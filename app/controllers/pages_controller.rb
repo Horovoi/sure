@@ -9,10 +9,24 @@ class PagesController < ApplicationController
 
     period_param = params[:cashflow_period]
     @cashflow_period = if period_param.present?
-      begin
-        Period.from_key(period_param)
-      rescue Period::InvalidKeyError
-        Period.last_30_days
+      if period_param == "custom"
+        # Allow users to specify an explicit date range for the cashflow chart
+        last_30 = Period.last_30_days
+        start_date = safe_parse_date(params[:cashflow_start_date]) || last_30.start_date
+        end_date   = safe_parse_date(params[:cashflow_end_date])   || last_30.end_date
+
+        # Ensure start_date <= end_date
+        if start_date > end_date
+          start_date, end_date = end_date, start_date
+        end
+
+        Period.custom(start_date: start_date, end_date: end_date)
+      else
+        begin
+          Period.from_key(period_param)
+        rescue Period::InvalidKeyError
+          Period.last_30_days
+        end
       end
     else
       Period.last_30_days
@@ -151,5 +165,12 @@ class PagesController < ApplicationController
       # No primary income node anymore, percentages are on individual income cats relative to total_income_val
 
       { nodes: nodes, links: links, currency_symbol: Money::Currency.new(currency_symbol).symbol }
+    end
+
+    def safe_parse_date(value)
+      return nil if value.blank?
+      Date.parse(value)
+    rescue ArgumentError
+      nil
     end
 end
