@@ -4,7 +4,15 @@
   <%= tag.div class: "space-y-4 pb-32" do %>
     <%= render "accounts/show/header", account: account, title: title, subtitle: subtitle %>
 
-    <%= render UI::Account::Chart.new(account: account, period: chart_period, view: chart_view) %>
+    <%= render UI::Account::Chart.new(
+          account: account,
+          period: chart_period,
+          view: chart_view,
+          period_selected_param: @period_selected_param,
+          period_start_param: @period_start_param,
+          period_end_param: @period_end_param,
+          period_error: @period_error
+        ) %>
 
     <div class="min-h-[800px]" data-testid="account-details">
       <% if tabs.count > 1 %>
