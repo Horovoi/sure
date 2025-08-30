@@ -1,0 +1,43 @@
+date,account_name,amount,name,category,tags,notes,currency
+2025-08-30,VST Зарплата,530.0,Спільнота,Restaurants,"","",UAH
+2025-08-24,VST Кешбек,596.39,Aliexpress,Shopping,"","",UAH
+2025-08-21,VST Зарплата,25000.0,Payment to Mono Visa,,"",,UAH
+2025-08-27,VST Зарплата,379.3,Нова Пошта,Postal Services,"","",UAH
+2025-08-24,VST Зарплата,200.0,Transfer to Готівка,,"",,UAH
+2025-08-26,VST Зарплата,270.0,Простір Кави,Restaurants,"","",UAH
+2025-08-28,VST Зарплата,270.0,Простір Кави,Restaurants,"","",UAH
+2025-08-23,VST Зарплата,14500.0,Оренда Квартири,Rent,"","",UAH
+2025-08-24,Готівка,-200.0,Transfer from VST Зарплата,,"",,UAH
+2025-08-27,VST Зарплата,56.99,Новус,Groceries,"","",UAH
+2025-08-21,VST Зарплата,14500.0,Payment to Mono Visa,,"",,UAH
+2025-08-29,VST Зарплата,52.6,Лоток,Groceries,"","",UAH
+2025-08-23,VST Зарплата,660.0,Спільнота,Restaurants,"","",UAH
+2025-08-21,VST Зарплата,5200.0,Payment to БВР,,"",,UAH
+2025-08-30,БВР,903.65,Сільпо,Groceries,"","",UAH
+2025-08-21,БВР,-5200.0,Payment from VST Зарплата,,"",,UAH
+2025-08-23,Mono Visa,8712.97,Freedom Knife Shop,Shopping,"",Benchmade Bailout,UAH
+2025-08-30,БВР,1347.0,Сільпо,Groceries,"","",UAH
+2025-08-21,VST Зарплата,-57945.72,Зарплата,Income,"","",UAH
+2025-08-25,VST Зарплата,60.0,Нова Пошта,Postal Services,"","",UAH
+2025-08-28,VST Зарплата,40.0,Сирний,Groceries,"","",UAH
+2025-08-24,Готівка,260.0,Оплата Консьєржу,Utilities,"","",UAH
+2025-08-24,VST Кешбек,-1000.0,Transfer from VST Зарплата,,"",,UAH
+2025-08-21,Mono Visa,-25000.0,Payment from VST Зарплата,,"",,UAH
+2025-08-21,Mono Visa,-14500.0,Payment from VST Зарплата,,"",,UAH
+2025-08-23,БВР,2217.0,Сільпо,Groceries,"","",UAH
+2025-08-24,VST Кешбек,397.89,Prom,Coffee,"",Фільтри Kafec,UAH
+2025-08-28,VST Зарплата,350.0,Kyivstar,Mobile Plan,"","",UAH
+2025-08-23,Mono Visa,4046.66,Погашення за роутер (3/3),Shopping,"","",UAH
+2025-08-24,VST Зарплата,670.26,Новус,Groceries,"","",UAH
+2025-08-29,VST Зарплата,160.0,Fruteko,Groceries,"","",UAH
+2025-08-28,VST Зарплата,10500.0,Payment to Mono Visa,,"",,UAH
+2025-08-24,VST Зарплата,45.0,OKWINE,Groceries,"","",UAH
+2025-08-28,Mono Visa,-10500.0,Payment from VST Зарплата,,"",,UAH
+2025-08-28,VST Зарплата,-11781.68,Премія,Income,"","",UAH
+2025-08-22,VST Зарплата,270.0,Простір Кави,Restaurants,"","",UAH
+2025-08-21,VST Зарплата,-29000.0,Transfer from VST Збереження (На Оренду),,"",,UAH
+2025-08-21,VST Збереження (На Оренду),29000.0,Transfer to VST Зарплата,,"",,UAH
+2025-08-27,VST Зарплата,286.0,Пузата Хата,Restaurants,"","",UAH
+2025-08-24,Mono Visa,2123.7,Superwhisper,Subscription Services,"","",UAH
+2025-08-26,VST Зарплата,440.38,Fruteko,Groceries,"","",UAH
+2025-08-24,VST Зарплата,1000.0,Transfer to VST Кешбек,,"",,UAH

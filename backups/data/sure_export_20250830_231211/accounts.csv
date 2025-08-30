@@ -1,0 +1,7 @@
+id,name,type,subtype,balance,currency,created_at
+26a4f845-23af-4b04-9700-d4d57471a03a,VST Збереження (На Оренду),Depository,,108.0,UAH,2025-08-30T16:22:44+03:00
+47448279-213f-41fd-9dc3-adf503e14d01,VST Кешбек,Depository,,49.25,UAH,2025-08-30T16:00:41+03:00
+5f93fa12-ca48-496b-ba37-4eb390e82386,Готівка,Depository,,0.0,UAH,2025-08-30T16:01:12+03:00
+69194908-a1f3-4706-9817-836ca4098672,БВР,CreditCard,,4447.68,UAH,2025-08-30T16:04:14+03:00
+9dcee806-5e8a-42b2-9ef8-d7146a236375,VST Зарплата,Depository,,23408.88,UAH,2025-08-30T15:59:33+03:00
+c0b77472-ca22-443a-801a-2569cd8f07d4,Mono Visa,CreditCard,,-103.73,UAH,2025-08-30T16:08:33+03:00
