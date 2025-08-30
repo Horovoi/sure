@@ -1,0 +1,123 @@
+# Production Docker Compose Configuration
+# Based on compose.example.yml but modified for local production deployment
+
+x-db-env: &db_env
+  POSTGRES_USER: ${POSTGRES_USER:-sure_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # Must be set in .env.production
+  POSTGRES_DB: ${POSTGRES_DB:-sure_production}
+
+x-rails-env: &rails_env
+  <<: *db_env
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+  SELF_HOSTED: "true"
+  RAILS_FORCE_SSL: "false"  # Set to true if using HTTPS
+  RAILS_ASSUME_SSL: "false"
+  DB_HOST: db
+  DB_PORT: 5432
+  REDIS_URL: redis://redis:6379/1
+  TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY}
+  OPENAI_ACCESS_TOKEN: ${OPENAI_ACCESS_TOKEN}
+  # SMTP Configuration
+  SMTP_ADDRESS: ${SMTP_ADDRESS}
+  SMTP_PORT: ${SMTP_PORT}
+  SMTP_USERNAME: ${SMTP_USERNAME}
+  SMTP_PASSWORD: ${SMTP_PASSWORD}
+  SMTP_TLS_ENABLED: ${SMTP_TLS_ENABLED}
+  EMAIL_SENDER: ${EMAIL_SENDER}
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_COMMIT_SHA: ${BUILD_COMMIT_SHA:-development}
+    # Alternative: use pre-built image
+    # image: ghcr.io/we-promise/sure:latest
+    volumes:
+      - app-storage:/rails/storage
+    ports:
+      - "${PORT:-3000}:3000"
+    restart: unless-stopped
+    environment:
+      <<: *rails_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sure_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/up || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_COMMIT_SHA: ${BUILD_COMMIT_SHA:-development}
+    # Alternative: use pre-built image
+    # image: ghcr.io/we-promise/sure:latest
+    command: bundle exec sidekiq
+    volumes:
+      - app-storage:/rails/storage
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      <<: *rails_env
+    networks:
+      - sure_net
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      <<: *db_env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sure_net
+    # Uncomment to expose database port (for debugging only)
+    # ports:
+    #   - "5432:5432"
+
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sure_net
+    # Uncomment to expose Redis port (for debugging only)
+    # ports:
+    #   - "6379:6379"
+
+volumes:
+  app-storage:
+  postgres-data:
+  redis-data:
+
+networks:
+  sure_net:
+    driver: bridge
