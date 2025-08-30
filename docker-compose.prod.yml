@@ -27,13 +27,8 @@ x-rails-env: &rails_env
 
 services:
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BUILD_COMMIT_SHA: ${BUILD_COMMIT_SHA:-development}
-    # Alternative: use pre-built image
-    # image: ghcr.io/we-promise/sure:latest
+    # Use pre-built image instead of building
+    image: ghcr.io/horovoi/sure:${BUILD_COMMIT_SHA:-latest}
     volumes:
       - app-storage:/rails/storage
     ports:
@@ -56,13 +51,8 @@ services:
       start_period: 30s
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BUILD_COMMIT_SHA: ${BUILD_COMMIT_SHA:-development}
-    # Alternative: use pre-built image
-    # image: ghcr.io/we-promise/sure:latest
+    # Use same pre-built image
+    image: ghcr.io/horovoi/sure:${BUILD_COMMIT_SHA:-latest}
     command: bundle exec sidekiq
     volumes:
       - app-storage:/rails/storage
@@ -93,9 +83,6 @@ services:
       retries: 5
     networks:
       - sure_net
-    # Uncomment to expose database port (for debugging only)
-    # ports:
-    #   - "5432:5432"
 
   redis:
     image: redis:latest
@@ -109,9 +96,6 @@ services:
       retries: 5
     networks:
       - sure_net
-    # Uncomment to expose Redis port (for debugging only)
-    # ports:
-    #   - "6379:6379"
 
 volumes:
   app-storage:
