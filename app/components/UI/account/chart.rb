@@ -1,10 +1,14 @@
 class UI::Account::Chart < ApplicationComponent
   attr_reader :account
 
-  def initialize(account:, period: nil, view: nil)
+  def initialize(account:, period: nil, view: nil, period_selected_param: nil, period_start_param: nil, period_end_param: nil, period_error: nil)
     @account = account
     @period = period
     @view = view
+    @period_selected_param = period_selected_param
+    @period_start_param = period_start_param
+    @period_end_param = period_end_param
+    @period_error = period_error
   end
 
   def period
@@ -68,5 +72,22 @@ class UI::Account::Chart < ApplicationComponent
 
   def trend
     series.trend
+  end
+
+  # Helpers used by the template to control the custom date UI
+  def selected_key
+    (@period_selected_param == "custom") ? "custom" : (period.key || "custom")
+  end
+
+  def period_start_value
+    @period_start_param.presence || period.start_date
+  end
+
+  def period_end_value
+    @period_end_param.presence || period.end_date
+  end
+
+  def period_error
+    @period_error
   end
 end
