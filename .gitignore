@@ -109,3 +109,6 @@ scripts/
 
 # Deployment guide
 deploy_guide.md
+
+# Backup files
+backups/
