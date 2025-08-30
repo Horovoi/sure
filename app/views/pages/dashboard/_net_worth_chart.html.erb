@@ -14,12 +14,30 @@
       <% end %>
     </div>
 
-    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "_top" } do |form| %>
-      <%= form.select :period,
-                    Period.as_options,
-                    { selected: period.key },
-                    data: { "auto-submit-form-target": "auto" },
-                    class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form" } do |form| %>
+      <div class="flex items-center gap-2">
+        <% net_worth_options = Period.as_options + [["Custom", "custom"]] %>
+        <% selected_key = period.key || "custom" %>
+        <%= form.select :period,
+                      net_worth_options,
+                      { selected: selected_key },
+                      data: { "auto-submit-form-target": "auto" },
+                      class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+
+        <% if period.key.nil? %>
+          <div class="flex items-center gap-2">
+            <%= form.date_field :start_date,
+                  value: period.start_date,
+                  data: { "auto-submit-form-target": "auto" },
+                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
+            <span class="text-secondary text-sm">to</span>
+            <%= form.date_field :end_date,
+                  value: period.end_date,
+                  data: { "auto-submit-form-target": "auto" },
+                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
+          </div>
+        <% end %>
+      </div>
     <% end %>
   </div>
 

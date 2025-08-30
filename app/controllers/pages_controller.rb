@@ -8,6 +8,31 @@ class PagesController < ApplicationController
     @investment_statement = Current.family.investment_statement
     @accounts = Current.family.accounts.visible.with_attached_logo
 
+    period_param = params[:cashflow_period]
+    @cashflow_period = if period_param.present?
+      if period_param == "custom"
+        # Allow users to specify an explicit date range for the cashflow chart
+        last_30 = Period.last_30_days
+        start_date = safe_parse_date(params[:cashflow_start_date]) || last_30.start_date
+        end_date   = safe_parse_date(params[:cashflow_end_date])   || last_30.end_date
+
+        # Ensure start_date <= end_date
+        if start_date > end_date
+          start_date, end_date = end_date, start_date
+        end
+
+        Period.custom(start_date: start_date, end_date: end_date)
+      else
+        begin
+          Period.from_key(period_param)
+        rescue Period::InvalidKeyError
+          Period.last_30_days
+        end
+      end
+    else
+      Period.last_30_days
+    end
+
     family_currency = Current.family.currency
 
     # Use IncomeStatement for all cashflow data (now includes categorized trades)
@@ -259,5 +284,12 @@ class PagesController < ApplicationController
           end
         end
       end
+    end
+
+    def safe_parse_date(value)
+      return nil if value.blank?
+      Date.parse(value)
+    rescue ArgumentError
+      nil
     end
 end

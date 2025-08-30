@@ -1,12 +1,35 @@
 <%# locals: (sankey_data:, period:) %>
 <div id="cashflow-sankey-chart">
-  <div class="flex justify-end items-center gap-4 px-4 mb-4">
-    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "_top" } do |form| %>
-      <%= form.select :period,
-                Period.as_options,
-                { selected: period.key },
-                data: { "auto-submit-form-target": "auto" },
-                class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+  <div class="flex justify-between items-center gap-4 px-4 mb-4">
+    <h2 class="text-lg font-medium inline-flex items-center gap-1.5">
+      Cashflow
+    </h2>
+
+    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "cashflow_sankey_section" } do |form| %>
+      <div class="flex items-center gap-2">
+        <% cashflow_options = Period.as_options + [["Custom", "custom"]] %>
+        <% selected_key = period.key || "custom" %>
+        <%= form.select :cashflow_period,
+                  cashflow_options,
+                  { selected: selected_key },
+                  data: { "auto-submit-form-target": "auto" },
+                  class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+
+        <%# When in custom mode, show start/end date pickers %>
+        <% if period.key.nil? %>
+          <div class="flex items-center gap-2">
+            <%= form.date_field :cashflow_start_date,
+                  value: period.start_date,
+                  data: { "auto-submit-form-target": "auto" },
+                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
+            <span class="text-secondary text-sm">to</span>
+            <%= form.date_field :cashflow_end_date,
+                  value: period.end_date,
+                  data: { "auto-submit-form-target": "auto" },
+                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
+          </div>
+        <% end %>
+      </div>
     <% end %>
   </div>
 
