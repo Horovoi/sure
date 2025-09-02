@@ -6,6 +6,8 @@ import { sankey, sankeyLinkHorizontal } from "d3-sankey";
 export default class extends Controller {
   static values = {
     data: Object,
+    withSubcategories: Object,
+    withoutSubcategories: Object,
     nodeWidth: { type: Number, default: 15 },
     nodePadding: { type: Number, default: 20 },
     currencySymbol: { type: String, default: "$" }
@@ -16,6 +18,30 @@ export default class extends Controller {
     this.resizeObserver.observe(this.element);
     this.tooltip = null;
     this.#createTooltip();
+    // Ensure each controller instance has a unique id to scope SVG defs
+    if (!this.element.id) {
+      this.element.id = `sankey-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    this._instanceId = this.element.id;
+    
+    // Initialize data if not explicitly set
+    if (!this.dataValue) {
+      this.dataValue = this.withSubcategoriesValue || this.withoutSubcategoriesValue || {};
+    }
+
+    // Listen for subcategory toggle events targeted at this element
+    this._onSubcategoryEvent = (e) => {
+      const { showSubcategories } = e.detail || {};
+      this.setSubcategoryMode(showSubcategories);
+    };
+    this.element.addEventListener("sankey:set-subcategories", this._onSubcategoryEvent);
+
+    // Handle dataset replacement from compact card
+    this._onDatasetsEvent = (e) => {
+      const { withSubcategories, withoutSubcategories, showSubcategories, currencySymbol } = e.detail || {};
+      this.setDatasets({ withSubcategories, withoutSubcategories, showSubcategories, currencySymbol });
+    };
+    this.element.addEventListener("sankey:set-datasets", this._onDatasetsEvent);
     this.#draw();
   }
 
@@ -24,6 +50,14 @@ export default class extends Controller {
     if (this.tooltip) {
       this.tooltip.remove();
       this.tooltip = null;
+    }
+    if (this._onSubcategoryEvent) {
+      this.element.removeEventListener("sankey:set-subcategories", this._onSubcategoryEvent);
+      this._onSubcategoryEvent = null;
+    }
+    if (this._onDatasetsEvent) {
+      this.element.removeEventListener("sankey:set-datasets", this._onDatasetsEvent);
+      this._onDatasetsEvent = null;
     }
   }
 
@@ -85,8 +119,9 @@ export default class extends Controller {
     // Define gradients for links
     const defs = svg.append("defs");
 
+    const instancePrefix = this._instanceId || "sankey";
     sankeyData.links.forEach((link, i) => {
-      const gradientId = `link-gradient-${link.source.index}-${link.target.index}-${i}`;
+      const gradientId = `${instancePrefix}-link-gradient-${link.source.index}-${link.target.index}-${i}`;
 
       const getStopColorWithOpacity = (nodeColorInput, opacity = 0.1) => {
         let colorStr = nodeColorInput || "var(--color-gray-400)";
@@ -138,7 +173,7 @@ export default class extends Controller {
         });
         return path;
       })
-      .attr("stroke", (d, i) => `url(#link-gradient-${d.source.index}-${d.target.index}-${i})`)
+      .attr("stroke", (d, i) => `url(#${instancePrefix}-link-gradient-${d.source.index}-${d.target.index}-${i})`)
       .attr("stroke-width", (d) => Math.max(1, d.width))
       .style("transition", "opacity 0.3s ease");
 
@@ -317,6 +352,45 @@ export default class extends Controller {
         .transition()
         .duration(100)
         .style("opacity", 0);
+    }
+  }
+
+  // Public: switch dataset according to toggle
+  setSubcategoryMode(show) {
+    const desired = show ? this.withSubcategoriesValue : this.withoutSubcategoriesValue;
+    if (desired && desired !== this.dataValue) {
+      this.dataValue = desired;
+      this.#draw();
+    }
+  }
+
+  // Public: replace datasets (e.g., when period changes) and re-render
+  setDatasets({ withSubcategories, withoutSubcategories, showSubcategories, currencySymbol }) {
+    let updated = false;
+
+    if (withSubcategories && withSubcategories !== this.withSubcategoriesValue) {
+      this.withSubcategoriesValue = withSubcategories;
+      updated = true;
+    }
+    if (withoutSubcategories && withoutSubcategories !== this.withoutSubcategoriesValue) {
+      this.withoutSubcategoriesValue = withoutSubcategories;
+      updated = true;
+    }
+    if (typeof currencySymbol === "string" && currencySymbol.length) {
+      this.currencySymbolValue = currencySymbol;
+    }
+
+    // If we replaced datasets, pick the correct one based on requested mode
+    if (updated) {
+      const show = !!showSubcategories;
+      const desired = show ? this.withSubcategoriesValue : this.withoutSubcategoriesValue;
+      if (desired) {
+        this.dataValue = desired;
+        this.#draw();
+      }
+    } else if (typeof showSubcategories === "boolean") {
+      // If only mode changed, still update
+      this.setSubcategoryMode(showSubcategories);
     }
   }
 } 

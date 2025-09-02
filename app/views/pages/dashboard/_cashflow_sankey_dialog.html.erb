@@ -1,0 +1,32 @@
+<%# locals: (sankey_data:, period:, cashflow_show_subcategories:, sankey_data_with_subcategories: nil, sankey_data_without_subcategories: nil) %>
+
+<%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "cashflow_sankey_dialog", disable_frame: true) do |d| %>
+  <% d.with_header title: "Cashflow", subtitle: "Expanded view" do %>
+    <div class="w-[92vw] max-w-[1400px] mx-auto pr-4 flex items-center justify-end">
+      <div class="inline-flex items-center gap-2">
+        <label for="cashflow_show_subcategories_dialog" class="text-sm text-secondary">Show subcategories</label>
+        <%= render DS::Toggle.new(
+          id: "cashflow_show_subcategories_dialog",
+          name: "cashflow_show_subcategories_overlay",
+          checked: cashflow_show_subcategories,
+          data: { controller: "fullscreen", action: "change->fullscreen#toggleSubcategories", fullscreen_target_id_value: "cashflowSankeyChartFullscreen" }
+        ) %>
+      </div>
+    </div>
+  <% end %>
+  <% d.with_body do %>
+    <div class="px-4 pb-4">
+      <div class="w-[92vw] max-w-[1400px] h-[80vh] mx-auto">
+        <div
+          id="cashflowSankeyChartFullscreen"
+          data-controller="sankey-chart"
+          data-sankey-chart-with-subcategories-value="<%= (sankey_data_with_subcategories || sankey_data).to_json %>"
+          data-sankey-chart-without-subcategories-value="<%= (sankey_data_without_subcategories || sankey_data).to_json %>"
+          data-sankey-chart-data-value="<%= (cashflow_show_subcategories ? sankey_data_with_subcategories : sankey_data_without_subcategories).to_json %>"
+          data-sankey-chart-currency-symbol-value="<%= sankey_data[:currency_symbol] %>"
+          class="w-full h-full"></div>
+      </div>
+    </div>
+  <% end %>
+<% end %>
+
