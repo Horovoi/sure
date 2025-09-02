@@ -29,10 +29,21 @@
       <section class="bg-container py-4 rounded-xl shadow-border-xs mb-6">
         <%= render partial: "pages/dashboard/cashflow_sankey", locals: {
           sankey_data: @cashflow_sankey_data,
+          sankey_data_with_subcategories: @cashflow_sankey_data_with_subcategories,
+          sankey_data_without_subcategories: @cashflow_sankey_data_without_subcategories,
           period: @cashflow_period
         } %>
       </section>
     <% end %>
+
+    <%# Fullscreen dialog for cashflow moved outside the frame so it stays open during frame updates %>
+    <%= render partial: "pages/dashboard/cashflow_sankey_dialog", locals: {
+      sankey_data: @cashflow_sankey_data,
+      sankey_data_with_subcategories: @cashflow_sankey_data_with_subcategories,
+      sankey_data_without_subcategories: @cashflow_sankey_data_without_subcategories,
+      period: @cashflow_period,
+      cashflow_show_subcategories: @cashflow_show_subcategories
+    } %>
 
     <section class="bg-container py-4 rounded-xl shadow-border-xs">
       <%= render partial: "pages/dashboard/net_worth_chart", locals: {
