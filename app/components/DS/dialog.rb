@@ -40,6 +40,7 @@ class DS::Dialog < DesignSystemComponent
     sm: "lg:max-w-[300px]",
     md: "lg:max-w-[550px]",
     lg: "lg:max-w-[700px]",
+    xl: "lg:max-w-[92vw]",
     full: "lg:max-w-full"
   }.freeze
 

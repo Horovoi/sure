@@ -5,6 +5,17 @@
   <div class="flex justify-between gap-4 px-4">
     <div class="space-y-2">
       <% if series.trend.present? %>
+        <div class="flex items-center gap-2">
+          <p class="text-sm text-secondary font-medium"><%= t(".title") %></p>
+          <%= render DS::Button.new(
+            variant: :icon,
+            size: :sm,
+            icon: "maximize-2",
+            type: "button",
+            data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "net_worth_fullscreen_dialog" },
+            class: "hidden sm:inline-flex"
+          ) %>
+        </div>
         <p class="text-primary -space-x-0.5 text-3xl font-medium <%= "animate-pulse" if balance_sheet.syncing? %>">
           <%= series.trend.current.format %>
         </p>
@@ -14,31 +25,33 @@
       <% end %>
     </div>
 
-    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form" } do |form| %>
-      <div class="flex items-center gap-2">
-        <% net_worth_options = Period.as_options + [["Custom", "custom"]] %>
-        <% selected_key = period.key || "custom" %>
-        <%= form.select :period,
-                      net_worth_options,
-                      { selected: selected_key },
-                      data: { "auto-submit-form-target": "auto" },
-                      class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+    <div class="flex items-center gap-2">
+      <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form" } do |form| %>
+        <div class="flex items-center gap-2">
+          <% net_worth_options = Period.as_options + [["Custom", "custom"]] %>
+          <% selected_key = period.key || "custom" %>
+          <%= form.select :period,
+                        net_worth_options,
+                        { selected: selected_key },
+                        data: { "auto-submit-form-target": "auto" },
+                        class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
 
-        <% if period.key.nil? %>
-          <div class="flex items-center gap-2">
-            <%= form.date_field :start_date,
-                  value: period.start_date,
-                  data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
-            <span class="text-secondary text-sm">to</span>
-            <%= form.date_field :end_date,
-                  value: period.end_date,
-                  data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
-          </div>
-        <% end %>
-      </div>
-    <% end %>
+          <% if period.key.nil? %>
+            <div class="flex items-center gap-2">
+              <%= form.date_field :start_date,
+                    value: period.start_date,
+                    data: { "auto-submit-form-target": "auto" },
+                    class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
+              <span class="text-secondary text-sm">to</span>
+              <%= form.date_field :end_date,
+                    value: period.end_date,
+                    data: { "auto-submit-form-target": "auto" },
+                    class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
   </div>
 
   <% if series.any? %>
@@ -54,3 +67,19 @@
   <% end %>
 
 </div>
+
+<%# Fullscreen dialog overlay for Net Worth chart %>
+<%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "net_worth_fullscreen_dialog") do |d| %>
+  <% d.with_header title: t(".title"), subtitle: "Expanded view" %>
+  <% d.with_body do %>
+    <div class="px-4 pb-4">
+      <div class="w-[92vw] max-w-[1400px] h-[80vh] mx-auto">
+        <div
+          id="netWorthChartFullscreen"
+          class="w-full h-full"
+          data-controller="time-series-chart"
+          data-time-series-chart-data-value="<%= series.to_json %>"></div>
+      </div>
+    </div>
+  <% end %>
+<% end %>

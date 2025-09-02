@@ -13,7 +13,9 @@ export default class extends Controller {
 
     // Get latest datasets from the compact chart element
     const compactChart = document.getElementById("cashflowSankeyChart");
-    let withSub = null, withoutSub = null, currency = null;
+    let withSub = null;
+    let withoutSub = null;
+    let currency = null;
     if (compactChart) {
       const ds = compactChart.dataset;
       try { withSub = ds.sankeyChartWithSubcategoriesValue ? JSON.parse(ds.sankeyChartWithSubcategoriesValue) : null; } catch {}
