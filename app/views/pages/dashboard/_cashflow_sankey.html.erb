@@ -1,9 +1,19 @@
-<%# locals: (sankey_data:, period:) %>
+<%# locals: (sankey_data:, period:, sankey_data_with_subcategories: nil, sankey_data_without_subcategories: nil) %>
 <div id="cashflow-sankey-chart">
   <div class="flex justify-between items-center gap-4 px-4 mb-4">
-    <h2 class="text-lg font-medium inline-flex items-center gap-1.5">
-      Cashflow
-    </h2>
+    <div class="flex items-center gap-2">
+      <h2 class="text-lg font-medium inline-flex items-center gap-1.5">
+        Cashflow
+      </h2>
+      <%= render DS::Button.new(
+        variant: :icon,
+        size: :sm,
+        icon: "maximize-2",
+        type: "button",
+        data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "cashflow_sankey_dialog" },
+        class: "hidden sm:inline-flex"
+      ) %>
+    </div>
 
     <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "cashflow_sankey_section" } do |form| %>
       <div class="flex items-center gap-2">
@@ -29,20 +39,37 @@
                   class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
           </div>
         <% end %>
+
+        <div class="flex items-center gap-2 pl-2">
+          <label for="cashflow_show_subcategories" class="text-sm text-secondary">Show subcategories</label>
+          <%= render DS::Toggle.new(
+            id: "cashflow_show_subcategories",
+            name: "cashflow_show_subcategories",
+            checked: @cashflow_show_subcategories,
+            data: {
+              controller: "cashflow-sync",
+              action: "change->cashflow-sync#broadcast",
+              "auto-submit-form-target": "auto"
+            }
+          ) %>
+        </div>
       </div>
     <% end %>
   </div>
 
   <% if sankey_data[:links].present? %>
-    <div class="w-full h-96">
+    <div class="w-full h-[26rem] md:h-[28rem]">
       <div
+        id="cashflowSankeyChart"
         data-controller="sankey-chart"
+        data-sankey-chart-with-subcategories-value="<%= (sankey_data_with_subcategories || sankey_data).to_json %>"
+        data-sankey-chart-without-subcategories-value="<%= (sankey_data_without_subcategories || sankey_data).to_json %>"
         data-sankey-chart-data-value="<%= sankey_data.to_json %>"
         data-sankey-chart-currency-symbol-value="<%= sankey_data[:currency_symbol] %>"
         class="w-full h-full"></div>
     </div>
   <% else %>
-    <div class="h-[300px] lg:h-[340px] bg-container py-4 flex flex-col items-center justify-center">
+    <div class="h-[340px] lg:h-[380px] bg-container py-4 flex flex-col items-center justify-center">
       <div class="space-y-3 text-center flex flex-col items-center">
         <%= render DS::FilledIcon.new(
           variant: :container,
@@ -61,3 +88,5 @@
     </div>
   <% end %>
 </div>
+
+<%# Fullscreen dialog moved to dashboard.html.erb to prevent frame refresh from closing it %>
