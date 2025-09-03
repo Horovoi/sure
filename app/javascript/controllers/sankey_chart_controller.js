@@ -41,8 +41,9 @@ export default class extends Controller {
     this._instanceId = this.element.id;
     
     // Initialize data if not explicitly set
+    // Prefer the dataset without subcategories to align with the default UI state
     if (!this.dataValue) {
-      this.dataValue = this.withSubcategoriesValue || this.withoutSubcategoriesValue || {};
+      this.dataValue = this.withoutSubcategoriesValue || this.withSubcategoriesValue || {};
     }
 
     // Listen for subcategory toggle events targeted at this element

@@ -26,20 +26,23 @@ class PagesController < ApplicationController
         begin
           Period.from_key(period_param)
         rescue Period::InvalidKeyError
-          Period.last_30_days
+          # Fall back to the same period used elsewhere (user preference via Periodable)
+          @period
         end
       end
     else
-      Period.last_30_days
+      # Default to the globally selected period (from Periodable),
+      # which uses the current user's default when not provided via params
+      @period
     end
 
     family_currency = Current.family.currency
 
-    # Toggle: show/hide subcategories in Sankey (default: true)
+    # Toggle: show/hide subcategories in Sankey (default: false)
     @cashflow_show_subcategories = if params.key?(:cashflow_show_subcategories)
       ActiveModel::Type::Boolean.new.cast(params[:cashflow_show_subcategories])
     else
-      true
+      false
     end
 
     # Use IncomeStatement for all cashflow data (now includes categorized trades)
