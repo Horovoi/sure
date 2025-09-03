@@ -21,6 +21,13 @@ export default class extends Controller {
       try { withSub = ds.sankeyChartWithSubcategoriesValue ? JSON.parse(ds.sankeyChartWithSubcategoriesValue) : null; } catch {}
       try { withoutSub = ds.sankeyChartWithoutSubcategoriesValue ? JSON.parse(ds.sankeyChartWithoutSubcategoriesValue) : null; } catch {}
       currency = ds.sankeyChartCurrencySymbolValue || null;
+      // Update fullscreen period label from compact chart's current period
+      const label = ds.periodLabel;
+      const start = ds.periodStart;
+      const end = ds.periodEnd;
+      const pretty = label || this.formatRange(start, end);
+      const headerEl = document.getElementById("cashflowFullscreenPeriod");
+      if (headerEl && pretty) headerEl.textContent = pretty;
     }
 
     // Update fullscreen chart if present
@@ -41,6 +48,22 @@ export default class extends Controller {
     const overlayToggle = document.getElementById("cashflow_show_subcategories_dialog");
     if (overlayToggle) {
       overlayToggle.checked = !!checked;
+    }
+  }
+
+  formatRange(start, end) {
+    if (!start || !end) return null;
+    try {
+      const fmt = new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+      });
+      const s = fmt.format(new Date(start));
+      const e = fmt.format(new Date(end));
+      return `${s} to ${e}`;
+    } catch {
+      return `${start} to ${end}`;
     }
   }
 }

@@ -16,6 +16,14 @@ export default class extends Controller {
       try {
         data = ds.timeSeriesChartDataValue ? JSON.parse(ds.timeSeriesChartDataValue) : null;
       } catch {}
+
+      // Update fullscreen header period label
+      const label = ds.periodLabel;
+      const start = ds.periodStart || (data && data.start_date);
+      const end = ds.periodEnd || (data && data.end_date);
+      const pretty = label || this.formatRange(start, end);
+      const headerEl = document.getElementById("netWorthFullscreenPeriod");
+      if (headerEl && pretty) headerEl.textContent = pretty;
     }
 
     if (!data) return;
@@ -26,5 +34,20 @@ export default class extends Controller {
       chartEl.dispatchEvent(new CustomEvent("timeseries:set-data", { detail: { data } }));
     }
   }
-}
 
+  formatRange(start, end) {
+    if (!start || !end) return null;
+    try {
+      const fmt = new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+      });
+      const s = fmt.format(new Date(start));
+      const e = fmt.format(new Date(end));
+      return `${s} to ${e}`;
+    } catch {
+      return `${start} to ${end}`;
+    }
+  }
+}

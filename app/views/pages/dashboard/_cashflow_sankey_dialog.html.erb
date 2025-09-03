@@ -1,7 +1,11 @@
 <%# locals: (sankey_data:, period:, cashflow_show_subcategories:, sankey_data_with_subcategories: nil, sankey_data_without_subcategories: nil) %>
 
 <%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "cashflow_sankey_dialog", disable_frame: true) do |d| %>
-  <% d.with_header title: "Cashflow", subtitle: "Expanded view" do %>
+  <%# Build a friendly period label: named period_text %>
+  <% period_text = period.key.present? ? period.label : "#{period.start_date.strftime('%b %d, %Y')} to #{period.end_date.strftime('%b %d, %Y')}" %>
+
+  <% d.with_header title: "Cashflow", meta: period_text, meta_id: "cashflowFullscreenPeriod" do %>
+    <p class="text-sm text-secondary">Expanded view</p>
     <div class="w-[92vw] max-w-[1400px] mx-auto pr-4 flex items-center justify-end">
       <div class="inline-flex items-center gap-2">
         <label for="cashflow_show_subcategories_dialog" class="text-sm text-secondary">Show subcategories</label>
@@ -29,4 +33,3 @@
     </div>
   <% end %>
 <% end %>
-
