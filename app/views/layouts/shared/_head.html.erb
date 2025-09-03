@@ -4,6 +4,48 @@
   <%= csrf_meta_tags %>
   <%= csp_meta_tag %>
 
+  <%# Resolve and apply the effective theme before CSS loads to prevent flashes %>
+  <script>
+    (function() {
+      try {
+        var docEl = document.documentElement;
+        var userPref = docEl.getAttribute('data-theme-user-preference-value') || docEl.getAttribute('data-theme') || 'system';
+        var resolved = (function(pref) {
+          if (pref === 'dark') return 'dark';
+          if (pref === 'light') return 'light';
+          return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        })(userPref);
+
+        // Apply resolved theme immediately
+        docEl.setAttribute('data-theme', resolved);
+        // Help the UA paint controls appropriately
+        docEl.style.colorScheme = resolved;
+        // Set base background to avoid inverse flash pre-CSS
+        if (resolved === 'dark') {
+          docEl.style.backgroundColor = '#0B0B0B';
+        } else {
+          docEl.style.backgroundColor = '#FFFFFF';
+        }
+      } catch (e) { /* no-op */ }
+    })();
+  </script>
+
+  <%# Prevent white flash before CSS/theme initialization %>
+  <style>
+    html[data-theme="dark"],
+    html[data-theme="dark"] body {
+      background-color: #0B0B0B;
+      color-scheme: dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      html[data-theme="system"],
+      html[data-theme="system"] body {
+        background-color: #0B0B0B;
+        color-scheme: dark;
+      }
+    }
+  </style>
+
   <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
 
   <%= combobox_style_tag %>
@@ -22,7 +64,8 @@
 
   <meta name="msapplication-TileColor" content="#F9F9F9">
   <meta name="msapplication-config" content="/browserconfig.xml">
-  <meta name="theme-color" content="#F9F9F9">
+  <meta name="theme-color" content="#F9F9F9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0B0B0B" media="(prefers-color-scheme: dark)">
 
   <link rel="manifest" href="<%= pwa_manifest_path %>">
   <link rel="icon" type="image/svg+xml" href="<%= asset_path 'logomark-color.svg' %>">
