@@ -59,7 +59,10 @@
     id="netWorthChart"
     class="w-full flex-1 min-h-52"
     data-controller="time-series-chart"
-    data-time-series-chart-data-value="<%= series.to_json %>"></div>
+    data-time-series-chart-data-value="<%= series.to_json %>"
+    data-period-label="<%= period.key.present? ? period.label : nil %>"
+    data-period-start="<%= period.start_date %>"
+    data-period-end="<%= period.end_date %>"></div>
   <% else %>
     <div class="w-full h-full flex items-center justify-center">
       <p class="text-secondary text-sm"><%= t(".data_not_available") %></p>

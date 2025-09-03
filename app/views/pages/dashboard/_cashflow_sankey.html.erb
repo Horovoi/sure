@@ -66,6 +66,9 @@
         data-sankey-chart-without-subcategories-value="<%= (sankey_data_without_subcategories || sankey_data).to_json %>"
         data-sankey-chart-data-value="<%= sankey_data.to_json %>"
         data-sankey-chart-currency-symbol-value="<%= sankey_data[:currency_symbol] %>"
+        data-period-label="<%= period.key.present? ? period.label : nil %>"
+        data-period-start="<%= period.start_date %>"
+        data-period-end="<%= period.end_date %>"
         class="w-full h-full"></div>
     </div>
   <% else %>
