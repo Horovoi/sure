@@ -45,12 +45,20 @@
       cashflow_show_subcategories: @cashflow_show_subcategories
     } %>
 
-    <section class="bg-container py-4 rounded-xl shadow-border-xs">
-      <%= render partial: "pages/dashboard/net_worth_chart", locals: {
-        balance_sheet: @balance_sheet,
-        period: @period
-      } %>
-    </section>
+    <%# Fullscreen dialog for net worth moved outside its frame so it stays open during frame updates %>
+    <%= render partial: "pages/dashboard/net_worth_chart_dialog", locals: {
+      balance_sheet: @balance_sheet,
+      period: @period
+    } %>
+
+    <%= turbo_frame_tag "net_worth_section" do %>
+      <section class="bg-container py-4 rounded-xl shadow-border-xs">
+        <%= render partial: "pages/dashboard/net_worth_chart", locals: {
+          balance_sheet: @balance_sheet,
+          period: @period
+        } %>
+      </section>
+    <% end %>
 
     <section>
       <%= render "pages/dashboard/balance_sheet", balance_sheet: @balance_sheet %>

@@ -23,12 +23,26 @@ export default class extends Controller {
     this._install();
     document.addEventListener("turbo:load", this._reinstall);
     this._setupResizeObserver();
+
+    // Allow external controllers to update the dataset dynamically (e.g., fullscreen sync)
+    this._onSetData = (e) => {
+      const { data } = e.detail || {};
+      if (data) {
+        this.dataValue = data;
+        this._reinstall();
+      }
+    };
+    this.element.addEventListener("timeseries:set-data", this._onSetData);
   }
 
   disconnect() {
     this._teardown();
     document.removeEventListener("turbo:load", this._reinstall);
     this._resizeObserver?.disconnect();
+    if (this._onSetData) {
+      this.element.removeEventListener("timeseries:set-data", this._onSetData);
+      this._onSetData = null;
+    }
   }
 
   _reinstall = () => {
