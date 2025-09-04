@@ -40,6 +40,18 @@
   }
 }
 
+/* Mobile tuning for Sankey chart labels to reduce crowding */
+@media (max-width: 640px) {
+  /* Shrink primary label text a touch on small screens */
+  #cashflowSankeyChart text {
+    font-size: 0.7rem; /* ~11.2px */
+  }
+  /* Make secondary tspan line slightly smaller */
+  #cashflowSankeyChart tspan {
+    font-size: 0.6rem; /* ~9.6px */
+  }
+}
+
 .combobox {
   .hw-combobox__main__wrapper,
   .hw-combobox__input {

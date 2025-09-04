@@ -26,6 +26,11 @@
         } else {
           docEl.style.backgroundColor = '#FFFFFF';
         }
+
+        // Detect PWA standalone to enable CSS overrides where needed
+        if ((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone) {
+          docEl.classList.add('pwa-standalone');
+        }
       } catch (e) { /* no-op */ }
     })();
   </script>
@@ -69,9 +74,9 @@
 
   <link rel="manifest" href="<%= pwa_manifest_path %>">
   <link rel="icon" type="image/svg+xml" href="<%= asset_path 'logomark-color.svg' %>">
-  <link rel="shortcut icon" type="image/png" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="shortcut icon" type="image/png" sizes="180x180" href="/logo-pwa.png">
   <link rel="mask-icon" href="<%= asset_path 'logomark.svg' %>" color="#0B0B0B">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/logo-pwa.png">
 
   <% if Rails.env.production? && (posthog_config = Rails.configuration.x.posthog).try(:api_key).present? %>
     <%= render "shared/posthog", posthog_api_key: posthog_config.api_key, posthog_host: posthog_config.host %>

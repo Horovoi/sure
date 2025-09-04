@@ -10,7 +10,8 @@ export default class extends Controller {
     withoutSubcategories: Object,
     nodeWidth: { type: Number, default: 15 },
     nodePadding: { type: Number, default: 20 },
-    currencySymbol: { type: String, default: "$" }
+    currencySymbol: { type: String, default: "$" },
+    innerPadding: { type: Number, default: 16 }
   };
 
   // Visual constants

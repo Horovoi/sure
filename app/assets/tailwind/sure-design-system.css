@@ -245,7 +245,7 @@
 
 /* Specific override for strong tags in prose under dark mode */
 .prose:where([data-theme=dark], [data-theme=dark] *) strong {
-  color: theme(colors.white) !important;
+  color: theme('colors.white') !important;
 }
 
 @layer base {
@@ -266,6 +266,23 @@
     --shadow-xl: 0px 20px 24px -4px --alpha(var(--color-white) / 8%);
   }
 
+  /*
+    iOS PWA safe area handling
+    - Keep top padding to avoid status bar overlap.
+    - Remove bottom padding here to prevent an extra blank space below our
+      mobile bottom nav. Individual components (e.g., the mobile nav) already
+      apply pb-[env(safe-area-inset-bottom)].
+  */
+  html {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: 0; /* was env(safe-area-inset-bottom) */
+  }
+
+  /* Ensure the app fills the dynamic viewport height on iOS */
+  body {
+    min-height: 100dvh;
+  }
+
   button {
     @apply cursor-pointer focus-visible:outline-gray-900;
   }
@@ -276,8 +293,11 @@
 
   /* We control the sizing through DialogComponent, so reset this value */
   dialog:modal {
+    /* Fallbacks for various viewport units across browsers/PWA */
     max-width: 100dvw;
+    max-width: 100svw;
     max-height: 100dvh;
+    max-height: 100svh;
   }
 
   details>summary::-webkit-details-marker {
@@ -300,6 +320,23 @@
 }
 
 @layer components {
+  /* Mobile bottom nav: safe-area adjustments
+     - Default: respect safe-area insets
+     - PWA standalone: reduce padding slightly to visually match Safari
+       minimal UI mode on iOS. Fallback via html.pwa-standalone for older iOS.
+  */
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  @media (display-mode: standalone) {
+    .mobile-bottom-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 36px); }
+  }
+
+  html.pwa-standalone .mobile-bottom-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 36px);
+  }
+
   /* Forms */
   .form-field {
     @apply flex flex-col gap-1 relative px-3 py-2 rounded-md border bg-container border-secondary shadow-xs w-full;
