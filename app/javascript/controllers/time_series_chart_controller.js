@@ -9,6 +9,9 @@ export default class extends Controller {
     strokeWidth: { type: Number, default: 2 },
     useLabels: { type: Boolean, default: true },
     useTooltip: { type: Boolean, default: true },
+    // Optional enhancements primarily for fullscreen mode
+    showYGuides: { type: Boolean, default: false },
+    endpointMarkers: { type: Boolean, default: false },
   };
 
   _d3SvgMemo = null;
@@ -136,6 +139,15 @@ export default class extends Controller {
       this._drawGradientBelowTrendline();
     }
 
+    // Optional, minimal helpers for context in fullscreen view
+    if (this.showYGuidesValue) {
+      this._drawYGuides();
+    }
+
+    if (this.endpointMarkersValue) {
+      this._drawEndpointMarkers();
+    }
+
     if (this.useTooltipValue) {
       this._drawTooltip();
       this._trackMouseForShowingTooltip();
@@ -234,7 +246,7 @@ export default class extends Controller {
     // Style ticks
     this._d3Group
       .selectAll(".tick text")
-      .attr("class", "fg-gray")
+      .attr("class", "fg-gray fill-current")
       .style("font-size", "12px")
       .style("font-weight", "500")
       .attr("text-anchor", "middle")
@@ -341,7 +353,7 @@ export default class extends Controller {
 
         this._setTrendlineSplitAt(xPercent);
 
-        // Reset
+        // Reset (do not touch endpoint markers)
         this._d3Group.selectAll(".data-point-circle").remove();
         this._d3Group.selectAll(".guideline").remove();
 
@@ -396,6 +408,144 @@ export default class extends Controller {
           this._setTrendlineSplitAt(1);
         }
       });
+  }
+
+  // Draw subtle horizontal guide lines at min/mid/max values with right-side labels
+  _drawYGuides() {
+    const values = this._normalDataPoints.map(this._getDatumValue);
+    const dataMin = d3.min(values);
+    const dataMax = d3.max(values);
+    const dataMid = (dataMin + dataMax) / 2;
+
+    const isDark = this._isDarkTheme();
+    const lineOpacityStrong = isDark ? 0.08 : 0.15;
+    const lineOpacitySoft = isDark ? 0.05 : 0.10;
+
+    const guides = [
+      { key: "max", v: dataMax, opacity: lineOpacityStrong },
+      { key: "mid", v: dataMid, opacity: lineOpacitySoft },
+      { key: "min", v: dataMin, opacity: lineOpacityStrong },
+    ];
+
+    const end = this._normalDataPoints[this._normalDataPoints.length - 1];
+    const yEnd = this._d3YScale(this._getDatumValue(end));
+
+    guides.forEach((g) => {
+      const y = this._d3YScale(g.v);
+
+      // Avoid drawing labels that collide with endpoint labels or x-axis labels
+      const nearEnd = Math.abs(y - yEnd) < 16 && (g.key === "min" || g.key === "max");
+      const tooCloseToBottom = this._d3ContainerHeight - y < 16; // collides with bottom date label
+      const shouldSkipLabel = nearEnd || (g.key === "min" && tooCloseToBottom);
+
+      // Line
+      const [rangeStart, rangeEnd] = this._d3XScale.range();
+      this._d3Group
+        .append("line")
+        .attr("class", "y-guide fg-subdued")
+        .attr("x1", rangeStart)
+        .attr("x2", rangeEnd)
+        .attr("y1", y)
+        .attr("y2", y)
+        .attr("stroke", "currentColor")
+        .attr("stroke-opacity", g.opacity)
+        .attr("stroke-dasharray", "4,4");
+
+      if (!shouldSkipLabel) {
+        // Label (right aligned)
+        const endX = this._d3XScale(end.date);
+        // Shift slightly left of the end/gradient boundary to avoid being cut
+        const labelX = Math.min(this._d3ContainerWidth - 6, endX - 10);
+        this._d3Group
+          .append("text")
+          .attr("class", "fg-gray fill-current")
+          .attr("x", Math.max(0, labelX))
+          .attr("y", y - 4)
+          .attr("text-anchor", "end")
+          .style("font-size", "11px")
+          .style("font-weight", "500")
+          .text(this._formatMoneyLike(g.v));
+      }
+    });
+  }
+
+  // Add start/end markers with value labels near the path extremes
+  _drawEndpointMarkers() {
+    const first = this._normalDataPoints[0];
+    const last = this._normalDataPoints[this._normalDataPoints.length - 1];
+
+    const points = [
+      { d: first, align: "start" },
+      { d: last, align: "end" },
+    ];
+
+    points.forEach(({ d, align }) => {
+      const cx = this._d3XScale(d.date);
+      const cy = this._d3YScale(this._getDatumValue(d));
+
+      // Outer halo
+      this._d3Group
+        .append("circle")
+        .attr("class", "endpoint-marker")
+        .attr("cx", cx)
+        .attr("cy", cy)
+        .attr("r", 7)
+        .attr("fill", this._trendColor)
+        .attr("fill-opacity", 0.12)
+        .attr("pointer-events", "none");
+
+      // Inner dot
+      this._d3Group
+        .append("circle")
+        .attr("class", "endpoint-marker")
+        .attr("cx", cx)
+        .attr("cy", cy)
+        .attr("r", 3.5)
+        .attr("fill", this._trendColor)
+        .attr("pointer-events", "none");
+
+      // Value label
+      const labelOffsetX = align === "start" ? 10 : -10;
+      const anchor = align === "start" ? "start" : "end";
+      this._d3Group
+        .append("text")
+        .attr("class", "fg-gray fill-current")
+        .attr("x", cx + labelOffsetX)
+        .attr("y", cy - 10)
+        .attr("text-anchor", anchor)
+        .style("font-size", "12px")
+        .style("font-weight", "600")
+        .text(this._extractFormattedValue(d.value));
+    });
+  }
+
+  // Format a numeric value using the Money-like object available in the dataset when possible.
+  // If dataset already provides formatted values, it simply returns them; otherwise fallbacks to
+  // a compact number format in the user's locale.
+  _formatMoneyLike(rawNumber) {
+    // Try to infer currency from the last datum, which includes value.current.currency if Money-like
+    const sample = this.dataValue?.values?.[this.dataValue.values.length - 1]?.value;
+    const currency = typeof sample === "object" && sample?.currency ? sample.currency : undefined;
+
+    try {
+      const fmt = new Intl.NumberFormat(undefined, {
+        style: currency ? "currency" : "decimal",
+        currency: currency || undefined,
+        notation: "compact",
+        maximumFractionDigits: 2,
+      });
+      return fmt.format(Number(rawNumber));
+    } catch (_) {
+      return String(rawNumber);
+    }
+  }
+
+  _isDarkTheme() {
+    const docEl = document.documentElement;
+    const pref = docEl.getAttribute("data-theme") || "system";
+    if (pref === "dark") return true;
+    if (pref === "light") return false;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
   _tooltipTemplate(datum) {
@@ -529,7 +679,7 @@ export default class extends Controller {
   get _d3XScale() {
     return d3
       .scaleTime()
-      .rangeRound([0, this._d3ContainerWidth])
+      .rangeRound([this._xPaddingLeft, this._d3ContainerWidth - this._xPaddingRight])
       .domain(d3.extent(this._normalDataPoints, (d) => d.date));
   }
 
@@ -592,5 +742,16 @@ export default class extends Controller {
       this._reinstall();
     });
     this._resizeObserver.observe(this.element);
+  }
+
+  get _xPaddingLeft() {
+    // Prevent clipped endpoints and labels; add a bit more when endpoint markers are visible
+    const base = Math.max(6, this.strokeWidthValue * 1.5);
+    return this.endpointMarkersValue ? base + 6 : base;
+  }
+
+  get _xPaddingRight() {
+    // Mirror left padding and leave small room for right-hand labels
+    return this._xPaddingLeft + 6;
   }
 }
