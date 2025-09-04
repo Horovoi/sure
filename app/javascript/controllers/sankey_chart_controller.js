@@ -10,7 +10,8 @@ export default class extends Controller {
     withoutSubcategories: Object,
     nodeWidth: { type: Number, default: 15 },
     nodePadding: { type: Number, default: 20 },
-    currencySymbol: { type: String, default: "$" }
+    currencySymbol: { type: String, default: "$" },
+    innerPadding: { type: Number, default: 16 }
   };
 
   connect() {
@@ -108,8 +109,8 @@ export default class extends Controller {
       .nodeWidth(this.nodeWidthValue)
       .nodePadding(this.nodePaddingValue)
       .extent([
-        [16, 16],
-        [width - 16, height - 16],
+        [this.innerPaddingValue, this.innerPaddingValue],
+        [width - this.innerPaddingValue, height - this.innerPaddingValue],
       ]);
 
     const sankeyData = sankeyGenerator({

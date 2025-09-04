@@ -7,12 +7,12 @@
   <% period_text = period.key.present? ? period.label : "#{period.start_date.strftime('%b %d, %Y')} to #{period.end_date.strftime('%b %d, %Y')}" %>
   <% d.with_header title: "Net Worth", meta: period_text, meta_id: "netWorthFullscreenPeriod" do %>
     <div class="flex items-center">
-      <p class="text-sm text-secondary">Expanded view</p>
+      <p class="text-xs sm:text-sm text-secondary">Expanded view</p>
     </div>
   <% end %>
   <% d.with_body do %>
-    <div class="px-4 pb-4">
-      <div class="w-[92vw] max-w-[1400px] h-[80vh] mx-auto">
+    <div class="pb-4 -mx-2 sm:-mx-1">
+      <div class="w-full max-w-[1400px] h-[70svh] mx-auto">
         <div
           id="netWorthChartFullscreen"
           class="w-full h-full"
