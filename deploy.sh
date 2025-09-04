@@ -33,7 +33,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production pull
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 
 echo "✅ Deployment complete!"
-echo "🌐 Application should be available at: http://localhost:${PORT:-3000}"
+echo "🌐 Application should be available at: http://localhost:${PORT:-3333}"
 
 # Show running containers
 echo "📋 Running containers:"
