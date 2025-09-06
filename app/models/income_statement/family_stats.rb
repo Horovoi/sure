@@ -23,7 +23,8 @@ class IncomeStatement::FamilyStats
         {
           target_currency: @family.currency,
           interval: @interval,
-          family_id: @family.id
+          family_id: @family.id,
+          offset_days: fiscal_offset_days
         }
       ])
     end
@@ -32,9 +33,12 @@ class IncomeStatement::FamilyStats
       <<~SQL
         WITH period_totals AS (
           SELECT
-            date_trunc(:interval, ae.date) as period,
-            CASE WHEN t.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END as classification,
-            SUM(CASE WHEN t.kind = 'investment_contribution' THEN ABS(ae.amount * COALESCE(er.rate, 1)) ELSE ae.amount * COALESCE(er.rate, 1) END) as total
+            date_trunc(
+              :interval,
+              CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
+            ) as period,
+            CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END as classification,
+            SUM(ae.amount * COALESCE(er.rate, 1)) as total
           FROM transactions t
           JOIN entries ae ON ae.entryable_id = t.id AND ae.entryable_type = 'Transaction'
           JOIN accounts a ON a.id = ae.account_id
@@ -46,9 +50,7 @@ class IncomeStatement::FamilyStats
           WHERE a.family_id = :family_id
             AND t.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
             AND ae.excluded = false
-            AND (t.extra -> 'simplefin' ->> 'pending')::boolean IS DISTINCT FROM true
-            AND (t.extra -> 'plaid' ->> 'pending')::boolean IS DISTINCT FROM true
-          GROUP BY period, CASE WHEN t.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
+          GROUP BY period, CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
         )
         SELECT
           classification,
@@ -57,5 +59,13 @@ class IncomeStatement::FamilyStats
         FROM period_totals
         GROUP BY classification;
       SQL
+    end
+
+    def fiscal_offset_days
+      return 0 unless @family.respond_to?(:fiscal_month_enabled?)
+      return 0 unless @family.fiscal_month_enabled?
+      day = @family.fiscal_start_day.to_i
+      return 0 if day <= 1
+      day - 1
     end
 end

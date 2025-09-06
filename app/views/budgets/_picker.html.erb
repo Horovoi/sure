@@ -3,7 +3,13 @@
 <%= turbo_frame_tag "budget_picker" do %>
   <div class="p-3 space-y-4">
     <div class="flex items-center gap-2 justify-between">
-      <% last_month_of_previous_year = Date.new(year - 1, 12, 1) %>
+      <% begin
+           last_dom = Date.new(year - 1, 12, -1).day
+           day = [ family.fiscal_start_day, last_dom ].min
+           last_month_of_previous_year = Date.new(year - 1, 12, day)
+         rescue
+           last_month_of_previous_year = Date.new(year - 1, 12, 1)
+         end %>
 
       <% if Budget.budget_date_valid?(last_month_of_previous_year, family: family) %>
         <%= link_to picker_budgets_path(year: year - 1), data: { turbo_frame: "budget_picker" }, class: "p-2 flex items-center justify-center hover:bg-alpha-black-25 rounded-md" do %>
@@ -19,7 +25,13 @@
         <%= year %>
       </span>
 
-      <% first_month_of_next_year = Date.new(year + 1, 1, 1) %>
+      <% begin
+           first_dom = Date.new(year + 1, 1, -1).day
+           day = [ family.fiscal_start_day, first_dom ].min
+           first_month_of_next_year = Date.new(year + 1, 1, day)
+         rescue
+           first_month_of_next_year = Date.new(year + 1, 1, 1)
+         end %>
 
       <% if Budget.budget_date_valid?(first_month_of_next_year, family: family) %>
         <%= link_to picker_budgets_path(year: year + 1), data: { turbo_frame: "budget_picker" }, class: "p-2 flex items-center justify-center hover:bg-alpha-black-25 rounded-md" do %>
@@ -34,8 +46,11 @@
 
     <div class="grid grid-cols-3 gap-2 text-sm text-center font-medium">
       <% Date::ABBR_MONTHNAMES.compact.each do |month_name| %>
-        <% date = Date.strptime("#{month_name}-#{year}", "%b-%Y") %>
-        <% param_key = Budget.date_to_param(date) %>
+        <% month_index = Date::ABBR_MONTHNAMES.index(month_name) %>
+        <% last_dom = Date.new(year, month_index, -1).day %>
+        <% start_day = [ family.fiscal_start_day, last_dom ].min %>
+        <% date = Date.new(year, month_index, start_day) %>
+        <% param_key = Budget.date_to_param(date, family: family) %>
 
         <% if Budget.budget_date_valid?(date, family: family) %>
           <%= render DS::Link.new(

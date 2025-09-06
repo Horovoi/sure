@@ -6,21 +6,19 @@ module SettingsHelper
     { name: "Preferences", path: :settings_preferences_path },
     { name: "Profile Info", path: :settings_profile_path },
     { name: "Security", path: :settings_security_path },
-    { name: "Payment", path: :settings_payment_path, condition: :not_self_hosted? },
+    { name: "Billing", path: :settings_billing_path, condition: :not_self_hosted? },
     # Transactions section
     { name: "Categories", path: :categories_path },
     { name: "Tags", path: :tags_path },
     { name: "Rules", path: :rules_path },
     { name: "Merchants", path: :family_merchants_path },
-    { name: "Recurring", path: :recurring_transactions_path },
     # Advanced section
-    { name: "AI Prompts", path: :settings_ai_prompts_path, condition: :admin_user? },
-    { name: "LLM Usage", path: :settings_llm_usage_path, condition: :admin_user? },
-    { name: "API Key", path: :settings_api_key_path, condition: :admin_user? },
-    { name: "Self-Hosting", path: :settings_hosting_path, condition: :self_hosted_and_admin? },
-    { name: "Providers", path: :settings_providers_path, condition: :admin_user? },
-    { name: "Imports", path: :imports_path, condition: :admin_user? },
-    { name: "Exports", path: :family_exports_path, condition: :admin_user? },
+    { name: "Budgeting", path: :settings_budgeting_path },
+    { name: "AI Prompts", path: :settings_ai_prompts_path },
+    { name: "API Key", path: :settings_api_key_path },
+    { name: "Self-Hosting", path: :settings_hosting_path, condition: :self_hosted? },
+    { name: "Imports", path: :imports_path },
+    { name: "SimpleFin", path: :simplefin_items_path },
     # More section
     { name: "Guides", path: :settings_guides_path },
     { name: "What's new", path: :changelog_path },
@@ -44,9 +42,9 @@ module SettingsHelper
     }
   end
 
-  def settings_section(title:, subtitle: nil, collapsible: false, open: true, &block)
+  def settings_section(title:, subtitle: nil, &block)
     content = capture(&block)
-    render partial: "settings/section", locals: { title: title, subtitle: subtitle, content: content, collapsible: collapsible, open: open }
+    render partial: "settings/section", locals: { title: title, subtitle: subtitle, content: content }
   end
 
   def settings_nav_footer
@@ -72,14 +70,5 @@ module SettingsHelper
   private
     def not_self_hosted?
       !self_hosted?
-    end
-
-    # Helper used by SETTINGS_ORDER conditions
-    def admin_user?
-      Current.user&.admin?
-    end
-
-    def self_hosted_and_admin?
-      self_hosted? && admin_user?
     end
 end

@@ -40,6 +40,7 @@ class Family < ApplicationRecord
 
   validates :locale, inclusion: { in: I18n.available_locales.map(&:to_s) }
   validates :date_format, inclusion: { in: DATE_FORMATS.map(&:last) }
+  validates :fiscal_month_start_day, inclusion: { in: 1..31 }, allow_nil: true
 
   def assigned_merchants
     merchant_ids = transactions.where.not(merchant_id: nil).pluck(:merchant_id).uniq
@@ -118,6 +119,40 @@ class Family < ApplicationRecord
 
   def oldest_entry_date
     entries.order(:date).first&.date || Date.current
+  end
+
+  # ---------------------------------------------------------------------------
+  # Budget / Fiscal month helpers
+  # ---------------------------------------------------------------------------
+  def fiscal_month_enabled?
+    use_fiscal_months && fiscal_month_start_day.present? && fiscal_month_start_day > 1
+  end
+
+  # Returns the effective start day to use (1..31); when not enabled returns 1
+  def fiscal_start_day
+    (fiscal_month_enabled? ? fiscal_month_start_day : 1) || 1
+  end
+
+  # Compute the start date of the budget period that includes the given date
+  def budget_period_start_for(date)
+    day = fiscal_start_day
+
+    # Determine which month contains the start of period for the given date
+    base_month = if date.day >= day
+      Date.new(date.year, date.month, 1)
+    else
+      (date << 1).beginning_of_month
+    end
+
+    last_dom = Date.new(base_month.year, base_month.month, -1).day
+    start_day = [ day, last_dom ].min
+    Date.new(base_month.year, base_month.month, start_day)
+  end
+
+  # Compute the inclusive end date for the budget period starting at start_date
+  def budget_period_end_for(start_date)
+    next_start = budget_period_start_for(start_date >> 1) # +1 month
+    next_start - 1.day
   end
 
   # Used for invalidating family / balance sheet related aggregation queries

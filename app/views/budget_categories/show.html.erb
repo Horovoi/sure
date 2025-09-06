@@ -71,14 +71,22 @@
           <% end %>
 
           <div class="flex items-center justify-between text-sm">
-            <dt class="text-secondary">Monthly average spending</dt>
+            <dt class="text-secondary">Monthly average spending
+              <% if Current.family.fiscal_month_enabled? %>
+                <span class="ml-1 px-1 py-0.5 border border-tertiary rounded">Fiscal</span>
+              <% end %>
+            </dt>
             <dd class="text-primary font-medium">
               <%= @budget_category.avg_monthly_expense_money.format %>
             </dd>
           </div>
 
           <div class="flex items-center justify-between text-sm">
-            <dt class="text-secondary">Monthly median spending</dt>
+            <dt class="text-secondary">Monthly median spending
+              <% if Current.family.fiscal_month_enabled? %>
+                <span class="ml-1 px-1 py-0.5 border border-tertiary rounded">Fiscal</span>
+              <% end %>
+            </dt>
             <dd class="text-primary font-medium">
               <%= @budget_category.median_monthly_expense_money.format %>
             </dd>

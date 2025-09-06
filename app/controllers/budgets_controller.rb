@@ -18,10 +18,8 @@ class BudgetsController < ApplicationController
   end
 
   def picker
-    render partial: "budgets/picker", locals: {
-      family: Current.family,
-      year: params[:year].to_i || Date.current.year
-    }
+    year = (params[:year].presence || Date.current.year).to_i
+    render partial: "budgets/picker", locals: { family: Current.family, year: year }
   end
 
   private
@@ -35,9 +33,13 @@ class BudgetsController < ApplicationController
     end
 
     def set_budget
-      start_date = Budget.param_to_date(params[:month_year])
+      start_date = Budget.param_to_date(params[:month_year], family: Current.family)
       @budget = Budget.find_or_bootstrap(Current.family, start_date: start_date)
       raise ActiveRecord::RecordNotFound unless @budget
+
+      # Ensure canonical param is used (important for fiscal month mapping)
+      canonical = @budget.to_param
+      redirect_to(budget_path(@budget)) and return if params[:month_year] != canonical
     end
 
     def redirect_to_current_month_budget
