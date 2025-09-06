@@ -135,6 +135,8 @@ class Family < ApplicationRecord
 
   # Compute the start date of the budget period that includes the given date
   def budget_period_start_for(date)
+    # Normalize to Date to safely use month arithmetic (<<, >>)
+    date = date.to_date
     day = fiscal_start_day
 
     # Determine which month contains the start of period for the given date
