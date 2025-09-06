@@ -1,7 +1,7 @@
 <%# locals: (budget_category:) %>
 
 <%= turbo_frame_tag dom_id(budget_category), class: "w-full" do %>
-  <%= link_to budget_budget_category_path(budget_category.budget, budget_category), class: "group w-full p-4 flex items-center gap-3 bg-container", data: { turbo_frame: "drawer" } do %>
+  <%= link_to budget_budget_category_path(budget_category.budget, budget_category), class: "group w-full p-3 md:p-4 flex items-center gap-2 md:gap-3 bg-container", data: { turbo_frame: "drawer" } do %>
 
     <% if budget_category.initialized? %>
       <div class="w-10 h-10 group-hover:scale-105 transition-all duration-300">
@@ -24,30 +24,30 @@
     <% end %>
 
     <div>
-      <p class="text-sm font-medium text-primary"><%= budget_category.category.name %></p>
+      <p class="text-xs md:text-sm font-medium text-primary"><%= budget_category.category.name %></p>
 
       <% if budget_category.initialized? %>
         <% if budget_category.available_to_spend.negative? %>
-          <p class="text-sm font-medium text-red-500"><%= format_money(budget_category.available_to_spend_money.abs) %> over</p>
+          <p class="text-xs md:text-sm font-medium text-red-500"><%= format_money(budget_category.available_to_spend_money.abs) %> over</p>
         <% elsif budget_category.available_to_spend.zero? %>
-          <p class="text-sm font-medium <%= budget_category.budgeted_spending.positive? ? "text-orange-500" : "text-secondary" %>">
+          <p class="text-xs md:text-sm font-medium <%= budget_category.budgeted_spending.positive? ? "text-orange-500" : "text-secondary" %>">
             <%= format_money(budget_category.available_to_spend_money) %> left
           </p>
         <% else %>
-          <p class="text-sm text-secondary font-medium"><%= format_money(budget_category.available_to_spend_money) %> left</p>
+          <p class="text-xs md:text-sm text-secondary font-medium"><%= format_money(budget_category.available_to_spend_money) %> left</p>
         <% end %>
       <% else %>
-        <p class="text-sm text-secondary font-medium">
+        <p class="text-xs md:text-sm text-secondary font-medium">
           <%= budget_category.median_monthly_expense_money.format %> avg
         </p>
       <% end %>
     </div>
 
     <div class="ml-auto text-right">
-      <p class="text-sm font-medium text-primary"><%= format_money(budget_category.actual_spending_money) %></p>
+      <p class="text-xs md:text-sm font-medium text-primary"><%= format_money(budget_category.actual_spending_money) %></p>
 
       <% if budget_category.initialized? %>
-        <p class="text-sm text-secondary">from <%= format_money(budget_category.budgeted_spending_money) %></p>
+        <p class="text-xs md:text-sm text-secondary">from <%= format_money(budget_category.budgeted_spending_money) %></p>
       <% end %>
     </div>
   <% end %>

@@ -1,18 +1,26 @@
 class DS::Dialog < DesignSystemComponent
   renders_one :header, ->(title: nil, subtitle: nil, meta: nil, meta_id: nil, hide_close_icon: false, **opts, &block) do
     content_tag(:header, class: "px-4 flex flex-col gap-2", **opts) do
-      title_div = content_tag(:div, class: "flex items-center justify-between gap-2") do
-        title = content_tag(:h2, title, class: class_names("font-medium text-primary", drawer? ? "text-lg" : "")) if title
-        meta_chip = content_tag(:span, meta, id: meta_id, class: "ml-2 inline-flex items-center rounded-full border border-secondary text-secondary text-xs font-medium px-2 py-0.5") if meta
-        close_icon = render DS::Button.new(variant: "icon", class: "ml-auto", icon: "x", tabindex: "-1", data: { action: "DS--dialog#close" }) unless hide_close_icon
-        safe_join([ title, meta_chip, close_icon ].compact)
+      close_icon = render DS::Button.new(variant: "icon", class: "ml-auto", icon: "x", tabindex: "-1", data: { action: "DS--dialog#close" }) unless hide_close_icon
+
+      if title.present? || meta.present?
+        title_div = content_tag(:div, class: "flex items-center justify-between gap-2") do
+          title_el = content_tag(:h2, title, class: class_names("font-medium text-primary", drawer? ? "text-lg" : "")) if title
+          meta_chip = content_tag(:span, meta, id: meta_id, class: "ml-2 inline-flex items-center rounded-full border border-secondary text-secondary text-xs font-medium px-2 py-0.5") if meta
+          safe_join([ title_el, meta_chip, close_icon ].compact)
+        end
+
+        subtitle_el = content_tag(:p, subtitle, class: "text-sm text-secondary") if subtitle
+        block_content = capture(&block) if block
+        safe_join([ title_div, subtitle_el, block_content ].compact)
+      else
+        # No title/meta provided: place block content and close icon on the same row
+        block_content = capture(&block) if block
+        header_row = content_tag(:div, class: "flex items-start justify-between gap-2") do
+          safe_join([ block_content, close_icon ].compact)
+        end
+        header_row
       end
-
-      subtitle = content_tag(:p, subtitle, class: "text-sm text-secondary") if subtitle
-
-      block_content = capture(&block) if block
-
-      safe_join([ title_div, subtitle, block_content ].compact)
     end
   end
 
@@ -70,7 +78,8 @@ class DS::Dialog < DesignSystemComponent
 
   def dialog_outer_classes
     variant_classes = if drawer?
-      "items-end justify-end"
+      # On mobile: anchor to top so expansion pushes downward; on lg+: anchor to bottom like a classic drawer
+      "items-start justify-center lg:items-end lg:justify-end"
     else
       "items-center justify-center"
     end
@@ -83,7 +92,9 @@ class DS::Dialog < DesignSystemComponent
 
   def dialog_inner_classes
     variant_classes = if drawer?
-      "lg:w-[550px] h-full"
+      # On mobile: add vertical insets to match modal spacing and prevent overflow.
+      # On lg+: keep previous drawer sizing and full-height behavior.
+      "lg:w-[550px] lg:h-full mt-6 mb-4 lg:my-0 max-h-[calc(100svh-1.75rem)]"
     else
       class_names(
         "max-h-full",
@@ -92,7 +103,8 @@ class DS::Dialog < DesignSystemComponent
     end
 
     class_names(
-      "flex flex-col bg-container rounded-xl shadow-border-xs mx-3 lg:mx-0 w-full overflow-hidden",
+      # Limit max width on small screens to avoid overflow when combined with horizontal margins
+      "flex flex-col bg-container rounded-xl shadow-border-xs mx-3 lg:mx-0 w-full max-w-[calc(100vw-1.5rem)] overflow-hidden",
       variant_classes
     )
   end
