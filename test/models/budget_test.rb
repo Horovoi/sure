@@ -62,6 +62,42 @@ class BudgetTest < ActiveSupport::TestCase
     refute Budget.budget_date_valid?(2.months.from_now, family: @family)
   end
 
+  test "budget_date_valid? works with fiscal months enabled at 2-years boundary" do
+    # Enable fiscal months with a start day that forces the back-one-month path for early month dates
+    @family.use_fiscal_months = true
+    @family.fiscal_month_start_day = 10
+
+    # Using TimeWithZone here reproduces the original edge case
+    two_years_ago = 2.years.ago.beginning_of_month
+    assert Budget.budget_date_valid?(two_years_ago, family: @family)
+  end
+
+  test "budget_date_valid? allows going back to earliest entry > 2 years with fiscal months" do
+    @family.use_fiscal_months = true
+    @family.fiscal_month_start_day = 10
+
+    # Create an entry over 3 years ago on an early day to exercise month subtraction
+    old_account = Account.create!(
+      family: @family,
+      accountable: Depository.new,
+      name: "Very Old Account",
+      status: "active",
+      currency: "USD",
+      balance: 100
+    )
+
+    Entry.create!(
+      account: old_account,
+      entryable: Transaction.new(category: categories(:income)),
+      date: 3.years.ago.change(day: 5),
+      name: "Very Old Transaction",
+      amount: 10,
+      currency: "USD"
+    )
+
+    assert Budget.budget_date_valid?(3.years.ago.beginning_of_month, family: @family)
+  end
+
   test "previous_budget_param returns nil when date is too old" do
     # Create a budget at the oldest allowed date
     two_years_ago = 2.years.ago.beginning_of_month
