@@ -19,8 +19,8 @@ export default class extends Controller {
 
       // Update fullscreen header period label
       const label = ds.periodLabel;
-      const start = ds.periodStart || (data && data.start_date);
-      const end = ds.periodEnd || (data && data.end_date);
+      const start = ds.periodStart || data?.start_date;
+      const end = ds.periodEnd || data?.end_date;
       const pretty = label || this.formatRange(start, end);
       const headerEl = document.getElementById("netWorthFullscreenPeriod");
       if (headerEl && pretty) headerEl.textContent = pretty;

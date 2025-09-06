@@ -251,8 +251,10 @@ export default class extends Controller {
       .style("font-weight", "500")
       .attr("text-anchor", "middle")
       .attr("dx", (_d, i) => {
-        // We know we only have 2 values
-        return i === 0 ? "5em" : "-5em";
+        // Dynamic horizontal offset to reduce collisions with endpoint labels/markers
+        // Range ~2.5em–4.5em depending on width
+        const em = Math.max(2.5, Math.min(4.5, this._d3ContainerWidth / 300));
+        return i === 0 ? `${em}em` : `-${em}em`;
       })
       .attr("dy", "0em");
   }
@@ -474,6 +476,17 @@ export default class extends Controller {
     const first = this._normalDataPoints[0];
     const last = this._normalDataPoints[this._normalDataPoints.length - 1];
 
+    // Skip endpoints entirely when the series is effectively flat (straight line)
+    // Use a small relative epsilon to account for floating point rounding
+    const values = this._normalDataPoints.map(this._getDatumValue);
+    const dataMin = d3.min(values);
+    const dataMax = d3.max(values);
+    const scale = Math.max(Math.abs(dataMax), Math.abs(dataMin), 1);
+    const epsilon = scale * 1e-6; // ~0.0001% of magnitude
+    if (Math.abs(dataMax - dataMin) <= epsilon) {
+      return;
+    }
+
     const points = [
       { d: first, align: "start" },
       { d: last, align: "end" },
@@ -483,6 +496,18 @@ export default class extends Controller {
       const cx = this._d3XScale(d.date);
       const cy = this._d3YScale(this._getDatumValue(d));
 
+      // Determine local slope using a neighbor to better place labels and avoid overlaps
+      let neighbor;
+      if (align === "start") {
+        neighbor = this._normalDataPoints[1] || d;
+      } else {
+        neighbor = this._normalDataPoints[this._normalDataPoints.length - 2] || d;
+      }
+      const ny = this._d3YScale(this._getDatumValue(neighbor));
+      const slopeUp = ny < cy; // smaller y is visually higher
+      const isDark = this._isDarkTheme();
+      const outlineColor = isDark ? "var(--color-gray-900)" : "var(--color-white)";
+
       // Outer halo
       this._d3Group
         .append("circle")
@@ -491,7 +516,8 @@ export default class extends Controller {
         .attr("cy", cy)
         .attr("r", 7)
         .attr("fill", this._trendColor)
-        .attr("fill-opacity", 0.12)
+        // Lighter, theme-aware halo
+        .attr("fill-opacity", isDark ? 0.10 : 0.06)
         .attr("pointer-events", "none");
 
       // Inner dot
@@ -501,21 +527,72 @@ export default class extends Controller {
         .attr("cx", cx)
         .attr("cy", cy)
         .attr("r", 3.5)
+        // Softer, theme-aware dot with subtle outline for contrast on both themes
         .attr("fill", this._trendColor)
+        .attr("fill-opacity", isDark ? 0.75 : 0.6)
+        .attr("stroke", outlineColor)
+        .attr("stroke-width", 1.5)
+        .attr("stroke-opacity", 0.9)
         .attr("pointer-events", "none");
 
       // Value label
-      const labelOffsetX = align === "start" ? 10 : -10;
+      const labelOffsetX = align === "start" ? 12 : -12;
+      // Place label opposite to slope to reduce overlap with the line near the endpoint
+      const labelOffsetY = slopeUp ? 14 : -14; // if line goes up, put label below; else above
       const anchor = align === "start" ? "start" : "end";
-      this._d3Group
+
+      // Group for label + background
+      const g = this._d3Group.append("g").attr("class", "endpoint-marker label");
+
+      const labelText = this._extractFormattedValue(d.value);
+      const text = g
         .append("text")
-        .attr("class", "fg-gray fill-current")
+        // Keep label color as-is (theme-provided via text-primary)
+        .attr("class", "text-primary fill-current")
         .attr("x", cx + labelOffsetX)
-        .attr("y", cy - 10)
+        .attr("y", cy + labelOffsetY)
         .attr("text-anchor", anchor)
         .style("font-size", "12px")
         .style("font-weight", "600")
-        .text(this._extractFormattedValue(d.value));
+        .text(labelText);
+
+      // Minimal style: create a soft halo by stroking a cloned text underneath
+      try {
+        const haloColor = isDark ? "var(--color-gray-900)" : "var(--color-white)";
+        g.insert("text", "text")
+          .attr("x", cx + labelOffsetX)
+          .attr("y", cy + labelOffsetY)
+          .attr("text-anchor", anchor)
+          .style("font-size", "12px")
+          .style("font-weight", "600")
+          .text(labelText)
+          .attr("fill", "none")
+          .attr("stroke", haloColor)
+          .attr("stroke-width", 3.5)
+          .attr("stroke-linejoin", "round")
+          .attr("stroke-opacity", 0.9)
+          .style("paint-order", "stroke fill")
+          .attr("pointer-events", "none");
+
+        const bbox = text.node().getBBox();
+
+        // Connector line from marker to the nearest edge of the label, to feel "attached" to the chart
+        const labelEdgeX = align === "start" ? bbox.x - 6 : bbox.x + bbox.width + 6;
+        const labelEdgeY = bbox.y + bbox.height / 2;
+        this._d3Group
+          .append("line")
+          .attr("x1", cx)
+          .attr("y1", cy)
+          .attr("x2", labelEdgeX)
+          .attr("y2", labelEdgeY)
+          .attr("stroke", this._trendColor)
+          .attr("stroke-opacity", 0.25)
+          .attr("stroke-width", 1.5)
+          .attr("stroke-linecap", "round")
+          .attr("pointer-events", "none");
+      } catch (_) {
+        // If getBBox fails (e.g., not in DOM yet), skip background
+      }
     });
   }
 
@@ -545,7 +622,7 @@ export default class extends Controller {
     const pref = docEl.getAttribute("data-theme") || "system";
     if (pref === "dark") return true;
     if (pref === "light") return false;
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
   }
 
   _tooltipTemplate(datum) {
@@ -643,10 +720,17 @@ export default class extends Controller {
   }
 
   get _margin() {
-    if (this.useLabelsValue) {
-      return { top: 20, right: 0, bottom: 10, left: 0 };
-    }
-    return { top: 0, right: 0, bottom: 0, left: 0 };
+    // Provide extra breathing room when labels/markers/guides are enabled
+    const withLabels = this.useLabelsValue;
+    const withGuides = this.showYGuidesValue;
+    const withMarkers = this.endpointMarkersValue;
+
+    const top = withLabels ? (withMarkers ? 28 : 22) : 4;
+    const bottom = withLabels ? (withMarkers ? 18 : 14) : 4;
+    const right = withGuides || withMarkers ? 12 : 4;
+    const left = withLabels ? 6 : 4;
+
+    return { top, right, bottom, left };
   }
 
   get _d3ContainerWidth() {
@@ -711,7 +795,7 @@ export default class extends Controller {
       // Start axis at a percentage below the minimum, not at 0
       const baselinePadding = dataRange * 2; // Show 2x the data range below min
       yMin = Math.max(0, dataMin - baselinePadding);
-      yMax = dataMax + dataRange * 0.5; // Add 50% padding above
+      yMax = dataMax + dataRange * 0.6; // Slightly more padding above for labels
     } else {
       // For larger changes or when data crosses zero, use more context
       // Always include 0 when data is negative or close to 0
@@ -719,14 +803,16 @@ export default class extends Controller {
         yMin = Math.min(0, dataMin * 1.1);
       } else {
         // Otherwise use dynamic baseline
-        yMin = dataMin - dataRange * 0.3;
+        yMin = dataMin - dataRange * 0.35;
       }
-      yMax = dataMax + dataRange * 0.1;
+      yMax = dataMax + dataRange * 0.15;
     }
 
     // Adjust padding for labels if needed
     if (this.useLabelsValue) {
-      const extraPadding = (yMax - yMin) * 0.1;
+      // Add more breathing room when endpoint markers or guides are present
+      const factor = (this.endpointMarkersValue || this.showYGuidesValue) ? 0.15 : 0.1;
+      const extraPadding = (yMax - yMin) * factor;
       yMin -= extraPadding;
       yMax += extraPadding;
     }
@@ -745,13 +831,13 @@ export default class extends Controller {
   }
 
   get _xPaddingLeft() {
-    // Prevent clipped endpoints and labels; add a bit more when endpoint markers are visible
-    const base = Math.max(6, this.strokeWidthValue * 1.5);
-    return this.endpointMarkersValue ? base + 6 : base;
+    // Prevent clipped endpoints and labels; add more when endpoint markers are visible
+    const base = Math.max(8, this.strokeWidthValue * 2);
+    return this.endpointMarkersValue ? base + 8 : base + 4;
   }
 
   get _xPaddingRight() {
-    // Mirror left padding and leave small room for right-hand labels
-    return this._xPaddingLeft + 6;
+    // Mirror left padding and reserve extra room for right-hand labels/guides
+    return this._xPaddingLeft + (this.showYGuidesValue ? 10 : 6);
   }
 }
