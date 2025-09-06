@@ -42,7 +42,17 @@
     <%= render DS::Link.new(
         text: "Today",
         variant: "outline",
-        href: budget_path(Budget.date_to_param(Date.current)),
+        href: budget_path(Budget.date_to_param(Date.current, family: Current.family)),
     ) %>
   </div>
+</div>
+
+<div class="text-secondary text-xs mb-3">
+  <span>Period:</span>
+  <span class="text-primary">
+    <%= @budget.start_date.strftime("%b %-d, %Y") %> — <%= @budget.end_date.strftime("%b %-d, %Y") %>
+  </span>
+  <% if Current.family.fiscal_month_enabled? %>
+    <span class="ml-2 px-1.5 py-0.5 border border-tertiary rounded-md">Fiscal months</span>
+  <% end %>
 </div>

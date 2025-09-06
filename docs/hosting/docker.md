@@ -1,119 +1,110 @@
 # Self Hosting Sure with Docker
 
-This guide will help you setup, update, and maintain your self-hosted Sure application with Docker Compose. Docker Compose is the most popular and recommended way to self-host the Sure app.
+This guide helps you set up, run, and update your self-hosted Sure instance using Docker Compose. Docker Compose is the most popular and recommended way to self-host the Sure app.
 
 ## Setup Guide
 
-Follow the guide below to get your app running.
+Follow the steps below to get your app running.
 
 ### Step 1: Install Docker
 
 Complete the following steps:
 
-1. Install Docker Engine by following [the official guide](https://docs.docker.com/engine/install/)
+1. Install Docker Engine using the official guide: https://docs.docker.com/engine/install/ (for Windows and macOS, you can use Docker Desktop app instead: https://docs.docker.com/desktop/)
 2. Start the Docker service on your machine
-3. Verify that Docker is installed correctly and is running by opening up a terminal and running the following command:
+3. Verify Docker is installed and running:
 
 ```bash
-# If Docker is setup correctly, this command will succeed
 docker run hello-world
 ```
 
-### Step 2: Configure your Docker Compose file and environment
+### Step 2: Create a folder and get the compose file
 
-#### Create a directory for your app to run
-
-Open your terminal and create a directory where your app will run. Below is an example command with a recommended directory:
+Create a working directory for your deployment and download the compose file:
 
 ```bash
-# Create a directory on your computer for Docker files (name whatever you'd like)
 mkdir -p ~/docker-apps/sure
-
-# Once created, navigate your current working directory to the new folder
 cd ~/docker-apps/sure
+
+# Download the production compose file
+curl -o docker-compose.yml \
+  https://raw.githubusercontent.com/Horovoi/sure/refs/heads/main/docker-compose.prod.yml
 ```
 
-#### Copy our sample Docker Compose file
+This fetches the production compose configuration that the rest of this guide references.
 
-Make sure you are in the directory you just created and run the following command:
+### Step 3: Configure your environment
 
-```bash
-# Download the sample compose.yml file from the GitHub repository
-curl -o compose.yml https://raw.githubusercontent.com/we-promise/sure/main/compose.example.yml
-```
-
-This command will do the following:
-
-1. Fetch the sample docker compose file from our public Github repository
-2. Creates a file in your current directory called `compose.yml` with the contents of the example file
-
-At this point, the only file in your current working directory should be `compose.yml`.
-
-### Step 3 (optional): Configure your environment
-
-By default, our `compose.example.yml` file runs without any configuration.  That said, if you would like extra security (important if you're running outside of a local network), you can follow the steps below to set things up.
-
-If you're running the app locally and don't care much about security, you can skip this step.
-
-#### Create your environment file
-
-In order to configure the app, you will need to create a file called `.env`, which is where Docker will read environment variables from.
-
-To do this, run the following command:
+Create a `.env` file next to `docker-compose.yml` for Docker Compose variable substitution.
 
 ```bash
 touch .env
 ```
 
-#### Generate the app secret key
-
-The app requires an environment variable called `SECRET_KEY_BASE` to run.
-
-We will first need to generate this in the terminal. If you have `openssl` installed on your computer, you can generate it with the following command:
+Generate a `SECRET_KEY_BASE` (required):
 
 ```bash
 openssl rand -hex 64
-```
-
-_Alternatively_, you can generate a key without openssl or any external dependencies by pasting the following bash command in your terminal and running it:
-
-```bash
+# or, if openssl isn't available
 head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n' && echo
 ```
 
-Once you have generated a key, save it and move on to the next step.
+Open `.env` and set at least the required values:
 
-#### Fill in your environment file
+```dotenv
+# Required
+SECRET_KEY_BASE="paste_the_generated_value_here"
+POSTGRES_PASSWORD="choose_a_strong_database_password"
 
-Open the file named `.env` that we created in a prior step using your favorite text editor.
+# Optional (recommended to leave defaults unless needed)
+# POSTGRES_USER=sure_user
+# POSTGRES_DB=sure_production
 
-Fill in this file with the following variables:
+# Host port (defaults to 3333)
+# PORT=3333
 
-```txt
-SECRET_KEY_BASE="replacemewiththegeneratedstringfromthepriorstep"
-POSTGRES_PASSWORD="replacemewithyourdesireddatabasepassword"
+# Optional integrations
+# TWELVE_DATA_API_KEY=
+# OPENAI_ACCESS_TOKEN=
+
+# Optional SMTP settings (for password reset, emails)
+# SMTP_ADDRESS=
+# SMTP_PORT=465
+# SMTP_USERNAME=
+# SMTP_PASSWORD=
+# SMTP_TLS_ENABLED=true
+# EMAIL_SENDER=no-reply@example.com
+
+# SSL settings if behind a TLS proxy
+# RAILS_FORCE_SSL=true
+# RAILS_ASSUME_SSL=true
+
+# Pin image to a specific tag/commit (optional). If unset, uses "latest".
+# BUILD_COMMIT_SHA=
 ```
+
+Notes:
+- `POSTGRES_PASSWORD` is required; `POSTGRES_USER` and `POSTGRES_DB` default to `sure_user` and `sure_production`.
+- The app listens on container port 3333; the host port defaults to 3333 and can be changed via `PORT`.
+- Only variables listed above are read by the containers as defined in `docker-compose.yml`.
 
 ### Step 4: Run the app
 
-You are now ready to run the app. Start with the following command to make sure everything is working:
+Start the stack and check logs:
 
 ```bash
 docker compose up
 ```
 
-This will pull our official Docker image and start the app. You will see logs in your terminal.
+When services are healthy, open your browser to:
 
-Open your browser, and navigate to `http://localhost:3000`.
+http://localhost:3333
 
-If everything is working, you will see the Sure login screen.
+You should see the Sure login screen.
 
 ### Step 5: Create your account
 
-The first time you run the app, you will need to register a new account by hitting "create your account" on the login page.
-
-1. Enter your email
-2. Enter a password
+On first run, click "Create your account" on the login page and register with your email and password.
 
 ### Step 6: Run the app in the background
 
@@ -123,71 +114,66 @@ Most self-hosting users will want the Sure app to run in the background on their
 docker compose up -d
 ```
 
-The `-d` flag will run Docker Compose in "detached" mode. To verify it is running, you can run the following command:
+Verify it is running:
 
-```
+```bash
 docker compose ls
 ```
 
 ### Step 7: Enjoy!
 
-Your app is now set up. You can visit it at `http://localhost:3000` in your browser.
+Your app is now running at http://localhost:3333 (or your chosen `PORT`).
 
-If you find bugs or have a feature request, be sure to read through our [contributing guide here](https://github.com/we-promise/sure/wiki/How-to-Contribute-Effectively-to-Sure).
+If you find bugs or have feature requests, open an issue on GitHub.
 
 ## How to update your app
 
-The mechanism that updates your self-hosted Sure app is the GHCR (Github Container Registry) Docker image that you see in the `compose.yml` file:
+The stack pulls a prebuilt image defined in the compose file:
 
 ```yml
-image: ghcr.io/we-promise/sure:latest
+image: ghcr.io/horovoi/sure:${BUILD_COMMIT_SHA:-latest}
 ```
 
-We recommend using one of the following images, but you can pin your app to whatever version you'd like (see [packages](https://github.com/we-promise/sure/pkgs/container/sure)):
-
-- `ghcr.io/we-promise/sure:latest` (latest commit)
-- `ghcr.io/we-promise/sure:stable` (latest release)
-
-By default, your app _will NOT_ automatically update. To update your self-hosted app, run the following commands in your terminal:
+To update to the newest published image:
 
 ```bash
-cd ~/docker-apps/sure # Navigate to whatever directory you configured the app in
-docker compose pull # This pulls the "latest" published image from GHCR
-docker compose build # This rebuilds the app with updates
-docker compose up --no-deps -d web worker # This restarts the app using the newest version
+cd ~/docker-apps/sure
+docker compose pull
+docker compose up -d web worker
 ```
 
-## How to change which updates your app receives
+## How to pin the app to a specific version
 
-If you'd like to pin the app to a specific version or tag, all you need to do is edit the `compose.yml` file:
+You can pin to a specific tag or commit by setting `BUILD_COMMIT_SHA` in your `.env` (for example a release tag or commit SHA):
 
-```yml
-image: ghcr.io/we-promise/sure:stable
+```dotenv
+BUILD_COMMIT_SHA=latest
+# or: BUILD_COMMIT_SHA=68528a115638
 ```
 
-After doing this, make sure and restart the app:
+Then redeploy:
 
 ```bash
-docker compose pull # This pulls the "latest" published image from GHCR
-docker compose build # This rebuilds the app with updates
-docker compose up --no-deps -d app # This restarts the app using the newest version
+docker compose pull
+docker compose up -d web worker
 ```
 
 ## Troubleshooting
 
 ### ActiveRecord::DatabaseConnectionError
 
-If you are trying to get Sure started for the **first time** and run into database connection issues, it is likely because Docker has already initialized the Postgres database with a _different_ default role (usually from a previous attempt to start the app).
+If this is your first start and you hit a database connection error, Docker may have initialized the database with an unexpected role from a previous attempt.
 
-If you run into this issue, you can optionally **reset the database**.
+You can reset the stack (this deletes all data: database, redis, and uploaded files stored in volumes):
 
-**PLEASE NOTE: this will delete any existing data that you have in your Sure database, so proceed with caution.**  For first-time users of the app just trying to get started, you're generally safe to run the commands below.
-
-By running the commands below, you will delete your existing Sure database and "reset" it.
-
-```
-docker compose down
-docker volume rm sure_postgres-data # this is the name of the volume the DB is mounted to
+```bash
+docker compose down -v
 docker compose up
-docker exec -it sure-postgres-1 psql -U maybe -d maybe_production -c "SELECT 1;" # This will verify that the issue is fixed
+```
+
+To verify the DB is reachable after startup:
+
+```bash
+docker compose exec db psql -U sure_user -d sure_production -c "SELECT 1;"
+# If you customized POSTGRES_USER/POSTGRES_DB, substitute those values.
 ```

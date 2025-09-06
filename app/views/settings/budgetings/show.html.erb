@@ -1,0 +1,45 @@
+<%= content_for :page_title, "Budgeting" %>
+
+<%= settings_section title: "Fiscal Months", subtitle: "Shift monthly budgets to start on a custom day" do %>
+  <div>
+    <%= styled_form_with model: @user, class: "space-y-4", data: { controller: "fiscal-months auto-submit-form" } do |form| %>
+      <%= form.hidden_field :redirect_to, value: "budgeting" %>
+      <%= form.fields_for :family do |family_form| %>
+        <div class="p-3 shadow-border-xs bg-container rounded-lg md:flex md:justify-between md:items-center">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full bg-gray-25 flex justify-center items-center">
+              <%= icon "calendar-range" %>
+            </div>
+
+            <div class="text-sm space-y-1">
+              <% if @user.family.fiscal_month_enabled? %>
+                <p class="text-primary">Fiscal budgeting is <span class="font-medium text-green-600">enabled</span></p>
+                <p class="text-secondary">Budgets start on the <%= @user.family.fiscal_start_day.ordinalize %> of each month.</p>
+              <% else %>
+                <p class="text-primary">Fiscal budgeting is <span class="font-medium text-red-600">disabled</span></p>
+                <p class="text-secondary">Use fiscal months to start budgets on a custom day.</p>
+              <% end %>
+            </div>
+          </div>
+
+          <div class="mt-4 md:mt-0">
+            <%= family_form.toggle :use_fiscal_months, {
+                  label: nil,
+                  data: { auto_submit_form_target: "auto", action: "change->fiscal-months#handleToggle", fiscal_months_target: "toggle" }
+                } %>
+          </div>
+        </div>
+
+        <%= family_form.select :fiscal_month_start_day,
+              (1..31).map { |d| [ d.ordinalize, d ] },
+              { label: "Fiscal month start day" },
+              { disabled: !@user.family.use_fiscal_months,
+                data: { auto_submit_form_target: "auto", fiscal_months_target: "day" } } %>
+
+        <p class="text-xs text-secondary pl-2">
+          Budgets start on this day each month. Example: 10th runs from the 10th this month through the 9th next month.
+        </p>
+      <% end %>
+    <% end %>
+  </div>
+<% end %>

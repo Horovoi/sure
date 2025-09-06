@@ -34,6 +34,21 @@ class Period
       label: "Current Month",
       comparison_label: "vs. start of month"
     },
+    # Shown only when fiscal months are enabled for the family
+    "fiscal_current_month" => {
+      date_range: -> {
+        family = Current.family
+        start = if family&.fiscal_month_enabled?
+          family.budget_period_start_for(Date.current)
+        else
+          Date.current.beginning_of_month
+        end
+        [ start, Date.current ]
+      },
+      label_short: "FMTD",
+      label: "Fiscal MTD",
+      comparison_label: "vs. start of fiscal month"
+    },
     "last_30_days" => {
       date_range: -> { [ 30.days.ago.to_date, Date.current ] },
       label_short: "30D",
@@ -82,7 +97,12 @@ class Period
     end
 
     def all
-      PERIODS.map { |key, period| from_key(key) }
+      keys = PERIODS.keys
+      # Hide fiscal period unless enabled, but still allow from_key for resilience
+      unless Current.family&.fiscal_month_enabled?
+        keys = keys - [ "fiscal_current_month" ]
+      end
+      keys.map { |key| from_key(key) }
     end
 
     def as_options

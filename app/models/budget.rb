@@ -15,28 +15,41 @@ class Budget < ApplicationRecord
            :estimated_spending, :estimated_income, :actual_income, :remaining_expected_income
 
   class << self
-    def date_to_param(date)
-      date.strftime(PARAM_DATE_FORMAT).downcase
+    def date_to_param(date, family: nil)
+      start_for_param = family ? family.budget_period_start_for(date) : date
+      start_for_param.strftime(PARAM_DATE_FORMAT).downcase
     end
 
-    def param_to_date(param)
-      Date.strptime(param, PARAM_DATE_FORMAT).beginning_of_month
+    def param_to_date(param, family: nil)
+      parsed = Date.strptime(param, PARAM_DATE_FORMAT)
+      return parsed.beginning_of_month unless family
+
+      # Interpret the param as the month that STARTS the budget period
+      # Example: "Mar-2025" -> Mar 10, 2025 (if fiscal_start_day = 10)
+      day = family.fiscal_start_day
+      last_dom = Date.new(parsed.year, parsed.month, -1).day
+      Date.new(parsed.year, parsed.month, [day, last_dom].min)
     end
 
     def budget_date_valid?(date, family:)
-      beginning_of_month = date.beginning_of_month
+      start = family.budget_period_start_for(date)
+      earliest_start = family.budget_period_start_for(oldest_valid_budget_date(family))
+      current_start = family.budget_period_start_for(Date.current)
 
-      beginning_of_month >= oldest_valid_budget_date(family) && beginning_of_month <= Date.current.end_of_month
+      start >= earliest_start && start <= current_start
     end
 
     def find_or_bootstrap(family, start_date:)
       return nil unless budget_date_valid?(start_date, family: family)
 
+      period_start = family.budget_period_start_for(start_date)
+      period_end = family.budget_period_end_for(period_start)
+
       Budget.transaction do
         budget = Budget.find_or_create_by!(
           family: family,
-          start_date: start_date.beginning_of_month,
-          end_date: start_date.end_of_month
+          start_date: period_start,
+          end_date: period_end
         ) do |b|
           b.currency = family.currency
         end
@@ -61,7 +74,7 @@ class Budget < ApplicationRecord
   end
 
   def to_param
-    self.class.date_to_param(start_date)
+    self.class.date_to_param(start_date, family: family)
   end
 
   def sync_budget_categories
@@ -111,14 +124,14 @@ class Budget < ApplicationRecord
   end
 
   def current?
-    start_date == Date.today.beginning_of_month && end_date == Date.today.end_of_month
+    start_date == family.budget_period_start_for(Date.today) && end_date == family.budget_period_end_for(start_date)
   end
 
   def previous_budget_param
     previous_date = start_date - 1.month
     return nil unless self.class.budget_date_valid?(previous_date, family: family)
 
-    self.class.date_to_param(previous_date)
+    self.class.date_to_param(previous_date, family: family)
   end
 
   def next_budget_param
@@ -127,7 +140,7 @@ class Budget < ApplicationRecord
     next_date = start_date + 1.month
     return nil unless self.class.budget_date_valid?(next_date, family: family)
 
-    self.class.date_to_param(next_date)
+    self.class.date_to_param(next_date, family: family)
   end
 
   def to_donut_segments_json

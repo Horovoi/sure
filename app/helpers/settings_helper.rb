@@ -13,6 +13,7 @@ module SettingsHelper
     { name: "Rules", path: :rules_path },
     { name: "Merchants", path: :family_merchants_path },
     # Advanced section
+    { name: "Budgeting", path: :settings_budgeting_path },
     { name: "AI Prompts", path: :settings_ai_prompts_path },
     { name: "API Key", path: :settings_api_key_path },
     { name: "Self-Hosting", path: :settings_hosting_path, condition: :self_hosted? },

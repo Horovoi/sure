@@ -25,7 +25,7 @@
             { label: t(".date_format") },
             { data: { auto_submit_form_target: "auto" } } %>
 
-        <%= form.select :default_period,
+      <%= form.select :default_period,
             Period.all.map { |period| [ period.label, period.key ] },
             { label: t(".default_period") },
             { data: { auto_submit_form_target: "auto" } } %>
@@ -45,6 +45,8 @@
     <% end %>
   </div>
 <% end %>
+
+<!-- Moved Budgeting to Advanced > Budgeting page -->
 
 <%= settings_section title: t(".theme_title"), subtitle: t(".theme_subtitle") do %>
   <div data-controller="theme" data-theme-user-preference-value="<%= @user.theme %>">
