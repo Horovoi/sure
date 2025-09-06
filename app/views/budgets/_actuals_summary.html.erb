@@ -1,10 +1,10 @@
 <%# locals: (budget:) %>
 
 <div>
-  <div class="p-4 border-b border-secondary">
-    <h3 class="text-sm text-secondary mb-2">Income</h3>
+  <div class="p-3 md:p-4 border-b border-secondary">
+    <h3 class="text-xs md:text-sm text-secondary mb-2">Income</h3>
 
-    <span class="inline-block mb-2 text-xl font-medium text-primary">
+    <span class="inline-block mb-2 text-lg md:text-xl font-medium text-primary">
       <%= budget.actual_income_money.format %>
     </span>
 
@@ -29,10 +29,10 @@
     <% end %>
   </div>
 
-  <div class="p-4">
-    <h3 class="text-sm text-secondary mb-2">Expenses</h3>
+  <div class="p-3 md:p-4">
+    <h3 class="text-xs md:text-sm text-secondary mb-2">Expenses</h3>
 
-    <span class="inline-block mb-2 text-xl font-medium text-primary"><%= budget.actual_spending_money.format %></span>
+    <span class="inline-block mb-2 text-lg md:text-xl font-medium text-primary"><%= budget.actual_spending_money.format %></span>
 
     <% if budget.expense_category_totals.any? %>
       <div>
