@@ -200,119 +200,119 @@ class PagesController < ApplicationController
       # Central Cash Flow node
       cash_flow_idx = add_node.call("cash_flow_node", "Cash Flow", total_income, 100.0, "var(--color-success)")
 
-      # Process income categories (flow: subcategory -> parent -> cash_flow)
-      process_category_totals(
-        category_totals: income_totals.category_totals,
-        total: total_income,
-        prefix: "income",
-        default_color: Category::UNCATEGORIZED_COLOR,
-        add_node: add_node,
-        links: links,
-        cash_flow_idx: cash_flow_idx,
-        flow_direction: :inbound
-      )
+      # --- Process Income Side ---
+      if include_subcategories
+        # Parent categories + subcategories
+        grouped_income_totals = income_totals.category_totals.group_by { |ct| ct.category.parent_id }
+        root_income_totals = grouped_income_totals[nil] || []
 
-      # Process expense categories (flow: cash_flow -> parent -> subcategory)
-      process_category_totals(
-        category_totals: expense_totals.category_totals,
-        total: total_expense,
-        prefix: "expense",
-        default_color: Category::UNCATEGORIZED_COLOR,
-        add_node: add_node,
-        links: links,
-        cash_flow_idx: cash_flow_idx,
-        flow_direction: :outbound
-      )
+        root_income_totals.each do |ct|
+          val = ct.total.to_f.round(2)
+          next if val.zero?
 
-      # Surplus/Deficit
-      net = (total_income - total_expense).round(2)
-      if net.positive?
-        percentage = total_income.zero? ? 0 : (net / total_income * 100).round(1)
-        idx = add_node.call("surplus_node", "Surplus", net, percentage, "var(--color-success)")
-        links << { source: cash_flow_idx, target: idx, value: net, color: "var(--color-success)", percentage: percentage }
-      end
+          percentage_of_total_income = total_income_val.zero? ? 0 : (val / total_income_val * 100).round(1)
 
-      { nodes: nodes, links: links, currency_symbol: Money::Currency.new(currency).symbol }
-    end
+          node_display_name = ct.category.name
+          node_color = ct.category.color.presence || Category::COLORS.sample
 
-    def build_outflows_donut_data(expense_totals)
-      currency_symbol = Money::Currency.new(expense_totals.currency).symbol
-      total = expense_totals.total
+          # Parent income category node
+          parent_idx = add_node.call(
+            "income_#{ct.category.id}",
+            node_display_name,
+            val,
+            percentage_of_total_income,
+            node_color
+          )
 
-      categories = expense_totals.category_totals
-        .reject { |ct| ct.category.parent_id.present? || ct.total.zero? }
-        .sort_by { |ct| -ct.total }
-        .map do |ct|
-          {
-            id: ct.category.id,
-            name: ct.category.name,
-            amount: ct.total.to_f.round(2),
-            currency: ct.currency,
-            percentage: ct.weight.round(1),
-            color: ct.category.color.presence || Category::UNCATEGORIZED_COLOR,
-            icon: ct.category.lucide_icon,
-            clickable: !ct.category.other_investments?
+          # Link: Parent category -> Cash Flow (income flows into cash flow)
+          links << {
+            source: parent_idx,
+            target: cash_flow_idx,
+            value: val,
+            color: node_color,
+            percentage: percentage_of_total_income
           }
-        end
 
-      { categories: categories, total: total.to_f.round(2), currency: expense_totals.currency, currency_symbol: currency_symbol }
-    end
+          # Subcategories for this parent (skip for Uncategorized which has no true children)
+          subcategory_totals = node_display_name == "Uncategorized" ? [] : (grouped_income_totals[ct.category.id] || [])
+          subcategory_totals.each do |st|
+            sub_val = st.total.to_f.round(2)
+            next if sub_val.zero?
 
-    # Processes category totals for sankey diagram, handling parent/subcategory relationships.
-    # flow_direction: :inbound (subcategory -> parent -> cash_flow) for income
-    #                 :outbound (cash_flow -> parent -> subcategory) for expenses
-    def process_category_totals(category_totals:, total:, prefix:, default_color:, add_node:, links:, cash_flow_idx:, flow_direction:)
-      # Build lookup of subcategories by parent_id
-      subcategories_by_parent = category_totals
-        .select { |ct| ct.category.parent_id.present? && ct.total.to_f > 0 }
-        .group_by { |ct| ct.category.parent_id }
+            sub_percentage = total_income_val.zero? ? 0 : (sub_val / total_income_val * 100).round(1)
+            sub_node_color = st.category.color.presence || node_color
 
-      category_totals.each do |ct|
-        next if ct.category.parent_id.present? # Skip subcategories in first pass
+            sub_idx = add_node.call(
+              "income_#{st.category.id}",
+              st.category.name,
+              sub_val,
+              sub_percentage,
+              sub_node_color
+            )
 
-        val = ct.total.to_f.round(2)
-        next if val.zero?
-
-        percentage = total.zero? ? 0 : (val / total * 100).round(1)
-        color = ct.category.color.presence || default_color
-        node_key = "#{prefix}_#{ct.category.id || ct.category.name}"
-
-        subs = subcategories_by_parent[ct.category.id] || []
-
-        if subs.any?
-          parent_idx = add_node.call(node_key, ct.category.name, val, percentage, color)
-
-          # Link parent to/from cash flow based on direction
-          if flow_direction == :inbound
-            links << { source: parent_idx, target: cash_flow_idx, value: val, color: color, percentage: percentage }
-          else
-            links << { source: cash_flow_idx, target: parent_idx, value: val, color: color, percentage: percentage }
+            # Link: Subcategory -> Parent category
+            links << {
+              source: sub_idx,
+              target: parent_idx,
+              value: sub_val,
+              color: sub_node_color,
+              percentage: sub_percentage
+            }
           end
 
-          # Add subcategory nodes
-          subs.each do |sub_ct|
-            sub_val = sub_ct.total.to_f.round(2)
-            sub_pct = val.zero? ? 0 : (sub_val / val * 100).round(1)
-            sub_color = sub_ct.category.color.presence || color
-            sub_key = "#{prefix}_sub_#{sub_ct.category.id}"
-            sub_idx = add_node.call(sub_key, sub_ct.category.name, sub_val, sub_pct, sub_color)
-
-            # Link subcategory to/from parent based on direction
-            if flow_direction == :inbound
-              links << { source: sub_idx, target: parent_idx, value: sub_val, color: sub_color, percentage: sub_pct }
-            else
-              links << { source: parent_idx, target: sub_idx, value: sub_val, color: sub_color, percentage: sub_pct }
+          # If the parent has direct transactions not assigned to subcategories,
+          # show them as a "Direct" leaf to preserve Sankey flow conservation.
+          if subcategory_totals.any?
+            sum_sub = subcategory_totals.sum { |st| st.total.to_f.round(2) }
+            direct_val = (val - sum_sub).round(2)
+            if direct_val.positive?
+              direct_percentage = total_income_val.zero? ? 0 : (direct_val / total_income_val * 100).round(1)
+              direct_idx = add_node.call(
+                "income_#{ct.category.id}_direct",
+                "#{node_display_name} (Direct)",
+                direct_val,
+                direct_percentage,
+                node_color
+              )
+              links << {
+                source: direct_idx,
+                target: parent_idx,
+                value: direct_val,
+                color: node_color,
+                percentage: direct_percentage
+              }
             end
           end
-        else
-          # No subcategories, link directly to/from cash flow
-          idx = add_node.call(node_key, ct.category.name, val, percentage, color)
+        end
+      else
+        # Top-level categories only
+        income_totals.category_totals.each do |ct|
+          # Skip subcategories – only include root income categories
+          next if ct.category.parent_id.present?
 
-          if flow_direction == :inbound
-            links << { source: idx, target: cash_flow_idx, value: val, color: color, percentage: percentage }
-          else
-            links << { source: cash_flow_idx, target: idx, value: val, color: color, percentage: percentage }
-          end
+          val = ct.total.to_f.round(2)
+          next if val.zero?
+
+          percentage_of_total_income = total_income_val.zero? ? 0 : (val / total_income_val * 100).round(1)
+
+          node_display_name = ct.category.name
+          node_color = ct.category.color.presence || Category::COLORS.sample
+
+          current_cat_idx = add_node.call(
+            "income_#{ct.category.id}",
+            node_display_name,
+            val,
+            percentage_of_total_income,
+            node_color
+          )
+
+          links << {
+            source: current_cat_idx,
+            target: cash_flow_idx,
+            value: val,
+            color: node_color,
+            percentage: percentage_of_total_income
+          }
         end
       end
 
@@ -447,6 +447,29 @@ class PagesController < ApplicationController
       # No primary income node anymore, percentages are on individual income cats relative to total_income_val
 
       { nodes: nodes, links: links, currency_symbol: Money::Currency.new(currency).symbol }
+    end
+
+    def build_outflows_donut_data(expense_totals)
+      currency_symbol = Money::Currency.new(expense_totals.currency).symbol
+      total = expense_totals.total
+
+      categories = expense_totals.category_totals
+        .reject { |ct| ct.category.parent_id.present? || ct.total.zero? }
+        .sort_by { |ct| -ct.total }
+        .map do |ct|
+          {
+            id: ct.category.id,
+            name: ct.category.name,
+            amount: ct.total.to_f.round(2),
+            currency: ct.currency,
+            percentage: ct.weight.round(1),
+            color: ct.category.color.presence || Category::UNCATEGORIZED_COLOR,
+            icon: ct.category.lucide_icon,
+            clickable: !ct.category.other_investments?
+          }
+        end
+
+      { categories: categories, total: total.to_f.round(2), currency: expense_totals.currency, currency_symbol: currency_symbol }
     end
 
     def safe_parse_date(value)
