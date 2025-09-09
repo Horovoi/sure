@@ -117,34 +117,120 @@ class PagesController < ApplicationController
       # --- Create Central Cash Flow Node ---
       cash_flow_idx = add_node.call("cash_flow_node", "Cash Flow", total_income_val, 0, "var(--color-success)")
 
-      # --- Process Income Side (Top-level categories only) ---
-      income_totals.category_totals.each do |ct|
-        # Skip subcategories – only include root income categories
-        next if ct.category.parent_id.present?
+      # --- Process Income Side ---
+      if include_subcategories
+        # Parent categories + subcategories
+        grouped_income_totals = income_totals.category_totals.group_by { |ct| ct.category.parent_id }
+        root_income_totals = grouped_income_totals[nil] || []
 
-        val = ct.total.to_f.round(2)
-        next if val.zero?
+        root_income_totals.each do |ct|
+          val = ct.total.to_f.round(2)
+          next if val.zero?
 
-        percentage_of_total_income = total_income_val.zero? ? 0 : (val / total_income_val * 100).round(1)
+          percentage_of_total_income = total_income_val.zero? ? 0 : (val / total_income_val * 100).round(1)
 
-        node_display_name = ct.category.name
-        node_color = ct.category.color.presence || Category::COLORS.sample
+          node_display_name = ct.category.name
+          node_color = ct.category.color.presence || Category::COLORS.sample
 
-        current_cat_idx = add_node.call(
-          "income_#{ct.category.id}",
-          node_display_name,
-          val,
-          percentage_of_total_income,
-          node_color
-        )
+          # Parent income category node
+          parent_idx = add_node.call(
+            "income_#{ct.category.id}",
+            node_display_name,
+            val,
+            percentage_of_total_income,
+            node_color
+          )
 
-        links << {
-          source: current_cat_idx,
-          target: cash_flow_idx,
-          value: val,
-          color: node_color,
-          percentage: percentage_of_total_income
-        }
+          # Link: Parent category -> Cash Flow (income flows into cash flow)
+          links << {
+            source: parent_idx,
+            target: cash_flow_idx,
+            value: val,
+            color: node_color,
+            percentage: percentage_of_total_income
+          }
+
+          # Subcategories for this parent (skip for Uncategorized which has no true children)
+          subcategory_totals = node_display_name == "Uncategorized" ? [] : (grouped_income_totals[ct.category.id] || [])
+          subcategory_totals.each do |st|
+            sub_val = st.total.to_f.round(2)
+            next if sub_val.zero?
+
+            sub_percentage = total_income_val.zero? ? 0 : (sub_val / total_income_val * 100).round(1)
+            sub_node_color = st.category.color.presence || node_color
+
+            sub_idx = add_node.call(
+              "income_#{st.category.id}",
+              st.category.name,
+              sub_val,
+              sub_percentage,
+              sub_node_color
+            )
+
+            # Link: Subcategory -> Parent category
+            links << {
+              source: sub_idx,
+              target: parent_idx,
+              value: sub_val,
+              color: sub_node_color,
+              percentage: sub_percentage
+            }
+          end
+
+          # If the parent has direct transactions not assigned to subcategories,
+          # show them as a "Direct" leaf to preserve Sankey flow conservation.
+          if subcategory_totals.any?
+            sum_sub = subcategory_totals.sum { |st| st.total.to_f.round(2) }
+            direct_val = (val - sum_sub).round(2)
+            if direct_val.positive?
+              direct_percentage = total_income_val.zero? ? 0 : (direct_val / total_income_val * 100).round(1)
+              direct_idx = add_node.call(
+                "income_#{ct.category.id}_direct",
+                "#{node_display_name} (Direct)",
+                direct_val,
+                direct_percentage,
+                node_color
+              )
+              links << {
+                source: direct_idx,
+                target: parent_idx,
+                value: direct_val,
+                color: node_color,
+                percentage: direct_percentage
+              }
+            end
+          end
+        end
+      else
+        # Top-level categories only
+        income_totals.category_totals.each do |ct|
+          # Skip subcategories – only include root income categories
+          next if ct.category.parent_id.present?
+
+          val = ct.total.to_f.round(2)
+          next if val.zero?
+
+          percentage_of_total_income = total_income_val.zero? ? 0 : (val / total_income_val * 100).round(1)
+
+          node_display_name = ct.category.name
+          node_color = ct.category.color.presence || Category::COLORS.sample
+
+          current_cat_idx = add_node.call(
+            "income_#{ct.category.id}",
+            node_display_name,
+            val,
+            percentage_of_total_income,
+            node_color
+          )
+
+          links << {
+            source: current_cat_idx,
+            target: cash_flow_idx,
+            value: val,
+            color: node_color,
+            percentage: percentage_of_total_income
+          }
+        end
       end
 
       if include_subcategories
