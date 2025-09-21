@@ -22,4 +22,12 @@ module CategoriesHelper
   def family_categories
     [ Category.uncategorized ].concat(Current.family.categories.alphabetically)
   end
+
+  def grouped_family_categories
+    Current.family.categories
+           .includes(:subcategories)
+           .roots
+           .alphabetically
+           .yield_self { |scope| Category::Group.for(scope) }
+  end
 end

@@ -2,11 +2,10 @@ class TransactionsController < ApplicationController
   include EntryableResource
 
   before_action :store_params!, only: :index
+  before_action :load_category_groups, only: %i[new create]
 
   def new
     super
-    @income_categories = Current.family.categories.incomes.alphabetically
-    @expense_categories = Current.family.categories.expenses.alphabetically
   end
 
   def index
@@ -356,6 +355,18 @@ class TransactionsController < ApplicationController
 
     def preferences_params
       params.require(:preferences).permit(collapsed_sections: {})
+    end
+
+    def load_category_groups
+      category_scope = Current.family.categories.includes(:subcategories)
+
+      @income_category_groups = Category.grouped_select_options(
+        category_scope.incomes.roots.alphabetically
+      )
+
+      @expense_category_groups = Category.grouped_select_options(
+        category_scope.expenses.roots.alphabetically
+      )
     end
 
     # Helper methods for convert_to_trade
