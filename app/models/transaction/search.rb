@@ -34,7 +34,8 @@ class Transaction::Search
       query = apply_status_filter(query, status)
       query = apply_merchant_filter(query, merchants)
       query = apply_tag_filter(query, tags)
-      query = EntrySearch.apply_search_filter(query, search)
+      # Enforce minimum search length of 2 characters for name search
+      query = EntrySearch.apply_search_filter(query, search.to_s.length >= 2 ? search : nil)
       query = EntrySearch.apply_date_filters(query, start_date, end_date)
       query = EntrySearch.apply_amount_filter(query, amount, amount_operator)
       query = EntrySearch.apply_accounts_filter(query, accounts, account_ids)
