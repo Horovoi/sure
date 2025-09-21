@@ -31,21 +31,45 @@ class Category < ApplicationRecord
   class Group
     attr_reader :category, :subcategories
 
-    delegate :name, :color, to: :category
+    delegate :name, :color, :id, to: :category
 
     def self.for(categories)
-      categories.select { |category| category.parent_id.nil? }.map do |category|
-        new(category, category.subcategories)
-      end
+      categories
+        .select { |category| category.parent_id.nil? }
+        .sort_by { |category| category.name.downcase }
+        .map do |category|
+          new(category, category.subcategories.alphabetically)
+        end
     end
 
     def initialize(category, subcategories = nil)
       @category = category
       @subcategories = subcategories || []
     end
+
+    def to_grouped_options
+      [name, category_and_subcategory_options]
+    end
+
+    private
+      def category_and_subcategory_options
+        [[name, id]].tap do |options|
+          sorted_subcategories.each do |subcategory|
+            options << [subcategory.name, subcategory.id]
+          end
+        end
+      end
+
+      def sorted_subcategories
+        Array(subcategories).sort_by { |subcategory| subcategory.name.downcase }
+      end
   end
 
   class << self
+    def grouped_select_options(categories)
+      Category::Group.for(Array(categories)).map(&:to_grouped_options)
+    end
+
     def icon_codes
       %w[bus circle-dollar-sign ambulance apple award baby battery lightbulb bed-single beer bluetooth book briefcase building credit-card camera utensils cooking-pot cookie dices drama dog drill drum dumbbell gamepad-2 graduation-cap house hand-helping ice-cream-cone phone piggy-bank pill pizza printer puzzle ribbon shopping-cart shield-plus ticket trees]
     end

@@ -30,4 +30,19 @@ class CategoryTest < ActiveSupport::TestCase
 
     assert_equal "Validation failed: Parent can't have more than 2 levels of subcategories", error.message
   end
+
+  test "grouped select options include parent and subcategories" do
+    options = Category.grouped_select_options(
+      @family.categories.includes(:subcategories).roots.alphabetically
+    )
+
+    food_group = options.find { |label, _| label == "Food & Drink" }
+    assert food_group, "expected Food & Drink group to be present"
+
+    option_labels = food_group.last.map(&:first)
+    option_ids = food_group.last.map(&:second)
+
+    assert_equal ["Food & Drink", "Restaurants"], option_labels
+    assert_equal [categories(:food_and_drink).id, categories(:subcategory).id], option_ids
+  end
 end
