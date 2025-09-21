@@ -21,6 +21,31 @@ class TransactionsController < ApplicationController
                        )
 
     @pagy, @transactions = pagy(base_scope, limit: per_page)
+
+    respond_to do |format|
+      format.html do
+        if turbo_frame_request?
+          render partial: "transactions/results_frame"
+        else
+          render :index
+        end
+      end
+
+      # Optimize reactive search: stream updates to both summary and results
+      format.turbo_stream do
+        render turbo_stream: [
+          turbo_stream.replace(
+            "transactions_summary",
+            partial: "transactions/summary_frame",
+            locals: { totals: @search.totals }
+          ),
+          turbo_stream.replace(
+            "transactions_results",
+            partial: "transactions/results_frame"
+          )
+        ]
+      end
+    end
   end
 
   def clear_filter
