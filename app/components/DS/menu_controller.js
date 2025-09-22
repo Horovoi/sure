@@ -36,6 +36,7 @@ export default class extends Controller {
     this.element.addEventListener("keydown", this.handleKeydown);
     document.addEventListener("click", this.handleOutsideClick);
     document.addEventListener("turbo:load", this.handleTurboLoad);
+    document.addEventListener("turbo:submit-end", this.handleTurboSubmitEnd);
   }
 
   removeEventListeners() {
@@ -43,10 +44,21 @@ export default class extends Controller {
     this.element.removeEventListener("keydown", this.handleKeydown);
     document.removeEventListener("click", this.handleOutsideClick);
     document.removeEventListener("turbo:load", this.handleTurboLoad);
+    document.removeEventListener("turbo:submit-end", this.handleTurboSubmitEnd);
   }
 
   handleTurboLoad = () => {
     if (!this.show) this.close();
+  };
+
+  handleTurboSubmitEnd = (event) => {
+    if (!this.show) return;
+    if (event?.detail?.success === false) return;
+
+    const form = event.target;
+    if (form instanceof HTMLElement && form.contains(this.element)) {
+      this.close();
+    }
   };
 
   handleOutsideClick = (event) => {
