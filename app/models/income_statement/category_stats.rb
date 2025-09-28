@@ -1,7 +1,8 @@
 class IncomeStatement::CategoryStats
-  def initialize(family, interval: "month")
+  def initialize(family, interval: "month", exclude_current_period: false)
     @family = family
     @interval = interval
+    @exclude_current_period = exclude_current_period
   end
 
   def call
@@ -25,16 +26,18 @@ class IncomeStatement::CategoryStats
           target_currency: @family.currency,
           interval: @interval,
           family_id: @family.id,
-          offset_days: fiscal_offset_days
+          offset_days: fiscal_offset_days,
+          exclude_current_period: (@exclude_current_period ? 1 : 0)
         }
       ])
     end
 
     def query_sql
       <<~SQL
-        WITH period_totals AS (
+        WITH base AS (
           SELECT
             c.id as category_id,
+            c.parent_id as parent_category_id,
             date_trunc(
               :interval,
               CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
@@ -53,14 +56,46 @@ class IncomeStatement::CategoryStats
           WHERE a.family_id = :family_id
             AND t.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
             AND ae.excluded = false
-          GROUP BY c.id, period, CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
+            AND (
+              :exclude_current_period = 0 OR
+              date_trunc(
+                :interval,
+                CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
+              ) < date_trunc(
+                :interval,
+                CASE WHEN :offset_days > 0 THEN (CURRENT_DATE - make_interval(days => :offset_days)) ELSE CURRENT_DATE END
+              )
+            )
+          GROUP BY c.id, c.parent_id, period, CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
+        ),
+        parents AS (
+          SELECT
+            COALESCE(parent_category_id, category_id) as category_id,
+            period,
+            classification,
+            SUM(total) as total
+          FROM base
+          GROUP BY COALESCE(parent_category_id, category_id), period, classification
+        ),
+        final AS (
+          -- Subcategory rows retain their own category_id
+          SELECT b.category_id, b.period, b.classification, b.total
+          FROM base b
+          WHERE b.parent_category_id IS NOT NULL
+          UNION ALL
+          -- Parent rows roll up their own + children
+          SELECT p.category_id, p.period, p.classification, p.total
+          FROM parents p
+          WHERE p.category_id IN (
+            SELECT id FROM categories WHERE family_id = :family_id AND parent_id IS NULL
+          )
         )
         SELECT
           category_id,
           classification,
           ABS(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total)) as median,
           ABS(AVG(total)) as avg
-        FROM period_totals
+        FROM final
         GROUP BY category_id, classification;
       SQL
     end
