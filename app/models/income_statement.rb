@@ -36,24 +36,29 @@ class IncomeStatement
     build_period_total(classification: "income", period: period)
   end
 
-  def median_expense(interval: "month", category: nil)
+  def median_expense(interval: "month", category: nil, exclude_current_period: false)
     if category.present?
-      category_stats(interval: interval).find { |stat| stat.classification == "expense" && stat.category_id == category.id }&.median || 0
+      category_stats(interval: interval, exclude_current_period: exclude_current_period)
+        .find { |stat| stat.classification == "expense" && stat.category_id == category.id }&.median || 0
     else
-      family_stats(interval: interval).find { |stat| stat.classification == "expense" }&.median || 0
+      family_stats(interval: interval, exclude_current_period: exclude_current_period)
+        .find { |stat| stat.classification == "expense" }&.median || 0
     end
   end
 
-  def avg_expense(interval: "month", category: nil)
+  def avg_expense(interval: "month", category: nil, exclude_current_period: false)
     if category.present?
-      category_stats(interval: interval).find { |stat| stat.classification == "expense" && stat.category_id == category.id }&.avg || 0
+      category_stats(interval: interval, exclude_current_period: exclude_current_period)
+        .find { |stat| stat.classification == "expense" && stat.category_id == category.id }&.avg || 0
     else
-      family_stats(interval: interval).find { |stat| stat.classification == "expense" }&.avg || 0
+      family_stats(interval: interval, exclude_current_period: exclude_current_period)
+        .find { |stat| stat.classification == "expense" }&.avg || 0
     end
   end
 
-  def median_income(interval: "month")
-    family_stats(interval: interval).find { |stat| stat.classification == "income" }&.median || 0
+  def median_income(interval: "month", exclude_current_period: false)
+    family_stats(interval: interval, exclude_current_period: exclude_current_period)
+      .find { |stat| stat.classification == "income" }&.median || 0
   end
 
   private
@@ -112,20 +117,22 @@ class IncomeStatement
       )
     end
 
-    def family_stats(interval: "month")
+    def family_stats(interval: "month", exclude_current_period: false)
       @family_stats ||= {}
       fiscal_key = [ family.use_fiscal_months, family.fiscal_start_day ]
-      @family_stats[[interval, fiscal_key]] ||= Rails.cache.fetch([
-        "income_statement", "family_stats", family.id, interval, fiscal_key, family.entries_cache_version
-      ]) { FamilyStats.new(family, interval:).call }
+      cache_key = [interval, fiscal_key, exclude_current_period]
+      @family_stats[cache_key] ||= Rails.cache.fetch([
+        "income_statement", "family_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
+      ]) { FamilyStats.new(family, interval:, exclude_current_period:).call }
     end
 
-    def category_stats(interval: "month")
+    def category_stats(interval: "month", exclude_current_period: false)
       @category_stats ||= {}
       fiscal_key = [ family.use_fiscal_months, family.fiscal_start_day ]
-      @category_stats[[interval, fiscal_key]] ||= Rails.cache.fetch([
-        "income_statement", "category_stats", family.id, interval, fiscal_key, family.entries_cache_version
-      ]) { CategoryStats.new(family, interval:).call }
+      cache_key = [interval, fiscal_key, exclude_current_period]
+      @category_stats[cache_key] ||= Rails.cache.fetch([
+        "income_statement", "category_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
+      ]) { CategoryStats.new(family, interval:, exclude_current_period:).call }
     end
 
     def totals_query(transactions_scope:, date_range:)

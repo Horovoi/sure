@@ -177,11 +177,11 @@ class Budget < ApplicationRecord
   end
 
   def category_median_monthly_expense(category)
-    income_statement.median_expense(category: category)
+    income_statement.median_expense(category: category, exclude_current_period: true)
   end
 
   def category_avg_monthly_expense(category)
-    income_statement.avg_expense(category: category)
+    income_statement.avg_expense(category: category, exclude_current_period: true)
   end
 
   def available_to_spend

@@ -1,7 +1,8 @@
 class IncomeStatement::FamilyStats
-  def initialize(family, interval: "month")
+  def initialize(family, interval: "month", exclude_current_period: false)
     @family = family
     @interval = interval
+    @exclude_current_period = exclude_current_period
   end
 
   def call
@@ -24,7 +25,8 @@ class IncomeStatement::FamilyStats
           target_currency: @family.currency,
           interval: @interval,
           family_id: @family.id,
-          offset_days: fiscal_offset_days
+          offset_days: fiscal_offset_days,
+          exclude_current_period: (@exclude_current_period ? 1 : 0)
         }
       ])
     end
@@ -50,6 +52,16 @@ class IncomeStatement::FamilyStats
           WHERE a.family_id = :family_id
             AND t.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
             AND ae.excluded = false
+            AND (
+              :exclude_current_period = 0 OR
+              date_trunc(
+                :interval,
+                CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
+              ) < date_trunc(
+                :interval,
+                CASE WHEN :offset_days > 0 THEN (CURRENT_DATE - make_interval(days => :offset_days)) ELSE CURRENT_DATE END
+              )
+            )
           GROUP BY period, CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
         )
         SELECT
