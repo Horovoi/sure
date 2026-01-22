@@ -19,7 +19,7 @@ fr:
       automatic_description: "L'identification automatique s'exécute également après :"
       triggers:
         - Les importations CSV sont terminées (transactions, trades, comptes, etc.)
-        - Toute synchronisation de fournisseur est terminée (Plaid, SimpleFIN, etc.)
+        - Toute synchronisation de fournisseur est terminée (Plaid, Lunchflow, etc.)
     identified: "%{count} modèles de transactions récurrentes identifiés"
     cleaned_up: "%{count} transactions récurrentes obsolètes nettoyées"
     marked_inactive: Transaction récurrente marquée comme inactive

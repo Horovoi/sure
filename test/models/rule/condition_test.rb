@@ -195,7 +195,7 @@ class Rule::ConditionTest < ActiveSupport::TestCase
     )
     paypal_entry.transaction.update!(
       extra: {
-        "simplefin" => {
+        "plaid" => {
           "payee" => "Amazon via PayPal",
           "description" => "Purchase from Amazon",
           "memo" => "Order #12345"
@@ -229,7 +229,7 @@ class Rule::ConditionTest < ActiveSupport::TestCase
     )
     transaction_entry.transaction.update!(
       extra: {
-        "simplefin" => {
+        "plaid" => {
           "payee" => "Netflix"
         }
       }
@@ -271,7 +271,7 @@ class Rule::ConditionTest < ActiveSupport::TestCase
       name: "Transaction with details"
     )
     transaction_with_details.transaction.update!(
-      extra: { "simplefin" => { "payee" => "Test Merchant" } }
+      extra: { "plaid" => { "payee" => "Test Merchant" } }
     )
 
     condition = Rule::Condition.new(

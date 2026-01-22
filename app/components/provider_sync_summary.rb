@@ -3,7 +3,7 @@
 # Reusable sync summary component for provider items.
 #
 # This component displays sync statistics in a collapsible panel that can be used
-# by any provider (SimpleFIN, Plaid, Lunchflow, etc.) to show their sync results.
+# by any provider (Plaid, Lunchflow, Enable Banking, etc.) to show their sync results.
 #
 # @example Basic usage
 #   <%= render ProviderSyncSummary.new(
@@ -14,8 +14,8 @@
 # @example With custom institution count
 #   <%= render ProviderSyncSummary.new(
 #     stats: @sync_stats,
-#     provider_item: @simplefin_item,
-#     institutions_count: @simplefin_item.connected_institutions.size
+#     provider_item: @plaid_item,
+#     institutions_count: @plaid_item.connected_institutions.size
 #   ) %>
 #
 class ProviderSyncSummary < ViewComponent::Base

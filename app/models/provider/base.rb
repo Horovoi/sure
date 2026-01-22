@@ -26,7 +26,7 @@ class Provider::Base
   end
 
   # Provider identification - must be implemented by subclasses
-  # @return [String] The provider name (e.g., "plaid", "simplefin")
+  # @return [String] The provider name (e.g., "plaid", "lunchflow")
   def provider_name
     raise NotImplementedError, "#{self.class} must implement #provider_name"
   end

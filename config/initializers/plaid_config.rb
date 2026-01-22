@@ -5,7 +5,7 @@ Rails.application.configure do
   config.plaid = nil
   config.plaid_eu = nil
 
-  # Plaid pending transaction settings (mirrors SimpleFIN config pattern)
+  # Plaid pending transaction settings
   falsy = %w[0 false no off]
   config.x.plaid ||= ActiveSupport::OrderedOptions.new
   # Default to true - fetch pending transactions for display with "Pending" badge

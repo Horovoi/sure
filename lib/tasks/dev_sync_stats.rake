@@ -54,7 +54,7 @@ module DevSyncStatsHelpers
     end
 
     # Add holdings stats for investment-capable providers
-    if %w[simplefin plaid coinstats].include?(provider_name)
+    if %w[plaid coinstats].include?(provider_name)
       stats["holdings_found"] = rand(5..50)
     end
 
@@ -120,7 +120,6 @@ namespace :dev do
       puts "Generating fake sync stats for testing..."
 
       DevSyncStatsHelpers.generate_fake_stats_for_items(PlaidItem, "plaid")
-      DevSyncStatsHelpers.generate_fake_stats_for_items(SimplefinItem, "simplefin")
       DevSyncStatsHelpers.generate_fake_stats_for_items(LunchflowItem, "lunchflow")
       DevSyncStatsHelpers.generate_fake_stats_for_items(EnableBankingItem, "enable_banking")
       DevSyncStatsHelpers.generate_fake_stats_for_items(CoinstatsItem, "coinstats")
@@ -150,7 +149,6 @@ namespace :dev do
       puts "Generating fake sync stats with errors and warnings..."
 
       DevSyncStatsHelpers.generate_fake_stats_for_items(PlaidItem, "plaid", include_issues: true)
-      DevSyncStatsHelpers.generate_fake_stats_for_items(SimplefinItem, "simplefin", include_issues: true)
       DevSyncStatsHelpers.generate_fake_stats_for_items(LunchflowItem, "lunchflow", include_issues: true)
       DevSyncStatsHelpers.generate_fake_stats_for_items(EnableBankingItem, "enable_banking", include_issues: true)
       DevSyncStatsHelpers.generate_fake_stats_for_items(CoinstatsItem, "coinstats", include_issues: true)
@@ -172,25 +170,6 @@ namespace :dev do
       end
 
       puts "Creating fake provider items for family: #{family.name || family.id}..."
-
-      # Create a fake SimpleFIN item
-      simplefin_item = family.simplefin_items.create!(
-        name: "Test SimpleFIN Connection",
-        access_url: "https://test.simplefin.org/fake"
-      )
-      puts "  Created SimplefinItem: #{simplefin_item.name}"
-
-      # Create fake SimpleFIN accounts
-      3.times do |i|
-        simplefin_item.simplefin_accounts.create!(
-          name: "Test Account #{i + 1}",
-          account_id: "test-account-#{SecureRandom.hex(8)}",
-          currency: "USD",
-          current_balance: rand(1000..50000),
-          account_type: %w[checking savings credit_card].sample
-        )
-      end
-      puts "    Created 3 SimplefinAccounts"
 
       # Create a fake Plaid item (requires access_token)
       plaid_item = family.plaid_items.create!(
@@ -283,7 +262,6 @@ namespace :dev do
       end
 
       puts "\nNow generating sync stats for the test providers..."
-      DevSyncStatsHelpers.generate_fake_stats_for_items(SimplefinItem, "simplefin", include_issues: true)
       DevSyncStatsHelpers.generate_fake_stats_for_items(PlaidItem, "plaid", include_issues: false)
       DevSyncStatsHelpers.generate_fake_stats_for_items(LunchflowItem, "lunchflow", include_issues: false)
       DevSyncStatsHelpers.generate_fake_stats_for_items(CoinstatsItem, "coinstats", include_issues: true)
@@ -303,7 +281,6 @@ namespace :dev do
 
       # Remove items that start with "Test "
       count = 0
-      count += SimplefinItem.where("name LIKE ?", "Test %").destroy_all.count
       count += PlaidItem.where("name LIKE ?", "Test %").destroy_all.count
       count += LunchflowItem.where("name LIKE ?", "Test %").destroy_all.count
       count += CoinstatsItem.where("name LIKE ?", "Test %").destroy_all.count

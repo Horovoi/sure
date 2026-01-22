@@ -13,12 +13,12 @@ class Account::ProviderImportAdapter
 
   # Imports a transaction from a provider
   #
-  # @param external_id [String] Unique identifier from the provider (e.g., "plaid_12345", "simplefin_abc")
+  # @param external_id [String] Unique identifier from the provider (e.g., "plaid_12345", "lunchflow_abc")
   # @param amount [BigDecimal, Numeric] Transaction amount
   # @param currency [String] Currency code (e.g., "USD")
   # @param date [Date, String] Transaction date
   # @param name [String] Transaction name/description
-  # @param source [String] Provider name (e.g., "plaid", "simplefin")
+  # @param source [String] Provider name (e.g., "plaid", "lunchflow")
   # @param category_id [Integer, nil] Optional category ID
   # @param merchant [Merchant, nil] Optional merchant object
   # @param notes [String, nil] Optional transaction notes/memo
@@ -77,10 +77,8 @@ class Account::ProviderImportAdapter
       end
 
       # If still a new entry and this is a POSTED transaction, check for matching pending transactions
-      incoming_pending = extra.is_a?(Hash) && (
-        ActiveModel::Type::Boolean.new.cast(extra.dig("simplefin", "pending")) ||
+      incoming_pending = extra.is_a?(Hash) &&
         ActiveModel::Type::Boolean.new.cast(extra.dig("plaid", "pending"))
-      )
 
       if entry.new_record? && !incoming_pending
         pending_match = nil
@@ -94,7 +92,7 @@ class Account::ProviderImportAdapter
           end
         end
 
-        # PRIORITY 2: Fallback to EXACT amount match (for SimpleFIN and providers without linking IDs)
+        # PRIORITY 2: Fallback to EXACT amount match (for providers without linking IDs)
         # Only searches backward in time - pending date must be <= posted date
         if pending_match.nil?
           pending_match = find_pending_transaction(date: date, amount: amount, currency: currency, source: source)
@@ -237,7 +235,7 @@ class Account::ProviderImportAdapter
   #
   # @param provider_merchant_id [String] Provider's merchant ID
   # @param name [String] Merchant name
-  # @param source [String] Provider name (e.g., "plaid", "simplefin")
+  # @param source [String] Provider name (e.g., "plaid", "lunchflow")
   # @param website_url [String, nil] Optional merchant website
   # @param logo_url [String, nil] Optional merchant logo URL
   # @return [ProviderMerchant, nil] The merchant object or nil if data is insufficient
@@ -314,7 +312,7 @@ class Account::ProviderImportAdapter
 
     Account.transaction do
       # Two strategies for finding/creating holdings:
-      # 1. By external_id (SimpleFin approach) - tracks each holding uniquely
+      # 1. By external_id - tracks each holding uniquely
       # 2. By security+date+currency (Plaid approach) - overwrites holdings for same security/date
       holding = nil
 
@@ -625,12 +623,12 @@ class Account::ProviderImportAdapter
   end
 
   # Finds a pending transaction that likely matches a newly posted transaction
-  # Used to reconcile pending→posted when SimpleFIN gives different IDs for the same transaction
+  # Used to reconcile pending→posted when provider gives different IDs for the same transaction
   #
   # @param date [Date, String] Posted transaction date
   # @param amount [BigDecimal, Numeric] Transaction amount (must match exactly)
   # @param currency [String] Currency code
-  # @param source [String] Provider name (e.g., "simplefin")
+  # @param source [String] Provider name (e.g., "plaid")
   # @param date_window [Integer] Days to search around the posted date (default: 8)
   # @return [Entry, nil] The pending entry or nil if not found
   def find_pending_transaction(date:, amount:, currency:, source:, date_window: 8)
@@ -638,12 +636,12 @@ class Account::ProviderImportAdapter
 
     # Look for entries that:
     # 1. Same account (implicit via account.entries)
-    # 2. Same source (simplefin)
+    # 2. Same source
     # 3. Same amount (exact match - this is the strongest signal)
     # 4. Same currency
     # 5. Date within window (pending can post days later)
     # 6. Is a Transaction (not Trade or Valuation)
-    # 7. Has pending=true in transaction.extra["simplefin"]["pending"] or extra["plaid"]["pending"]
+    # 7. Has pending=true in transaction.extra["plaid"]["pending"]
     candidates = account.entries
       .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
       .where(source: source)
@@ -651,8 +649,7 @@ class Account::ProviderImportAdapter
       .where(currency: currency)
       .where(date: (date - date_window.days)..date) # Pending must be ON or BEFORE posted date
       .where(<<~SQL.squish)
-        (transactions.extra -> 'simplefin' ->> 'pending')::boolean = true
-        OR (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
       SQL
       .order(date: :desc) # Prefer most recent pending transaction
 
@@ -668,7 +665,7 @@ class Account::ProviderImportAdapter
   # @param date [Date, String] Posted transaction date
   # @param amount [BigDecimal, Numeric] Posted transaction amount (typically higher due to tip)
   # @param currency [String] Currency code
-  # @param source [String] Provider name (e.g., "simplefin")
+  # @param source [String] Provider name (e.g., "plaid")
   # @param merchant_id [Integer, nil] Merchant ID for more accurate matching
   # @param name [String, nil] Transaction name for fuzzy name matching
   # @param date_window [Integer] Days to search backward from posted date (default: 3 for fuzzy)
@@ -696,8 +693,7 @@ class Account::ProviderImportAdapter
       .where(date: (date - date_window.days)..date) # Pending ON or BEFORE posted
       .where("ABS(entries.amount) BETWEEN ? AND ?", min_pending_abs, max_pending_abs)
       .where(<<~SQL.squish)
-        (transactions.extra -> 'simplefin' ->> 'pending')::boolean = true
-        OR (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
       SQL
 
     # If merchant_id is provided, prioritize matching by merchant
@@ -764,8 +760,7 @@ class Account::ProviderImportAdapter
       .where(date: (date - date_window.days)..date)
       .where("ABS(entries.amount) BETWEEN ? AND ?", min_pending_abs, max_pending_abs)
       .where(<<~SQL.squish)
-        (transactions.extra -> 'simplefin' ->> 'pending')::boolean = true
-        OR (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
       SQL
 
     # For low confidence, require BOTH merchant AND name match (stronger signal needed)

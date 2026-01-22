@@ -19,7 +19,7 @@ en:
       automatic_description: "Automatic identification also runs after:"
       triggers:
         - CSV imports complete (transactions, trades, accounts, etc. )
-        - Any provider sync completes ( Plaid, SimpleFIN, etc. )
+        - Any provider sync completes ( Plaid, Lunchflow, etc. )
     identified: Identified %{count} recurring transaction patterns
     cleaned_up: Cleaned up %{count} stale recurring transactions
     marked_inactive: Recurring transaction marked as inactive

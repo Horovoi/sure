@@ -15,19 +15,18 @@ class Account::ProviderImportAdapterCrossProviderTest < ActiveSupport::TestCase
       provider: plaid_accounts(:one)
     )
 
-    # Provider B (e.g., SimpleFin)
-    item = SimplefinItem.create!(family: families(:dylan_family), name: "SF Conn", access_url: "https://example.com/access")
-    sfa_b = SimplefinAccount.create!(
-      simplefin_item: item,
-      name: "SF Invest",
-      account_id: "sf_inv_cross_provider",
+    # Provider B (e.g., Lunchflow)
+    lf_item = LunchflowItem.create!(family: families(:dylan_family), name: "LF Conn", api_key: "lf_test_key")
+    lfa_b = LunchflowAccount.create!(
+      lunchflow_item: lf_item,
+      name: "LF Invest",
+      account_id: "lf_inv_cross_provider",
       currency: "USD",
-      account_type: "investment",
       current_balance: 1000
     )
     ap_b = AccountProvider.create!(
       account: investment_account,
-      provider: sfa_b
+      provider: lfa_b
     )
 
     # Use a date that will not collide with existing fixture holdings for this account
@@ -58,7 +57,7 @@ class Account::ProviderImportAdapterCrossProviderTest < ActiveSupport::TestCase
         price: 110,
         cost_basis: nil,
         external_id: "ext-b-1",
-        source: "simplefin",
+        source: "lunchflow",
         account_provider_id: ap_b.id,
         delete_future_holdings: false
       )
@@ -83,7 +82,7 @@ class Account::ProviderImportAdapterCrossProviderTest < ActiveSupport::TestCase
         price: 110,
         cost_basis: nil,
         external_id: "ext-b-1",
-        source: "simplefin",
+        source: "lunchflow",
         account_provider_id: ap_b.id,
         delete_future_holdings: false
       )

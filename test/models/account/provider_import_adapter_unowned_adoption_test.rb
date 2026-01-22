@@ -9,17 +9,16 @@ class Account::ProviderImportAdapterUnownedAdoptionTest < ActiveSupport::TestCas
     adapter = Account::ProviderImportAdapter.new(investment_account)
     security = securities(:aapl)
 
-    # Create a SimpleFin provider for this account (the importer)
-    item = SimplefinItem.create!(family: families(:dylan_family), name: "SF Conn", access_url: "https://example.com/access")
-    sfa = SimplefinAccount.create!(
-      simplefin_item: item,
-      name: "SF Invest",
-      account_id: "sf_inv_unowned_claim",
+    # Create a Lunchflow provider for this account (the importer)
+    lf_item = LunchflowItem.create!(family: families(:dylan_family), name: "LF Conn", api_key: "lf_test_key")
+    lfa = LunchflowAccount.create!(
+      lunchflow_item: lf_item,
+      name: "LF Invest",
+      account_id: "lf_inv_unowned_claim",
       currency: "USD",
-      account_type: "investment",
       current_balance: 1000
     )
-    ap = AccountProvider.create!(account: investment_account, provider: sfa)
+    ap = AccountProvider.create!(account: investment_account, provider: lfa)
 
     holding_date = Date.today - 4.days
 
@@ -34,7 +33,7 @@ class Account::ProviderImportAdapterUnownedAdoptionTest < ActiveSupport::TestCas
       account_provider_id: nil
     )
 
-    # Import for SimpleFin with an external_id that will collide on composite key
+    # Import for Lunchflow with an external_id that will collide on composite key
     # Adapter should NOT create a new row, but should update the existing one:
     # - qty/price/amount/cost_basis updated
     # - external_id attached
@@ -49,7 +48,7 @@ class Account::ProviderImportAdapterUnownedAdoptionTest < ActiveSupport::TestCas
         price: 110,
         cost_basis: nil,
         external_id: "ext-unowned-1",
-        source: "simplefin",
+        source: "lunchflow",
         account_provider_id: ap.id,
         delete_future_holdings: false
       )
@@ -80,7 +79,7 @@ class Account::ProviderImportAdapterUnownedAdoptionTest < ActiveSupport::TestCas
         price: 110,
         cost_basis: nil,
         external_id: "ext-unowned-1",
-        source: "simplefin",
+        source: "lunchflow",
         account_provider_id: ap.id,
         delete_future_holdings: false
       )

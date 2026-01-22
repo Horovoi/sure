@@ -115,7 +115,7 @@ class <%= class_name %>Item < ApplicationRecord
 
   # TODO: Customize sync status summary if needed
   # Some providers use latest_sync.sync_stats, others use count methods directly.
-  # See SimplefinItem#sync_status_summary or EnableBankingItem#sync_status_summary for examples.
+  # See PlaidItem#sync_status_summary or EnableBankingItem#sync_status_summary for examples.
   def sync_status_summary
     total_accounts = total_accounts_count
     linked_count = linked_accounts_count
@@ -147,7 +147,7 @@ class <%= class_name %>Item < ApplicationRecord
   end
 
   # TODO: Customize based on how your provider stores institution data
-  # SimpleFin uses org_data, others use institution_metadata.
+  # Some providers use org_data, others use institution_metadata.
   # Adjust the field name and key lookups as needed.
   def connected_institutions
     <%= file_name %>_accounts.includes(:account)

@@ -165,13 +165,11 @@ class Transaction::Search
       return query if statuses.uniq.sort == [ "confirmed", "pending" ] # Both selected = no filter
 
       pending_condition = <<~SQL.squish
-        (transactions.extra -> 'simplefin' ->> 'pending')::boolean = true
-        OR (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
       SQL
 
       confirmed_condition = <<~SQL.squish
-        (transactions.extra -> 'simplefin' ->> 'pending')::boolean IS DISTINCT FROM true
-        AND (transactions.extra -> 'plaid' ->> 'pending')::boolean IS DISTINCT FROM true
+        (transactions.extra -> 'plaid' ->> 'pending')::boolean IS DISTINCT FROM true
       SQL
 
       case statuses.sort

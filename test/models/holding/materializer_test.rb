@@ -28,7 +28,7 @@ class Holding::MaterializerTest < ActiveSupport::TestCase
   end
 
   test "preserves provider cost_basis when trade-derived cost_basis is nil" do
-    # Simulate a provider-imported holding with cost_basis (e.g., from SimpleFIN)
+    # Simulate a provider-imported holding with cost_basis (e.g., from a provider)
     # This is the realistic scenario: linked account with provider holdings but no trades
     provider_cost_basis = BigDecimal("150.00")
     holding = Holding.create!(

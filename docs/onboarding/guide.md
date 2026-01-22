@@ -38,7 +38,6 @@ When you arrive at the main dashboard, showing **No accounts yet**, you're all s
 > 
 > - [**Lunch Flow**](https://www.lunchflow.app/)
 > - [**Plaid**](/docs/hosting/plaid.md)
-> - [**SimpleFIN**](https://beta-bridge.simplefin.org/)
 > - [**Enable Banking**](https://enablebanking.com/) (beta)
 > - [**CoinStats**](https://coinstats.app//) (beta)
 >
@@ -167,7 +166,7 @@ Sure tracks cost basis from three sources:
 | --- | --- |
 | **Manual** | User-entered values that you set directly |
 | **Calculated** | Computed from your buy trades and transaction history |
-| **Provider** | Imported from your financial institution (Plaid, SimpleFin, etc.) |
+| **Provider** | Imported from your financial institution (Plaid, Lunchflow, etc.) |
 
 #### Priority Hierarchy
 

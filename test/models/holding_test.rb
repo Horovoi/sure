@@ -83,7 +83,7 @@ class HoldingTest < ActiveSupport::TestCase
   end
 
   test "avg_cost uses stored cost_basis when available" do
-    # Simulate provider-supplied cost_basis (e.g., from SimpleFIN)
+    # Simulate provider-supplied cost_basis (e.g., from a provider)
     @amzn.update!(cost_basis: 200.00)
 
     assert_equal Money.new(200.00, "USD"), @amzn.avg_cost

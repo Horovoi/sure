@@ -26,7 +26,7 @@ ca:
       title: Detecció automàtica de patrons
       triggers:
         - Importacions CSV completades (transaccions, operacions, comptes, etc.)
-        - Sincronitzacions de proveïdors completades (Plaid, SimpleFIN, etc.)
+        - Sincronitzacions de proveïdors completades (Plaid, Lunchflow, etc.)
     marked_active: S'ha marcat la transacció recurrent com a activa
     marked_as_recurring: S'ha marcat la transacció com a recurrent
     marked_inactive: S'ha marcat la transacció recurrent com a inactiva

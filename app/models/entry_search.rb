@@ -67,10 +67,7 @@ class EntrySearch
         AND EXISTS (
           SELECT 1 FROM transactions t
           WHERE t.id = entries.entryable_id
-          AND (
-            (t.extra -> 'simplefin' ->> 'pending')::boolean = true
-            OR (t.extra -> 'plaid' ->> 'pending')::boolean = true
-          )
+          AND (t.extra -> 'plaid' ->> 'pending')::boolean = true
         )
       SQL
 
@@ -79,10 +76,7 @@ class EntrySearch
         OR NOT EXISTS (
           SELECT 1 FROM transactions t
           WHERE t.id = entries.entryable_id
-          AND (
-            (t.extra -> 'simplefin' ->> 'pending')::boolean = true
-            OR (t.extra -> 'plaid' ->> 'pending')::boolean = true
-          )
+          AND (t.extra -> 'plaid' ->> 'pending')::boolean = true
         )
       SQL
 

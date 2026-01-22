@@ -23,7 +23,7 @@ zh-CN:
       title: 自动模式识别
       triggers:
       - CSV 导入完成时（交易、投资、账户等）
-      - 任何服务提供商同步完成时（Plaid、SimpleFIN 等）
+      - 任何服务提供商同步完成时（Plaid、Lunchflow 等）
     marked_active: 定期交易已标记为激活
     marked_as_recurring: 交易已标记为定期交易
     marked_inactive: 定期交易已标记为未激活

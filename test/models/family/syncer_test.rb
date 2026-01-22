@@ -57,7 +57,6 @@ class Family::SyncerTest < ActiveSupport::TestCase
     # Mock the account and plaid item syncs to avoid side effects
     Account.any_instance.stubs(:sync_later)
     PlaidItem.any_instance.stubs(:sync_later)
-    SimplefinItem.any_instance.stubs(:sync_later)
     LunchflowItem.any_instance.stubs(:sync_later)
     EnableBankingItem.any_instance.stubs(:sync_later)
 

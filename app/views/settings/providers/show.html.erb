@@ -14,19 +14,13 @@
   <% end %>
 
   <%# Providers below are hardcoded because they manage Family-scoped connections                 %>
-  <%# (via their own models like SimplefinItem, LunchflowItem, etc.) rather than global settings. %>
+  <%# (via their own models like LunchflowItem, etc.) rather than global settings.                %>
   <%# They require custom UI for connection management, status display, and sync actions.         %>
   <%# The controller excludes them from @provider_configurations (see prepare_show_context).      %>
 
   <%= settings_section title: "Lunch Flow", collapsible: true, open: false do %>
     <turbo-frame id="lunchflow-providers-panel">
       <%= render "settings/providers/lunchflow_panel" %>
-    </turbo-frame>
-  <% end %>
-
-  <%= settings_section title: "SimpleFIN", collapsible: true, open: false do %>
-    <turbo-frame id="simplefin-providers-panel">
-      <%= render "settings/providers/simplefin_panel" %>
     </turbo-frame>
   <% end %>
 

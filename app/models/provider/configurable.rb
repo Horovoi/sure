@@ -43,7 +43,7 @@
 #
 # The provider_key is automatically derived from the class name:
 #   Provider::PlaidAdapter -> "plaid"
-#   Provider::SimplefinAdapter -> "simplefin"
+#   Provider::LunchflowAdapter -> "lunchflow"
 #
 # Fields are stored with keys like "plaid_client_id", "plaid_secret", etc.
 # Access values via: configuration.get_value(:client_id) or field.value

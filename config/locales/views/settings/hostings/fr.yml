@@ -86,4 +86,4 @@ fr:
         auto_sync_time_description: Spécifiez l'heure à laquelle la synchronisation automatique doit se produire.
         include_pending_label: Inclure les transactions en attente
         include_pending_description: Lorsque cette option est activée, les transactions en attente (non confirmées) seront importées et automatiquement réconciliées lors de leur validation. Désactivez si votre banque fournit des données de transactions en attente peu fiables.
-        env_configured_message: Ce paramètre est désactivé car une variable d'environnement du fournisseur (SIMPLEFIN_INCLUDE_PENDING ou PLAID_INCLUDE_PENDING) est définie. Supprimez-la pour activer ce paramètre.
+        env_configured_message: Ce paramètre est désactivé car la variable d'environnement PLAID_INCLUDE_PENDING est définie. Supprimez-la pour activer ce paramètre.

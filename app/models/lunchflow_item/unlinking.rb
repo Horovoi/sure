@@ -2,7 +2,7 @@
 
 module LunchflowItem::Unlinking
   # Concern that encapsulates unlinking logic for a Lunchflow item.
-  # Mirrors the SimplefinItem::Unlinking behavior.
+  # Mirrors the PlaidItem::Unlinking behavior.
   extend ActiveSupport::Concern
 
   # Idempotently remove all connections between this Lunchflow item and local accounts.

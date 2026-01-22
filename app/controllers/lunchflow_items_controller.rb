@@ -501,7 +501,7 @@ class LunchflowItemsController < ApplicationController
     end
   end
 
-  # Show unlinked Lunchflow accounts for setup (similar to SimpleFIN setup_accounts)
+  # Show unlinked Lunchflow accounts for setup
   def setup_accounts
     # First, ensure we have the latest accounts from the API
     @api_error = fetch_lunchflow_accounts_from_api

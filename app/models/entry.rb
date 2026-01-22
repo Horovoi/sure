@@ -40,8 +40,7 @@ class Entry < ApplicationRecord
   scope :pending, -> {
     joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
       .where(<<~SQL.squish)
-        (transactions.extra -> 'simplefin' ->> 'pending')::boolean = true
-        OR (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
       SQL
   }
 
@@ -53,10 +52,7 @@ class Entry < ApplicationRecord
       OR NOT EXISTS (
         SELECT 1 FROM transactions t
         WHERE t.id = entries.entryable_id
-        AND (
-          (t.extra -> 'simplefin' ->> 'pending')::boolean = true
-          OR (t.extra -> 'plaid' ->> 'pending')::boolean = true
-        )
+        AND (t.extra -> 'plaid' ->> 'pending')::boolean = true
       )
     SQL
   }
@@ -111,8 +107,7 @@ class Entry < ApplicationRecord
         .where(amount: pending_entry.amount)
         .where(date: pending_entry.date..(pending_entry.date + date_window.days)) # Posted must be ON or AFTER pending date
         .where(<<~SQL.squish)
-          (transactions.extra -> 'simplefin' ->> 'pending')::boolean IS NOT TRUE
-          AND (transactions.extra -> 'plaid' ->> 'pending')::boolean IS NOT TRUE
+          (transactions.extra -> 'plaid' ->> 'pending')::boolean IS NOT TRUE
         SQL
         .limit(2) # Only need to know if 0, 1, or 2+ candidates
         .to_a # Load limited records to avoid COUNT(*) on .size
@@ -157,8 +152,7 @@ class Entry < ApplicationRecord
         .where(date: pending_entry.date..(pending_entry.date + fuzzy_date_window.days)) # Posted ON or AFTER pending
         .where("ABS(entries.amount) BETWEEN ? AND ?", min_amount, max_amount)
         .where(<<~SQL.squish)
-          (transactions.extra -> 'simplefin' ->> 'pending')::boolean IS NOT TRUE
-          AND (transactions.extra -> 'plaid' ->> 'pending')::boolean IS NOT TRUE
+          (transactions.extra -> 'plaid' ->> 'pending')::boolean IS NOT TRUE
         SQL
 
       # Match by name similarity (first 3 words)

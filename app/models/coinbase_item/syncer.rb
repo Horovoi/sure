@@ -68,7 +68,7 @@ class CoinbaseItem::Syncer
 
   private
     # Marks the sync as failed with an error message.
-    # Mirrors SimplefinItem::Syncer#mark_failed for consistent failure handling.
+    # Mirrors PlaidItem::Syncer#mark_failed for consistent failure handling.
     #
     # @param sync [Sync] The sync record to mark as failed
     # @param error_message [String] The error message to record

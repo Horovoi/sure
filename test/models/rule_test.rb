@@ -124,7 +124,7 @@ class RuleTest < ActiveSupport::TestCase
     )
     paypal_entry.transaction.update!(
       extra: {
-        "simplefin" => {
+        "plaid" => {
           "payee" => "Whole Foods via PayPal",
           "description" => "Grocery shopping"
         }
@@ -140,7 +140,7 @@ class RuleTest < ActiveSupport::TestCase
     )
     paypal_entry2.transaction.update!(
       extra: {
-        "simplefin" => {
+        "plaid" => {
           "payee" => "Amazon via PayPal"
         }
       }

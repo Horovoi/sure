@@ -95,7 +95,7 @@ class CoinbaseAccount::HoldingsProcessor
 
     def resolve_security
       # Use CRYPTO: prefix to distinguish from stock tickers
-      # This matches SimpleFIN's handling of crypto assets
+      # This uses the standard crypto ticker format
       ticker = crypto_code.include?(":") ? crypto_code : "CRYPTO:#{crypto_code}"
 
       # Try to resolve via Security::Resolver first
