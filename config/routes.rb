@@ -104,7 +104,6 @@ Rails.application.routes.draw do
     collection do
       get :preferences
       get :goals
-      get :trial
     end
   end
 
@@ -115,7 +114,6 @@ Rails.application.routes.draw do
     resource :hosting, only: %i[show update] do
       delete :clear_cache, on: :collection
     end
-    resource :payment, only: :show
     resource :security, only: :show
     resources :sso_identities, only: :destroy
     resource :api_key, only: [ :show, :new, :create, :destroy ]
@@ -124,13 +122,6 @@ Rails.application.routes.draw do
     resource :guides, only: :show
     resource :bank_sync, only: :show, controller: "bank_sync"
     resource :providers, only: %i[show update]
-  end
-
-  resource :subscription, only: %i[new show create] do
-    collection do
-      get :upgrade
-      get :success
-    end
   end
 
   resources :tags, except: :show do
@@ -384,7 +375,6 @@ Rails.application.routes.draw do
   namespace :webhooks do
     post "plaid"
     post "plaid_eu"
-    post "stripe"
   end
 
   get "redis-configuration-error", to: "pages#redis_configuration_error"

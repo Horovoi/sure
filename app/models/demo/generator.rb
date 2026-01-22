@@ -156,8 +156,6 @@ class Demo::Generator
         date_format: "%m-%d-%Y"
       )
 
-      family.start_subscription!("sub_demo_123") if subscribed
-
       # Admin user
       family.users.create!(
         email: email,

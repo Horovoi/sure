@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_22_195218) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_22_203745) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -487,7 +487,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_22_195218) do
     t.datetime "updated_at", null: false
     t.string "currency", default: "USD"
     t.string "locale", default: "en"
-    t.string "stripe_customer_id"
     t.string "date_format", default: "%m-%d-%Y"
     t.string "country", default: "US"
     t.string "timezone"
@@ -1105,20 +1104,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_22_195218) do
     t.index ["name"], name: "index_sso_providers_on_name", unique: true
   end
 
-  create_table "subscriptions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "family_id", null: false
-    t.string "status", null: false
-    t.string "stripe_id"
-    t.decimal "amount", precision: 19, scale: 4
-    t.string "currency"
-    t.string "interval"
-    t.datetime "current_period_ends_at"
-    t.datetime "trial_ends_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["family_id"], name: "index_subscriptions_on_family_id", unique: true
-  end
-
   create_table "syncs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "syncable_type", null: false
     t.uuid "syncable_id", null: false
@@ -1339,7 +1324,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_22_195218) do
   add_foreign_key "sessions", "impersonation_sessions", column: "active_impersonator_session_id"
   add_foreign_key "sessions", "users"
   add_foreign_key "sso_audit_logs", "users"
-  add_foreign_key "subscriptions", "families"
   add_foreign_key "syncs", "syncs", column: "parent_id"
   add_foreign_key "taggings", "tags"
   add_foreign_key "tags", "families"

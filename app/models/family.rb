@@ -1,6 +1,6 @@
 class Family < ApplicationRecord
   include CoinbaseConnectable
-  include PlaidConnectable, LunchflowConnectable, EnableBankingConnectable, Syncable, AutoTransferMatchable, Subscribeable, CoinstatsConnectable
+  include PlaidConnectable, LunchflowConnectable, EnableBankingConnectable, Syncable, AutoTransferMatchable, CoinstatsConnectable
 
   DATE_FORMATS = [
     [ "MM-DD-YYYY", "%m-%d-%Y" ],

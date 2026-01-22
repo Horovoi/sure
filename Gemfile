@@ -72,7 +72,6 @@ gem "tzinfo-data", platforms: %i[windows jruby]
 gem "csv"
 gem "rchardet" # Character encoding detection
 gem "redcarpet"
-gem "stripe"
 gem "plaid"
 gem "httparty"
 gem "rotp", "~> 6.3"

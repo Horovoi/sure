@@ -6,7 +6,6 @@ module SettingsHelper
     { name: "Preferences", path: :settings_preferences_path },
     { name: "Profile Info", path: :settings_profile_path },
     { name: "Security", path: :settings_security_path },
-    { name: "Billing", path: :subscription_path, condition: :not_self_hosted? },
     # Transactions section
     { name: "Categories", path: :categories_path },
     { name: "Tags", path: :tags_path },
