@@ -60,14 +60,14 @@ class Category < ApplicationRecord
     end
 
     def to_grouped_options
-      [name, category_and_subcategory_options]
+      [ name, category_and_subcategory_options ]
     end
 
     private
       def category_and_subcategory_options
-        [[name, id]].tap do |options|
+        [ [ name, id ] ].tap do |options|
           sorted_subcategories.each do |subcategory|
-            options << [subcategory.name, subcategory.id]
+            options << [ subcategory.name, subcategory.id ]
           end
         end
       end

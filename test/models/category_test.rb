@@ -42,7 +42,7 @@ class CategoryTest < ActiveSupport::TestCase
     option_labels = food_group.last.map(&:first)
     option_ids = food_group.last.map(&:second)
 
-    assert_equal ["Food & Drink", "Restaurants"], option_labels
-    assert_equal [categories(:food_and_drink).id, categories(:subcategory).id], option_ids
+    assert_equal [ "Food & Drink", "Restaurants" ], option_labels
+    assert_equal [ categories(:food_and_drink).id, categories(:subcategory).id ], option_ids
   end
 end

@@ -5,4 +5,3 @@ class Settings::BudgetingsController < ApplicationController
     @user = Current.user
   end
 end
-

@@ -19,6 +19,6 @@ class CategoriesHelperTest < ActionView::TestCase
     food_group = groups.find { |group| group.category.name == "Food & Drink" }
     assert food_group, "expected Food & Drink group to be present"
 
-    assert_equal ["Restaurants"], food_group.subcategories.map(&:name)
+    assert_equal [ "Restaurants" ], food_group.subcategories.map(&:name)
   end
 end

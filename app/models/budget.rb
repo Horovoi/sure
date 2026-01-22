@@ -28,7 +28,7 @@ class Budget < ApplicationRecord
       # Example: "Mar-2025" -> Mar 10, 2025 (if fiscal_start_day = 10)
       day = family.fiscal_start_day
       last_dom = Date.new(parsed.year, parsed.month, -1).day
-      Date.new(parsed.year, parsed.month, [day, last_dom].min)
+      Date.new(parsed.year, parsed.month, [ day, last_dom ].min)
     end
 
     def budget_date_valid?(date, family:)

@@ -120,7 +120,7 @@ class IncomeStatement
     def family_stats(interval: "month", exclude_current_period: false)
       @family_stats ||= {}
       fiscal_key = [ family.use_fiscal_months, family.fiscal_start_day ]
-      cache_key = [interval, fiscal_key, exclude_current_period]
+      cache_key = [ interval, fiscal_key, exclude_current_period ]
       @family_stats[cache_key] ||= Rails.cache.fetch([
         "income_statement", "family_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
       ]) { FamilyStats.new(family, interval:, exclude_current_period:).call }
@@ -129,7 +129,7 @@ class IncomeStatement
     def category_stats(interval: "month", exclude_current_period: false)
       @category_stats ||= {}
       fiscal_key = [ family.use_fiscal_months, family.fiscal_start_day ]
-      cache_key = [interval, fiscal_key, exclude_current_period]
+      cache_key = [ interval, fiscal_key, exclude_current_period ]
       @category_stats[cache_key] ||= Rails.cache.fetch([
         "income_statement", "category_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
       ]) { CategoryStats.new(family, interval:, exclude_current_period:).call }

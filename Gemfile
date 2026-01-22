@@ -36,7 +36,7 @@ gem "sidekiq-cron"
 gem "sidekiq-unique-jobs"
 
 # Monitoring
-gem "vernier"
+# gem "vernier"  # Temporarily disabled - C++ compilation issues on macOS
 gem "rack-mini-profiler"
 gem "sentry-ruby"
 gem "sentry-rails"
