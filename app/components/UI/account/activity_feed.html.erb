@@ -10,7 +10,7 @@
           <% menu.with_item(
               variant: "link",
               text: t("accounts.show.activity.new_balance"),
-              icon: "circle-dollar-sign",
+              icon: "dollar-sign",
               href: new_valuation_path(account_id: account.id),
               data: { turbo_frame: :modal }) %>
         <% end %>
@@ -36,7 +36,7 @@
         <% menu.with_item(
             variant: "link",
             text: t("accounts.show.activity.new_transfer"),
-            icon: "arrow-right-left",
+            icon: "arrow-left-right",
             href: new_transfer_path(from_account_id: account.id),
             data: { turbo_frame: :modal }) %>
       <% end %>
@@ -74,7 +74,7 @@
               type: "button",
               text: t("accounts.show.activity.filter"),
               variant: "outline",
-              icon: "list-filter"
+              icon: "filter"
             ) %>
 
             <% menu.with_custom_content do %>
@@ -112,7 +112,7 @@
               action: "click->checkbox-toggle#toggle",
               checkbox_toggle_target: "toggleButton"
             } do %>
-            <%= helpers.icon("list-todo") %>
+            <%= helpers.icon("list-checks") %>
         <% end %>
       </div>
     </div>

@@ -84,21 +84,21 @@ class Category < ApplicationRecord
 
     def icon_codes
       %w[
-        ambulance apple award baby badge-dollar-sign banknote barcode bar-chart-3 bath
-        battery bed-single beer bike bluetooth bone book book-open briefcase building bus
-        cake calculator calendar-heart calendar-range camera car cat chart-line
-        circle-dollar-sign circle-parking coffee coins compass cookie cooking-pot
-        credit-card dices dog drama drill droplet drum dumbbell film flame flower flower-2
-        fuel gamepad-2 gem gift glasses globe graduation-cap hammer hand-heart
-        hand-helping heart-handshake handshake headphones heart heart-pulse home hotel
-        house ice-cream-cone key landmark laptop leaf lightbulb luggage mail map-pin
-        martini mic monitor moon music package palette party-popper paw-print pen pencil
-        percent phone pie-chart piggy-bank pill pizza plane plug popcorn power printer
-        puzzle receipt receipt-text ribbon scale scissors settings shield shield-plus
-        shirt shopping-bag shopping-basket shopping-cart smartphone sparkles sprout
-        stethoscope store sun tablet-smartphone tag target tent thermometer ticket train
-        trees tree-palm trending-up trophy truck tv umbrella undo-2 unplug users utensils
-        video wallet wallet-cards waves wifi wine wrench zap
+        apple award baby banknote scan bar-chart bath
+        battery beer bike bluetooth bone book book-open briefcase building bus
+        cake calculator calendar camera car
+        dollar-sign coffee coins compass cookie
+        credit-card dices droplet film flame flower
+        fuel gem gift glasses globe graduation-cap hammer
+        headphones heart home
+        key landmark laptop leaf lightbulb luggage mail map-pin
+        mic monitor moon music package palette pencil
+        percent phone pie-chart pizza plane plug power printer
+        puzzle scale scissors settings shield
+        shirt shopping-bag shopping-cart smartphone
+        stethoscope sun tag target tent thermometer ticket train
+        trending-up trophy truck tv umbrella undo-2 users utensils
+        video wallet waves wifi wine wrench zap layers
       ]
     end
 
@@ -116,7 +116,7 @@ class Category < ApplicationRecord
       new(
         name: I18n.t(UNCATEGORIZED_NAME_KEY),
         color: UNCATEGORIZED_COLOR,
-        lucide_icon: "circle-dashed"
+        lucide_icon: "circle-dot"
       )
     end
 
@@ -146,27 +146,27 @@ class Category < ApplicationRecord
     private
       def default_categories
         [
-          [ "Income", "#22c55e", "circle-dollar-sign", "income" ],
+          [ "Income", "#22c55e", "dollar-sign", "income" ],
           [ "Food & Drink", "#f97316", "utensils", "expense" ],
           [ "Groceries", "#407706", "shopping-bag", "expense" ],
           [ "Shopping", "#3b82f6", "shopping-cart", "expense" ],
           [ "Transportation", "#0ea5e9", "bus", "expense" ],
           [ "Travel", "#2563eb", "plane", "expense" ],
-          [ "Entertainment", "#a855f7", "drama", "expense" ],
-          [ "Healthcare", "#4da568", "pill", "expense" ],
+          [ "Entertainment", "#a855f7", "film", "expense" ],
+          [ "Healthcare", "#4da568", "stethoscope", "expense" ],
           [ "Personal Care", "#14b8a6", "scissors", "expense" ],
           [ "Home Improvement", "#d97706", "hammer", "expense" ],
           [ "Mortgage / Rent", "#b45309", "home", "expense" ],
           [ "Utilities", "#eab308", "lightbulb", "expense" ],
           [ "Subscriptions", "#6366f1", "wifi", "expense" ],
           [ "Insurance", "#0284c7", "shield", "expense" ],
-          [ "Sports & Fitness", "#10b981", "dumbbell", "expense" ],
-          [ "Gifts & Donations", "#61c9ea", "hand-helping", "expense" ],
+          [ "Sports & Fitness", "#10b981", "target", "expense" ],
+          [ "Gifts & Donations", "#61c9ea", "gift", "expense" ],
           [ "Taxes", "#dc2626", "landmark", "expense" ],
           [ "Loan Payments", "#e11d48", "credit-card", "expense" ],
           [ "Services", "#7c3aed", "briefcase", "expense" ],
-          [ "Fees", "#6b7280", "receipt", "expense" ],
-          [ "Savings & Investments", "#059669", "piggy-bank", "expense" ],
+          [ "Fees", "#6b7280", "file-text", "expense" ],
+          [ "Savings & Investments", "#059669", "trending-up", "expense" ],
           [ investment_contributions_name, "#0d9488", "trending-up", "expense" ]
         ]
       end

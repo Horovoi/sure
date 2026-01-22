@@ -68,7 +68,7 @@ class Investment < ApplicationRecord
     end
 
     def icon
-      "chart-line"
+      "line-chart"
     end
 
     def region_label_for(region)

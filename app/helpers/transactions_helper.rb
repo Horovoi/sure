@@ -6,9 +6,9 @@ module TransactionsHelper
       { key: "type_filter", label: t("transactions.search.filters.type"), icon: "tag" },
       { key: "status_filter", label: t("transactions.search.filters.status"), icon: "clock" },
       { key: "amount_filter", label: t("transactions.search.filters.amount"), icon: "hash" },
-      { key: "category_filter", label: t("transactions.search.filters.category"), icon: "shapes" },
+      { key: "category_filter", label: t("transactions.search.filters.category"), icon: "layers" },
       { key: "tag_filter", label: t("transactions.search.filters.tag"), icon: "tags" },
-      { key: "merchant_filter", label: t("transactions.search.filters.merchant"), icon: "store" }
+      { key: "merchant_filter", label: t("transactions.search.filters.merchant"), icon: "building" }
     ]
   end
 

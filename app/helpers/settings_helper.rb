@@ -6,7 +6,7 @@ module SettingsHelper
     { name: "Preferences", path: :settings_preferences_path },
     { name: "Profile Info", path: :settings_profile_path },
     { name: "Security", path: :settings_security_path },
-    { name: "Billing", path: :settings_billing_path, condition: :not_self_hosted? },
+    { name: "Billing", path: :subscription_path, condition: :not_self_hosted? },
     # Transactions section
     { name: "Categories", path: :categories_path },
     { name: "Tags", path: :tags_path },
@@ -42,9 +42,9 @@ module SettingsHelper
     }
   end
 
-  def settings_section(title:, subtitle: nil, &block)
+  def settings_section(title:, subtitle: nil, collapsible: false, open: true, &block)
     content = capture(&block)
-    render partial: "settings/section", locals: { title: title, subtitle: subtitle, content: content }
+    render partial: "settings/section", locals: { title: title, subtitle: subtitle, content: content, collapsible: collapsible, open: open }
   end
 
   def settings_nav_footer

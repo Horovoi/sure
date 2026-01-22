@@ -213,7 +213,7 @@ class RuleImport < Import
             name: value,
             color: Category::UNCATEGORIZED_COLOR,
             classification: "expense",
-            lucide_icon: "shapes"
+            lucide_icon: "layers"
           )
         end
         return category.id
@@ -246,7 +246,7 @@ class RuleImport < Import
             name: value,
             color: Category::UNCATEGORIZED_COLOR,
             classification: "expense",
-            lucide_icon: "shapes"
+            lucide_icon: "layers"
           )
         end
         return category.id

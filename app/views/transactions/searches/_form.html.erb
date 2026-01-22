@@ -27,7 +27,7 @@
         type: "button",
         text: "Filter",
         variant: "outline",
-        icon: "list-filter"
+        icon: "filter"
       ) %>
 
       <% menu.with_custom_content do %>
@@ -43,7 +43,7 @@
           action: "click->checkbox-toggle#toggle",
           checkbox_toggle_target: "toggleButton"
         } do %>
-      <%= icon("list-todo") %>
+      <%= icon("list-checks") %>
     <% end %>
   </div>
 <% end %>

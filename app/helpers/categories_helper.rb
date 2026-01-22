@@ -3,7 +3,7 @@ module CategoriesHelper
     Category.new \
       name: "Transfer",
       color: Category::TRANSFER_COLOR,
-      lucide_icon: "arrow-right-left"
+      lucide_icon: "arrow-left-right"
   end
 
   def payment_category

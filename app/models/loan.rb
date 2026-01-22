@@ -34,7 +34,7 @@ class Loan < ApplicationRecord
     end
 
     def icon
-      "hand-coins"
+      "banknote"
     end
 
     def classification

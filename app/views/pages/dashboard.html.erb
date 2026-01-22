@@ -92,19 +92,6 @@
       balance_sheet: @balance_sheet,
       period: @period
     } %>
-
-    <%= turbo_frame_tag "net_worth_section" do %>
-      <section class="bg-container py-4 rounded-xl shadow-border-xs mb-6">
-        <%= render partial: "pages/dashboard/net_worth_chart", locals: {
-          balance_sheet: @balance_sheet,
-          period: @period
-        } %>
-      </section>
-    <% end %>
-
-    <section>
-      <%= render "pages/dashboard/balance_sheet", balance_sheet: @balance_sheet %>
-    </section>
   <% else %>
     <section>
       <%= render "pages/dashboard/no_accounts_graph_placeholder" %>

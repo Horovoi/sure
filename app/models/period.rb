@@ -78,6 +78,18 @@ class Period
       label_short: "5Y",
       label: "Last 5 Years",
       comparison_label: "vs. 5 years ago"
+    },
+    "all_time" => {
+      date_range: -> {
+        family = Current.family
+        start_date = family&.oldest_entry_date
+        # Fallback to 5 years ago if no family or oldest_entry_date is today
+        start_date = 5.years.ago.to_date if start_date.nil? || start_date == Date.current
+        [ start_date, Date.current ]
+      },
+      label_short: "All",
+      label: "All Time",
+      comparison_label: "since beginning"
     }
   }
 

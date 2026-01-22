@@ -19,7 +19,7 @@
 
 <% if @user.errors.present? %>
   <div class="text-red-600 flex items-center gap-2">
-    <%= icon("circle-alert") %>
+    <%= icon("alert-circle") %>
     <p class="text-sm"><%= @user.errors.full_messages.to_sentence %></p>
   </div>
 <% end %>

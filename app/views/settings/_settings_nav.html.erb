@@ -5,19 +5,19 @@ nav_sections = [
     items: [
       { label: t(".accounts_label"), path: accounts_path, icon: "layers" },
       { label: t(".bank_sync_label"), path: settings_bank_sync_path, icon: "banknote" },
-      { label: t(".preferences_label"), path: settings_preferences_path, icon: "bolt" },
-      { label: t(".profile_label"), path: settings_profile_path, icon: "circle-user" },
+      { label: t(".preferences_label"), path: settings_preferences_path, icon: "sliders" },
+      { label: t(".profile_label"), path: settings_profile_path, icon: "user" },
       { label: t(".security_label"), path: settings_security_path, icon: "shield-check" },
-      { label: t(".billing_label"), path: settings_billing_path, icon: "circle-dollar-sign", if: !self_hosted? }
+      { label: t(".billing_label"), path: subscription_path, icon: "dollar-sign", if: !self_hosted? }
     ]
   },
   {
     header: t(".transactions_section_title"),
     items: [
-      { label: t(".categories_label"), path: categories_path, icon: "shapes" },
+      { label: t(".categories_label"), path: categories_path, icon: "layers" },
       { label: t(".tags_label"), path: tags_path, icon: "tags" },
       { label: t(".rules_label"), path: rules_path, icon: "git-branch" },
-      { label: t(".merchants_label"), path: family_merchants_path, icon: "store" }
+      { label: t(".merchants_label"), path: family_merchants_path, icon: "building" }
     ]
   },
   {
