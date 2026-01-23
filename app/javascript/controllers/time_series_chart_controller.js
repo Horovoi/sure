@@ -12,6 +12,7 @@ export default class extends Controller {
     // Optional enhancements primarily for fullscreen mode
     showYGuides: { type: Boolean, default: false },
     endpointMarkers: { type: Boolean, default: false },
+    fullscreen: { type: Boolean, default: false },
   };
 
   _d3SvgMemo = null;
@@ -132,10 +133,15 @@ export default class extends Controller {
   }
 
   _drawChart() {
+    // Draw zero line and split area fill first (behind trendline)
+    this._drawZeroLine();
+    this._drawSplitAreaFill();
+
     this._drawTrendline();
 
     if (this.useLabelsValue) {
       this._drawXAxisLabels();
+      this._drawIntermediateTicks();
       this._drawGradientBelowTrendline();
     }
 
@@ -152,6 +158,97 @@ export default class extends Controller {
       this._drawTooltip();
       this._trackMouseForShowingTooltip();
     }
+  }
+
+  // Draw a subtle dashed horizontal line at y=0 when data crosses zero
+  _drawZeroLine() {
+    const values = this._normalDataPoints.map(this._getDatumValue);
+    const dataMin = d3.min(values);
+    const dataMax = d3.max(values);
+
+    // Only draw if data actually crosses zero
+    if (dataMin >= 0 || dataMax <= 0) return;
+
+    const zeroY = this._d3YScale(0);
+    const [rangeStart, rangeEnd] = this._d3XScale.range();
+    const isDark = this._isDarkTheme();
+
+    this._d3Group
+      .append("line")
+      .attr("class", "zero-line fg-subdued")
+      .attr("x1", rangeStart)
+      .attr("x2", rangeEnd)
+      .attr("y1", zeroY)
+      .attr("y2", zeroY)
+      .attr("stroke", "currentColor")
+      .attr("stroke-opacity", isDark ? 0.2 : 0.3)
+      .attr("stroke-dasharray", "4,4");
+  }
+
+  // Draw split area fills: green above zero, red below zero
+  _drawSplitAreaFill() {
+    const values = this._normalDataPoints.map(this._getDatumValue);
+    const dataMin = d3.min(values);
+    const dataMax = d3.max(values);
+
+    // Only draw if data actually crosses zero
+    if (dataMin >= 0 || dataMax <= 0) return;
+
+    const zeroY = this._d3YScale(0);
+    const isDark = this._isDarkTheme();
+    const opacity = isDark ? 0.08 : 0.05;
+
+    // Clip path for positive area (above zero line)
+    this._d3Group
+      .append("clipPath")
+      .attr("id", `${this.element.id}-clip-positive`)
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", this._d3ContainerWidth)
+      .attr("height", zeroY);
+
+    // Positive area fill (green)
+    this._d3Group
+      .append("path")
+      .datum(this._normalDataPoints)
+      .attr("clip-path", `url(#${this.element.id}-clip-positive)`)
+      .attr("fill", "var(--color-success)")
+      .attr("fill-opacity", opacity)
+      .attr(
+        "d",
+        d3
+          .area()
+          .x((d) => this._d3XScale(d.date))
+          .y0(zeroY)
+          .y1((d) => this._d3YScale(this._getDatumValue(d))),
+      );
+
+    // Clip path for negative area (below zero line)
+    this._d3Group
+      .append("clipPath")
+      .attr("id", `${this.element.id}-clip-negative`)
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", zeroY)
+      .attr("width", this._d3ContainerWidth)
+      .attr("height", this._d3ContainerHeight - zeroY);
+
+    // Negative area fill (red)
+    this._d3Group
+      .append("path")
+      .datum(this._normalDataPoints)
+      .attr("clip-path", `url(#${this.element.id}-clip-negative)`)
+      .attr("fill", "var(--color-destructive)")
+      .attr("fill-opacity", opacity)
+      .attr(
+        "d",
+        d3
+          .area()
+          .x((d) => this._d3XScale(d.date))
+          .y0(zeroY)
+          .y1((d) => this._d3YScale(this._getDatumValue(d))),
+      );
   }
 
   _drawTrendline() {
@@ -257,6 +354,72 @@ export default class extends Controller {
         return i === 0 ? `${em}em` : `-${em}em`;
       })
       .attr("dy", "0em");
+  }
+
+  // Draw intermediate tick marks (both modes) and labels (fullscreen only)
+  _drawIntermediateTicks() {
+    const data = this._normalDataPoints;
+    if (data.length < 10) return; // Skip for short datasets
+
+    const isFullscreen = this.fullscreenValue;
+    const [rangeStart, rangeEnd] = this._d3XScale.range();
+    const width = rangeEnd - rangeStart;
+
+    // Calculate tick count: more for fullscreen, fewer for compact
+    const tickCount = isFullscreen
+      ? Math.min(5, Math.floor(width / 200))
+      : Math.min(4, Math.floor(width / 150));
+
+    if (tickCount < 1) return;
+
+    // Get evenly spaced dates (excluding first/last which are already shown)
+    const timeScale = this._d3XScale;
+    const ticks = timeScale.ticks(tickCount + 2).slice(1, -1);
+
+    const isDark = this._isDarkTheme();
+    const tickOpacity = isDark ? 0.15 : 0.2;
+    const labelOpacity = isDark ? 0.5 : 0.6;
+
+    ticks.forEach((date) => {
+      const x = this._d3XScale(date);
+
+      // Skip if too close to edges (within 10% of width)
+      if (x < rangeStart + width * 0.1 || x > rangeEnd - width * 0.1) return;
+
+      // Tick mark (both modes)
+      this._d3Group
+        .append("line")
+        .attr("class", "intermediate-tick fg-subdued")
+        .attr("x1", x)
+        .attr("x2", x)
+        .attr("y1", this._d3ContainerHeight)
+        .attr("y2", this._d3ContainerHeight + 4)
+        .attr("stroke", "currentColor")
+        .attr("stroke-opacity", tickOpacity);
+
+      // Label (fullscreen only)
+      if (isFullscreen) {
+        this._d3Group
+          .append("text")
+          .attr("class", "fg-gray fill-current intermediate-label")
+          .attr("x", x)
+          .attr("y", this._d3ContainerHeight + 14)
+          .attr("text-anchor", "middle")
+          .attr("opacity", labelOpacity)
+          .style("font-size", "10px")
+          .style("font-weight", "400")
+          .text(this._formatIntermediateDate(date));
+      }
+    });
+  }
+
+  _formatIntermediateDate(date) {
+    const range = this._d3XScale.domain();
+    const daysDiff = (range[1] - range[0]) / (1000 * 60 * 60 * 24);
+
+    if (daysDiff > 365) return d3.timeFormat("%b '%y")(date); // "Jan '24"
+    if (daysDiff > 90) return d3.timeFormat("%b %d")(date); // "Jan 15"
+    return d3.timeFormat("%b %d")(date); // "Jan 15"
   }
 
   _drawGradientBelowTrendline() {
@@ -724,9 +887,11 @@ export default class extends Controller {
     const withLabels = this.useLabelsValue;
     const withGuides = this.showYGuidesValue;
     const withMarkers = this.endpointMarkersValue;
+    const isFullscreen = this.fullscreenValue;
 
     const top = withLabels ? (withMarkers ? 28 : 22) : 4;
-    const bottom = withLabels ? (withMarkers ? 18 : 14) : 4;
+    // Extra bottom space in fullscreen for intermediate date labels
+    const bottom = withLabels ? (isFullscreen ? 24 : withMarkers ? 18 : 14) : 4;
     const right = withGuides || withMarkers ? 12 : 4;
     const left = withLabels ? 6 : 4;
 
