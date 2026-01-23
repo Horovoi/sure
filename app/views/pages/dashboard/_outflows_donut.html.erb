@@ -1,8 +1,9 @@
 <%# locals: (outflows_data:, period:) %>
+<%= turbo_frame_tag "outflows_donut_section" do %>
 <div id="outflows-donut-section">
   <div class="flex justify-end items-center gap-4 px-4 mb-4">
-    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "_top" } do |form| %>
-      <%= form.select :period,
+    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "outflows_donut_section" } do |form| %>
+      <%= form.select :outflows_period,
                 Period.as_options,
                 { selected: period.key },
                 data: { "auto-submit-form-target": "auto" },
@@ -125,3 +126,4 @@
     </div>
   </div>
 </div>
+<% end %>

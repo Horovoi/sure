@@ -38,6 +38,46 @@ class PagesController < ApplicationController
 
     family_currency = Current.family.currency
 
+    # Parse net_worth_period (independent period for net worth chart)
+    net_worth_period_param = params[:net_worth_period]
+    @net_worth_period = if net_worth_period_param.present?
+      if net_worth_period_param == "custom"
+        last_30 = Period.last_30_days
+        start_date = safe_parse_date(params[:net_worth_start_date]) || last_30.start_date
+        end_date   = safe_parse_date(params[:net_worth_end_date])   || last_30.end_date
+        start_date, end_date = end_date, start_date if start_date > end_date
+        Period.custom(start_date: start_date, end_date: end_date)
+      else
+        begin
+          Period.from_key(net_worth_period_param)
+        rescue Period::InvalidKeyError
+          @period
+        end
+      end
+    else
+      @period
+    end
+
+    # Parse outflows_period (independent period for outflows chart)
+    outflows_period_param = params[:outflows_period]
+    @outflows_period = if outflows_period_param.present?
+      if outflows_period_param == "custom"
+        last_30 = Period.last_30_days
+        start_date = safe_parse_date(params[:outflows_start_date]) || last_30.start_date
+        end_date   = safe_parse_date(params[:outflows_end_date])   || last_30.end_date
+        start_date, end_date = end_date, start_date if start_date > end_date
+        Period.custom(start_date: start_date, end_date: end_date)
+      else
+        begin
+          Period.from_key(outflows_period_param)
+        rescue Period::InvalidKeyError
+          @period
+        end
+      end
+    else
+      @period
+    end
+
     # Toggle: show/hide subcategories in Sankey (default: false)
     @cashflow_show_subcategories = if params.key?(:cashflow_show_subcategories)
       ActiveModel::Type::Boolean.new.cast(params[:cashflow_show_subcategories])
@@ -69,7 +109,9 @@ class PagesController < ApplicationController
       @cashflow_sankey_data_with_subcategories :
       @cashflow_sankey_data_without_subcategories
 
-    @outflows_data = build_outflows_donut_data(expense_totals)
+    # Outflows uses its own period
+    outflows_expense_totals = Current.family.income_statement.expense_totals(period: @outflows_period)
+    @outflows_data = build_outflows_donut_data(outflows_expense_totals)
 
     @dashboard_sections = build_dashboard_sections
 
@@ -124,7 +166,7 @@ class PagesController < ApplicationController
           key: "cashflow_sankey",
           title: "pages.dashboard.cashflow_sankey.title",
           partial: "pages/dashboard/cashflow_sankey",
-          locals: { sankey_data: @cashflow_sankey_data, period: @period },
+          locals: { sankey_data: @cashflow_sankey_data, period: @cashflow_period },
           visible: Current.family.accounts.any?,
           collapsible: true
         },
@@ -132,7 +174,7 @@ class PagesController < ApplicationController
           key: "outflows_donut",
           title: "pages.dashboard.outflows_donut.title",
           partial: "pages/dashboard/outflows_donut",
-          locals: { outflows_data: @outflows_data, period: @period },
+          locals: { outflows_data: @outflows_data, period: @outflows_period },
           visible: Current.family.accounts.any? && @outflows_data[:categories].present?,
           collapsible: true
         },
@@ -148,7 +190,7 @@ class PagesController < ApplicationController
           key: "net_worth_chart",
           title: "pages.dashboard.net_worth_chart.title",
           partial: "pages/dashboard/net_worth_chart",
-          locals: { balance_sheet: @balance_sheet, period: @period },
+          locals: { balance_sheet: @balance_sheet, period: @net_worth_period },
           visible: Current.family.accounts.any?,
           collapsible: true
         },

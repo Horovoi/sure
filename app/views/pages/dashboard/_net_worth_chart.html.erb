@@ -1,5 +1,5 @@
 <%# locals: (balance_sheet:, period:, **args) %>
-
+<%= turbo_frame_tag "net_worth_section" do %>
 <div id="net-worth-chart" data-controller="networth-sync">
   <% series = balance_sheet.net_worth_series(period: period) %>
   <div class="flex flex-col gap-3 px-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -30,7 +30,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <% net_worth_options = Period.as_options + [["Custom", "custom"]] %>
           <% selected_key = period.key || "custom" %>
-          <%= form.select :period,
+          <%= form.select :net_worth_period,
                         net_worth_options,
                         { selected: selected_key },
                         data: { "auto-submit-form-target": "auto" },
@@ -38,12 +38,12 @@
 
           <% if period.key.nil? %>
             <div class="flex items-center gap-2">
-              <%= form.date_field :start_date,
+              <%= form.date_field :net_worth_start_date,
                     value: period.start_date,
                     data: { "auto-submit-form-target": "auto" },
                     class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
               <span class="text-secondary text-sm">to</span>
-              <%= form.date_field :end_date,
+              <%= form.date_field :net_worth_end_date,
                     value: period.end_date,
                     data: { "auto-submit-form-target": "auto" },
                     class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
@@ -72,5 +72,6 @@
   <% end %>
 
 </div>
+<% end %>
 
 <%# Fullscreen dialog moved to dashboard.html.erb to prevent frame refresh from closing it %>

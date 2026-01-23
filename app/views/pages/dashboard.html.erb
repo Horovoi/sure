@@ -90,7 +90,7 @@
     <%# Fullscreen dialog for net worth moved outside its frame so it stays open during frame updates %>
     <%= render partial: "pages/dashboard/net_worth_chart_dialog", locals: {
       balance_sheet: @balance_sheet,
-      period: @period
+      period: @net_worth_period
     } %>
   <% else %>
     <section>
