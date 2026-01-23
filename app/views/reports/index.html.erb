@@ -5,7 +5,7 @@
         <%= t("reports.index.title") %>
       </h1>
       <p class="text-sm lg:text-base text-secondary">
-        <%= t("reports.index.subtitle") %>
+        Financial insights for <%= @start_date.strftime("%b %-d") %> – <%= @end_date.strftime("%b %-d, %Y") %>
       </p>
     </div>
 
@@ -17,30 +17,31 @@
     <% end %>
 
     <%# Period Navigation Tabs %>
-    <div class="flex items-center justify-between gap-4">
-      <div class="flex items-center gap-2 overflow-x-auto pb-2">
+    <div class="space-y-2">
+      <%# Tab Row %>
+      <div class="flex items-center gap-2 overflow-x-auto">
         <%= render DS::Link.new(
-          text: t("reports.index.periods.monthly"),
+          text: t("reports.index.periods.month"),
           variant: @period_type == :monthly ? "secondary" : "ghost",
-          href: reports_path(period_type: :monthly),
+          href: reports_path(period_type: :monthly, period_mode: @period_mode, fiscal_mode: @fiscal_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
-          text: t("reports.index.periods.quarterly"),
+          text: t("reports.index.periods.quarter"),
           variant: @period_type == :quarterly ? "secondary" : "ghost",
-          href: reports_path(period_type: :quarterly),
+          href: reports_path(period_type: :quarterly, period_mode: @period_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
-          text: t("reports.index.periods.ytd"),
+          text: t("reports.index.periods.year"),
           variant: @period_type == :ytd ? "secondary" : "ghost",
-          href: reports_path(period_type: :ytd),
+          href: reports_path(period_type: :ytd, period_mode: @period_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
-          text: t("reports.index.periods.last_6_months"),
+          text: t("reports.index.periods.six_months"),
           variant: @period_type == :last_6_months ? "secondary" : "ghost",
-          href: reports_path(period_type: :last_6_months),
+          href: reports_path(period_type: :last_6_months, period_mode: @period_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
@@ -51,47 +52,65 @@
         ) %>
       </div>
 
-      <%# Print Report Button %>
-      <%= link_to print_reports_path(period_type: @period_type, start_date: @start_date, end_date: @end_date),
-                  target: "_blank",
-                  rel: "noopener",
-                  aria: { label: t("reports.index.print_report") },
-                  class: "inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-secondary bg-surface-inset hover:bg-surface-hover rounded-lg transition-colors flex-shrink-0" do %>
-        <%= icon("printer", size: "sm") %>
-        <span class="hidden sm:inline"><%= t("reports.index.print_report") %></span>
-      <% end %>
-    </div>
+      <%# Filter Bar: Toggles + Date + Print %>
+      <div class="flex flex-wrap items-center gap-3">
+        <% if @period_type != :custom %>
+          <%# Current/Last Toggle %>
+          <div class="inline-flex rounded-md border border-secondary p-0.5 bg-surface-inset">
+            <%= link_to reports_path(period_type: @period_type, period_mode: "current", fiscal_mode: @fiscal_mode),
+                class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@period_mode == 'current' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
+              <%= t("reports.index.toggles.current") %>
+            <% end %>
+            <%= link_to reports_path(period_type: @period_type, period_mode: "last", fiscal_mode: @fiscal_mode),
+                class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@period_mode == 'last' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
+              <%= t("reports.index.toggles.last") %>
+            <% end %>
+          </div>
 
-    <%# Custom Date Range Picker (only shown when custom is selected) %>
-    <% if @period_type == :custom %>
-      <%= form_with url: reports_path, method: :get, data: { controller: "auto-submit-form" }, class: "flex items-center gap-3 bg-surface-inset p-3 rounded-lg" do |f| %>
-        <%= f.hidden_field :period_type, value: :custom %>
+          <%# Fiscal Toggle - only for Month tab when fiscal enabled %>
+          <% if @period_type == :monthly && Current.family.fiscal_month_enabled? %>
+            <div class="inline-flex rounded-md border border-secondary p-0.5 bg-surface-inset">
+              <%= link_to reports_path(period_type: :monthly, period_mode: @period_mode, fiscal_mode: "false"),
+                  class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode != 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
+                <%= t("reports.index.toggles.calendar") %>
+              <% end %>
+              <%= link_to reports_path(period_type: :monthly, period_mode: @period_mode, fiscal_mode: "true"),
+                  class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode == 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
+                <%= t("reports.index.toggles.fiscal") %>
+              <% end %>
+            </div>
+          <% end %>
+        <% else %>
+          <%# Custom Date Range Picker %>
+          <%= form_with url: reports_path, method: :get, data: { controller: "auto-submit-form" }, class: "flex flex-wrap items-center gap-2" do |f| %>
+            <%= f.hidden_field :period_type, value: :custom %>
+            <%= f.date_field :start_date,
+                             value: @start_date.strftime("%Y-%m-%d"),
+                             data: { auto_submit_form_target: "auto" },
+                             autocomplete: "off",
+                             class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-surface-inset text-primary w-32" %>
+            <span class="text-secondary">–</span>
+            <%= f.date_field :end_date,
+                             value: @end_date.strftime("%Y-%m-%d"),
+                             data: { auto_submit_form_target: "auto" },
+                             autocomplete: "off",
+                             class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-surface-inset text-primary w-32" %>
+          <% end %>
+        <% end %>
 
-        <div class="flex items-center gap-2">
-          <label class="text-sm font-medium text-secondary"><%= t("reports.index.date_range.from") %></label>
-          <%= f.date_field :start_date,
-                           value: @start_date.strftime("%Y-%m-%d"),
-                           data: { auto_submit_form_target: "auto" },
-                           autocomplete: "off",
-                           class: "px-3 py-1.5 border border-primary rounded-lg text-sm bg-container-inset text-primary" %>
-        </div>
-        <span class="text-secondary">—</span>
-        <div class="flex items-center gap-2">
-          <label class="text-sm font-medium text-secondary"><%= t("reports.index.date_range.to") %></label>
-          <%= f.date_field :end_date,
-                           value: @end_date.strftime("%Y-%m-%d"),
-                           data: { auto_submit_form_target: "auto" },
-                           autocomplete: "off",
-                           class: "px-3 py-1.5 border border-primary rounded-lg text-sm bg-container-inset text-primary" %>
-        </div>
-      <% end %>
-    <% end %>
+        <%# Spacer %>
+        <div class="flex-1"></div>
 
-    <%# Period Display %>
-    <div class="text-sm text-secondary">
-      <%= t("reports.index.showing_period",
-            start: @start_date.strftime("%b %-d, %Y"),
-            end: @end_date.strftime("%b %-d, %Y")) %>
+        <%# Print Report Button %>
+        <%= link_to print_reports_path(period_type: @period_type, period_mode: @period_mode, fiscal_mode: @fiscal_mode, start_date: @start_date, end_date: @end_date),
+                    target: "_blank",
+                    rel: "noopener",
+                    aria: { label: t("reports.index.print_report") },
+                    class: "inline-flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium text-secondary hover:text-primary transition-colors" do %>
+          <%= icon("printer", size: "sm") %>
+          <span class="hidden sm:inline"><%= t("reports.index.print_report") %></span>
+        <% end %>
+      </div>
     </div>
   </div>
 <% end %>

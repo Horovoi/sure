@@ -9,11 +9,16 @@ en:
       drag_to_reorder: "Drag to reorder section"
       toggle_section: "Toggle section visibility"
       periods:
-        monthly: Monthly
-        quarterly: Quarterly
-        ytd: Year to Date
-        last_6_months: Last 6 Months
-        custom: Custom Range
+        month: Month
+        quarter: Quarter
+        year: Year
+        six_months: 6 Months
+        custom: Custom
+      toggles:
+        current: Current
+        last: Last
+        calendar: Calendar
+        fiscal: Fiscal
       date_range:
         from: From
         to: To

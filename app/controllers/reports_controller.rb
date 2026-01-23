@@ -91,6 +91,8 @@ class ReportsController < ApplicationController
   private
     def setup_report_data(show_flash: false)
       @period_type = params[:period_type]&.to_sym || :monthly
+      @period_mode = params[:period_mode] || "current"
+      @fiscal_mode = params[:fiscal_mode] || default_fiscal_mode
       @start_date = parse_date_param(:start_date) || default_start_date
       @end_date = parse_date_param(:end_date) || default_end_date
 
@@ -225,15 +227,23 @@ class ReportsController < ApplicationController
     end
 
     def default_start_date
+      is_last = @period_mode == "last"
+      use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+
       case @period_type
       when :monthly
-        Date.current.beginning_of_month.to_date
+        if use_fiscal
+          base = is_last ? 1.month.ago : Date.current
+          Current.family.budget_period_start_for(base)
+        else
+          is_last ? 1.month.ago.beginning_of_month.to_date : Date.current.beginning_of_month.to_date
+        end
       when :quarterly
-        Date.current.beginning_of_quarter.to_date
+        is_last ? 3.months.ago.beginning_of_quarter.to_date : Date.current.beginning_of_quarter.to_date
       when :ytd
-        Date.current.beginning_of_year.to_date
+        is_last ? 1.year.ago.beginning_of_year.to_date : Date.current.beginning_of_year.to_date
       when :last_6_months
-        6.months.ago.beginning_of_month.to_date
+        is_last ? 7.months.ago.beginning_of_month.to_date : 6.months.ago.beginning_of_month.to_date
       when :custom
         1.month.ago.to_date
       else
@@ -242,18 +252,33 @@ class ReportsController < ApplicationController
     end
 
     def default_end_date
+      is_last = @period_mode == "last"
+      use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+
       case @period_type
-      when :monthly, :last_6_months
-        Date.current.end_of_month.to_date
+      when :monthly
+        if use_fiscal
+          base = is_last ? 1.month.ago : Date.current
+          start = Current.family.budget_period_start_for(base)
+          is_last ? Current.family.budget_period_end_for(start) : Date.current
+        else
+          is_last ? 1.month.ago.end_of_month.to_date : Date.current
+        end
       when :quarterly
-        Date.current.end_of_quarter.to_date
+        is_last ? 3.months.ago.end_of_quarter.to_date : Date.current
       when :ytd
-        Date.current
+        is_last ? 1.year.ago.end_of_year.to_date : Date.current
+      when :last_6_months
+        is_last ? 1.month.ago.end_of_month.to_date : Date.current
       when :custom
         Date.current
       else
-        Date.current.end_of_month.to_date
+        Date.current
       end
+    end
+
+    def default_fiscal_mode
+      Current.family.fiscal_month_enabled? ? "true" : "false"
     end
 
     def build_previous_period
