@@ -612,4 +612,176 @@ class RecurringTransactionTest < ActiveSupport::TestCase
     assert RecurringTransaction.exists?(manual_recurring.id)
     assert_not RecurringTransaction.exists?(auto_recurring.id)
   end
+
+  # Subscription-specific tests
+  test "subscriptions scope returns only subscriptions" do
+    # Create a regular recurring transaction
+    regular = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 15.99,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "active",
+      is_subscription: false
+    )
+
+    # Create a subscription
+    subscription = @family.recurring_transactions.create!(
+      merchant: merchants(:amazon),
+      amount: 9.99,
+      currency: "USD",
+      expected_day_of_month: 10,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "active",
+      is_subscription: true
+    )
+
+    subscriptions = @family.recurring_transactions.subscriptions
+    assert_includes subscriptions, subscription
+    assert_not_includes subscriptions, regular
+  end
+
+  test "active_subscriptions scope returns only active subscriptions" do
+    # Create active subscription
+    active_sub = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 15.99,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "active",
+      is_subscription: true
+    )
+
+    # Create inactive subscription
+    inactive_sub = @family.recurring_transactions.create!(
+      merchant: merchants(:amazon),
+      amount: 9.99,
+      currency: "USD",
+      expected_day_of_month: 10,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "inactive",
+      is_subscription: true
+    )
+
+    active_subs = @family.recurring_transactions.active_subscriptions
+    assert_includes active_subs, active_sub
+    assert_not_includes active_subs, inactive_sub
+  end
+
+  test "monthly_cost returns correct amount for monthly subscription" do
+    subscription = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 15.99,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "active",
+      is_subscription: true,
+      billing_cycle: "monthly"
+    )
+
+    assert_equal 15.99, subscription.monthly_cost
+  end
+
+  test "monthly_cost returns yearly amount divided by 12 for yearly subscription" do
+    subscription = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 120.00,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.year.from_now,
+      status: "active",
+      is_subscription: true,
+      billing_cycle: "yearly"
+    )
+
+    assert_equal 10.00, subscription.monthly_cost
+  end
+
+  test "yearly_cost returns monthly amount multiplied by 12 for monthly subscription" do
+    subscription = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 10.00,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "active",
+      is_subscription: true,
+      billing_cycle: "monthly"
+    )
+
+    assert_equal 120.00, subscription.yearly_cost
+  end
+
+  test "yearly_cost returns correct amount for yearly subscription" do
+    subscription = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 99.00,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.year.from_now,
+      status: "active",
+      is_subscription: true,
+      billing_cycle: "yearly"
+    )
+
+    assert_equal 99.00, subscription.yearly_cost
+  end
+
+  test "calculate_next_expected_date adds year for yearly subscription" do
+    subscription = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 99.00,
+      currency: "USD",
+      expected_day_of_month: 15,
+      last_occurrence_date: Date.new(2025, 1, 15),
+      next_expected_date: Date.new(2026, 1, 15),
+      status: "active",
+      is_subscription: true,
+      billing_cycle: "yearly"
+    )
+
+    next_date = subscription.calculate_next_expected_date(Date.new(2025, 1, 15))
+    assert_equal Date.new(2026, 1, 15), next_date
+  end
+
+  test "display_name returns merchant name when merchant present" do
+    subscription = @family.recurring_transactions.create!(
+      merchant: @merchant,
+      amount: 15.99,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "active",
+      is_subscription: true
+    )
+
+    assert_equal @merchant.name, subscription.display_name
+  end
+
+  test "display_name returns name when no merchant" do
+    subscription = @family.recurring_transactions.create!(
+      name: "Custom Subscription",
+      amount: 15.99,
+      currency: "USD",
+      expected_day_of_month: 5,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      status: "active",
+      is_subscription: true
+    )
+
+    assert_equal "Custom Subscription", subscription.display_name
+  end
 end

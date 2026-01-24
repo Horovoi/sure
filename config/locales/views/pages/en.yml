@@ -48,3 +48,14 @@ en:
         trades: "Trades"
         no_investments: "No investment accounts"
         add_investment: "Add an investment account to track your portfolio"
+      subscriptions_summary:
+        title: "Subscriptions"
+        active_count:
+          one: "%{count} active subscription"
+          other: "%{count} active subscriptions"
+        view_all: "View All"
+        view_calendar: "View Calendar"
+        upcoming_7_days: "Upcoming (next 7 days)"
+        no_upcoming: "No subscriptions due in the next 7 days"
+        monthly: "Monthly"
+        yearly: "Yearly"

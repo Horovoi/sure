@@ -1,0 +1,9 @@
+<div class="max-w-2xl mx-auto">
+  <header class="mb-6">
+    <h1 class="text-primary text-xl font-medium"><%= @subscription.display_name %></h1>
+  </header>
+
+  <div class="bg-container rounded-xl shadow-border-xs p-6">
+    <%= render "form", subscription: @subscription %>
+  </div>
+</div>

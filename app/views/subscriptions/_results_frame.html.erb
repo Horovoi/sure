@@ -1,0 +1,39 @@
+<%= turbo_frame_tag "subscriptions_results" do %>
+  <div class="bg-container rounded-xl shadow-border-xs">
+    <% if @subscriptions.empty? %>
+      <div class="text-center py-12 px-4">
+        <div class="text-secondary mb-4">
+          <%= icon "credit-card", size: "xl" %>
+        </div>
+        <p class="text-primary font-medium mb-2"><%= t("subscriptions.index.no_subscriptions") %></p>
+        <p class="text-secondary text-sm mb-4"><%= t("subscriptions.index.no_subscriptions_description") %></p>
+        <%= render DS::Link.new(
+          text: t("subscriptions.index.new_subscription"),
+          icon: "plus",
+          variant: "primary",
+          href: new_subscription_path
+        ) %>
+      </div>
+    <% else %>
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="text-xs uppercase font-medium text-secondary border-b border-divider">
+              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.name") %></th>
+              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.amount") %></th>
+              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.cycle") %></th>
+              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.next_billing") %></th>
+              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.status") %></th>
+              <th class="text-right py-3 px-4"><%= t("subscriptions.index.table.actions") %></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @subscriptions.each do |subscription| %>
+              <%= render "subscriptions/subscription", subscription: subscription %>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </div>
+<% end %>

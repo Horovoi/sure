@@ -61,3 +61,17 @@ bin/rails test test/models/account_test.rb  # Specific file
 bin/rails test test/models/account_test.rb:42  # Specific line
 bin/rails test:system                       # System tests (slow)
 ```
+
+## Docker Database Setup
+
+The database runs in Docker. `.env.test.local` must exist with DB credentials:
+
+```bash
+# Required in .env.test.local
+DB_HOST=127.0.0.1
+DB_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+```
+
+**Why?** `dotenv-rails` intentionally skips `.env.local` in test environment for safety. Without `.env.test.local`, tests fail with `ActiveRecord::DatabaseConnectionError`.

@@ -113,6 +113,17 @@ class PagesController < ApplicationController
     outflows_expense_totals = Current.family.income_statement.expense_totals(period: @outflows_period)
     @outflows_data = build_outflows_donut_data(outflows_expense_totals)
 
+    # Load subscriptions for the summary widget
+    @upcoming_subscriptions = Current.family.recurring_transactions
+                                    .active_subscriptions
+                                    .where("next_expected_date <= ?", 7.days.from_now.to_date)
+                                    .where("next_expected_date >= ?", Date.current)
+                                    .order(:next_expected_date)
+                                    .limit(5)
+                                    .includes(:merchant)
+
+    @subscriptions_monthly_total = calculate_subscriptions_monthly_total
+
     @dashboard_sections = build_dashboard_sections
 
     @breadcrumbs = [ [ "Home", root_path ], [ "Dashboard", nil ] ]
@@ -200,6 +211,14 @@ class PagesController < ApplicationController
           partial: "pages/dashboard/balance_sheet",
           locals: { balance_sheet: @balance_sheet },
           visible: Current.family.accounts.any?,
+          collapsible: true
+        },
+        {
+          key: "subscriptions_summary",
+          title: "pages.dashboard.subscriptions_summary.title",
+          partial: "pages/dashboard/subscriptions_summary",
+          locals: { upcoming_subscriptions: @upcoming_subscriptions, monthly_total: @subscriptions_monthly_total },
+          visible: Current.family.recurring_transactions.subscriptions.any?,
           collapsible: true
         }
       ]
@@ -519,5 +538,12 @@ class PagesController < ApplicationController
       Date.parse(value)
     rescue ArgumentError
       nil
+    end
+
+    def calculate_subscriptions_monthly_total
+      total = Current.family.recurring_transactions.active_subscriptions.sum do |sub|
+        sub.billing_cycle_yearly? ? (sub.amount / 12) : sub.amount
+      end
+      Money.new(total, Current.family.currency)
     end
 end

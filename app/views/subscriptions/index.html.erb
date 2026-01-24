@@ -1,0 +1,105 @@
+<div class="space-y-4 flex flex-col">
+  <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h1 class="text-primary text-xl font-medium"><%= t(".title") %></h1>
+      <p class="text-secondary text-sm mt-1">
+        <%= t(".monthly_total") %>: <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span>
+        <span class="text-subdued mx-2">&middot;</span>
+        <%= t(".yearly_total") %>: <span class="font-medium text-primary"><%= format_money(@yearly_total) %></span>
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <%= render DS::Link.new(
+        text: t(".calendar"),
+        icon: "calendar",
+        variant: "outline",
+        href: calendar_subscriptions_path
+      ) %>
+
+      <%= render DS::Link.new(
+        text: t(".new_subscription"),
+        variant: "primary",
+        icon: "plus",
+        href: new_subscription_path
+      ) %>
+    </div>
+  </header>
+
+  <%# Filters %>
+  <div class="bg-container rounded-xl shadow-border-xs p-4">
+    <%= form_with url: subscriptions_path, method: :get, data: { turbo_frame: "subscriptions_results", turbo_action: "advance", controller: "auto-submit-form" } do |f| %>
+      <%= hidden_field_tag :status, params[:status] if params[:status].present? %>
+      <%= hidden_field_tag :billing_cycle, params[:billing_cycle] if params[:billing_cycle].present? %>
+      <div class="flex flex-wrap items-center gap-3">
+        <%# Status filter %>
+        <div class="flex items-center gap-1 bg-surface-inset rounded-lg p-1">
+          <%= link_to t(".filter.all"),
+              subscriptions_path(status: nil, billing_cycle: params[:billing_cycle]),
+              data: { turbo_action: "advance" },
+              class: class_names(
+                "px-3 py-1.5 text-sm rounded-md transition-colors",
+                params[:status].blank? ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+              ) %>
+          <%= link_to t(".filter.active"),
+              subscriptions_path(status: "active", billing_cycle: params[:billing_cycle]),
+              data: { turbo_action: "advance" },
+              class: class_names(
+                "px-3 py-1.5 text-sm rounded-md transition-colors",
+                params[:status] == "active" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+              ) %>
+          <%= link_to t(".filter.inactive"),
+              subscriptions_path(status: "inactive", billing_cycle: params[:billing_cycle]),
+              data: { turbo_action: "advance" },
+              class: class_names(
+                "px-3 py-1.5 text-sm rounded-md transition-colors",
+                params[:status] == "inactive" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+              ) %>
+        </div>
+
+        <%# Billing cycle filter %>
+        <div class="flex items-center gap-1 bg-surface-inset rounded-lg p-1">
+          <%= link_to t(".filter.all"),
+              subscriptions_path(status: params[:status], billing_cycle: nil),
+              data: { turbo_action: "advance" },
+              class: class_names(
+                "px-3 py-1.5 text-sm rounded-md transition-colors",
+                params[:billing_cycle].blank? ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+              ) %>
+          <%= link_to t(".filter.monthly"),
+              subscriptions_path(status: params[:status], billing_cycle: "monthly"),
+              data: { turbo_action: "advance" },
+              class: class_names(
+                "px-3 py-1.5 text-sm rounded-md transition-colors",
+                params[:billing_cycle] == "monthly" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+              ) %>
+          <%= link_to t(".filter.yearly"),
+              subscriptions_path(status: params[:status], billing_cycle: "yearly"),
+              data: { turbo_action: "advance" },
+              class: class_names(
+                "px-3 py-1.5 text-sm rounded-md transition-colors",
+                params[:billing_cycle] == "yearly" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+              ) %>
+        </div>
+
+        <%# Search %>
+        <div class="flex-1 min-w-[200px]">
+          <%= f.search_field :search,
+              value: params[:search],
+              placeholder: t(".search_placeholder"),
+              class: "w-full px-3 py-1.5 text-sm bg-surface-inset rounded-lg border border-secondary focus:border-primary focus:ring-1 focus:ring-primary",
+              data: {
+                auto_submit_form_target: "auto",
+                autosubmit_trigger_event: "input",
+                autosubmit_min_length: "2",
+                autosubmit_debounce_add_timeout: "100",
+                autosubmit_debounce_clear_timeout: "0"
+              } %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <%# Subscriptions list %>
+  <%= render "subscriptions/results_frame" %>
+</div>

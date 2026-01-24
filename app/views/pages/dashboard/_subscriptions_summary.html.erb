@@ -1,0 +1,81 @@
+<%# locals: (upcoming_subscriptions:, monthly_total:, **args) %>
+
+<div id="subscriptions-summary" class="space-y-4">
+  <div class="flex justify-between gap-4 px-4">
+    <div class="space-y-2">
+      <div class="flex items-center gap-2">
+        <h2 class="text-lg font-medium"><%= t(".title") %></h2>
+      </div>
+
+      <p class="text-primary text-3xl font-medium">
+        <%= format_money(monthly_total) %><span class="text-secondary text-sm font-normal">/mo</span>
+      </p>
+
+      <div class="flex items-center gap-2 text-sm">
+        <span class="text-secondary"><%= t(".active_count", count: Current.family.recurring_transactions.active_subscriptions.count) %></span>
+      </div>
+    </div>
+
+    <%= link_to subscriptions_path, class: "shrink-0" do %>
+      <%= render DS::Link.new(
+        text: t(".view_all"),
+        icon: "arrow-right",
+        variant: "ghost"
+      ) %>
+    <% end %>
+  </div>
+
+  <% if upcoming_subscriptions.any? %>
+    <div class="bg-container-inset rounded-xl p-1 mx-4">
+      <div class="px-4 py-2 flex items-center uppercase text-xs font-medium text-secondary">
+        <%= t(".upcoming_7_days") %>
+      </div>
+
+      <div class="shadow-border-xs rounded-lg bg-container font-medium text-sm">
+        <% upcoming_subscriptions.each_with_index do |subscription, idx| %>
+          <%= link_to edit_subscription_path(subscription), class: "p-4 flex items-center justify-between gap-4 hover:bg-surface-hover transition-colors #{idx < upcoming_subscriptions.size - 1 ? 'border-b border-primary' : ''}" do %>
+            <div class="flex items-center gap-3">
+              <% if subscription.subscription_logo_url.present? %>
+                <img src="<%= subscription.subscription_logo_url %>" alt="<%= subscription.display_name %>" class="w-8 h-8 rounded-full object-cover">
+              <% else %>
+                <%= render DS::FilledIcon.new(
+                  variant: :text,
+                  text: subscription.display_name,
+                  size: "md",
+                  rounded: true
+                ) %>
+              <% end %>
+              <div>
+                <p class="font-medium text-primary"><%= subscription.display_name %></p>
+                <p class="text-xs text-secondary">
+                  <%= l(subscription.next_expected_date, format: :short) %>
+                  <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium <%= subscription.billing_cycle_monthly? ? 'bg-violet-100 text-violet-700' : 'bg-yellow-100 text-yellow-700' %>">
+                    <%= subscription.billing_cycle_monthly? ? t(".monthly") : t(".yearly") %>
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div class="text-right">
+              <p class="font-medium text-primary"><%= format_money(-subscription.amount_money) %></p>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+  <% else %>
+    <div class="mx-4 p-4 bg-container-inset rounded-xl text-center text-sm text-secondary">
+      <%= t(".no_upcoming") %>
+    </div>
+  <% end %>
+
+  <div class="flex justify-center px-4">
+    <%= link_to calendar_subscriptions_path do %>
+      <%= render DS::Link.new(
+        text: t(".view_calendar"),
+        icon: "calendar",
+        variant: "outline"
+      ) %>
+    <% end %>
+  </div>
+</div>

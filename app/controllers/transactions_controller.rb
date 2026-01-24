@@ -297,6 +297,70 @@ class TransactionsController < ApplicationController
     end
   end
 
+  def mark_as_subscription
+    transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
+
+    # Check if a subscription already exists for this pattern
+    existing = Current.family.recurring_transactions.subscriptions.find_by(
+      merchant_id: transaction.merchant_id,
+      name: transaction.merchant_id.present? ? nil : transaction.entry.name,
+      currency: transaction.entry.currency
+    )
+
+    if existing
+      flash[:alert] = t("subscriptions.already_exists")
+      redirect_back_or_to transactions_path
+      return
+    end
+
+    begin
+      # Create recurring transaction first
+      recurring_transaction = RecurringTransaction.create_from_transaction(transaction)
+
+      # Detect billing cycle from transaction history
+      matching_entries = RecurringTransaction.find_matching_transaction_entries(
+        family: Current.family,
+        merchant_id: transaction.merchant_id,
+        name: transaction.merchant_id.present? ? nil : transaction.entry.name,
+        currency: transaction.entry.currency,
+        expected_day: recurring_transaction.expected_day_of_month,
+        lookback_months: 24
+      )
+
+      billing_cycle = RecurringTransaction::SubscriptionDetector.detect_billing_cycle(
+        matching_entries.map(&:date)
+      )
+
+      # Mark as subscription with detected billing cycle
+      recurring_transaction.update!(
+        is_subscription: true,
+        billing_cycle: billing_cycle,
+        category_id: find_subscriptions_category&.id
+      )
+
+      respond_to do |format|
+        format.html do
+          flash[:notice] = t("subscriptions.marked_as_subscription")
+          redirect_to edit_subscription_path(recurring_transaction)
+        end
+      end
+    rescue ActiveRecord::RecordInvalid => e
+      respond_to do |format|
+        format.html do
+          flash[:alert] = t("subscriptions.creation_failed")
+          redirect_back_or_to transactions_path
+        end
+      end
+    rescue StandardError => e
+      respond_to do |format|
+        format.html do
+          flash[:alert] = t("subscriptions.unexpected_error")
+          redirect_back_or_to transactions_path
+        end
+      end
+    end
+  end
+
   def update_preferences
     Current.user.update_transactions_preferences(preferences_params)
     head :ok
@@ -392,6 +456,10 @@ class TransactionsController < ApplicationController
       @expense_category_groups = Category.grouped_select_options(
         category_scope.expenses.roots.alphabetically
       )
+    end
+
+    def find_subscriptions_category
+      Current.family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")
     end
 
     # Helper methods for convert_to_trade

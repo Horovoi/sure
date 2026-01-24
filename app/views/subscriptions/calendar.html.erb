@@ -1,0 +1,177 @@
+<div class="space-y-4 flex flex-col" data-controller="subscription-calendar">
+  <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h1 class="text-primary text-xl font-medium"><%= t(".title") %></h1>
+      <p class="text-secondary text-sm mt-1">
+        <%= t(".monthly_total") %>: <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span>
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <%= render DS::Link.new(
+        text: t(".list"),
+        icon: "list",
+        variant: "outline",
+        href: subscriptions_path
+      ) %>
+
+      <%= render DS::Link.new(
+        text: t("subscriptions.index.new_subscription"),
+        variant: "primary",
+        icon: "plus",
+        href: new_subscription_path
+      ) %>
+    </div>
+  </header>
+
+  <%# Calendar navigation %>
+  <div class="bg-container rounded-xl shadow-border-xs p-4">
+    <div class="flex items-center justify-between mb-4">
+      <%= link_to calendar_subscriptions_path(month: @month.prev_month.strftime("%Y-%m-%d")),
+          class: "p-2 rounded-lg hover:bg-surface-inset transition-colors" do %>
+        <%= icon "chevron-left", size: "sm" %>
+      <% end %>
+
+      <h2 class="text-lg font-medium text-primary">
+        <%= @month.strftime("%B %Y") %>
+      </h2>
+
+      <%= link_to calendar_subscriptions_path(month: @month.next_month.strftime("%Y-%m-%d")),
+          class: "p-2 rounded-lg hover:bg-surface-inset transition-colors" do %>
+        <%= icon "chevron-right", size: "sm" %>
+      <% end %>
+    </div>
+
+    <%# Today button %>
+    <% unless @month.beginning_of_month == Date.current.beginning_of_month %>
+      <div class="text-center mb-4">
+        <%= link_to t(".today"),
+            calendar_subscriptions_path,
+            class: "text-sm text-link hover:underline" %>
+      </div>
+    <% end %>
+
+    <%# Calendar grid %>
+    <div class="rounded-lg overflow-hidden border border-secondary">
+      <%# Day headers %>
+      <div class="grid grid-cols-7 bg-surface-inset">
+        <% %w[Mon Tue Wed Thu Fri Sat Sun].each do |day| %>
+          <div class="py-2 text-center text-xs font-medium text-secondary uppercase">
+            <%= day %>
+          </div>
+        <% end %>
+      </div>
+
+      <%# Calendar days %>
+      <div class="grid grid-cols-7">
+        <%# Padding for start of month %>
+        <% start_day = (@month.beginning_of_month.wday - 1) % 7 %>
+        <% start_day.times do %>
+          <div class="min-h-[80px] p-2 border-t border-r border-secondary bg-surface-inset"></div>
+        <% end %>
+
+        <%# Days of the month %>
+        <% (@month.beginning_of_month..@month.end_of_month).each do |date| %>
+          <% subscriptions_on_day = @calendar_data[date] || [] %>
+          <% is_today = date == Date.current %>
+
+          <div class="min-h-[80px] p-2 border-t border-r border-secondary hover:bg-surface-hover transition-colors <%= 'bg-orange-50 border-l-2 border-l-orange-500' if is_today %>"
+               data-action="click->subscription-calendar#showDayDetails"
+               data-date="<%= date.iso8601 %>">
+            <%# Day number %>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-sm font-medium <%= is_today ? 'text-orange-600' : 'text-primary' %>">
+                <%= date.day %>
+              </span>
+            </div>
+
+            <%# Subscription indicators %>
+            <% if subscriptions_on_day.any? %>
+              <div class="flex flex-wrap gap-1">
+                <% subscriptions_on_day.first(3).each do |sub| %>
+                  <%= link_to edit_subscription_path(sub),
+                      class: "block",
+                      title: "#{sub.display_name} - #{format_money(-sub.amount_money)}" do %>
+                    <% if sub.subscription_logo_url.present? %>
+                      <%= image_tag sub.subscription_logo_url,
+                          class: "w-5 h-5 rounded-full object-cover border border-white shadow-sm",
+                          loading: "lazy" %>
+                    <% else %>
+                      <div class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white <%= sub.billing_cycle_monthly? ? 'bg-violet-500' : 'bg-yellow-500' %>">
+                        <%= sub.display_name[0].upcase %>
+                      </div>
+                    <% end %>
+                  <% end %>
+                <% end %>
+
+                <% if subscriptions_on_day.size > 3 %>
+                  <div class="w-5 h-5 rounded-full bg-surface-inset flex items-center justify-center text-[10px] font-medium text-secondary">
+                    +<%= subscriptions_on_day.size - 3 %>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+
+        <%# Padding for end of month %>
+        <% end_day = (7 - @month.end_of_month.wday) % 7 %>
+        <% end_day.times do %>
+          <div class="min-h-[80px] p-2 border-t border-r border-secondary bg-surface-inset"></div>
+        <% end %>
+      </div>
+    </div>
+
+    <%# Legend %>
+    <div class="flex items-center gap-4 mt-4 text-xs text-secondary">
+      <div class="flex items-center gap-1.5">
+        <div class="w-3 h-3 rounded-full bg-violet-500"></div>
+        <span><%= t(".legend.monthly") %></span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+        <span><%= t(".legend.yearly") %></span>
+      </div>
+    </div>
+  </div>
+
+  <%# Day details modal/drawer (populated via Stimulus) %>
+  <div id="day-details-drawer"
+       class="hidden fixed inset-0 z-50"
+       data-subscription-calendar-target="drawer">
+    <div class="absolute inset-0 bg-black/50" data-action="click->subscription-calendar#closeDayDetails"></div>
+    <div class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-container shadow-xl overflow-y-auto">
+      <div class="p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium text-primary" data-subscription-calendar-target="drawerTitle">
+            Subscriptions
+          </h3>
+          <button type="button"
+                  class="p-2 rounded-lg hover:bg-surface-inset transition-colors"
+                  data-action="click->subscription-calendar#closeDayDetails">
+            <%= icon "x", size: "sm" %>
+          </button>
+        </div>
+        <div data-subscription-calendar-target="drawerContent">
+          <%# Content populated by JavaScript %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%# Pass calendar data to JavaScript %>
+<script type="application/json" data-subscription-calendar-target="calendarData">
+  <%= raw @calendar_data.transform_keys(&:iso8601).transform_values { |subs|
+    subs.map do |sub|
+      {
+        id: sub.id,
+        name: sub.display_name,
+        amount: format_money(-sub.amount_money),
+        billing_cycle: sub.billing_cycle,
+        logo_url: sub.subscription_logo_url,
+        edit_url: edit_subscription_path(sub)
+      }
+    end
+  }.to_json %>
+</script>

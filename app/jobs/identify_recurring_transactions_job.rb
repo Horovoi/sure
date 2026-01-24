@@ -20,6 +20,9 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
     # Use advisory lock as final safety net against concurrent execution
     with_advisory_lock(family_id) do
       RecurringTransaction::Identifier.new(family).identify_recurring_patterns
+
+      # After identifying recurring patterns, detect subscriptions
+      RecurringTransaction::SubscriptionDetector.detect_for_family(family)
     end
   end
 

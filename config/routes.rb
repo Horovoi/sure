@@ -207,6 +207,7 @@ Rails.application.routes.draw do
       get :convert_to_trade
       post :create_trade_from_transaction
       post :mark_as_recurring
+      post :mark_as_subscription
       post :merge_duplicate
       post :dismiss_duplicate
     end
@@ -221,6 +222,16 @@ Rails.application.routes.draw do
 
     member do
       match :toggle_status, via: [ :get, :post ]
+    end
+  end
+
+  resources :subscriptions, only: %i[index new create show edit update destroy] do
+    collection do
+      get :calendar
+    end
+
+    member do
+      post :toggle_status
     end
   end
 

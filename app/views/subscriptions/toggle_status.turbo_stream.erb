@@ -1,0 +1,7 @@
+<% if should_remove_from_view?(@subscription) %>
+  <%= turbo_stream.remove dom_id(@subscription) %>
+<% else %>
+  <%= turbo_stream.replace dom_id(@subscription) do %>
+    <%= render "subscriptions/subscription", subscription: @subscription %>
+  <% end %>
+<% end %>

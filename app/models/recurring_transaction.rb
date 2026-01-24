@@ -3,6 +3,9 @@ class RecurringTransaction < ApplicationRecord
 
   belongs_to :family
   belongs_to :merchant, optional: true
+  belongs_to :category, optional: true
+
+  has_one_attached :logo
 
   monetize :amount
   monetize :expected_amount_min, allow_nil: true
@@ -10,6 +13,7 @@ class RecurringTransaction < ApplicationRecord
   monetize :expected_amount_avg, allow_nil: true
 
   enum :status, { active: "active", inactive: "inactive" }
+  enum :billing_cycle, { monthly: "monthly", yearly: "yearly" }, prefix: true
 
   validates :amount, presence: true
   validates :currency, presence: true
@@ -35,6 +39,8 @@ class RecurringTransaction < ApplicationRecord
 
   scope :for_family, ->(family) { where(family: family) }
   scope :expected_soon, -> { active.where("next_expected_date <= ?", 1.month.from_now) }
+  scope :subscriptions, -> { where(is_subscription: true) }
+  scope :active_subscriptions, -> { subscriptions.active }
 
   # Class methods for identification and cleanup
   # Schedules pattern identification with debounce to run after all syncs complete
@@ -267,15 +273,19 @@ class RecurringTransaction < ApplicationRecord
 
   # Calculate the next expected date based on the last occurrence
   def calculate_next_expected_date(from_date = last_occurrence_date)
-    # Start with next month
-    next_month = from_date.next_month
+    # For yearly subscriptions, add 1 year instead of 1 month
+    if is_subscription? && billing_cycle_yearly?
+      next_period = from_date.next_year
+    else
+      next_period = from_date.next_month
+    end
 
     # Try to use the expected day of month
     begin
-      Date.new(next_month.year, next_month.month, expected_day_of_month)
+      Date.new(next_period.year, next_period.month, expected_day_of_month)
     rescue ArgumentError
       # If day doesn't exist in month (e.g., 31st in February), use last day of month
-      next_month.end_of_month
+      next_period.end_of_month
     end
   end
 
@@ -304,6 +314,35 @@ class RecurringTransaction < ApplicationRecord
       amount_avg: expected_amount_avg,
       has_variance: has_amount_variance?
     )
+  end
+
+  # Subscription-specific methods
+
+  # Get the monthly cost for this subscription
+  # For yearly subscriptions, divides by 12
+  def monthly_cost
+    return amount unless is_subscription?
+    billing_cycle_yearly? ? (amount / 12) : amount
+  end
+
+  # Get the yearly cost for this subscription
+  # For monthly subscriptions, multiplies by 12
+  def yearly_cost
+    return amount unless is_subscription?
+    billing_cycle_monthly? ? (amount * 12) : amount
+  end
+
+  # Get the logo URL with fallback chain:
+  # custom_logo_url -> attached logo -> merchant logo -> nil
+  def subscription_logo_url
+    return custom_logo_url if custom_logo_url.present?
+    return Rails.application.routes.url_helpers.rails_blob_path(logo, only_path: true) if logo.attached?
+    merchant&.logo_url
+  end
+
+  # Display name for the subscription
+  def display_name
+    merchant.present? ? merchant.name : name
   end
 
   private

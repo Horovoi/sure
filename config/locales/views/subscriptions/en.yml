@@ -1,0 +1,79 @@
+---
+en:
+  subscriptions:
+    index:
+      title: Subscriptions
+      home: Home
+      new_subscription: New Subscription
+      calendar: Calendar
+      monthly_total: Monthly Total
+      yearly_total: Yearly Total
+      no_subscriptions: No subscriptions found
+      no_subscriptions_description: Create a subscription to start tracking your recurring payments.
+      filter:
+        all: All
+        active: Active
+        inactive: Inactive
+        monthly: Monthly
+        yearly: Yearly
+      search_placeholder: Search subscriptions...
+      table:
+        name: Name
+        amount: Amount
+        cycle: Cycle
+        next_billing: Next Billing
+        status: Status
+        actions: Actions
+    calendar:
+      title: Calendar
+      list: List
+      home: Home
+      today: Today
+      subscriptions_on_day: Subscriptions on %{date}
+      no_subscriptions: No subscriptions on this day
+      legend:
+        monthly: Monthly
+        yearly: Yearly
+      monthly_total: Monthly Total
+    new:
+      title: New Subscription
+      home: Home
+    edit:
+      title: Edit Subscription
+      home: Home
+    form:
+      name: Name
+      name_placeholder: "e.g. Netflix, Spotify"
+      amount: Amount
+      currency: Currency
+      billing_cycle: Billing Cycle
+      billing_day: Billing Day
+      billing_day_hint: Day of the month when you're billed
+      category: Category
+      category_placeholder: Select category
+      merchant: Merchant
+      merchant_placeholder: Select merchant
+      notes: Notes
+      notes_placeholder: Add any notes about this subscription...
+      logo: Custom Logo
+      logo_hint: Upload a custom logo for this subscription
+      save: Save Subscription
+      cancel: Cancel
+    status:
+      active: Active
+      inactive: Inactive
+    billing_cycle:
+      monthly: Monthly
+      yearly: Yearly
+    created: Subscription created successfully
+    updated: Subscription updated successfully
+    deleted: Subscription deleted successfully
+    marked_inactive: Subscription marked as inactive
+    marked_active: Subscription marked as active
+    marked_as_subscription: Transaction marked as subscription
+    already_exists: A subscription already exists for this pattern
+    creation_failed: Failed to create subscription
+    unexpected_error: An unexpected error occurred
+    toggle_status:
+      marked_inactive: Subscription marked as inactive
+      marked_active: Subscription marked as active

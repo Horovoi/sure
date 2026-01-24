@@ -14,3 +14,9 @@ amazon:
   name: Amazon
   color: "#fd7f6f"
   family: dylan_family
+
+starbucks:
+  type: FamilyMerchant
+  name: Starbucks Coffee
+  color: "#00704A"
+  family: dylan_family

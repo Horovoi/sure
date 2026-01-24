@@ -1,0 +1,84 @@
+<tr id="<%= dom_id(subscription) %>"
+    class="border-b border-subdued hover:bg-surface-hover <%= "opacity-60" unless subscription.active? %>">
+  <td class="py-3 px-4">
+    <div class="flex items-center gap-3">
+      <%# Logo %>
+      <% if subscription.subscription_logo_url.present? %>
+        <%= image_tag subscription.subscription_logo_url,
+            class: "w-8 h-8 rounded-full object-cover",
+            loading: "lazy" %>
+      <% else %>
+        <%= render DS::FilledIcon.new(
+          variant: :text,
+          text: subscription.display_name,
+          size: "md",
+          rounded: true
+        ) %>
+      <% end %>
+
+      <%# Name and merchant %>
+      <div>
+        <span class="text-sm text-primary font-medium block"><%= subscription.display_name %></span>
+        <% if subscription.category.present? %>
+          <span class="text-xs text-secondary"><%= subscription.category.name %></span>
+        <% end %>
+      </div>
+    </div>
+  </td>
+
+  <td class="py-3 px-4">
+    <span class="text-sm font-medium text-primary">
+      <%= format_money(-subscription.amount_money) %>
+    </span>
+    <% if subscription.billing_cycle_yearly? %>
+      <span class="text-xs text-secondary block">
+        ~<%= format_money(Money.new(subscription.monthly_cost, subscription.currency)) %>/mo
+      </span>
+    <% end %>
+  </td>
+
+  <td class="py-3 px-4">
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= subscription.billing_cycle_monthly? ? 'bg-violet-100 text-violet-700' : 'bg-yellow-100 text-yellow-700' %>">
+      <%= t("subscriptions.billing_cycle.#{subscription.billing_cycle}") %>
+    </span>
+  </td>
+
+  <td class="py-3 px-4 text-sm text-secondary">
+    <%= l(subscription.next_expected_date, format: :short) %>
+  </td>
+
+  <td class="py-3 px-4">
+    <% if subscription.active? %>
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-success">
+        <%= t("subscriptions.status.active") %>
+      </span>
+    <% else %>
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-inset text-secondary">
+        <%= t("subscriptions.status.inactive") %>
+      </span>
+    <% end %>
+  </td>
+
+  <td class="py-3 px-4 text-right">
+    <div class="flex items-center justify-end gap-2">
+      <%= link_to edit_subscription_path(subscription),
+          class: "text-secondary hover:text-primary" do %>
+        <%= icon "pencil", size: "sm" %>
+      <% end %>
+
+      <%= button_to toggle_status_subscription_path(subscription),
+          method: :post,
+          params: { status: params[:status] },
+          form: { data: { turbo_stream: true } },
+          class: "text-secondary hover:text-primary" do %>
+        <%= icon subscription.active? ? "pause" : "play", size: "sm" %>
+      <% end %>
+
+      <%= link_to subscription_path(subscription),
+          data: { turbo_method: :delete, turbo_confirm: "Are you sure you want to delete this subscription?" },
+          class: "text-secondary hover:text-destructive" do %>
+        <%= icon "trash-2", size: "sm" %>
+      <% end %>
+    </div>
+  </td>
+</tr>

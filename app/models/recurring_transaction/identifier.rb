@@ -135,6 +135,9 @@ class RecurringTransaction
       # Also check for manual recurring transactions that might need variance updates
       update_manual_recurring_transactions(three_months_ago)
 
+      # Detect subscriptions for newly created recurring transactions
+      RecurringTransaction::SubscriptionDetector.detect_for_family(family)
+
       recurring_patterns.size
     end
 
