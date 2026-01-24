@@ -4,7 +4,7 @@ class SubscriptionsController < ApplicationController
   def index
     @subscriptions = Current.family.recurring_transactions
                           .subscriptions
-                          .includes(:merchant, :category)
+                          .includes(:merchant, :category, :subscription_service)
                           .order(status: :asc, next_expected_date: :asc, name: :asc)
 
     # Apply filters
@@ -38,7 +38,7 @@ class SubscriptionsController < ApplicationController
     @month = params[:month].present? ? Date.parse(params[:month]) : Date.current.beginning_of_month
     @subscriptions = Current.family.recurring_transactions
                           .active_subscriptions
-                          .includes(:merchant, :category)
+                          .includes(:merchant, :category, :subscription_service)
 
     @calendar_data = build_calendar_data(@subscriptions, @month)
     @monthly_total = calculate_monthly_total(@subscriptions)
@@ -56,6 +56,7 @@ class SubscriptionsController < ApplicationController
       amount: 0,
       currency: Current.family.currency
     )
+    @subscription_services = SubscriptionService.alphabetically
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
   end
 
@@ -67,8 +68,15 @@ class SubscriptionsController < ApplicationController
 
     if @subscription.save
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
+
+      # Queue icon caching if subscription service is set and icon not cached
+      if @subscription.subscription_service.present? && !@subscription.subscription_service.icon.attached?
+        CacheSubscriptionIconJob.perform_later(@subscription.subscription_service)
+      end
+
       redirect_to subscriptions_path, notice: t(".created")
     else
+      @subscription_services = SubscriptionService.alphabetically
       render :new, status: :unprocessable_entity
     end
   end
@@ -78,6 +86,7 @@ class SubscriptionsController < ApplicationController
   end
 
   def edit
+    @subscription_services = SubscriptionService.alphabetically
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ @subscription.display_name, nil ] ]
   end
 
@@ -88,6 +97,7 @@ class SubscriptionsController < ApplicationController
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
       redirect_to subscriptions_path, notice: t(".updated")
     else
+      @subscription_services = SubscriptionService.alphabetically
       render :edit, status: :unprocessable_entity
     end
   end
@@ -131,7 +141,7 @@ class SubscriptionsController < ApplicationController
     def subscription_params
       params.require(:recurring_transaction).permit(
         :name, :amount, :currency, :billing_cycle, :expected_day_of_month,
-        :category_id, :merchant_id, :notes, :custom_logo_url, :status
+        :category_id, :merchant_id, :subscription_service_id, :notes, :custom_logo_url, :status
       )
     end
 

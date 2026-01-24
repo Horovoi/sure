@@ -1,0 +1,20 @@
+netflix:
+  name: Netflix
+  slug: netflix
+  domain: netflix.com
+  category: streaming
+  color: "#E50914"
+
+spotify:
+  name: Spotify
+  slug: spotify
+  domain: spotify.com
+  category: music
+  color: "#1DB954"
+
+notion:
+  name: Notion
+  slug: notion
+  domain: notion.so
+  category: software
+  color: "#000000"

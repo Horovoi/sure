@@ -42,6 +42,9 @@ en:
       title: Edit Subscription
       home: Home
     form:
+      service: Service
+      service_placeholder: Search for a service (e.g. Netflix, Spotify)...
+      service_hint: Select a known service to auto-fill details and display its logo
       name: Name
       name_placeholder: "e.g. Netflix, Spotify"
       amount: Amount
@@ -56,7 +59,7 @@ en:
       notes: Notes
       notes_placeholder: Add any notes about this subscription...
       logo: Custom Logo
-      logo_hint: Upload a custom logo for this subscription
+      logo_hint: Upload a custom logo for this subscription (overrides service logo)
       save: Save Subscription
       cancel: Cancel
     status:

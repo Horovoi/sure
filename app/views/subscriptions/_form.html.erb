@@ -1,9 +1,74 @@
-<%# locals: (subscription:) %>
+<%# locals: (subscription:, subscription_services:) %>
 
-<%= styled_form_with model: subscription, url: subscription.persisted? ? subscription_path(subscription) : subscriptions_path, class: "space-y-6" do |f| %>
+<%= styled_form_with model: subscription, url: subscription.persisted? ? subscription_path(subscription) : subscriptions_path, class: "space-y-6", data: { controller: "subscription-form" } do |f| %>
   <% if subscription.errors.any? %>
     <%= render "shared/form_errors", model: subscription %>
   <% end %>
+
+  <%# Service Selection %>
+  <div class="form-field">
+    <div class="form-field__body">
+      <label class="form-field__label"><%= t("subscriptions.form.service") %></label>
+      <div data-controller="subscription-service-select"
+           data-subscription-service-select-services-value="<%= subscription_services.map { |s| { id: s.id, name: s.name, slug: s.slug, domain: s.domain, category: s.category, color: s.color, logo_url: s.logo_url } }.to_json %>"
+           data-subscription-service-select-selected-value="<%= subscription.subscription_service_id %>"
+           data-action="subscription-service-select:selected->subscription-form#serviceSelected subscription-service-select:cleared->subscription-form#serviceCleared"
+           class="relative">
+        <%# Hidden field for the actual value %>
+        <input type="hidden"
+               name="recurring_transaction[subscription_service_id]"
+               value="<%= subscription.subscription_service_id %>"
+               data-subscription-service-select-target="hidden">
+
+        <%# Selected service preview %>
+        <div data-subscription-service-select-target="preview"
+             class="<%= subscription.subscription_service.present? ? '' : 'hidden' %> mb-2 p-2 bg-surface-inset rounded-lg">
+          <% if subscription.subscription_service.present? %>
+            <div class="flex items-center gap-2">
+              <% if subscription.subscription_service.logo_url.present? %>
+                <%= image_tag subscription.subscription_service.logo_url, class: "w-6 h-6 rounded-full object-cover", loading: "lazy" %>
+              <% else %>
+                <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background-color: <%= subscription.subscription_service.color || '#6B7280' %>">
+                  <%= subscription.subscription_service.name[0].upcase %>
+                </div>
+              <% end %>
+              <span class="text-sm text-primary font-medium"><%= subscription.subscription_service.name %></span>
+            </div>
+          <% end %>
+        </div>
+
+        <%# Input trigger %>
+        <div class="relative">
+          <input type="text"
+                 placeholder="<%= t("subscriptions.form.service_placeholder") %>"
+                 class="form-field__input pr-16"
+                 data-subscription-service-select-target="input"
+                 data-action="input->subscription-service-select#filter keydown->subscription-service-select#handleKeydown focus->subscription-service-select#open"
+                 autocomplete="off">
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <button type="button"
+                    data-subscription-service-select-target="clear"
+                    data-action="click->subscription-service-select#clear"
+                    class="<%= subscription.subscription_service.present? ? '' : 'hidden' %> p-1 text-secondary hover:text-primary">
+              <%= icon "x", size: "sm" %>
+            </button>
+            <button type="button"
+                    data-action="click->subscription-service-select#toggle"
+                    class="p-1 text-secondary hover:text-primary">
+              <%= icon "chevron-down", size: "sm" %>
+            </button>
+          </div>
+        </div>
+
+        <%# Dropdown %>
+        <div data-subscription-service-select-target="dropdown"
+             class="hidden absolute z-50 mt-1 w-full bg-container rounded-lg shadow-lg border border-secondary max-h-64 overflow-y-auto">
+          <div data-subscription-service-select-target="list"></div>
+        </div>
+      </div>
+      <p class="text-xs text-subdued mt-1"><%= t("subscriptions.form.service_hint") %></p>
+    </div>
+  </div>
 
   <%# Name %>
   <div class="space-y-2">
@@ -11,7 +76,8 @@
         label: t("subscriptions.form.name"),
         placeholder: t("subscriptions.form.name_placeholder"),
         required: true,
-        autofocus: true %>
+        autofocus: !subscription.new_record?,
+        data: { subscription_form_target: "nameField" } %>
   </div>
 
   <%# Amount and Currency %>

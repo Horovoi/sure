@@ -4,6 +4,7 @@ class RecurringTransaction < ApplicationRecord
   belongs_to :family
   belongs_to :merchant, optional: true
   belongs_to :category, optional: true
+  belongs_to :subscription_service, optional: true
 
   has_one_attached :logo
 
@@ -333,10 +334,11 @@ class RecurringTransaction < ApplicationRecord
   end
 
   # Get the logo URL with fallback chain:
-  # custom_logo_url -> attached logo -> merchant logo -> nil
+  # custom_logo_url -> attached logo -> subscription_service logo -> merchant logo -> nil
   def subscription_logo_url
     return custom_logo_url if custom_logo_url.present?
     return Rails.application.routes.url_helpers.rails_blob_path(logo, only_path: true) if logo.attached?
+    return subscription_service.logo_url if subscription_service.present?
     merchant&.logo_url
   end
 

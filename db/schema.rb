@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_24_100000) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_24_120354) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -955,6 +955,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_100000) do
     t.uuid "category_id"
     t.text "notes"
     t.string "custom_logo_url"
+    t.uuid "subscription_service_id"
     t.index ["family_id", "is_subscription"], name: "idx_recurring_txns_subscriptions", where: "(is_subscription = true)"
     t.index ["family_id", "merchant_id", "amount", "currency"], name: "idx_recurring_txns_merchant", unique: true, where: "(merchant_id IS NOT NULL)"
     t.index ["family_id", "name", "amount", "currency"], name: "idx_recurring_txns_name", unique: true, where: "((name IS NOT NULL) AND (merchant_id IS NULL))"
@@ -962,6 +963,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_100000) do
     t.index ["family_id"], name: "index_recurring_transactions_on_family_id"
     t.index ["merchant_id"], name: "index_recurring_transactions_on_merchant_id"
     t.index ["next_expected_date"], name: "index_recurring_transactions_on_next_expected_date"
+    t.index ["subscription_service_id"], name: "index_recurring_transactions_on_subscription_service_id"
   end
 
   create_table "rejected_transfers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1108,6 +1110,19 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_100000) do
     t.datetime "updated_at", null: false
     t.index ["enabled"], name: "index_sso_providers_on_enabled"
     t.index ["name"], name: "index_sso_providers_on_name", unique: true
+  end
+
+  create_table "subscription_services", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "name", null: false
+    t.string "slug", null: false
+    t.string "domain", null: false
+    t.string "category"
+    t.string "color"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_subscription_services_on_category"
+    t.index ["name"], name: "index_subscription_services_on_name"
+    t.index ["slug"], name: "index_subscription_services_on_slug", unique: true
   end
 
   create_table "syncs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1320,6 +1335,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_100000) do
   add_foreign_key "recurring_transactions", "categories"
   add_foreign_key "recurring_transactions", "families"
   add_foreign_key "recurring_transactions", "merchants"
+  add_foreign_key "recurring_transactions", "subscription_services"
   add_foreign_key "rejected_transfers", "transactions", column: "inflow_transaction_id"
   add_foreign_key "rejected_transfers", "transactions", column: "outflow_transaction_id"
   add_foreign_key "rule_actions", "rules"
