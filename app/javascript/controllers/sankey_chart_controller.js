@@ -21,7 +21,7 @@ export default class extends Controller {
   static MIN_NODE_PADDING = 4;
   static MAX_PADDING_RATIO = 0.4;
   static CORNER_RADIUS = 8;
-  static DEFAULT_COLOR = "var(--color-gray-400)";
+  static DEFAULT_COLOR = "#9E9E9E";
   static CSS_VAR_MAP = {
     "var(--color-success)": "#10A861",
     "var(--color-destructive)": "#EC2222",
@@ -147,7 +147,7 @@ export default class extends Controller {
   }
 
   #gradientId(link, index) {
-    return `link-gradient-${link.source.index}-${link.target.index}-${index}`;
+    return `link-gradient-${this._instanceId}-${link.source.index}-${link.target.index}-${index}`;
   }
 
   #colorWithOpacity(nodeColor, opacity = 0.1) {
@@ -157,11 +157,11 @@ export default class extends Controller {
     // Map CSS variables to hex values for d3 color manipulation
     colorStr = this.constructor.CSS_VAR_MAP[colorStr] || colorStr;
 
-    // Unmapped CSS vars cannot be manipulated, return as-is
-    if (colorStr.startsWith("var(--")) return colorStr;
+    // Unmapped CSS vars cannot be resolved in SVG gradients, use default hex
+    if (colorStr.startsWith("var(--")) return this.constructor.DEFAULT_COLOR;
 
     const d3Color = d3.color(colorStr);
-    return d3Color ? d3Color.copy({ opacity }) : defaultColor;
+    return d3Color ? d3Color.copy({ opacity }) : this.constructor.DEFAULT_COLOR;
   }
 
   #drawLinks(svg, links) {

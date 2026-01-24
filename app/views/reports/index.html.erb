@@ -33,15 +33,15 @@
           size: :sm
         ) %>
         <%= render DS::Link.new(
-          text: t("reports.index.periods.year"),
-          variant: @period_type == :ytd ? "secondary" : "ghost",
-          href: reports_path(period_type: :ytd, period_mode: @period_mode),
-          size: :sm
-        ) %>
-        <%= render DS::Link.new(
           text: t("reports.index.periods.six_months"),
           variant: @period_type == :last_6_months ? "secondary" : "ghost",
           href: reports_path(period_type: :last_6_months, period_mode: @period_mode),
+          size: :sm
+        ) %>
+        <%= render DS::Link.new(
+          text: t("reports.index.periods.year"),
+          variant: @period_type == :ytd ? "secondary" : "ghost",
+          href: reports_path(period_type: :ytd, period_mode: @period_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
