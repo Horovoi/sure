@@ -82,7 +82,9 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     get reports_path(period_type: :monthly)
     assert_response :ok
     assert_select "h2", text: I18n.t("reports.trends.title")
-    assert_select "th", text: I18n.t("reports.trends.month")
+    assert_select '[role="columnheader"]' do
+      assert_select "div", text: I18n.t("reports.trends.month")
+    end
   end
 
   test "index handles invalid date parameters gracefully" do
@@ -226,9 +228,9 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
 
   test "index groups transactions by parent and subcategories" do
     # Create parent category with subcategories
-    parent_category = @family.categories.create!(name: "Entertainment", classification: "expense", color: "#FF5733")
-    subcategory_movies = @family.categories.create!(name: "Movies", classification: "expense", parent: parent_category, color: "#33FF57")
-    subcategory_games = @family.categories.create!(name: "Games", classification: "expense", parent: parent_category, color: "#5733FF")
+    parent_category = @family.categories.create!(name: "Entertainment", classification: "expense", color: "#FF5733", lucide_icon: "film")
+    subcategory_movies = @family.categories.create!(name: "Movies", classification: "expense", parent: parent_category, color: "#33FF57", lucide_icon: "film")
+    subcategory_games = @family.categories.create!(name: "Games", classification: "expense", parent: parent_category, color: "#5733FF", lucide_icon: "gamepad-2")
 
     # Create transactions using helper
     create_transaction(account: @family.accounts.first, name: "Cinema ticket", amount: 15, category: subcategory_movies)
@@ -236,6 +238,12 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
 
     get reports_path(period_type: :monthly)
     assert_response :ok
-    assert_select "table.w-full"
+
+    # Parent category
+    assert_select "div[data-category='category-#{parent_category.id}']", text: /Entertainment/
+
+    # Subcategories
+    assert_select "div[data-category='category-#{subcategory_movies.id}']", text: /Movies/
+    assert_select "div[data-category='category-#{subcategory_games.id}']", text: /Games/
   end
 end
