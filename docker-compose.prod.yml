@@ -25,6 +25,9 @@ x-rails-env: &rails_env
   SMTP_PASSWORD: ${SMTP_PASSWORD}
   SMTP_TLS_ENABLED: ${SMTP_TLS_ENABLED}
   EMAIL_SENDER: ${EMAIL_SENDER}
+  # Brand Fetch (for logos/icons)
+  BRAND_FETCH_CLIENT_ID: ${BRAND_FETCH_CLIENT_ID}
+  BRAND_FETCH_HIGH_RES_LOGOS: ${BRAND_FETCH_HIGH_RES_LOGOS:-false}
 
 services:
   web:
