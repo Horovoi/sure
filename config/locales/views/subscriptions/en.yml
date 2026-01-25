@@ -1,10 +1,38 @@
 ---
 en:
   subscriptions:
+    suggestions:
+      title: Subscription Suggestions
+      home: Home
+      description: We found potential subscriptions in your transaction history.
+      no_suggestions: No pending suggestions
+      no_suggestions_back: All caught up! No subscription suggestions to review.
+      back_to_subscriptions: Back to Subscriptions
+      approve_all: Approve All
+      approve: Approve
+      dismiss: Dismiss
+      detected_amount: "%{amount}/%{cycle}"
+      transaction_count:
+        one: "%{count} transaction"
+        other: "%{count} transactions"
+    detect:
+      found:
+        one: Found %{count} potential subscription
+        other: Found %{count} potential subscriptions
+      none_found: No subscription patterns detected in your history
+    approve_suggestion:
+      success: Subscription approved
+    dismiss_suggestion:
+      success: Suggestion dismissed
+    approve_all_suggestions:
+      success: All suggestions approved
     index:
       title: Subscriptions
       home: Home
       new_subscription: New Subscription
+      add_subscription: Add Subscription
+      add_manually: Add Manually
+      detect_from_history: Detect from History
       calendar: Calendar
       monthly_total: Monthly Total
       yearly_total: Yearly Total

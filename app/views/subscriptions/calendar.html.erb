@@ -124,9 +124,15 @@
                   <%= link_to edit_subscription_path(sub, return_to: "calendar"),
                       class: "block" do %>
                     <% if sub.subscription_logo_url.present? %>
-                      <%= image_tag sub.subscription_logo_url,
-                          class: "w-7 h-7 rounded-full object-cover ring-2 ring-container",
-                          loading: "lazy" %>
+                      <div class="relative">
+                        <%= image_tag sub.subscription_logo_url,
+                            class: "w-7 h-7 rounded-full object-cover ring-2 ring-container",
+                            loading: "lazy",
+                            onerror: "this.style.display='none'; this.nextElementSibling.style.display='flex';" %>
+                        <div class="w-7 h-7 rounded-full items-center justify-center text-[10px] font-bold text-white bg-gray-400 ring-2 ring-container" style="display: none;">
+                          <%= sub.display_name[0].upcase %>
+                        </div>
+                      </div>
                     <% else %>
                       <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gray-400 ring-2 ring-container">
                         <%= sub.display_name[0].upcase %>

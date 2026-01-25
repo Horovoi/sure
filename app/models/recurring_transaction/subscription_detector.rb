@@ -1,48 +1,51 @@
 class RecurringTransaction
   class SubscriptionDetector
-    # Known subscription service keywords for detection
-    KNOWN_SERVICES = %w[
-      netflix spotify adobe apple google microsoft hulu disney hbo
-      amazon prime dropbox slack notion figma github linear vercel
-      openai anthropic chatgpt midjourney gym fitness planet anytime
-      youtube twitch patreon substack medium wordpress squarespace
-      mailchimp sendgrid aws azure heroku digitalocean cloudflare
-      zoom webex teams discord canva grammarly lastpass 1password
-      nordvpn expressvpn surfshark audible kindle kindle
-      playstation xbox nintendo gamepass crunchyroll funimation
-      headspace calm duolingo skillshare masterclass udemy coursera
-      peloton strava
-    ].freeze
-
-    # Category name that indicates a subscription
-    SUBSCRIPTION_CATEGORY_NAME = "Subscriptions".freeze
-
     class << self
       # Check if a recurring transaction is likely a subscription
+      # Only suggests if it matches a known service in the database
       def likely_subscription?(recurring_transaction)
-        category_match?(recurring_transaction) ||
-          merchant_name_match?(recurring_transaction)
+        service_exists_in_database?(recurring_transaction)
+      end
+
+      # Check if a matching SubscriptionService exists in the database
+      def service_exists_in_database?(recurring_transaction)
+        find_matching_service(recurring_transaction).present?
       end
 
       # Detect and mark subscriptions for a family
+      # Creates suggestions with suggestion_status: "suggested" instead of directly marking as subscription
+      # Re-evaluates dismissed suggestions (they may now match differently with updated algorithm)
+      # Skips confirmed subscriptions
       def detect_for_family(family)
-        subscriptions_category = find_subscriptions_category(family)
+        # Reset dismissed suggestions so they can be re-evaluated
+        family.recurring_transactions
+          .where(is_subscription: false)
+          .where(suggestion_status: "dismissed")
+          .update_all(suggestion_status: nil, subscription_service_id: nil)
 
-        family.recurring_transactions.where(is_subscription: false).find_each do |recurring|
-          if likely_subscription?(recurring)
-            service = find_matching_service(recurring)
+        # Process all non-subscription records that haven't been suggested yet
+        family.recurring_transactions
+          .where(is_subscription: false)
+          .where(suggestion_status: nil)
+          .find_each do |recurring|
+            if likely_subscription?(recurring)
+              service = find_matching_service(recurring)
 
-            recurring.update!(
-              is_subscription: true,
-              category_id: subscriptions_category&.id,
-              subscription_service_id: service&.id
-            )
-
-            if service.present? && !service.icon.attached?
-              CacheSubscriptionIconJob.perform_later(service)
+              # Don't change category here - only set it when user approves
+              recurring.update!(
+                suggestion_status: "suggested",
+                subscription_service_id: service&.id
+              )
             end
           end
-        end
+      end
+
+      # Auto-approve subscriptions that user manually marked
+      def auto_approve_for_family(family)
+        family.recurring_transactions
+          .where(is_subscription: true)
+          .where(suggestion_status: "suggested")
+          .update_all(suggestion_status: nil)
       end
 
       # Find matching SubscriptionService by name
@@ -56,22 +59,18 @@ class RecurringTransaction
         service = SubscriptionService.where("LOWER(name) = ?", normalized).first
         return service if service
 
-        # 2. Service name contains subscription name
+        # 2. Service name contains transaction name
         service = SubscriptionService.where("LOWER(name) LIKE ?", "%#{normalized}%").first
         return service if service
 
-        # 3. Subscription name contains service name
-        service = SubscriptionService.where("? LIKE '%' || LOWER(name) || '%'", normalized).first
-        return service if service
+        # 3. Transaction name contains full service name (min 4 chars to avoid false positives)
+        service = SubscriptionService
+          .where("LENGTH(name) >= 4")
+          .where("? LIKE '%' || LOWER(name) || '%'", normalized)
+          .order("LENGTH(name) DESC")
+          .first
 
-        # 4. Word-based matching
-        words = normalized.split(/\s+/).reject { |w| w.length < 3 }
-        words.each do |word|
-          service = SubscriptionService.where("LOWER(name) LIKE ?", "#{word}%").first
-          return service if service
-        end
-
-        nil
+        service
       end
 
       # Detect billing cycle based on transaction history
@@ -88,27 +87,6 @@ class RecurringTransaction
         avg_gap > 300 ? :yearly : :monthly
       end
 
-      private
-
-        def category_match?(recurring_transaction)
-          category = recurring_transaction.category
-          return false if category.nil?
-
-          category.name.downcase.include?("subscription")
-        end
-
-        def merchant_name_match?(recurring_transaction)
-          name = recurring_transaction.merchant&.name || recurring_transaction.name
-          return false if name.blank?
-
-          name_lower = name.downcase
-
-          KNOWN_SERVICES.any? { |service| name_lower.include?(service) }
-        end
-
-        def find_subscriptions_category(family)
-          family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")
-        end
     end
   end
 end

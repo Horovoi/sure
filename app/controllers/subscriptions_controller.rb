@@ -1,10 +1,11 @@
 class SubscriptionsController < ApplicationController
   before_action :set_subscription, only: %i[show edit update destroy toggle_status record_transaction skip_occurrence]
+  before_action :set_suggestion, only: %i[approve_suggestion dismiss_suggestion]
 
   def index
     @subscriptions = Current.family.recurring_transactions
                           .subscriptions
-                          .includes(:merchant, :category, :subscription_service)
+                          .includes(:merchant, :category, subscription_service: { icon_attachment: :blob })
                           .order(status: :asc, next_expected_date: :asc, name: :asc)
 
     # Apply filters
@@ -23,6 +24,7 @@ class SubscriptionsController < ApplicationController
     all_subscriptions = Current.family.recurring_transactions.subscriptions
     @active_count = all_subscriptions.active.count
     @inactive_count = all_subscriptions.inactive.count
+    @suggestion_count = Current.family.recurring_transactions.suggested.count
 
     @monthly_total = calculate_monthly_total(@subscriptions)
     @yearly_total = calculate_yearly_total(@subscriptions)
@@ -43,7 +45,7 @@ class SubscriptionsController < ApplicationController
     @month = params[:month].present? ? Date.parse(params[:month]) : Date.current.beginning_of_month
     @subscriptions = Current.family.recurring_transactions
                           .active_subscriptions
-                          .includes(:merchant, :category, :subscription_service)
+                          .includes(:merchant, :category, subscription_service: { icon_attachment: :blob })
 
     @calendar_data = build_calendar_data(@subscriptions, @month)
     @monthly_total = calculate_monthly_total(@subscriptions)
@@ -167,6 +169,66 @@ class SubscriptionsController < ApplicationController
     redirect_to subscriptions_path, notice: t(".success")
   end
 
+  def suggestions
+    @suggestions = Current.family.recurring_transactions
+                         .suggested
+                         .includes(:merchant, subscription_service: { icon_attachment: :blob })
+                         .order(created_at: :desc)
+    @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
+  end
+
+  def detect
+    count = SubscriptionSuggestionService.new(Current.family).detect
+    if count > 0
+      redirect_to suggestions_subscriptions_path, notice: t(".found", count: count)
+    else
+      redirect_to subscriptions_path, notice: t(".none_found")
+    end
+  end
+
+  def approve_suggestion
+    service = @suggestion.subscription_service
+    @suggestion.approve_suggestion!
+
+    # Queue icon caching if subscription service is set and icon not cached
+    if service.present? && !service.icon.attached?
+      CacheSubscriptionIconJob.perform_later(service)
+    end
+
+    @remaining_count = Current.family.recurring_transactions.suggested.count
+
+    respond_to do |format|
+      format.turbo_stream
+      format.html { redirect_to suggestions_subscriptions_path, notice: t(".success") }
+    end
+  end
+
+  def dismiss_suggestion
+    @suggestion.dismiss_suggestion!
+
+    @remaining_count = Current.family.recurring_transactions.suggested.count
+
+    respond_to do |format|
+      format.turbo_stream
+      format.html { redirect_to suggestions_subscriptions_path, notice: t(".success") }
+    end
+  end
+
+  def approve_all_suggestions
+    suggestions = Current.family.recurring_transactions.suggested.includes(:subscription_service)
+
+    suggestions.find_each do |suggestion|
+      service = suggestion.subscription_service
+      suggestion.approve_suggestion!
+
+      if service.present? && !service.icon.attached?
+        CacheSubscriptionIconJob.perform_later(service)
+      end
+    end
+
+    redirect_to subscriptions_path, notice: t(".success")
+  end
+
   helper_method :should_remove_from_view?
 
   private
@@ -181,6 +243,10 @@ class SubscriptionsController < ApplicationController
 
     def set_subscription
       @subscription = Current.family.recurring_transactions.subscriptions.find(params[:id])
+    end
+
+    def set_suggestion
+      @suggestion = Current.family.recurring_transactions.suggested.find(params[:id])
     end
 
     def subscription_params

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_25_101453) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_25_172749) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -957,11 +957,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_25_101453) do
     t.string "custom_logo_url"
     t.uuid "subscription_service_id"
     t.uuid "default_account_id"
+    t.string "suggestion_status"
+    t.datetime "dismissed_at"
     t.index ["default_account_id"], name: "index_recurring_transactions_on_default_account_id"
     t.index ["family_id", "is_subscription"], name: "idx_recurring_txns_subscriptions", where: "(is_subscription = true)"
     t.index ["family_id", "merchant_id", "amount", "currency"], name: "idx_recurring_txns_merchant", unique: true, where: "(merchant_id IS NOT NULL)"
     t.index ["family_id", "name", "amount", "currency"], name: "idx_recurring_txns_name", unique: true, where: "((name IS NOT NULL) AND (merchant_id IS NULL))"
     t.index ["family_id", "status"], name: "index_recurring_transactions_on_family_id_and_status"
+    t.index ["family_id", "suggestion_status"], name: "idx_suggested_subscriptions", where: "((suggestion_status)::text = 'suggested'::text)"
     t.index ["family_id"], name: "index_recurring_transactions_on_family_id"
     t.index ["merchant_id"], name: "index_recurring_transactions_on_merchant_id"
     t.index ["next_expected_date"], name: "index_recurring_transactions_on_next_expected_date"

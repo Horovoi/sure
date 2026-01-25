@@ -1,0 +1,31 @@
+<div class="space-y-4 flex flex-col">
+  <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h1 class="text-primary text-xl font-medium"><%= t(".title") %></h1>
+      <% if @suggestions.any? %>
+        <p class="text-secondary text-sm mt-1"><%= t(".description") %></p>
+      <% end %>
+    </div>
+
+    <div id="suggestions_header_actions">
+      <% if @suggestions.any? %>
+        <%= button_to approve_all_suggestions_subscriptions_path, method: :post, class: "inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-success hover:bg-success/90 rounded-lg transition-colors" do %>
+          <%= icon "check-circle", size: "sm", color: "white" %>
+          <span><%= t(".approve_all") %></span>
+        <% end %>
+      <% end %>
+    </div>
+  </header>
+
+  <div id="suggestions_container" class="bg-container rounded-xl shadow-border-xs">
+    <% if @suggestions.empty? %>
+      <%= render "subscriptions/suggestions_empty_state" %>
+    <% else %>
+      <div id="suggestions_list" class="divide-y divide-subdued">
+        <% @suggestions.each do |suggestion| %>
+          <%= render "subscriptions/suggestion", suggestion: suggestion %>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</div>

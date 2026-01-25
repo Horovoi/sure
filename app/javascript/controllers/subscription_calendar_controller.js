@@ -210,10 +210,10 @@ export default class extends Controller {
             <span class="text-primary text-sm font-medium truncate flex-1">${this.escapeHtml(sub.name)}</span>
             <span class="text-primary text-sm font-semibold">${sub.amount}</span>
           </div>
-          <div class="flex items-center gap-2 mt-1.5 text-xs text-secondary">
-            <span class="inline-flex items-center px-1.5 py-0.5 rounded ${billingColor} text-[10px] font-medium">${billingLabel}</span>
-            ${categoryLabel ? `<span>${categoryIcon} ${categoryLabel}</span>` : ''}
-            ${sub.account_name ? `<span class="truncate">· ${this.escapeHtml(sub.account_name)}</span>` : ''}
+          <div class="flex items-center gap-2 mt-1.5 text-xs text-secondary overflow-hidden">
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded ${billingColor} text-[10px] font-medium shrink-0">${billingLabel}</span>
+            ${categoryLabel ? `<span class="shrink-0">${categoryIcon} ${categoryLabel}</span>` : ''}
+            ${sub.account_name ? `<span class="truncate min-w-0">· ${this.escapeHtml(sub.account_name)}</span>` : ''}
           </div>
         </div>
       `

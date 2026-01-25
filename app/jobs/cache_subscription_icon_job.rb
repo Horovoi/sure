@@ -8,7 +8,7 @@ class CacheSubscriptionIconJob < ApplicationJob
     url = brandfetch_url(subscription_service.domain)
     response = HTTParty.get(url, timeout: 10)
 
-    if response.success?
+    if response.success? && response.content_type&.start_with?("image/")
       subscription_service.icon.attach(
         io: StringIO.new(response.body),
         filename: "#{subscription_service.slug}.png",

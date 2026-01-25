@@ -1,0 +1,13 @@
+<div class="text-center py-12 px-4">
+  <div class="text-secondary mb-4">
+    <%= icon "check-circle", size: "xl" %>
+  </div>
+  <p class="text-primary font-medium mb-2"><%= t("subscriptions.suggestions.no_suggestions") %></p>
+  <p class="text-secondary text-sm mb-4"><%= t("subscriptions.suggestions.no_suggestions_back") %></p>
+  <%= render DS::Link.new(
+    text: t("subscriptions.suggestions.back_to_subscriptions"),
+    icon: "arrow-left",
+    variant: "outline",
+    href: subscriptions_path
+  ) %>
+</div>

@@ -18,14 +18,34 @@
         href: calendar_subscriptions_path
       ) %>
 
-      <%= render DS::Link.new(
-        text: t(".new_subscription"),
-        variant: "primary",
-        icon: "plus",
-        href: new_subscription_path
-      ) %>
+      <%= render DS::Menu.new(variant: :button, placement: "bottom-end") do |menu| %>
+        <% menu.with_button(text: t(".add_subscription"), variant: "primary", icon: "plus") %>
+        <% menu.with_item(variant: "link", text: t(".add_manually"), icon: "edit-3", href: new_subscription_path) %>
+        <% menu.with_item(variant: "button", text: t(".detect_from_history"), icon: "search", href: detect_subscriptions_path, method: :post) %>
+      <% end %>
     </div>
   </header>
+
+  <%# Suggestion banner - only show when there are pending suggestions %>
+  <% if @suggestion_count > 0 %>
+    <div class="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <%= icon "zap", size: "md", class: "text-blue-600 dark:text-blue-400" %>
+        <div>
+          <p class="text-blue-900 dark:text-blue-100 font-medium">
+            <%= t("subscriptions.detect.success", count: @suggestion_count) %>
+          </p>
+          <p class="text-blue-700 dark:text-blue-300 text-sm">Review and approve to add them to your subscriptions.</p>
+        </div>
+      </div>
+      <%= render DS::Link.new(
+        text: t("subscriptions.suggestions.title"),
+        icon: "arrow-right",
+        variant: "outline",
+        href: suggestions_subscriptions_path
+      ) %>
+    </div>
+  <% end %>
 
   <%# Filters %>
   <div class="bg-container rounded-xl shadow-border-xs p-4">

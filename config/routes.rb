@@ -229,12 +229,17 @@ Rails.application.routes.draw do
   resources :subscriptions, only: %i[index new create show edit update destroy] do
     collection do
       get :calendar
+      get :suggestions
+      post :detect
+      post :approve_all_suggestions
     end
 
     member do
       post :toggle_status
       post :record_transaction
       post :skip_occurrence
+      post :approve_suggestion
+      post :dismiss_suggestion
     end
   end
 
@@ -418,6 +423,9 @@ Rails.application.routes.draw do
     end
     resources :users, only: [ :index, :update ]
   end
+
+  # Legacy redirects
+  get "calendar", to: redirect("/subscriptions/calendar")
 
   # Defines the root path route ("/")
   root "pages#dashboard"

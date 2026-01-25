@@ -1,0 +1,8 @@
+<%= turbo_stream.remove "suggestion_#{@suggestion.id}" %>
+
+<% if @remaining_count == 0 %>
+  <%= turbo_stream.update "suggestions_header_actions", "" %>
+  <%= turbo_stream.update "suggestions_container" do %>
+    <%= render "subscriptions/suggestions_empty_state" %>
+  <% end %>
+<% end %>

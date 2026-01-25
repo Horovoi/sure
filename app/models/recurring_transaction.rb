@@ -45,6 +45,9 @@ class RecurringTransaction < ApplicationRecord
   scope :expected_soon, -> { active.where("next_expected_date <= ?", 1.month.from_now) }
   scope :subscriptions, -> { where(is_subscription: true) }
   scope :active_subscriptions, -> { subscriptions.active }
+  scope :suggested, -> { where(suggestion_status: "suggested") }
+  scope :dismissed, -> { where(suggestion_status: "dismissed") }
+  scope :confirmed, -> { where(suggestion_status: nil) }
 
   # Class methods for identification and cleanup
   # Schedules pattern identification with debounce to run after all syncs complete
@@ -236,6 +239,23 @@ class RecurringTransaction < ApplicationRecord
   # Mark as active
   def mark_active!
     update!(status: "active")
+  end
+
+  # Approve a subscription suggestion
+  def approve_suggestion!
+    # Set category to "Subscriptions" if available
+    subscriptions_category = family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")
+
+    update!(
+      suggestion_status: nil,
+      is_subscription: true,
+      category_id: subscriptions_category&.id || category_id
+    )
+  end
+
+  # Dismiss a subscription suggestion
+  def dismiss_suggestion!
+    update!(suggestion_status: "dismissed", dismissed_at: Time.current)
   end
 
   # Update based on a new transaction occurrence

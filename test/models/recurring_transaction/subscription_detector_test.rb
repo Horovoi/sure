@@ -74,7 +74,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
     assert_equal :monthly, RecurringTransaction::SubscriptionDetector.detect_billing_cycle(dates)
   end
 
-  test "detect_for_family marks matching recurring transactions as subscriptions" do
+  test "detect_for_family marks matching recurring transactions as suggestions" do
     # Create a recurring transaction with Netflix merchant
     recurring = @family.recurring_transactions.create!(
       merchant: merchants(:netflix),
@@ -90,10 +90,10 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
     RecurringTransaction::SubscriptionDetector.detect_for_family(@family)
 
     recurring.reload
-    assert recurring.is_subscription?
+    assert_equal "suggested", recurring.suggestion_status
   end
 
-  test "detect_for_family does not mark non-matching transactions" do
+  test "detect_for_family does not mark non-matching transactions as suggestions" do
     recurring = @family.recurring_transactions.create!(
       merchant: merchants(:starbucks),
       amount: 5.00,
@@ -108,6 +108,6 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
     RecurringTransaction::SubscriptionDetector.detect_for_family(@family)
 
     recurring.reload
-    assert_not recurring.is_subscription?
+    assert_nil recurring.suggestion_status
   end
 end

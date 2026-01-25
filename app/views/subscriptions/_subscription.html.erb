@@ -2,19 +2,30 @@
     class="border-b border-subdued hover:bg-surface-hover">
   <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
     <div class="flex items-center gap-3">
-      <%# Logo %>
-      <% if subscription.subscription_logo_url.present? %>
-        <%= image_tag subscription.subscription_logo_url,
-            class: "w-8 h-8 rounded-full object-cover",
-            loading: "lazy" %>
-      <% else %>
-        <%= render DS::FilledIcon.new(
-          variant: :text,
-          text: subscription.display_name,
-          size: "md",
-          rounded: true
-        ) %>
-      <% end %>
+      <%# Logo with fallback for broken images %>
+      <div class="relative w-8 h-8 flex-shrink-0">
+        <% if subscription.subscription_logo_url.present? %>
+          <%= image_tag subscription.subscription_logo_url,
+              class: "w-8 h-8 rounded-full object-cover",
+              loading: "lazy",
+              onerror: "this.style.display='none'; this.nextElementSibling.style.display='flex';" %>
+          <div style="display: none;">
+            <%= render DS::FilledIcon.new(
+              variant: :text,
+              text: subscription.display_name,
+              size: "md",
+              rounded: true
+            ) %>
+          </div>
+        <% else %>
+          <%= render DS::FilledIcon.new(
+            variant: :text,
+            text: subscription.display_name,
+            size: "md",
+            rounded: true
+          ) %>
+        <% end %>
+      </div>
 
       <%# Name and merchant %>
       <div>
