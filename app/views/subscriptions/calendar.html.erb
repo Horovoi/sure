@@ -21,7 +21,7 @@
         text: t("subscriptions.index.new_subscription"),
         variant: "primary",
         icon: "plus",
-        href: new_subscription_path
+        href: new_subscription_path(return_to: "calendar")
       ) %>
     </div>
   </header>
@@ -121,7 +121,7 @@
             <% if subscriptions_on_day.any? %>
               <div class="flex items-center justify-center flex-1 -space-x-2">
                 <% subscriptions_on_day.first(3).each do |sub| %>
-                  <%= link_to edit_subscription_path(sub),
+                  <%= link_to edit_subscription_path(sub, return_to: "calendar"),
                       class: "block",
                       title: "#{sub.display_name} - #{format_money(-sub.amount_money)}" do %>
                     <% if sub.subscription_logo_url.present? %>
@@ -202,7 +202,7 @@
         amount: format_money(-sub.amount_money),
         billing_cycle: sub.billing_cycle,
         logo_url: sub.subscription_logo_url,
-        edit_url: edit_subscription_path(sub)
+        edit_url: edit_subscription_path(sub, return_to: "calendar")
       }
     end
   }.to_json %>

@@ -1,6 +1,6 @@
 <tr id="<%= dom_id(subscription) %>"
-    class="border-b border-subdued hover:bg-surface-hover <%= "opacity-60" unless subscription.active? %>">
-  <td class="py-3 px-4">
+    class="border-b border-subdued hover:bg-surface-hover">
+  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
     <div class="flex items-center gap-3">
       <%# Logo %>
       <% if subscription.subscription_logo_url.present? %>
@@ -26,7 +26,7 @@
     </div>
   </td>
 
-  <td class="py-3 px-4">
+  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
     <span class="text-sm font-medium text-primary">
       <%= format_money(-subscription.amount_money) %>
     </span>
@@ -37,13 +37,13 @@
     <% end %>
   </td>
 
-  <td class="py-3 px-4">
+  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= subscription.billing_cycle_monthly? ? "bg-violet-100 text-violet-700" : "bg-yellow-100 text-yellow-700" %>">
       <%= t("subscriptions.billing_cycle.#{subscription.billing_cycle}") %>
     </span>
   </td>
 
-  <td class="py-3 px-4 text-sm">
+  <td class="py-3 px-4 text-sm <%= "opacity-60" unless subscription.active? %>">
     <% if subscription.overdue? %>
       <span class="text-destructive font-medium"><%= l(subscription.next_expected_date, format: :short) %></span>
       <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-destructive">
@@ -59,7 +59,7 @@
     <% end %>
   </td>
 
-  <td class="py-3 px-4">
+  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
     <% if subscription.active? %>
       <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-success">
         <%= t("subscriptions.status.active") %>
