@@ -97,8 +97,10 @@ class Account::ProviderImportAdapter
       end
 
       # If still a new entry and this is a POSTED transaction, check for matching pending transactions
-      incoming_pending = extra.is_a?(Hash) &&
-        ActiveModel::Type::Boolean.new.cast(extra.dig("plaid", "pending"))
+      incoming_pending = extra.is_a?(Hash) && extra.values.any? do |provider_data|
+        next false unless provider_data.is_a?(Hash)
+        ActiveModel::Type::Boolean.new.cast(provider_data["pending"])
+      end
 
       if entry.new_record? && !incoming_pending
         pending_match = nil
@@ -708,9 +710,12 @@ class Account::ProviderImportAdapter
       .where(currency: currency)
       .where(date: (date - date_window.days)..date) # Pending must be ON or BEFORE posted date
       .where(<<~SQL.squish)
-        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        EXISTS (
+          SELECT 1 FROM jsonb_each(transactions.extra) AS pd
+          WHERE (pd.value ->> 'pending')::boolean = true
+        )
       SQL
-      .order(date: :desc) # Prefer most recent pending transaction
+      .order(date: :desc, created_at: :desc) # Prefer most recent pending transaction
 
     candidates.first
   end
@@ -752,7 +757,10 @@ class Account::ProviderImportAdapter
       .where(date: (date - date_window.days)..date) # Pending ON or BEFORE posted
       .where("ABS(entries.amount) BETWEEN ? AND ?", min_pending_abs, max_pending_abs)
       .where(<<~SQL.squish)
-        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        EXISTS (
+          SELECT 1 FROM jsonb_each(transactions.extra) AS pd
+          WHERE (pd.value ->> 'pending')::boolean = true
+        )
       SQL
 
     # If merchant_id is provided, prioritize matching by merchant
@@ -819,7 +827,10 @@ class Account::ProviderImportAdapter
       .where(date: (date - date_window.days)..date)
       .where("ABS(entries.amount) BETWEEN ? AND ?", min_pending_abs, max_pending_abs)
       .where(<<~SQL.squish)
-        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        EXISTS (
+          SELECT 1 FROM jsonb_each(transactions.extra) AS pd
+          WHERE (pd.value ->> 'pending')::boolean = true
+        )
       SQL
 
     # For low confidence, require BOTH merchant AND name match (stronger signal needed)

@@ -34,13 +34,19 @@ class Transaction < ApplicationRecord
   # Works with any provider that stores pending status in extra["provider_name"]["pending"]
   scope :pending, -> {
     where(<<~SQL.squish)
-      (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+      EXISTS (
+        SELECT 1 FROM jsonb_each(transactions.extra) AS pd
+        WHERE (pd.value ->> 'pending')::boolean = true
+      )
     SQL
   }
 
   scope :excluding_pending, -> {
     where(<<~SQL.squish)
-      (transactions.extra -> 'plaid' ->> 'pending')::boolean IS DISTINCT FROM true
+      NOT EXISTS (
+        SELECT 1 FROM jsonb_each(transactions.extra) AS pd
+        WHERE (pd.value ->> 'pending')::boolean = true
+      )
     SQL
   }
 
@@ -63,7 +69,10 @@ class Transaction < ApplicationRecord
 
   def pending?
     extra_data = extra.is_a?(Hash) ? extra : {}
-    ActiveModel::Type::Boolean.new.cast(extra_data.dig("plaid", "pending"))
+    extra_data.values.any? do |provider_data|
+      next false unless provider_data.is_a?(Hash)
+      ActiveModel::Type::Boolean.new.cast(provider_data["pending"])
+    end
   rescue
     false
   end

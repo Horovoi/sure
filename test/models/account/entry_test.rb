@@ -84,4 +84,74 @@ class EntryTest < ActiveSupport::TestCase
     # Should not include entry from disabled account
     assert_not_includes visible_entries, invisible_transaction
   end
+
+  # Pending scope tests
+  test "pending scope returns pending transaction entries" do
+    account = accounts(:depository)
+    pending_entry = create_pending_entry(account: account, provider: "plaid")
+    confirmed_entry = create_transaction(account: account, name: "Confirmed")
+
+    results = Entry.pending
+
+    assert_includes results, pending_entry
+    assert_not_includes results, confirmed_entry
+  end
+
+  test "excluding_pending scope excludes pending entries" do
+    account = accounts(:depository)
+    pending_entry = create_pending_entry(account: account, provider: "plaid")
+    confirmed_entry = create_transaction(account: account, name: "Confirmed")
+
+    results = Entry.excluding_pending
+
+    assert_not_includes results, pending_entry
+    assert_includes results, confirmed_entry
+  end
+
+  test "excluding_pending includes Trade and Valuation entries" do
+    account = accounts(:depository)
+    valuation = create_valuation(account: account, name: "Valuation", date: Date.current)
+    pending_entry = create_pending_entry(account: account, provider: "plaid")
+
+    results = Entry.excluding_pending
+
+    assert_includes results, valuation
+    assert_not_includes results, pending_entry
+  end
+
+  test "stale_pending returns pending entries older than threshold" do
+    account = accounts(:depository)
+    stale_pending = create_pending_entry(account: account, provider: "plaid", date: 10.days.ago.to_date)
+    recent_pending = create_pending_entry(account: account, provider: "plaid", date: 2.days.ago.to_date)
+
+    results = Entry.stale_pending(days: 8)
+
+    assert_includes results, stale_pending
+    assert_not_includes results, recent_pending
+  end
+
+  test "pending scope works with multiple providers" do
+    account = accounts(:depository)
+    plaid_pending = create_pending_entry(account: account, provider: "plaid")
+    lunchflow_pending = create_pending_entry(account: account, provider: "lunchflow")
+
+    results = Entry.pending
+
+    assert_includes results, plaid_pending
+    assert_includes results, lunchflow_pending
+  end
+
+  private
+
+    def create_pending_entry(account:, provider:, date: Date.current)
+      transaction = Transaction.new(extra: { provider => { "pending" => true } })
+      Entry.create!(
+        account: account,
+        name: "Pending transaction",
+        date: date,
+        currency: "USD",
+        amount: 100,
+        entryable: transaction
+      )
+    end
 end

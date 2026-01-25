@@ -67,7 +67,10 @@ class EntrySearch
         AND EXISTS (
           SELECT 1 FROM transactions t
           WHERE t.id = entries.entryable_id
-          AND (t.extra -> 'plaid' ->> 'pending')::boolean = true
+          AND EXISTS (
+            SELECT 1 FROM jsonb_each(t.extra) AS pd
+            WHERE (pd.value ->> 'pending')::boolean = true
+          )
         )
       SQL
 
@@ -76,7 +79,10 @@ class EntrySearch
         OR NOT EXISTS (
           SELECT 1 FROM transactions t
           WHERE t.id = entries.entryable_id
-          AND (t.extra -> 'plaid' ->> 'pending')::boolean = true
+          AND EXISTS (
+            SELECT 1 FROM jsonb_each(t.extra) AS pd
+            WHERE (pd.value ->> 'pending')::boolean = true
+          )
         )
       SQL
 

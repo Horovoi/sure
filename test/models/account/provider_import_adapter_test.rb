@@ -886,6 +886,7 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
 
       # The PENDING entry should now have a potential_posted_match suggestion
       pending_entry.reload
+      pending_entry.transaction.reload
       assert pending_entry.transaction.has_potential_duplicate?
       assert_equal posted_entry.id, pending_entry.transaction.potential_duplicate_entry.id
     end

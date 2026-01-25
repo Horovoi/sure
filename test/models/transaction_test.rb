@@ -44,4 +44,57 @@ class TransactionTest < ActiveSupport::TestCase
     assert_includes Transaction::ACTIVITY_LABELS, "Exchange"
     assert_includes Transaction::ACTIVITY_LABELS, "Other"
   end
+
+  # Pending scope tests
+  test "pending scope returns transactions with pending flag from any provider" do
+    pending_plaid = Transaction.create!(extra: { "plaid" => { "pending" => true } })
+    pending_lunchflow = Transaction.create!(extra: { "lunchflow" => { "pending" => true } })
+    confirmed = Transaction.create!(extra: { "plaid" => { "pending" => false } })
+
+    results = Transaction.pending
+
+    assert_includes results, pending_plaid
+    assert_includes results, pending_lunchflow
+    assert_not_includes results, confirmed
+  end
+
+  test "excluding_pending scope excludes pending transactions" do
+    pending_tx = Transaction.create!(extra: { "plaid" => { "pending" => true } })
+    confirmed_tx = Transaction.create!(extra: { "plaid" => { "pending" => false } })
+    empty_extra_tx = Transaction.create!(extra: {})
+
+    results = Transaction.excluding_pending
+
+    assert_not_includes results, pending_tx
+    assert_includes results, confirmed_tx
+    assert_includes results, empty_extra_tx
+  end
+
+  test "pending scope works with lunchflow provider" do
+    lunchflow_pending = Transaction.create!(extra: { "lunchflow" => { "pending" => true } })
+    lunchflow_confirmed = Transaction.create!(extra: { "lunchflow" => { "pending" => false } })
+
+    results = Transaction.pending
+
+    assert_includes results, lunchflow_pending
+    assert_not_includes results, lunchflow_confirmed
+  end
+
+  test "pending? handles nil extra gracefully" do
+    transaction = Transaction.new(extra: nil)
+
+    assert_not transaction.pending?
+  end
+
+  test "pending? handles empty extra gracefully" do
+    transaction = Transaction.new(extra: {})
+
+    assert_not transaction.pending?
+  end
+
+  test "pending? handles malformed provider data" do
+    transaction = Transaction.new(extra: { "plaid" => "not_a_hash" })
+
+    assert_not transaction.pending?
+  end
 end
