@@ -30,12 +30,48 @@ class RecurringTransaction
 
         family.recurring_transactions.where(is_subscription: false).find_each do |recurring|
           if likely_subscription?(recurring)
+            service = find_matching_service(recurring)
+
             recurring.update!(
               is_subscription: true,
-              category_id: subscriptions_category&.id
+              category_id: subscriptions_category&.id,
+              subscription_service_id: service&.id
             )
+
+            if service.present? && !service.icon.attached?
+              CacheSubscriptionIconJob.perform_later(service)
+            end
           end
         end
+      end
+
+      # Find matching SubscriptionService by name
+      def find_matching_service(recurring)
+        name = recurring.merchant&.name || recurring.name
+        return nil if name.blank?
+
+        normalized = name.downcase.strip
+
+        # 1. Exact match
+        service = SubscriptionService.where("LOWER(name) = ?", normalized).first
+        return service if service
+
+        # 2. Service name contains subscription name
+        service = SubscriptionService.where("LOWER(name) LIKE ?", "%#{normalized}%").first
+        return service if service
+
+        # 3. Subscription name contains service name
+        service = SubscriptionService.where("? LIKE '%' || LOWER(name) || '%'", normalized).first
+        return service if service
+
+        # 4. Word-based matching
+        words = normalized.split(/\s+/).reject { |w| w.length < 3 }
+        words.each do |word|
+          service = SubscriptionService.where("LOWER(name) LIKE ?", "#{word}%").first
+          return service if service
+        end
+
+        nil
       end
 
       # Detect billing cycle based on transaction history

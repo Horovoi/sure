@@ -430,14 +430,23 @@ namespace :subscription_services do
       family.recurring_transactions.subscriptions.where(subscription_service_id: nil).find_each do |sub|
         display_name = sub.display_name.downcase.strip
 
-        # Try exact match first
+        # 1. Exact match
         service = SubscriptionService.where("LOWER(name) = ?", display_name).first
 
-        # Try partial match (service name contains subscription name)
+        # 2. Service name contains subscription name
         service ||= SubscriptionService.where("LOWER(name) LIKE ?", "%#{display_name}%").first
 
-        # Try reverse partial match (subscription name contains service name)
+        # 3. Subscription name contains service name
         service ||= SubscriptionService.where("? LIKE '%' || LOWER(name) || '%'", display_name).first
+
+        # 4. Word-based matching
+        unless service
+          words = display_name.split(/\s+/).reject { |w| w.length < 3 || %w[the a an].include?(w) }
+          words.each do |word|
+            service = SubscriptionService.where("LOWER(name) LIKE ?", "#{word}%").first
+            break if service
+          end
+        end
 
         if service
           sub.update!(subscription_service_id: service.id)
