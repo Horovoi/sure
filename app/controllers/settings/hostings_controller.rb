@@ -3,7 +3,7 @@ class Settings::HostingsController < ApplicationController
 
   guard_feature unless: -> { self_hosted? }
 
-  before_action :ensure_admin, only: [ :update, :clear_cache ]
+  before_action :ensure_admin, only: [ :update, :clear_cache, :reset_scheduled_jobs ]
 
   def show
     @breadcrumbs = [
@@ -89,6 +89,44 @@ class Settings::HostingsController < ApplicationController
       sync_auto_sync_scheduler!
     end
 
+    scheduled_jobs_changed = false
+
+    if hosting_params.key?(:scheduled_jobs_start_time)
+      time_value = hosting_params[:scheduled_jobs_start_time]
+      unless Setting.valid_auto_sync_time?(time_value)
+        flash[:alert] = t(".invalid_sync_time")
+        return redirect_to settings_hosting_path
+      end
+      Setting.scheduled_jobs_start_time = time_value
+      scheduled_jobs_changed = true
+    end
+
+    if hosting_params.key?(:scheduled_jobs_timezone)
+      timezone_value = hosting_params[:scheduled_jobs_timezone]
+      if timezone_value.present? && !Setting.valid_auto_sync_timezone?(timezone_value)
+        flash[:alert] = t(".invalid_timezone")
+        return redirect_to settings_hosting_path
+      end
+      Setting.scheduled_jobs_timezone = timezone_value.presence
+      scheduled_jobs_changed = true
+    end
+
+    %i[data_cleaner_time security_health_check_time subscription_transactions_time].each do |field|
+      if hosting_params.key?(field)
+        time_value = hosting_params[field]
+        if time_value.present? && !Setting.valid_auto_sync_time?(time_value)
+          flash[:alert] = t(".invalid_sync_time")
+          return redirect_to settings_hosting_path
+        end
+        Setting.public_send("#{field}=", time_value.presence)
+        scheduled_jobs_changed = true
+      end
+    end
+
+    if scheduled_jobs_changed
+      sync_scheduled_jobs_manager!
+    end
+
     if hosting_params.key?(:openai_access_token)
       token_param = hosting_params[:openai_access_token].to_s.strip
       # Ignore blanks and redaction placeholders to prevent accidental overwrite
@@ -128,9 +166,24 @@ class Settings::HostingsController < ApplicationController
     redirect_to settings_hosting_path, notice: t(".cache_cleared")
   end
 
+  def reset_scheduled_jobs
+    ScheduledJobsManager.reset_custom_times!
+    redirect_to settings_hosting_path, notice: t(".scheduled_jobs_reset")
+  rescue StandardError => error
+    Rails.logger.error("[ScheduledJobsManager] Failed to reset: #{error.message}")
+    redirect_to settings_hosting_path, alert: t(".scheduler_sync_failed")
+  end
+
   private
     def hosting_params
-      params.require(:setting).permit(:onboarding_state, :require_email_confirmation, :brand_fetch_client_id, :brand_fetch_high_res_logos, :twelve_data_api_key, :openai_access_token, :openai_uri_base, :openai_model, :openai_json_mode, :exchange_rate_provider, :securities_provider, :syncs_include_pending, :auto_sync_enabled, :auto_sync_time)
+      params.require(:setting).permit(
+        :onboarding_state, :require_email_confirmation, :brand_fetch_client_id,
+        :brand_fetch_high_res_logos, :twelve_data_api_key, :openai_access_token,
+        :openai_uri_base, :openai_model, :openai_json_mode, :exchange_rate_provider,
+        :securities_provider, :syncs_include_pending, :auto_sync_enabled, :auto_sync_time,
+        :scheduled_jobs_start_time, :scheduled_jobs_timezone,
+        :data_cleaner_time, :security_health_check_time, :subscription_transactions_time
+      )
     end
 
     def ensure_admin
@@ -141,6 +194,14 @@ class Settings::HostingsController < ApplicationController
       AutoSyncScheduler.sync!
     rescue StandardError => error
       Rails.logger.error("[AutoSyncScheduler] Failed to sync scheduler: #{error.message}")
+      Rails.logger.error(error.backtrace.join("\n"))
+      flash[:alert] = t(".scheduler_sync_failed")
+    end
+
+    def sync_scheduled_jobs_manager!
+      ScheduledJobsManager.sync!
+    rescue StandardError => error
+      Rails.logger.error("[ScheduledJobsManager] Failed to sync scheduler: #{error.message}")
       Rails.logger.error(error.backtrace.join("\n"))
       flash[:alert] = t(".scheduler_sync_failed")
     end

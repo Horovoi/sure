@@ -1,0 +1,100 @@
+<div class="space-y-4">
+  <p class="text-secondary text-sm"><%= t(".description") %></p>
+
+  <div class="flex items-center justify-between gap-4">
+    <div class="space-y-1">
+      <p class="text-sm"><%= t(".start_time_label") %></p>
+      <p class="text-secondary text-sm"><%= t(".start_time_description") %></p>
+    </div>
+
+    <%= form_with model: Setting.new,
+                  url: settings_hosting_path,
+                  method: :patch,
+                  data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
+      <%= form.time_field :scheduled_jobs_start_time,
+                          value: Setting.scheduled_jobs_start_time,
+                          class: "rounded-lg border border-primary px-3 py-2 text-sm bg-container text-primary",
+                          data: { auto_submit_form_target: "auto" } %>
+    <% end %>
+  </div>
+
+  <div class="flex items-center justify-between gap-4">
+    <div class="space-y-1">
+      <p class="text-sm"><%= t(".timezone_label") %></p>
+      <p class="text-secondary text-sm"><%= t(".timezone_description") %></p>
+    </div>
+
+    <%= form_with model: Setting.new,
+                  url: settings_hosting_path,
+                  method: :patch,
+                  data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
+      <%= form.select :scheduled_jobs_timezone,
+                      ActiveSupport::TimeZone.all.map { |tz| [tz.to_s, tz.name] },
+                      { selected: ScheduledJobsManager.timezone },
+                      class: "rounded-lg border border-primary px-3 py-2 text-sm bg-container text-primary",
+                      data: { auto_submit_form_target: "auto" } %>
+    <% end %>
+  </div>
+
+  <div class="bg-surface-secondary border border-subdued rounded-lg p-4">
+    <p class="text-sm text-secondary mb-3"><%= t(".preview_label") %></p>
+    <% ScheduledJobsManager.effective_times.each do |job_key, time| %>
+      <div class="flex items-center gap-2 text-sm py-1">
+        <%= icon "clock", size: "sm", class: "text-subdued" %>
+        <span class="text-secondary"><%= t(".jobs.#{job_key}") %>:</span>
+        <span class="font-medium"><%= time %></span>
+        <% if ScheduledJobsManager.has_custom_times? && Setting.public_send("#{job_key}_time").present? %>
+          <span class="text-xs text-warning-600 bg-warning-50 px-1.5 py-0.5 rounded"><%= t(".custom") %></span>
+        <% end %>
+      </div>
+    <% end %>
+    <p class="text-xs text-subdued mt-2"><%= t(".timezone_note", timezone: ScheduledJobsManager.timezone) %></p>
+  </div>
+
+  <details class="border border-subdued rounded-lg">
+    <summary class="cursor-pointer text-sm font-medium text-secondary hover:text-primary flex items-center gap-2 p-4">
+      <%= icon "settings", size: "sm" %>
+      <%= t(".advanced_settings") %>
+    </summary>
+    <div class="px-4 pb-4 space-y-4">
+      <div class="bg-warning-50 border border-warning-200 rounded-lg p-3 text-sm text-warning-800">
+        <%= icon "alert-triangle", class: "inline w-4 h-4" %>
+        <%= t(".avoid_same_time_warning") %>
+      </div>
+
+      <% ScheduledJobsManager::CONFIGURABLE_JOBS.keys.each do |job_key| %>
+        <div class="flex items-center justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-sm"><%= t(".jobs.#{job_key}") %></p>
+          </div>
+
+          <%= form_with model: Setting.new,
+                        url: settings_hosting_path,
+                        method: :patch,
+                        data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
+            <%= form.time_field "#{job_key}_time",
+                                value: Setting.public_send("#{job_key}_time") || ScheduledJobsManager.effective_time_for(job_key),
+                                class: "rounded-lg border border-primary px-3 py-2 text-sm bg-container text-primary",
+                                data: { auto_submit_form_target: "auto" } %>
+          <% end %>
+        </div>
+      <% end %>
+
+      <% if ScheduledJobsManager.has_custom_times? %>
+        <%= button_to t(".reset_to_defaults"),
+                      reset_scheduled_jobs_settings_hosting_path,
+                      method: :post,
+                      class: "btn btn--ghost text-sm" %>
+      <% end %>
+    </div>
+  </details>
+
+  <div class="border-t border-subdued pt-4 mt-4">
+    <p class="text-sm font-medium text-secondary mb-3"><%= t(".non_configurable_title") %></p>
+    <div class="space-y-2 text-sm text-subdued">
+      <p><%= icon "info", size: "sm", class: "inline" %> <%= t(".non_configurable.import_market_data") %></p>
+      <p><%= icon "info", size: "sm", class: "inline" %> <%= t(".non_configurable.sync_hourly") %></p>
+      <p><%= icon "info", size: "sm", class: "inline" %> <%= t(".non_configurable.sync_cleaner") %></p>
+    </div>
+  </div>
+</div>

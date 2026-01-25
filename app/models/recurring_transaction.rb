@@ -406,11 +406,11 @@ class RecurringTransaction < ApplicationRecord
     entry
   end
 
-  # Generate all overdue transactions up to today
+  # Generate all due/overdue transactions up to today
   # Returns array of created entries
   def generate_overdue_transactions!
     return [] unless default_account.present?
-    return [] unless overdue?
+    return [] unless actionable?
 
     entries = []
     current_date = next_expected_date

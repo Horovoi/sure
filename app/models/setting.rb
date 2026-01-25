@@ -40,6 +40,15 @@ class Setting < RailsSettings::Base
   field :auto_sync_time, type: :string, default: ENV.fetch("AUTO_SYNC_TIME", "02:22")
   field :auto_sync_timezone, type: :string, default: ENV.fetch("AUTO_SYNC_TIMEZONE", "UTC")
 
+  # Scheduled jobs settings
+  field :scheduled_jobs_start_time, type: :string, default: "03:00"
+  field :scheduled_jobs_timezone, type: :string # nil = use family timezone
+
+  # Per-job time overrides (nil = use auto-stagger from start_time)
+  field :data_cleaner_time, type: :string
+  field :security_health_check_time, type: :string
+  field :subscription_transactions_time, type: :string
+
   AUTO_SYNC_TIME_FORMAT = /\A([01]?\d|2[0-3]):([0-5]\d)\z/
 
   def self.valid_auto_sync_time?(time_str)

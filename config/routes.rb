@@ -113,6 +113,7 @@ Rails.application.routes.draw do
     resource :budgeting, only: :show
     resource :hosting, only: %i[show update] do
       delete :clear_cache, on: :collection
+      post :reset_scheduled_jobs, on: :collection
     end
     resource :security, only: :show
     resources :sso_identities, only: :destroy

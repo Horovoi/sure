@@ -148,4 +148,67 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
       assert_equal I18n.t("settings.hostings.not_authorized"), flash[:alert]
     end
   end
+
+  test "can update scheduled jobs start time" do
+    with_self_hosting do
+      patch settings_hosting_url, params: { setting: { scheduled_jobs_start_time: "04:00" } }
+
+      assert_redirected_to settings_hosting_url
+      assert_equal "04:00", Setting.scheduled_jobs_start_time
+    end
+  end
+
+  test "can update scheduled jobs timezone" do
+    with_self_hosting do
+      patch settings_hosting_url, params: { setting: { scheduled_jobs_timezone: "America/New_York" } }
+
+      assert_redirected_to settings_hosting_url
+      assert_equal "America/New_York", Setting.scheduled_jobs_timezone
+    end
+  end
+
+  test "can update individual job times" do
+    with_self_hosting do
+      patch settings_hosting_url, params: { setting: { data_cleaner_time: "05:30" } }
+
+      assert_redirected_to settings_hosting_url
+      assert_equal "05:30", Setting.data_cleaner_time
+    end
+  end
+
+  test "rejects invalid scheduled jobs time" do
+    with_self_hosting do
+      patch settings_hosting_url, params: { setting: { scheduled_jobs_start_time: "invalid" } }
+
+      assert_redirected_to settings_hosting_url
+      assert_equal I18n.t("settings.hostings.update.invalid_sync_time"), flash[:alert]
+    end
+  end
+
+  test "can reset scheduled jobs to defaults" do
+    with_self_hosting do
+      Setting.data_cleaner_time = "06:00"
+      Setting.security_health_check_time = "07:00"
+
+      post reset_scheduled_jobs_settings_hosting_url
+
+      assert_redirected_to settings_hosting_url
+      assert_nil Setting.data_cleaner_time
+      assert_nil Setting.security_health_check_time
+    end
+  end
+
+  test "cannot reset scheduled jobs when not admin" do
+    with_self_hosting do
+      sign_in users(:family_member)
+
+      Setting.data_cleaner_time = "06:00"
+
+      post reset_scheduled_jobs_settings_hosting_url
+
+      assert_redirected_to settings_hosting_url
+      assert_equal I18n.t("settings.hostings.not_authorized"), flash[:alert]
+      assert_equal "06:00", Setting.data_cleaner_time
+    end
+  end
 end

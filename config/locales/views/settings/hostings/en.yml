@@ -18,6 +18,7 @@ en:
         general: General Settings
         financial_data_providers: Financial Data Providers
         sync_settings: Sync Settings
+        scheduled_jobs: Scheduled Jobs
         invites: Invite Codes
         title: Self-Hosting
         danger_zone: Danger Zone
@@ -78,6 +79,7 @@ en:
         success: Settings updated
         invalid_onboarding_state: Invalid onboarding state
         invalid_sync_time: Invalid sync time format. Please use HH:MM format (e.g., 02:30).
+        invalid_timezone: Invalid timezone selected.
         scheduler_sync_failed: Settings saved, but failed to update the sync schedule. Please try again or check the server logs.
       clear_cache:
         cache_cleared: Data cache has been cleared. This may take a few moments to complete.
@@ -90,3 +92,26 @@ en:
         include_pending_label: Include pending transactions
         include_pending_description: When enabled, pending (uncleared) transactions will be imported and automatically reconciled when they post. Disable if your bank provides unreliable pending data.
         env_configured_message: This setting is disabled because the PLAID_INCLUDE_PENDING environment variable is set. Remove it to enable this setting.
+      scheduled_jobs_settings:
+        description: Configure when maintenance jobs run. Jobs are automatically staggered by 15 minutes to avoid overloading the system.
+        start_time_label: Maintenance window start
+        start_time_description: Jobs will run starting at this time, staggered by 15 minutes.
+        timezone_label: Timezone
+        timezone_description: The timezone to use for scheduled job times.
+        preview_label: Scheduled times preview
+        timezone_note: "All times shown in %{timezone}"
+        custom: custom
+        advanced_settings: Advanced - Configure individual job times
+        avoid_same_time_warning: Avoid scheduling multiple jobs at the same time to prevent resource conflicts.
+        reset_to_defaults: Reset to defaults
+        non_configurable_title: Non-configurable jobs
+        jobs:
+          data_cleaner: Data cleanup
+          security_health_check: Security health check
+          subscription_transactions: Subscription transactions
+        non_configurable:
+          import_market_data: "Market data import: Runs at 5 PM EST after market close"
+          sync_hourly: "Hourly sync: Runs every hour (required for crypto sync)"
+          sync_cleaner: "Sync cleaner: Runs every hour (maintenance)"
+      reset_scheduled_jobs:
+        scheduled_jobs_reset: Scheduled job times have been reset to defaults.
