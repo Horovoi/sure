@@ -38,13 +38,25 @@
   </td>
 
   <td class="py-3 px-4">
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= subscription.billing_cycle_monthly? ? 'bg-violet-100 text-violet-700' : 'bg-yellow-100 text-yellow-700' %>">
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= subscription.billing_cycle_monthly? ? "bg-violet-100 text-violet-700" : "bg-yellow-100 text-yellow-700" %>">
       <%= t("subscriptions.billing_cycle.#{subscription.billing_cycle}") %>
     </span>
   </td>
 
-  <td class="py-3 px-4 text-sm text-secondary">
-    <%= l(subscription.next_expected_date, format: :short) %>
+  <td class="py-3 px-4 text-sm">
+    <% if subscription.overdue? %>
+      <span class="text-destructive font-medium"><%= l(subscription.next_expected_date, format: :short) %></span>
+      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-destructive">
+        <%= t("subscriptions.index.table.overdue") %>
+      </span>
+    <% elsif subscription.due_today? %>
+      <span class="text-primary font-medium"><%= l(subscription.next_expected_date, format: :short) %></span>
+      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+        <%= t("subscriptions.index.table.due_today") %>
+      </span>
+    <% else %>
+      <span class="text-secondary"><%= l(subscription.next_expected_date, format: :short) %></span>
+    <% end %>
   </td>
 
   <td class="py-3 px-4">
@@ -61,24 +73,40 @@
 
   <td class="py-3 px-4 text-right">
     <div class="flex items-center justify-end gap-2">
-      <%= link_to edit_subscription_path(subscription),
-          data: { turbo_frame: "_top" },
-          class: "text-secondary hover:text-primary" do %>
-        <%= icon "pencil", size: "sm" %>
+      <% if subscription.actionable? %>
+        <% if subscription.default_account.present? %>
+          <%= button_to record_transaction_subscription_path(subscription),
+              method: :post,
+              title: t(".record_now"),
+              class: "p-1.5 rounded hover:bg-green-50 text-success" do %>
+            <%= icon "check-circle", size: "sm", color: "current" %>
+          <% end %>
+        <% else %>
+          <%= link_to edit_subscription_path(subscription),
+              title: t(".link_account_to_record"),
+              data: { turbo_frame: "_top" },
+              class: "p-1.5 rounded hover:bg-yellow-50 text-warning" do %>
+            <%= icon "link", size: "sm", color: "current" %>
+          <% end %>
+        <% end %>
+      <% else %>
+        <span class="w-7 h-7"></span>
       <% end %>
 
-      <%= button_to toggle_status_subscription_path(subscription),
-          method: :post,
-          params: { status: params[:status] },
-          form: { data: { turbo_stream: true } },
-          class: "text-secondary hover:text-primary" do %>
-        <%= icon subscription.active? ? "pause" : "play", size: "sm" %>
-      <% end %>
-
-      <%= link_to subscription_path(subscription),
-          data: { turbo_frame: "_top", turbo_method: :delete, turbo_confirm: "Are you sure you want to delete this subscription?" },
-          class: "text-secondary hover:text-destructive" do %>
-        <%= icon "trash-2", size: "sm" %>
+      <%= render DS::Menu.new do |menu| %>
+        <% if subscription.actionable? %>
+          <% menu.with_item(variant: "button", text: t(".skip"), icon: "fast-forward",
+              href: skip_occurrence_subscription_path(subscription), method: :post) %>
+          <% menu.with_item(variant: "divider") %>
+        <% end %>
+        <% menu.with_item(variant: "link", text: t(".edit"), icon: "pencil",
+            href: edit_subscription_path(subscription), data: { turbo_frame: "_top" }) %>
+        <% menu.with_item(variant: "button", text: subscription.active? ? t(".pause") : t(".resume"),
+            icon: subscription.active? ? "pause" : "play",
+            href: toggle_status_subscription_path(subscription), method: :post) %>
+        <% menu.with_item(variant: "button", text: t(".delete"), icon: "trash-2",
+            href: subscription_path(subscription), method: :delete,
+            confirm: CustomConfirm.for_resource_deletion("subscription")) %>
       <% end %>
     </div>
   </td>

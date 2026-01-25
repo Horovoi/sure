@@ -24,6 +24,12 @@ en:
         next_billing: Next Billing
         status: Status
         actions: Actions
+        overdue: Overdue
+        due_today: Due Today
+        record_now: Record now
+        no_account: No account linked
+        link_account_to_record: Link account to record
+        skip: Skip this occurrence
     calendar:
       title: Calendar
       list: List
@@ -52,10 +58,15 @@ en:
       billing_cycle: Billing Cycle
       billing_day: Billing Day
       billing_day_hint: Day of the month when you're billed
+      next_expected_date: Next Billing Date
+      next_expected_date_hint: Override the next expected billing date (set to past date to test overdue features)
       category: Category
       category_placeholder: Select category
       merchant: Merchant
       merchant_placeholder: Select merchant
+      default_account: Payment Account
+      default_account_placeholder: Select account
+      default_account_hint: Account where subscription payments appear (for auto-recording transactions)
       notes: Notes
       notes_placeholder: Add any notes about this subscription...
       logo: Custom Logo
@@ -80,3 +91,17 @@ en:
     toggle_status:
       marked_inactive: Subscription marked as inactive
       marked_active: Subscription marked as active
+    record_transaction:
+      success: Transaction recorded successfully
+      already_exists: Transaction already exists for this period
+      no_account: Please set a default account for this subscription first
+    skip_occurrence:
+      success: Occurrence skipped
+    subscription:
+      record_now: Record now
+      link_account_to_record: Link account to record
+      skip: Skip this occurrence
+      edit: Edit
+      pause: Pause
+      resume: Resume
+      delete: Delete
