@@ -97,7 +97,7 @@
           <% has_yearly = subscriptions_on_day.any?(&:billing_cycle_yearly?) %>
 
           <div class="aspect-[5/4] p-1.5 border-t border-r border-secondary hover:bg-surface-hover transition-colors flex flex-col <%= 'ring-2 ring-green-600 ring-inset rounded-sm' if is_today %>"
-               data-action="click->subscription-calendar#showDayDetails"
+               data-action="click->subscription-calendar#showDayDetails mouseenter->subscription-calendar#handleCellMouseEnter mouseleave->subscription-calendar#handleCellMouseLeave touchstart->subscription-calendar#handleCellTouchStart touchend->subscription-calendar#handleCellTouchEnd touchmove->subscription-calendar#handleCellTouchMove"
                data-date="<%= date.iso8601 %>">
             <%# Header: Day number + billing cycle dots %>
             <div class="flex items-start justify-between">
@@ -122,8 +122,7 @@
               <div class="flex items-center justify-center flex-1 -space-x-2">
                 <% subscriptions_on_day.first(3).each do |sub| %>
                   <%= link_to edit_subscription_path(sub, return_to: "calendar"),
-                      class: "block",
-                      title: "#{sub.display_name} - #{format_money(-sub.amount_money)}" do %>
+                      class: "block" do %>
                     <% if sub.subscription_logo_url.present? %>
                       <%= image_tag sub.subscription_logo_url,
                           class: "w-7 h-7 rounded-full object-cover ring-2 ring-container",
@@ -167,6 +166,11 @@
     </div>
   </div>
 
+  <%# Hover card (populated via Stimulus) %>
+  <div class="hidden fixed z-50 bg-container shadow-border-xs rounded-xl p-3 min-w-[220px] max-w-[300px] pointer-events-none"
+       data-subscription-calendar-target="hoverCard">
+  </div>
+
   <%# Day details modal/drawer (populated via Stimulus) %>
   <div id="day-details-drawer"
        class="hidden fixed inset-0 z-50"
@@ -190,20 +194,22 @@
       </div>
     </div>
   </div>
-</div>
 
-<%# Pass calendar data to JavaScript %>
-<script type="application/json" data-subscription-calendar-target="calendarData">
-  <%= raw @calendar_data.transform_keys(&:iso8601).transform_values { |subs|
-    subs.map do |sub|
-      {
-        id: sub.id,
-        name: sub.display_name,
-        amount: format_money(-sub.amount_money),
-        billing_cycle: sub.billing_cycle,
-        logo_url: sub.subscription_logo_url,
-        edit_url: edit_subscription_path(sub, return_to: "calendar")
-      }
-    end
-  }.to_json %>
-</script>
+  <%# Pass calendar data to JavaScript %>
+  <script type="application/json" data-subscription-calendar-target="calendarData">
+    <%= raw @calendar_data.transform_keys(&:iso8601).transform_values { |subs|
+      subs.map do |sub|
+        {
+          id: sub.id,
+          name: sub.display_name,
+          amount: format_money(-sub.amount_money),
+          billing_cycle: sub.billing_cycle,
+          logo_url: sub.subscription_logo_url,
+          edit_url: edit_subscription_path(sub, return_to: "calendar"),
+          service_category: sub.subscription_service&.category,
+          account_name: sub.default_account&.name
+        }
+      end
+    }.to_json %>
+  </script>
+</div>
