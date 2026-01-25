@@ -3,7 +3,9 @@
     <div>
       <h1 class="text-primary text-xl font-medium"><%= t(".title") %></h1>
       <p class="text-secondary text-sm mt-1">
-        <%= t(".monthly_total") %>: <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span>
+        <span class="font-medium text-primary"><%= @subscriptions.count %></span> active ·
+        <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span>/mo ·
+        <span class="font-medium text-primary"><%= format_money(@monthly_total * 12) %></span>/yr
       </p>
     </div>
 
@@ -32,9 +34,19 @@
         <%= icon "chevron-left", size: "sm" %>
       <% end %>
 
-      <h2 class="text-lg font-medium text-primary">
-        <%= @month.strftime("%B %Y") %>
-      </h2>
+      <div class="flex items-center gap-3">
+        <h2 class="text-lg font-medium text-primary">
+          <%= @month.strftime("%B %Y") %>
+        </h2>
+        <% unless @month.beginning_of_month == Date.current.beginning_of_month %>
+          <%= render DS::Link.new(
+            text: t(".today"),
+            variant: "outline",
+            size: :sm,
+            href: calendar_subscriptions_path
+          ) %>
+        <% end %>
+      </div>
 
       <%= link_to calendar_subscriptions_path(month: @month.next_month.strftime("%Y-%m-%d")),
           class: "p-2 rounded-lg hover:bg-surface-inset transition-colors" do %>
@@ -42,14 +54,21 @@
       <% end %>
     </div>
 
-    <%# Today button %>
-    <% unless @month.beginning_of_month == Date.current.beginning_of_month %>
-      <div class="text-center mb-4">
-        <%= link_to t(".today"),
-            calendar_subscriptions_path,
-            class: "text-sm text-link hover:underline" %>
+    <%# Quick stats bar - pill style %>
+    <div class="flex items-center gap-3 mb-4">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-inset">
+        <span class="text-xs text-secondary">This week</span>
+        <span class="text-xs font-medium text-primary"><%= @this_week_data.size %></span>
+        <span class="text-xs text-tertiary">·</span>
+        <span class="text-xs font-medium text-primary"><%= format_money(@this_week_total) %></span>
       </div>
-    <% end %>
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg <%= @today_subscriptions.any? ? 'bg-green-500/10' : 'bg-surface-inset' %>">
+        <span class="text-xs text-secondary">Due today</span>
+        <span class="text-xs font-medium <%= @today_subscriptions.any? ? 'text-green-600' : 'text-primary' %>">
+          <%= @today_subscriptions.size %>
+        </span>
+      </div>
+    </div>
 
     <%# Calendar grid %>
     <div class="rounded-lg overflow-hidden border border-secondary">
@@ -67,37 +86,50 @@
         <%# Padding for start of month %>
         <% start_day = (@month.beginning_of_month.wday - 1) % 7 %>
         <% start_day.times do %>
-          <div class="min-h-[80px] p-2 border-t border-r border-secondary bg-surface-inset"></div>
+          <div class="aspect-[5/4] p-1.5 border-t border-r border-secondary bg-surface-inset"></div>
         <% end %>
 
         <%# Days of the month %>
         <% (@month.beginning_of_month..@month.end_of_month).each do |date| %>
           <% subscriptions_on_day = @calendar_data[date] || [] %>
           <% is_today = date == Date.current %>
+          <% has_monthly = subscriptions_on_day.any?(&:billing_cycle_monthly?) %>
+          <% has_yearly = subscriptions_on_day.any?(&:billing_cycle_yearly?) %>
 
-          <div class="min-h-[80px] p-2 border-t border-r border-secondary hover:bg-surface-hover transition-colors <%= "bg-orange-50 border-l-2 border-l-orange-500" if is_today %>"
+          <div class="aspect-[5/4] p-1.5 border-t border-r border-secondary hover:bg-surface-hover transition-colors flex flex-col <%= 'ring-2 ring-green-600 ring-inset rounded-sm' if is_today %>"
                data-action="click->subscription-calendar#showDayDetails"
                data-date="<%= date.iso8601 %>">
-            <%# Day number %>
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-sm font-medium <%= is_today ? "text-orange-600" : "text-primary" %>">
+            <%# Header: Day number + billing cycle dots %>
+            <div class="flex items-start justify-between">
+              <span class="text-sm font-medium <%= is_today ? 'text-green-600' : 'text-primary' %>">
                 <%= date.day %>
               </span>
+
+              <% if subscriptions_on_day.any? %>
+                <div class="flex items-center gap-0.5">
+                  <% if has_monthly %>
+                    <div class="w-2 h-2 rounded-full bg-violet-500"></div>
+                  <% end %>
+                  <% if has_yearly %>
+                    <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
+                  <% end %>
+                </div>
+              <% end %>
             </div>
 
-            <%# Subscription indicators %>
+            <%# Overlapping icon stack %>
             <% if subscriptions_on_day.any? %>
-              <div class="flex flex-wrap gap-1">
+              <div class="flex items-center justify-center flex-1 -space-x-2">
                 <% subscriptions_on_day.first(3).each do |sub| %>
                   <%= link_to edit_subscription_path(sub),
                       class: "block",
                       title: "#{sub.display_name} - #{format_money(-sub.amount_money)}" do %>
                     <% if sub.subscription_logo_url.present? %>
                       <%= image_tag sub.subscription_logo_url,
-                          class: "w-5 h-5 rounded-full object-cover border border-white shadow-sm",
+                          class: "w-7 h-7 rounded-full object-cover ring-2 ring-container",
                           loading: "lazy" %>
                     <% else %>
-                      <div class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white <%= sub.billing_cycle_monthly? ? "bg-violet-500" : "bg-yellow-500" %>">
+                      <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gray-400 ring-2 ring-container">
                         <%= sub.display_name[0].upcase %>
                       </div>
                     <% end %>
@@ -105,7 +137,7 @@
                 <% end %>
 
                 <% if subscriptions_on_day.size > 3 %>
-                  <div class="w-5 h-5 rounded-full bg-surface-inset flex items-center justify-center text-[10px] font-medium text-secondary">
+                  <div class="w-7 h-7 rounded-full bg-surface-inset ring-2 ring-container flex items-center justify-center text-[10px] font-medium text-secondary">
                     +<%= subscriptions_on_day.size - 3 %>
                   </div>
                 <% end %>
@@ -117,7 +149,7 @@
         <%# Padding for end of month %>
         <% end_day = (7 - @month.end_of_month.wday) % 7 %>
         <% end_day.times do %>
-          <div class="min-h-[80px] p-2 border-t border-r border-secondary bg-surface-inset"></div>
+          <div class="aspect-[5/4] p-1.5 border-t border-r border-secondary bg-surface-inset"></div>
         <% end %>
       </div>
     </div>
@@ -125,11 +157,11 @@
     <%# Legend %>
     <div class="flex items-center gap-4 mt-4 text-xs text-secondary">
       <div class="flex items-center gap-1.5">
-        <div class="w-3 h-3 rounded-full bg-violet-500"></div>
+        <div class="w-2 h-2 rounded-full bg-violet-500"></div>
         <span><%= t(".legend.monthly") %></span>
       </div>
       <div class="flex items-center gap-1.5">
-        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+        <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
         <span><%= t(".legend.yearly") %></span>
       </div>
     </div>

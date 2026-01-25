@@ -19,6 +19,11 @@ class SubscriptionsController < ApplicationController
                                             search_term, search_term)
     end
 
+    # Counts for subheader (before any filtering for accurate totals)
+    all_subscriptions = Current.family.recurring_transactions.subscriptions
+    @active_count = all_subscriptions.active.count
+    @inactive_count = all_subscriptions.inactive.count
+
     @monthly_total = calculate_monthly_total(@subscriptions)
     @yearly_total = calculate_yearly_total(@subscriptions)
     @breadcrumbs = [ [ t(".home"), root_path ], [ t(".title"), nil ] ]
@@ -42,6 +47,13 @@ class SubscriptionsController < ApplicationController
 
     @calendar_data = build_calendar_data(@subscriptions, @month)
     @monthly_total = calculate_monthly_total(@subscriptions)
+
+    # Week stats for quick stats bar
+    @today_subscriptions = @calendar_data[Date.current] || []
+    @this_week_data = (Date.current.beginning_of_week..Date.current.end_of_week)
+                        .flat_map { |d| @calendar_data[d] || [] }
+    @this_week_total = @this_week_data.sum(Money.new(0, Current.family.currency)) { |s| s.amount_money.abs }
+
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
   end
 

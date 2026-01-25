@@ -31,7 +31,7 @@ en:
         link_account_to_record: Link account to record
         skip: Skip this occurrence
     calendar:
-      title: Calendar
+      title: Subscription Calendar
       list: List
       home: Home
       today: Today

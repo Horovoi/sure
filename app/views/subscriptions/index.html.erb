@@ -3,9 +3,10 @@
     <div>
       <h1 class="text-primary text-xl font-medium"><%= t(".title") %></h1>
       <p class="text-secondary text-sm mt-1">
-        <%= t(".monthly_total") %>: <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span>
-        <span class="text-subdued mx-2">&middot;</span>
-        <%= t(".yearly_total") %>: <span class="font-medium text-primary"><%= format_money(@yearly_total) %></span>
+        <span class="font-medium text-primary"><%= @active_count %></span> active<% if @inactive_count > 0 %> ·
+        <span class="font-medium text-primary"><%= @inactive_count %></span> paused<% end %> ·
+        <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span>/mo ·
+        <span class="font-medium text-primary"><%= format_money(@yearly_total) %></span>/yr
       </p>
     </div>
 
