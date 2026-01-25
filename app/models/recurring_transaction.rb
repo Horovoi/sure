@@ -5,6 +5,9 @@ class RecurringTransaction < ApplicationRecord
   belongs_to :merchant, optional: true
   belongs_to :category, optional: true
   belongs_to :subscription_service, optional: true
+  belongs_to :default_account, class_name: "Account", optional: true
+
+  has_many :transactions, dependent: :nullify
 
   has_one_attached :logo
 
@@ -345,6 +348,99 @@ class RecurringTransaction < ApplicationRecord
   # Display name for the subscription
   def display_name
     merchant.present? ? merchant.name : name
+  end
+
+  # Check if this subscription is overdue
+  def overdue?
+    active? && next_expected_date.present? && next_expected_date < Date.current
+  end
+
+  # Check if this subscription is due today
+  def due_today?
+    active? && next_expected_date == Date.current
+  end
+
+  # Check if this subscription can be recorded (due today or overdue)
+  def actionable?
+    overdue? || due_today?
+  end
+
+  # Check if this subscription can auto-generate transactions
+  # Only for accounts without active provider connections
+  def can_auto_generate?
+    default_account.present? && default_account.unlinked?
+  end
+
+  # Get the amount to use for generating transactions
+  # Prefers expected_amount_avg for manual recurring with variance
+  def amount_for_transaction
+    (manual? && expected_amount_avg.present?) ? expected_amount_avg : amount
+  end
+
+  # Generate a transaction for the current due date
+  # Returns the created Entry or nil if already exists
+  def generate_transaction!(for_date: next_expected_date)
+    return nil unless default_account.present?
+    return nil if transaction_exists_for_period?(for_date)
+
+    entry = nil
+    ActiveRecord::Base.transaction do
+      transaction_amount = amount_for_transaction
+
+      entry = default_account.entries.create!(
+        date: for_date,
+        amount: transaction_amount,
+        currency: currency,
+        name: display_name,
+        source: "subscription",
+        entryable: Transaction.new(
+          category: category,
+          merchant: merchant,
+          recurring_transaction: self
+        )
+      )
+
+      record_occurrence!(for_date, transaction_amount)
+    end
+
+    entry
+  end
+
+  # Generate all overdue transactions up to today
+  # Returns array of created entries
+  def generate_overdue_transactions!
+    return [] unless default_account.present?
+    return [] unless overdue?
+
+    entries = []
+    current_date = next_expected_date
+
+    while current_date <= Date.current
+      entry = generate_transaction!(for_date: current_date)
+      entries << entry if entry
+
+      # Recalculate next date for the loop
+      current_date = calculate_next_expected_date(current_date)
+    end
+
+    entries
+  end
+
+  # Check if a transaction already exists for this period
+  def transaction_exists_for_period?(date)
+    return false unless default_account.present?
+
+    date_range = if billing_cycle_yearly?
+      date.beginning_of_year..date.end_of_year
+    else
+      date.beginning_of_month..date.end_of_month
+    end
+
+    default_account.entries
+      .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+      .where("transactions.recurring_transaction_id = ?", id)
+      .where(date: date_range)
+      .exists?
   end
 
   private

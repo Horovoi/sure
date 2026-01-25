@@ -55,6 +55,26 @@ class Account::ProviderImportAdapter
         end
       end
 
+      # If this is a new entry, check for subscription-generated matches first
+      # This handles the case where we auto-generated a transaction for a subscription
+      # and the bank sync now brings in the real transaction
+      if entry.new_record?
+        subscription_match = find_subscription_generated_match(
+          date: date,
+          amount: amount,
+          currency: currency
+        )
+        if subscription_match
+          # "Claim" the subscription-generated entry by updating its external_id and source
+          entry = subscription_match
+          entry.assign_attributes(external_id: external_id, source: source)
+          Rails.logger.info(
+            "Matched provider transaction to subscription-generated entry #{subscription_match.id} " \
+            "(#{subscription_match.name}, amount: #{amount})"
+          )
+        end
+      end
+
       # If this is a new entry, check for potential duplicates from manual/CSV imports
       # This handles the case where a user manually created or CSV imported a transaction
       # before linking their account to a provider
@@ -582,6 +602,45 @@ class Account::ProviderImportAdapter
   rescue => e
     Rails.logger.error("Failed to update #{account.accountable_type} attributes from #{source}: #{e.message}")
     false
+  end
+
+  # Finds a subscription-generated transaction that matches an incoming provider transaction
+  # Used for deduplication when bank sync imports a transaction we already auto-generated
+  #
+  # Matches on:
+  # - Same account (implicit via account.entries)
+  # - Same currency
+  # - Amount within 10% tolerance (to handle slight variations)
+  # - Date within 3 days
+  # - source = "subscription" (only match auto-generated entries)
+  #
+  # @param date [Date, String] Transaction date from provider
+  # @param amount [BigDecimal, Numeric] Transaction amount
+  # @param currency [String] Currency code
+  # @return [Entry, nil] The matching subscription-generated entry or nil
+  def find_subscription_generated_match(date:, amount:, currency:)
+    date = Date.parse(date.to_s) unless date.is_a?(Date)
+    amount = BigDecimal(amount.to_s)
+
+    # Calculate amount bounds with 10% tolerance
+    abs_amount = amount.abs
+    min_amount = abs_amount * 0.9
+    max_amount = abs_amount * 1.1
+
+    # Look for subscription-generated entries within date range
+    # Date tolerance: 3 days before or after
+    date_range = (date - 3.days)..(date + 3.days)
+
+    candidates = account.entries
+      .where(source: "subscription")
+      .where(currency: currency)
+      .where(date: date_range)
+      .where("ABS(entries.amount) BETWEEN ? AND ?", min_amount, max_amount)
+      .where(external_id: nil) # Only match entries not yet claimed by a provider
+      .order(date: :desc)
+
+    # Return the first match (most recent within the window)
+    candidates.first
   end
 
   # Finds a potential duplicate transaction from manual entry or CSV import

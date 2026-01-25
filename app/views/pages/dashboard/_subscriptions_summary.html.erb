@@ -49,7 +49,7 @@
                 <p class="font-medium text-primary"><%= subscription.display_name %></p>
                 <p class="text-xs text-secondary">
                   <%= l(subscription.next_expected_date, format: :short) %>
-                  <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium <%= subscription.billing_cycle_monthly? ? 'bg-violet-100 text-violet-700' : 'bg-yellow-100 text-yellow-700' %>">
+                  <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium <%= subscription.billing_cycle_monthly? ? "bg-violet-100 text-violet-700" : "bg-yellow-100 text-yellow-700" %>">
                     <%= subscription.billing_cycle_monthly? ? t(".monthly") : t(".yearly") %>
                   </span>
                 </p>

@@ -21,8 +21,8 @@ class CacheSubscriptionIconJob < ApplicationJob
 
   private
 
-  def brandfetch_url(domain)
-    size = Setting.brand_fetch_logo_size
-    "https://cdn.brandfetch.io/#{domain}/icon/fallback/lettermark/w/#{size}/h/#{size}?c=#{Setting.brand_fetch_client_id}"
-  end
+    def brandfetch_url(domain)
+      size = Setting.brand_fetch_logo_size
+      "https://cdn.brandfetch.io/#{domain}/icon/fallback/lettermark/w/#{size}/h/#{size}?c=#{Setting.brand_fetch_client_id}"
+    end
 end

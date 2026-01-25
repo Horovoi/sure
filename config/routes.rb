@@ -232,10 +232,12 @@ Rails.application.routes.draw do
 
     member do
       post :toggle_status
+      post :record_transaction
+      post :skip_occurrence
     end
   end
 
-  resources :subscription_services, only: [:index]
+  resources :subscription_services, only: [ :index ]
 
   resources :accountable_sparklines, only: :show, param: :accountable_type
 

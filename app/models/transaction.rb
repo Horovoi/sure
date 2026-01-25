@@ -3,6 +3,7 @@ class Transaction < ApplicationRecord
 
   belongs_to :category, optional: true
   belongs_to :merchant, optional: true
+  belongs_to :recurring_transaction, optional: true
 
   has_many :taggings, as: :taggable, dependent: :destroy
   has_many :tags, through: :taggings
@@ -42,6 +43,8 @@ class Transaction < ApplicationRecord
       (transactions.extra -> 'plaid' ->> 'pending')::boolean IS DISTINCT FROM true
     SQL
   }
+
+  scope :from_subscription, -> { where.not(recurring_transaction_id: nil) }
 
   # Overarching grouping method for all transfer-type transactions
   def transfer?

@@ -1,4 +1,4 @@
-<%# locals: (subscription:, subscription_services:) %>
+<%# locals: (subscription:, subscription_services:, accounts: []) %>
 
 <%= styled_form_with model: subscription, url: subscription.persisted? ? subscription_path(subscription) : subscriptions_path, class: "space-y-6", data: { controller: "subscription-form" } do |f| %>
   <% if subscription.errors.any? %>
@@ -22,13 +22,13 @@
 
         <%# Selected service preview %>
         <div data-subscription-service-select-target="preview"
-             class="<%= subscription.subscription_service.present? ? '' : 'hidden' %> mb-2 p-2 bg-surface-inset rounded-lg">
+             class="<%= subscription.subscription_service.present? ? "" : "hidden" %> mb-2 p-2 bg-surface-inset rounded-lg">
           <% if subscription.subscription_service.present? %>
             <div class="flex items-center gap-2">
               <% if subscription.subscription_service.logo_url.present? %>
                 <%= image_tag subscription.subscription_service.logo_url, class: "w-6 h-6 rounded-full object-cover", loading: "lazy" %>
               <% else %>
-                <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background-color: <%= subscription.subscription_service.color || '#6B7280' %>">
+                <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background-color: <%= subscription.subscription_service.color || "#6B7280" %>">
                   <%= subscription.subscription_service.name[0].upcase %>
                 </div>
               <% end %>
@@ -49,7 +49,7 @@
             <button type="button"
                     data-subscription-service-select-target="clear"
                     data-action="click->subscription-service-select#clear"
-                    class="<%= subscription.subscription_service.present? ? '' : 'hidden' %> p-1 text-secondary hover:text-primary">
+                    class="<%= subscription.subscription_service.present? ? "" : "hidden" %> p-1 text-secondary hover:text-primary">
               <%= icon "x", size: "sm" %>
             </button>
             <button type="button"
@@ -119,6 +119,16 @@
     </div>
   </div>
 
+  <%# Next Expected Date (for manual override) %>
+  <% if subscription.persisted? %>
+    <div class="space-y-2">
+      <%= f.date_field :next_expected_date,
+          label: t("subscriptions.form.next_expected_date"),
+          value: subscription.next_expected_date %>
+      <p class="text-xs text-subdued"><%= t("subscriptions.form.next_expected_date_hint") %></p>
+    </div>
+  <% end %>
+
   <%# Category %>
   <div class="space-y-2">
     <%= f.select :category_id,
@@ -131,6 +141,14 @@
     <%= f.select :merchant_id,
         Current.family.merchants.order(:name).map { |m| [m.name, m.id] },
         { include_blank: t("subscriptions.form.merchant_placeholder"), label: t("subscriptions.form.merchant") } %>
+  </div>
+
+  <%# Payment Account %>
+  <div class="space-y-2">
+    <%= f.select :default_account_id,
+        accounts.map { |a| [a.name, a.id] },
+        { include_blank: t("subscriptions.form.default_account_placeholder"), label: t("subscriptions.form.default_account") } %>
+    <p class="text-xs text-subdued"><%= t("subscriptions.form.default_account_hint") %></p>
   </div>
 
   <%# Custom Logo URL %>

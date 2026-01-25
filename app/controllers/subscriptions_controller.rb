@@ -1,5 +1,5 @@
 class SubscriptionsController < ApplicationController
-  before_action :set_subscription, only: %i[show edit update destroy toggle_status]
+  before_action :set_subscription, only: %i[show edit update destroy toggle_status record_transaction skip_occurrence]
 
   def index
     @subscriptions = Current.family.recurring_transactions
@@ -57,6 +57,7 @@ class SubscriptionsController < ApplicationController
       currency: Current.family.currency
     )
     @subscription_services = SubscriptionService.alphabetically
+    @accounts = Current.family.accounts.visible.alphabetically
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
   end
 
@@ -77,6 +78,7 @@ class SubscriptionsController < ApplicationController
       redirect_to subscriptions_path, notice: t(".created")
     else
       @subscription_services = SubscriptionService.alphabetically
+      @accounts = Current.family.accounts.visible.alphabetically
       render :new, status: :unprocessable_entity
     end
   end
@@ -87,17 +89,26 @@ class SubscriptionsController < ApplicationController
 
   def edit
     @subscription_services = SubscriptionService.alphabetically
+    @accounts = Current.family.accounts.visible.alphabetically
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ @subscription.display_name, nil ] ]
   end
 
   def update
+    # Only recalculate next_expected_date if billing day changed AND user didn't explicitly set next_expected_date
+    billing_day_changed = subscription_params[:expected_day_of_month].present? &&
+                          subscription_params[:expected_day_of_month].to_i != @subscription.expected_day_of_month
+    user_set_next_date = subscription_params[:next_expected_date].present?
+
     if @subscription.update(subscription_params)
-      @subscription.next_expected_date = calculate_next_expected_date(@subscription)
-      @subscription.save!
+      if billing_day_changed && !user_set_next_date
+        @subscription.next_expected_date = calculate_next_expected_date(@subscription)
+        @subscription.save!
+      end
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
       redirect_to subscriptions_path, notice: t(".updated")
     else
       @subscription_services = SubscriptionService.alphabetically
+      @accounts = Current.family.accounts.visible.alphabetically
       render :edit, status: :unprocessable_entity
     end
   end
@@ -122,6 +133,28 @@ class SubscriptionsController < ApplicationController
     end
   end
 
+  def record_transaction
+    if @subscription.default_account.blank?
+      redirect_to edit_subscription_path(@subscription), alert: t(".no_account")
+      return
+    end
+
+    entry = @subscription.generate_transaction!
+    if entry
+      redirect_to subscriptions_path, notice: t(".success")
+    else
+      redirect_to subscriptions_path, alert: t(".already_exists")
+    end
+  end
+
+  def skip_occurrence
+    # Skip by advancing to next expected date without creating a transaction
+    @subscription.update!(
+      next_expected_date: @subscription.calculate_next_expected_date
+    )
+    redirect_to subscriptions_path, notice: t(".success")
+  end
+
   helper_method :should_remove_from_view?
 
   private
@@ -141,7 +174,8 @@ class SubscriptionsController < ApplicationController
     def subscription_params
       params.require(:recurring_transaction).permit(
         :name, :amount, :currency, :billing_cycle, :expected_day_of_month,
-        :category_id, :merchant_id, :subscription_service_id, :notes, :custom_logo_url, :status
+        :category_id, :merchant_id, :subscription_service_id, :notes, :custom_logo_url, :status,
+        :default_account_id, :next_expected_date
       )
     end
 

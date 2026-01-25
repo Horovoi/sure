@@ -75,12 +75,12 @@
           <% subscriptions_on_day = @calendar_data[date] || [] %>
           <% is_today = date == Date.current %>
 
-          <div class="min-h-[80px] p-2 border-t border-r border-secondary hover:bg-surface-hover transition-colors <%= 'bg-orange-50 border-l-2 border-l-orange-500' if is_today %>"
+          <div class="min-h-[80px] p-2 border-t border-r border-secondary hover:bg-surface-hover transition-colors <%= "bg-orange-50 border-l-2 border-l-orange-500" if is_today %>"
                data-action="click->subscription-calendar#showDayDetails"
                data-date="<%= date.iso8601 %>">
             <%# Day number %>
             <div class="flex items-center justify-between mb-1">
-              <span class="text-sm font-medium <%= is_today ? 'text-orange-600' : 'text-primary' %>">
+              <span class="text-sm font-medium <%= is_today ? "text-orange-600" : "text-primary" %>">
                 <%= date.day %>
               </span>
             </div>
@@ -97,7 +97,7 @@
                           class: "w-5 h-5 rounded-full object-cover border border-white shadow-sm",
                           loading: "lazy" %>
                     <% else %>
-                      <div class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white <%= sub.billing_cycle_monthly? ? 'bg-violet-500' : 'bg-yellow-500' %>">
+                      <div class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white <%= sub.billing_cycle_monthly? ? "bg-violet-500" : "bg-yellow-500" %>">
                         <%= sub.display_name[0].upcase %>
                       </div>
                     <% end %>

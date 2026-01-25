@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_24_120354) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_25_101453) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -956,6 +956,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_120354) do
     t.text "notes"
     t.string "custom_logo_url"
     t.uuid "subscription_service_id"
+    t.uuid "default_account_id"
+    t.index ["default_account_id"], name: "index_recurring_transactions_on_default_account_id"
     t.index ["family_id", "is_subscription"], name: "idx_recurring_txns_subscriptions", where: "(is_subscription = true)"
     t.index ["family_id", "merchant_id", "amount", "currency"], name: "idx_recurring_txns_merchant", unique: true, where: "(merchant_id IS NOT NULL)"
     t.index ["family_id", "name", "amount", "currency"], name: "idx_recurring_txns_name", unique: true, where: "((name IS NOT NULL) AND (merchant_id IS NULL))"
@@ -1208,12 +1210,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_120354) do
     t.string "external_id"
     t.jsonb "extra", default: {}, null: false
     t.string "investment_activity_label"
+    t.uuid "recurring_transaction_id"
     t.index ["category_id"], name: "index_transactions_on_category_id"
     t.index ["external_id"], name: "index_transactions_on_external_id"
     t.index ["extra"], name: "index_transactions_on_extra", using: :gin
     t.index ["investment_activity_label"], name: "index_transactions_on_investment_activity_label"
     t.index ["kind"], name: "index_transactions_on_kind"
     t.index ["merchant_id"], name: "index_transactions_on_merchant_id"
+    t.index ["recurring_transaction_id"], name: "index_transactions_on_recurring_transaction_id"
   end
 
   create_table "transfers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1332,6 +1336,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_120354) do
   add_foreign_key "oidc_identities", "users"
   add_foreign_key "plaid_accounts", "plaid_items"
   add_foreign_key "plaid_items", "families"
+  add_foreign_key "recurring_transactions", "accounts", column: "default_account_id"
   add_foreign_key "recurring_transactions", "categories"
   add_foreign_key "recurring_transactions", "families"
   add_foreign_key "recurring_transactions", "merchants"
@@ -1354,6 +1359,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_24_120354) do
   add_foreign_key "trades", "securities"
   add_foreign_key "transactions", "categories", on_delete: :nullify
   add_foreign_key "transactions", "merchants"
+  add_foreign_key "transactions", "recurring_transactions"
   add_foreign_key "transfers", "transactions", column: "inflow_transaction_id", on_delete: :cascade
   add_foreign_key "transfers", "transactions", column: "outflow_transaction_id", on_delete: :cascade
   add_foreign_key "users", "chats", column: "last_viewed_chat_id"

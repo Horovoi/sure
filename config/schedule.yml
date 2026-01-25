@@ -30,3 +30,9 @@ clean_data:
   class: "DataCleanerJob"
   queue: "scheduled"
   description: "Cleans up old data (e.g., expired merchant associations)"
+
+generate_subscription_transactions:
+  cron: "0 6 * * *" # daily at 6:00 AM
+  class: "GenerateSubscriptionTransactionsJob"
+  queue: "scheduled"
+  description: "Generates transactions for due subscriptions on manual accounts"
