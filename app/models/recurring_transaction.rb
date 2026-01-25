@@ -182,10 +182,13 @@ class RecurringTransaction < ApplicationRecord
     end
   end
 
+  # Amount tolerance for matching (15% to handle exchange rate fluctuations)
+  AMOUNT_TOLERANCE = 0.15
+
   # Find matching transactions for this recurring pattern
   def matching_transactions
     # For manual recurring with amount variance, match within range
-    # For automatic recurring, match exact amount
+    # For automatic recurring, use tolerance-based matching to handle exchange rate fluctuations
     entries = if manual? && has_amount_variance?
       family.entries
         .where(entryable_type: "Transaction")
@@ -196,10 +199,14 @@ class RecurringTransaction < ApplicationRecord
                [ expected_day_of_month + 2, 31 ].min)
         .order(date: :desc)
     else
+      # Use tolerance-based matching (±15%) to handle multi-currency exchange rate fluctuations
+      tolerance_min = amount * (1 - AMOUNT_TOLERANCE)
+      tolerance_max = amount * (1 + AMOUNT_TOLERANCE)
+
       family.entries
         .where(entryable_type: "Transaction")
         .where(currency: currency)
-        .where("entries.amount = ?", amount)
+        .where("entries.amount BETWEEN ? AND ?", tolerance_min, tolerance_max)
         .where("EXTRACT(DAY FROM entries.date) BETWEEN ? AND ?",
                [ expected_day_of_month - 2, 1 ].max,
                [ expected_day_of_month + 2, 31 ].min)

@@ -6,6 +6,9 @@ class RecurringTransaction
       @family = family
     end
 
+    # Amount tolerance for grouping (15% to handle exchange rate fluctuations)
+    AMOUNT_TOLERANCE = 0.15
+
     # Identify and create/update recurring transactions for the family
     def identify_recurring_patterns
       three_months_ago = 3.months.ago.to_date
@@ -14,22 +17,31 @@ class RecurringTransaction
       entries_with_transactions = family.entries
         .where(entryable_type: "Transaction")
         .where("entries.date >= ?", three_months_ago)
-        .includes(:entryable)
+        .includes(:entryable, :account)
         .to_a
 
-      # Group by merchant (if present) or name, along with amount (preserve sign) and currency
+      # Group by merchant (if present) or name, along with normalized amount bucket and account currency
+      # This handles multi-currency scenarios (e.g., USD subscriptions from UAH accounts)
       grouped_transactions = entries_with_transactions
         .select { |entry| entry.entryable.is_a?(Transaction) }
         .group_by do |entry|
           transaction = entry.entryable
           # Use merchant_id if present, otherwise use entry name
           identifier = transaction.merchant_id.present? ? [ :merchant, transaction.merchant_id ] : [ :name, entry.name ]
-          [ identifier, entry.amount.round(2), entry.currency ]
-        end
+
+          # Normalize amount to account currency for consistent grouping
+          normalized = normalized_amount(entry)
+          next nil unless normalized  # Skip entries without exchange rate data
+
+          # Create amount bucket for tolerance-based grouping
+          bucket = amount_bucket(normalized, tolerance: AMOUNT_TOLERANCE)
+          [ identifier, bucket, entry.account.currency ]
+        end.compact
 
       recurring_patterns = []
 
-      grouped_transactions.each do |(identifier, amount, currency), entries|
+      grouped_transactions.each do |(identifier, amount_bucket, currency), entries|
+        next if identifier.nil?  # Skip nil keys from failed normalization
         next if entries.size < 3  # Must have at least 3 occurrences
 
         # Check if the last occurrence was within the last 45 days
@@ -46,8 +58,12 @@ class RecurringTransaction
           # Unpack identifier - either [:merchant, id] or [:name, name_string]
           identifier_type, identifier_value = identifier
 
+          # Calculate average normalized amount for the pattern (more accurate than bucket)
+          normalized_amounts = entries.map { |e| normalized_amount(e) }.compact
+          avg_amount = (normalized_amounts.sum / normalized_amounts.size).round(2)
+
           pattern = {
-            amount: amount,
+            amount: avg_amount,
             currency: currency,
             expected_day_of_month: expected_day,
             last_occurrence_date: last_occurrence.date,
@@ -284,6 +300,39 @@ class RecurringTransaction
           # If day doesn't exist in month, use last day of month
           next_month.end_of_month
         end
+      end
+
+      # Normalize entry amount to account currency for consistent grouping
+      # This handles multi-currency scenarios (e.g., USD subscription from UAH account)
+      def normalized_amount(entry)
+        # If entry currency matches account currency, no conversion needed
+        return entry.amount if entry.currency == entry.account.currency
+
+        # Fetch exchange rate for the transaction date
+        rate_record = ExchangeRate.find_or_fetch_rate(
+          from: entry.currency,
+          to: entry.account.currency,
+          date: entry.date
+        )
+
+        return nil unless rate_record  # Skip if no rate available
+
+        rate = rate_record.is_a?(ExchangeRate) ? rate_record.rate : rate_record.rate
+        (entry.amount * rate).round(2)
+      end
+
+      # Create amount bucket for tolerance-based grouping
+      # Similar amounts within tolerance are grouped together
+      def amount_bucket(amount, tolerance: AMOUNT_TOLERANCE)
+        return 0 if amount.zero?
+
+        # Use logarithmic buckets so $10±15% and $100±15% scale appropriately
+        # The bucket size scales with the magnitude of the amount
+        magnitude = 10 ** Math.log10(amount.abs).floor
+        bucket_size = magnitude * tolerance * 2
+
+        # Round to nearest bucket
+        ((amount / bucket_size).round * bucket_size).round(2)
       end
   end
 end
