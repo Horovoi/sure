@@ -1,28 +1,38 @@
-<%# locals: (upcoming_subscriptions:, monthly_total:, **args) %>
+<%# locals: (upcoming_subscriptions:, monthly_total:, suggestion_count: 0, due_today_count: 0, this_week_total: nil, **args) %>
 
 <div id="subscriptions-summary" class="space-y-4">
   <div class="flex justify-between gap-4 px-4">
     <div class="space-y-2">
       <div class="flex items-center gap-2">
         <h2 class="text-lg font-medium"><%= t(".title") %></h2>
+        <% if suggestion_count > 0 %>
+          <%= link_to suggestions_subscriptions_path, class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors" do %>
+            <%= icon "zap", size: "xs" %>
+            <%= t(".new_suggestions", count: suggestion_count) %>
+          <% end %>
+        <% end %>
       </div>
 
-      <p class="text-primary text-3xl font-medium">
-        <%= format_money(monthly_total) %><span class="text-secondary text-sm font-normal">/mo</span>
-      </p>
+      <div>
+        <p class="text-primary text-3xl font-medium">
+          <%= format_money(monthly_total) %><span class="text-secondary text-sm font-normal">/mo</span>
+        </p>
+        <p class="text-secondary text-sm">
+          <%= format_money(monthly_total * 12) %>/yr
+        </p>
+      </div>
 
       <div class="flex items-center gap-2 text-sm">
         <span class="text-secondary"><%= t(".active_count", count: Current.family.recurring_transactions.active_subscriptions.count) %></span>
       </div>
     </div>
 
-    <%= link_to subscriptions_path, class: "shrink-0" do %>
-      <%= render DS::Link.new(
-        text: t(".view_all"),
-        icon: "arrow-right",
-        variant: "ghost"
-      ) %>
-    <% end %>
+    <%= render DS::Link.new(
+      href: subscriptions_path,
+      text: t(".view_all"),
+      icon: "arrow-right",
+      variant: "ghost"
+    ) %>
   </div>
 
   <% if upcoming_subscriptions.any? %>
@@ -64,18 +74,26 @@
       </div>
     </div>
   <% else %>
-    <div class="mx-4 p-4 bg-container-inset rounded-xl text-center text-sm text-secondary">
-      <%= t(".no_upcoming") %>
+    <div class="mx-4 p-4 bg-container-inset rounded-xl text-center">
+      <p class="text-sm text-secondary"><%= t(".no_upcoming") %></p>
+      <div class="mt-3">
+        <%= render DS::Link.new(
+          href: new_subscription_path,
+          text: t(".add_subscription"),
+          icon: "plus",
+          variant: "outline",
+          size: :sm
+        ) %>
+      </div>
     </div>
   <% end %>
 
   <div class="flex justify-center px-4">
-    <%= link_to calendar_subscriptions_path do %>
-      <%= render DS::Link.new(
-        text: t(".view_calendar"),
-        icon: "calendar",
-        variant: "outline"
-      ) %>
-    <% end %>
+    <%= render DS::Link.new(
+      href: calendar_subscriptions_path,
+      text: t(".view_calendar"),
+      icon: "calendar",
+      variant: "outline"
+    ) %>
   </div>
 </div>

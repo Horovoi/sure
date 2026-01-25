@@ -123,6 +123,12 @@ class PagesController < ApplicationController
                                     .includes(:merchant)
 
     @subscriptions_monthly_total = calculate_subscriptions_monthly_total
+    @subscription_suggestion_count = Current.family.recurring_transactions.suggested.count
+    @subscriptions_due_today = Current.family.recurring_transactions
+                                      .active_subscriptions
+                                      .where(next_expected_date: Date.current)
+                                      .count
+    @subscriptions_this_week_total = calculate_this_week_subscriptions_total
 
     @dashboard_sections = build_dashboard_sections
 
@@ -217,7 +223,13 @@ class PagesController < ApplicationController
           key: "subscriptions_summary",
           title: "pages.dashboard.subscriptions_summary.title",
           partial: "pages/dashboard/subscriptions_summary",
-          locals: { upcoming_subscriptions: @upcoming_subscriptions, monthly_total: @subscriptions_monthly_total },
+          locals: {
+            upcoming_subscriptions: @upcoming_subscriptions,
+            monthly_total: @subscriptions_monthly_total,
+            suggestion_count: @subscription_suggestion_count,
+            due_today_count: @subscriptions_due_today,
+            this_week_total: @subscriptions_this_week_total
+          },
           visible: Current.family.recurring_transactions.subscriptions.any?,
           collapsible: true
         }
@@ -544,6 +556,16 @@ class PagesController < ApplicationController
       total = Current.family.recurring_transactions.active_subscriptions.sum do |sub|
         sub.billing_cycle_yearly? ? (sub.amount / 12) : sub.amount
       end
+      Money.new(total, Current.family.currency)
+    end
+
+    def calculate_this_week_subscriptions_total
+      total = Current.family.recurring_transactions
+        .active_subscriptions
+        .where(next_expected_date: Date.current..Date.current.end_of_week)
+        .sum do |sub|
+          sub.billing_cycle_yearly? ? (sub.amount / 12) : sub.amount
+        end
       Money.new(total, Current.family.currency)
     end
 end

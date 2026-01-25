@@ -59,3 +59,9 @@ en:
         no_upcoming: "No subscriptions due in the next 7 days"
         monthly: "Monthly"
         yearly: "Yearly"
+        add_subscription: "Add Subscription"
+        due_today: "Due today"
+        this_week: "This week"
+        new_suggestions:
+          one: "%{count} new"
+          other: "%{count} new"
