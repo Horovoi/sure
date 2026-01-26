@@ -62,13 +62,26 @@ class RecurringTransaction
           normalized_amounts = entries.map { |e| normalized_amount(e) }.compact
           avg_amount = (normalized_amounts.sum / normalized_amounts.size).round(2)
 
+          # Determine inferred account (most frequent account in pattern)
+          account_counts = entries.map { |e| e.account_id }.tally
+          inferred_account_id = account_counts.max_by { |_, count| count }&.first
+
+          # Detect if pattern might be priced in USD (for non-USD accounts)
+          base_currency_result = BaseCurrencyDetector.new(
+            entries: entries,
+            account_currency: currency
+          ).detect
+
           pattern = {
             amount: avg_amount,
             currency: currency,
             expected_day_of_month: expected_day,
             last_occurrence_date: last_occurrence.date,
             occurrence_count: entries.size,
-            entries: entries
+            entries: entries,
+            inferred_account_id: inferred_account_id,
+            detected_base_currency: base_currency_result&.dig(:currency),
+            detected_base_amount: base_currency_result&.dig(:amount)
           }
 
           if identifier_type == :merchant
@@ -123,7 +136,10 @@ class RecurringTransaction
             last_occurrence_date: pattern[:last_occurrence_date],
             next_expected_date: calculate_next_expected_date(pattern[:last_occurrence_date], pattern[:expected_day_of_month]),
             occurrence_count: pattern[:occurrence_count],
-            status: recurring_transaction.new_record? ? "active" : recurring_transaction.status
+            status: recurring_transaction.new_record? ? "active" : recurring_transaction.status,
+            inferred_account_id: pattern[:inferred_account_id],
+            detected_base_currency: pattern[:detected_base_currency],
+            detected_base_amount: pattern[:detected_base_amount]
           )
 
           recurring_transaction.save!
@@ -143,7 +159,10 @@ class RecurringTransaction
             expected_day_of_month: pattern[:expected_day_of_month],
             last_occurrence_date: pattern[:last_occurrence_date],
             next_expected_date: calculate_next_expected_date(pattern[:last_occurrence_date], pattern[:expected_day_of_month]),
-            occurrence_count: pattern[:occurrence_count]
+            occurrence_count: pattern[:occurrence_count],
+            inferred_account_id: pattern[:inferred_account_id],
+            detected_base_currency: pattern[:detected_base_currency],
+            detected_base_amount: pattern[:detected_base_amount]
           )
         end
       end

@@ -15,6 +15,12 @@ en:
       transaction_count:
         one: "%{count} transaction"
         other: "%{count} transactions"
+      approve_usd: "Approve (USD)"
+      approve_local: "Keep local"
+      approve_usd_option: "Approve as %{currency}"
+      approve_local_option: "Keep local currency"
+      dismiss_all: Dismiss All
+      dismiss_all_confirm: Are you sure you want to dismiss all suggestions?
     detect:
       found:
         one: Found %{count} potential subscription
@@ -26,6 +32,8 @@ en:
       success: Suggestion dismissed
     approve_all_suggestions:
       success: All suggestions approved
+    dismiss_all_suggestions:
+      success: All suggestions dismissed
     index:
       title: Subscriptions
       home: Home
@@ -86,6 +94,9 @@ en:
       billing_cycle: Billing Cycle
       billing_day: Billing Day
       billing_day_hint: Day of the month when you're billed
+      expected_month: Billing Month
+      expected_month_placeholder: Select month
+      expected_month_hint: Month when the yearly subscription renews
       next_expected_date: Next Billing Date
       next_expected_date_hint: Override the next expected billing date (set to past date to test overdue features)
       category: Category

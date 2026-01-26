@@ -113,7 +113,8 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       recurring_transaction: {
         name: "Updated Name",
         amount: 25.99,
-        billing_cycle: "yearly"
+        billing_cycle: "yearly",
+        expected_month: 6
       }
     }
 
@@ -162,5 +163,36 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
 
     get edit_subscription_url(other_subscription)
     assert_response :not_found
+  end
+
+  test "dismiss_all_suggestions dismisses all suggested subscriptions" do
+    # Create suggested subscriptions
+    suggestion1 = @family.recurring_transactions.create!(
+      name: "Spotify",
+      amount: 9.99,
+      currency: "USD",
+      expected_day_of_month: 15,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "suggested"
+    )
+    suggestion2 = @family.recurring_transactions.create!(
+      name: "Netflix",
+      amount: 15.99,
+      currency: "USD",
+      expected_day_of_month: 20,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "suggested"
+    )
+
+    assert_equal 2, @family.recurring_transactions.suggested.count
+
+    post dismiss_all_suggestions_subscriptions_url
+
+    assert_redirected_to subscriptions_path
+    assert_equal 0, @family.recurring_transactions.suggested.count
+    assert suggestion1.reload.dismissed_at.present?
+    assert suggestion2.reload.dismissed_at.present?
   end
 end

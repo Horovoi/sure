@@ -232,6 +232,8 @@ Rails.application.routes.draw do
       get :suggestions
       post :detect
       post :approve_all_suggestions
+      post :dismiss_all_suggestions
+      get :fetch_exchange_rate
     end
 
     member do

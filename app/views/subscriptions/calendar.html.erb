@@ -203,19 +203,26 @@
 
   <%# Pass calendar data to JavaScript %>
   <script type="application/json" data-subscription-calendar-target="calendarData">
-    <%= raw @calendar_data.transform_keys(&:iso8601).transform_values { |subs|
-      subs.map do |sub|
-        {
-          id: sub.id,
-          name: sub.display_name,
-          amount: format_money(-sub.amount_money),
-          billing_cycle: sub.billing_cycle,
-          logo_url: sub.subscription_logo_url,
-          edit_url: edit_subscription_path(sub, return_to: "calendar"),
-          service_category: sub.subscription_service&.category,
-          account_name: sub.default_account&.name
-        }
-      end
-    }.to_json %>
+    <%= raw({
+      family_currency: Current.family.currency,
+      dates: @calendar_data.transform_keys(&:iso8601).transform_values { |subs|
+        subs.map do |sub|
+          is_foreign = sub.currency != Current.family.currency
+          {
+            id: sub.id,
+            name: sub.display_name,
+            amount: format_money(-sub.amount_money),
+            converted_amount: is_foreign ? format_money(sub.amount_money.exchange_to(Current.family.currency, fallback_rate: 1).abs * -1) : nil,
+            converted_amount_raw: is_foreign ? sub.amount_money.exchange_to(Current.family.currency, fallback_rate: 1).abs.amount : sub.amount_money.abs.amount,
+            is_foreign_currency: is_foreign,
+            billing_cycle: sub.billing_cycle,
+            logo_url: sub.subscription_logo_url,
+            edit_url: edit_subscription_path(sub, return_to: "calendar"),
+            service_category: sub.subscription_service&.category,
+            account_name: sub.default_account&.name
+          }
+        end
+      }
+    }.to_json) %>
   </script>
 </div>

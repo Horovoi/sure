@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_25_172749) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_26_174720) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -959,6 +959,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_25_172749) do
     t.uuid "default_account_id"
     t.string "suggestion_status"
     t.datetime "dismissed_at"
+    t.uuid "inferred_account_id"
+    t.string "detected_base_currency"
+    t.decimal "detected_base_amount", precision: 19, scale: 4
+    t.integer "expected_month"
     t.index ["default_account_id"], name: "index_recurring_transactions_on_default_account_id"
     t.index ["family_id", "is_subscription"], name: "idx_recurring_txns_subscriptions", where: "(is_subscription = true)"
     t.index ["family_id", "merchant_id", "amount", "currency"], name: "idx_recurring_txns_merchant", unique: true, where: "(merchant_id IS NOT NULL)"
@@ -966,9 +970,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_25_172749) do
     t.index ["family_id", "status"], name: "index_recurring_transactions_on_family_id_and_status"
     t.index ["family_id", "suggestion_status"], name: "idx_suggested_subscriptions", where: "((suggestion_status)::text = 'suggested'::text)"
     t.index ["family_id"], name: "index_recurring_transactions_on_family_id"
+    t.index ["inferred_account_id"], name: "index_recurring_transactions_on_inferred_account_id"
     t.index ["merchant_id"], name: "index_recurring_transactions_on_merchant_id"
     t.index ["next_expected_date"], name: "index_recurring_transactions_on_next_expected_date"
     t.index ["subscription_service_id"], name: "index_recurring_transactions_on_subscription_service_id"
+    t.check_constraint "expected_month IS NULL OR expected_month >= 1 AND expected_month <= 12", name: "check_expected_month_range"
   end
 
   create_table "rejected_transfers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1340,6 +1346,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_25_172749) do
   add_foreign_key "plaid_accounts", "plaid_items"
   add_foreign_key "plaid_items", "families"
   add_foreign_key "recurring_transactions", "accounts", column: "default_account_id"
+  add_foreign_key "recurring_transactions", "accounts", column: "inferred_account_id"
   add_foreign_key "recurring_transactions", "categories"
   add_foreign_key "recurring_transactions", "families"
   add_foreign_key "recurring_transactions", "merchants"

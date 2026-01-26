@@ -11,9 +11,12 @@ export default class extends Controller {
 
   connect() {
     this.calendarData = {}
+    this.familyCurrency = "USD"
     if (this.hasCalendarDataTarget) {
       try {
-        this.calendarData = JSON.parse(this.calendarDataTarget.textContent)
+        const data = JSON.parse(this.calendarDataTarget.textContent)
+        this.familyCurrency = data.family_currency || "USD"
+        this.calendarData = data.dates || {}
       } catch (e) {
         console.error("Failed to parse calendar data:", e)
       }
@@ -65,9 +68,13 @@ export default class extends Controller {
             ? `<img src="${sub.logo_url}" class="w-10 h-10 rounded-full object-cover" loading="lazy" />`
             : `<div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white ${sub.billing_cycle === 'monthly' ? 'bg-violet-500' : 'bg-yellow-500'}">${sub.name[0].toUpperCase()}</div>`
           }
-          <div class="flex-1">
+          <div class="flex-1 min-w-0">
             <div class="font-medium text-primary">${sub.name}</div>
-            <div class="text-sm text-secondary">${sub.amount}</div>
+            ${sub.is_foreign_currency && sub.converted_amount
+              ? `<div class="text-sm text-secondary">${sub.amount}</div>
+                 <div class="text-xs text-tertiary">${sub.converted_amount}</div>`
+              : `<div class="text-sm text-secondary">${sub.amount}</div>`
+            }
           </div>
           <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sub.billing_cycle === 'monthly' ? 'bg-violet-100 text-violet-700' : 'bg-yellow-100 text-yellow-700'}">
             ${sub.billing_cycle === 'monthly' ? 'Monthly' : 'Yearly'}
@@ -163,14 +170,17 @@ export default class extends Controller {
   }
 
   buildHoverCardContent(subscriptions, date) {
+    // Sum using converted amounts (in family currency) for accurate totals
     const total = subscriptions.reduce((sum, sub) => {
-      const amount = parseFloat(sub.amount.replace(/[^0-9.-]/g, ""))
-      return sum + (isNaN(amount) ? 0 : Math.abs(amount))
+      const amount = sub.converted_amount_raw || 0
+      return sum + Math.abs(amount)
     }, 0)
 
-    const currencyMatch = subscriptions[0]?.amount?.match(/^[^0-9.-]+/)
-    const currency = currencyMatch ? currencyMatch[0] : "$"
-    const formattedTotal = `${currency}${total.toFixed(2)}`
+    // Format total using family currency
+    const formattedTotal = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: this.familyCurrency
+    }).format(total)
 
     // Format date header
     const dateObj = new Date(date)
@@ -200,6 +210,14 @@ export default class extends Controller {
       const billingLabel = sub.billing_cycle === 'monthly' ? 'Mo' : 'Yr'
       const billingColor = sub.billing_cycle === 'monthly' ? 'bg-violet-100 text-violet-700' : 'bg-yellow-100 text-yellow-700'
 
+      // Show amount with converted value for foreign currencies (stacked vertically)
+      const amountDisplay = sub.is_foreign_currency && sub.converted_amount
+        ? `<div class="text-right shrink-0">
+             <div class="text-primary text-sm font-semibold">${sub.amount}</div>
+             <div class="text-tertiary text-xs">${sub.converted_amount}</div>
+           </div>`
+        : `<span class="text-primary text-sm font-semibold shrink-0">${sub.amount}</span>`
+
       return `
         <div class="p-2 rounded-lg bg-surface-inset">
           <div class="flex items-center gap-2">
@@ -208,7 +226,7 @@ export default class extends Controller {
               : `<div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${sub.billing_cycle === 'monthly' ? 'bg-violet-500' : 'bg-yellow-500'}">${this.escapeHtml(sub.name[0].toUpperCase())}</div>`
             }
             <span class="text-primary text-sm font-medium truncate flex-1">${this.escapeHtml(sub.name)}</span>
-            <span class="text-primary text-sm font-semibold">${sub.amount}</span>
+            ${amountDisplay}
           </div>
           <div class="flex items-center gap-2 mt-1.5 text-xs text-secondary overflow-hidden">
             <span class="inline-flex items-center px-1.5 py-0.5 rounded ${billingColor} text-[10px] font-medium shrink-0">${billingLabel}</span>

@@ -41,7 +41,11 @@
     <span class="text-sm font-medium text-primary">
       <%= format_money(-subscription.amount_money) %>
     </span>
-    <% if subscription.billing_cycle_yearly? %>
+    <% if subscription.currency != Current.family.currency %>
+      <span class="text-xs text-secondary block">
+<%= format_money(subscription.amount_money.exchange_to(Current.family.currency, fallback_rate: 1).abs * -1) %>
+      </span>
+    <% elsif subscription.billing_cycle_yearly? %>
       <span class="text-xs text-secondary block">
         ~<%= format_money(Money.new(subscription.monthly_cost, subscription.currency)) %>/mo
       </span>

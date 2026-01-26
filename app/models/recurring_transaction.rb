@@ -6,6 +6,7 @@ class RecurringTransaction < ApplicationRecord
   belongs_to :category, optional: true
   belongs_to :subscription_service, optional: true
   belongs_to :default_account, class_name: "Account", optional: true
+  belongs_to :inferred_account, class_name: "Account", optional: true
 
   has_many :transactions, dependent: :nullify
 
@@ -22,6 +23,8 @@ class RecurringTransaction < ApplicationRecord
   validates :amount, presence: true
   validates :currency, presence: true
   validates :expected_day_of_month, presence: true, numericality: { greater_than: 0, less_than_or_equal_to: 31 }
+  validates :expected_month, presence: true, if: -> { is_subscription? && billing_cycle_yearly? }
+  validates :expected_month, numericality: { in: 1..12 }, allow_nil: true
   validate :merchant_or_name_present
   validate :amount_variance_consistency
 
@@ -249,15 +252,28 @@ class RecurringTransaction < ApplicationRecord
   end
 
   # Approve a subscription suggestion
-  def approve_suggestion!
+  def approve_suggestion!(use_base_currency: false)
     # Set category to "Subscriptions" if available
     subscriptions_category = family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")
 
-    update!(
+    updates = {
       suggestion_status: nil,
       is_subscription: true,
       category_id: subscriptions_category&.id || category_id
-    )
+    }
+
+    # Auto-set default_account from inferred_account if not already set
+    if default_account_id.blank? && inferred_account_id.present?
+      updates[:default_account_id] = inferred_account_id
+    end
+
+    # Use detected base currency if requested
+    if use_base_currency && detected_base_currency.present? && detected_base_amount.present?
+      updates[:currency] = detected_base_currency
+      updates[:amount] = detected_base_amount
+    end
+
+    update!(updates)
   end
 
   # Dismiss a subscription suggestion
@@ -304,19 +320,37 @@ class RecurringTransaction < ApplicationRecord
 
   # Calculate the next expected date based on the last occurrence
   def calculate_next_expected_date(from_date = last_occurrence_date)
-    # For yearly subscriptions, add 1 year instead of 1 month
-    if is_subscription? && billing_cycle_yearly?
-      next_period = from_date.next_year
-    else
-      next_period = from_date.next_month
-    end
+    # For yearly subscriptions with expected_month, use the specific month
+    if is_subscription? && billing_cycle_yearly? && expected_month.present?
+      # Determine the target year: if the expected month is before/equal to from_date's month
+      # and from_date's year, use next year; otherwise use from_date's year
+      target_year = from_date.year
+      if expected_month < from_date.month || (expected_month == from_date.month && expected_day_of_month <= from_date.day)
+        target_year += 1
+      end
 
-    # Try to use the expected day of month
-    begin
-      Date.new(next_period.year, next_period.month, expected_day_of_month)
-    rescue ArgumentError
-      # If day doesn't exist in month (e.g., 31st in February), use last day of month
-      next_period.end_of_month
+      begin
+        Date.new(target_year, expected_month, expected_day_of_month)
+      rescue ArgumentError
+        # If day doesn't exist in month, use last day of month
+        Date.new(target_year, expected_month, 1).end_of_month
+      end
+    elsif is_subscription? && billing_cycle_yearly?
+      # Fallback for yearly without expected_month
+      next_period = from_date.next_year
+      begin
+        Date.new(next_period.year, next_period.month, expected_day_of_month)
+      rescue ArgumentError
+        next_period.end_of_month
+      end
+    else
+      # Monthly subscriptions
+      next_period = from_date.next_month
+      begin
+        Date.new(next_period.year, next_period.month, expected_day_of_month)
+      rescue ArgumentError
+        next_period.end_of_month
+      end
     end
   end
 

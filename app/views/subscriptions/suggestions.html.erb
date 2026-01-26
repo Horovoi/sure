@@ -7,11 +7,17 @@
       <% end %>
     </div>
 
-    <div id="suggestions_header_actions">
+    <div id="suggestions_header_actions" class="flex items-center gap-2">
       <% if @suggestions.any? %>
         <%= button_to approve_all_suggestions_subscriptions_path, method: :post, class: "inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-success hover:bg-success/90 rounded-lg transition-colors" do %>
           <%= icon "check-circle", size: "sm", color: "white" %>
           <span><%= t(".approve_all") %></span>
+        <% end %>
+        <%= button_to dismiss_all_suggestions_subscriptions_path, method: :post,
+            class: "inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-secondary bg-container border border-secondary hover:bg-surface-hover rounded-lg transition-colors",
+            data: { turbo_confirm: t(".dismiss_all_confirm") } do %>
+          <%= icon "x", size: "sm", color: "current" %>
+          <span><%= t(".dismiss_all") %></span>
         <% end %>
       <% end %>
     </div>

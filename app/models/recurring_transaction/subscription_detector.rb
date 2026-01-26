@@ -31,13 +31,37 @@ class RecurringTransaction
             if likely_subscription?(recurring)
               service = find_matching_service(recurring)
 
-              # Don't change category here - only set it when user approves
-              recurring.update!(
+              # Get transaction dates for billing cycle detection
+              transaction_dates = get_transaction_dates(recurring)
+              billing_cycle = detect_billing_cycle(transaction_dates)
+
+              updates = {
                 suggestion_status: "suggested",
-                subscription_service_id: service&.id
-              )
+                subscription_service_id: service&.id,
+                billing_cycle: billing_cycle
+              }
+
+              # Detect expected_month for yearly subscriptions
+              if billing_cycle == :yearly
+                updates[:expected_month] = detect_expected_month(transaction_dates)
+              end
+
+              recurring.update!(updates)
             end
           end
+      end
+
+      # Get transaction dates for a recurring transaction
+      def get_transaction_dates(recurring)
+        entries = RecurringTransaction.find_matching_transaction_entries(
+          family: recurring.family,
+          merchant_id: recurring.merchant_id,
+          name: recurring.name,
+          currency: recurring.currency,
+          expected_day: recurring.expected_day_of_month,
+          lookback_months: 24
+        )
+        entries.map(&:date)
       end
 
       # Auto-approve subscriptions that user manually marked
@@ -87,6 +111,25 @@ class RecurringTransaction
         avg_gap > 300 ? :yearly : :monthly
       end
 
+      # Detect expected month for yearly subscriptions
+      # Uses most frequent month, with tie-breaker on most recent transaction
+      def detect_expected_month(transaction_dates)
+        return nil if transaction_dates.empty?
+
+        sorted_dates = transaction_dates.sort
+        month_counts = sorted_dates.map(&:month).tally
+
+        max_count = month_counts.values.max
+        top_months = month_counts.select { |_, count| count == max_count }.keys
+
+        if top_months.size == 1
+          top_months.first
+        else
+          # Tie-breaker: use the month of the most recent transaction among top months
+          most_recent = sorted_dates.reverse.find { |d| top_months.include?(d.month) }
+          most_recent&.month || top_months.first
+        end
+      end
     end
   end
 end

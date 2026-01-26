@@ -54,7 +54,10 @@ class SubscriptionsController < ApplicationController
     @today_subscriptions = @calendar_data[Date.current] || []
     @this_week_data = (Date.current.beginning_of_week..Date.current.end_of_week)
                         .flat_map { |d| @calendar_data[d] || [] }
-    @this_week_total = @this_week_data.sum(Money.new(0, Current.family.currency)) { |s| s.amount_money.abs }
+    @this_week_total = @this_week_data.sum(Money.new(0, Current.family.currency)) do |s|
+      amount = s.amount_money.abs
+      s.currency == Current.family.currency ? amount : amount.exchange_to(Current.family.currency, fallback_rate: 1)
+    end
 
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
   end
@@ -72,6 +75,7 @@ class SubscriptionsController < ApplicationController
     )
     @subscription_services = SubscriptionService.alphabetically
     @accounts = Current.family.accounts.visible.alphabetically
+    @exchange_rates = load_exchange_rates_for_form
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
   end
 
@@ -93,6 +97,7 @@ class SubscriptionsController < ApplicationController
     else
       @subscription_services = SubscriptionService.alphabetically
       @accounts = Current.family.accounts.visible.alphabetically
+      @exchange_rates = load_exchange_rates_for_form
       render :new, status: :unprocessable_entity
     end
   end
@@ -104,6 +109,7 @@ class SubscriptionsController < ApplicationController
   def edit
     @subscription_services = SubscriptionService.alphabetically
     @accounts = Current.family.accounts.visible.alphabetically
+    @exchange_rates = load_exchange_rates_for_form
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ @subscription.display_name, nil ] ]
   end
 
@@ -123,6 +129,7 @@ class SubscriptionsController < ApplicationController
     else
       @subscription_services = SubscriptionService.alphabetically
       @accounts = Current.family.accounts.visible.alphabetically
+      @exchange_rates = load_exchange_rates_for_form
       render :edit, status: :unprocessable_entity
     end
   end
@@ -188,7 +195,8 @@ class SubscriptionsController < ApplicationController
 
   def approve_suggestion
     service = @suggestion.subscription_service
-    @suggestion.approve_suggestion!
+    use_base_currency = params[:use_base_currency] == "1"
+    @suggestion.approve_suggestion!(use_base_currency: use_base_currency)
 
     # Queue icon caching if subscription service is set and icon not cached
     if service.present? && !service.icon.attached?
@@ -229,6 +237,27 @@ class SubscriptionsController < ApplicationController
     redirect_to subscriptions_path, notice: t(".success")
   end
 
+  def dismiss_all_suggestions
+    Current.family.recurring_transactions.suggested.find_each(&:dismiss_suggestion!)
+    redirect_to subscriptions_path, notice: t(".success")
+  end
+
+  def fetch_exchange_rate
+    from_currency = params[:from]&.upcase
+    to_currency = Current.family.currency
+
+    return render json: { error: "missing_currency" }, status: :bad_request unless from_currency
+    return render json: { rate: 1 } if from_currency == to_currency
+
+    rate = ExchangeRate.find_or_fetch_rate(from: from_currency, to: to_currency, date: Date.current, cache: true)
+
+    if rate
+      render json: { from: from_currency, to: to_currency, rate: rate.rate.to_f }
+    else
+      render json: { error: "rate_unavailable" }, status: :not_found
+    end
+  end
+
   helper_method :should_remove_from_view?
 
   private
@@ -251,7 +280,7 @@ class SubscriptionsController < ApplicationController
 
     def subscription_params
       params.require(:recurring_transaction).permit(
-        :name, :amount, :currency, :billing_cycle, :expected_day_of_month,
+        :name, :amount, :currency, :billing_cycle, :expected_day_of_month, :expected_month,
         :category_id, :merchant_id, :subscription_service_id, :notes, :custom_logo_url, :status,
         :default_account_id, :next_expected_date
       )
@@ -261,41 +290,74 @@ class SubscriptionsController < ApplicationController
       today = Date.current
       expected_day = subscription.expected_day_of_month || today.day
 
-      # Try this month first
-      begin
-        this_month_date = Date.new(today.year, today.month, expected_day)
-        return this_month_date if this_month_date >= today
-      rescue ArgumentError
-        # Day doesn't exist in this month, use end of month
-        return today.end_of_month if today.end_of_month >= today
-      end
+      # For yearly subscriptions with expected_month, use specific month
+      if subscription.billing_cycle_yearly? && subscription.expected_month.present?
+        target_year = today.year
+        expected_month = subscription.expected_month
 
-      # Use next period based on billing cycle
-      if subscription.billing_cycle_yearly?
-        next_period = today.next_year
+        # Try this year first
+        begin
+          this_year_date = Date.new(target_year, expected_month, expected_day)
+          return this_year_date if this_year_date >= today
+        rescue ArgumentError
+          # Day doesn't exist, use end of month
+          end_of_month = Date.new(target_year, expected_month, 1).end_of_month
+          return end_of_month if end_of_month >= today
+        end
+
+        # Use next year
+        target_year += 1
+        begin
+          Date.new(target_year, expected_month, expected_day)
+        rescue ArgumentError
+          Date.new(target_year, expected_month, 1).end_of_month
+        end
       else
-        next_period = today.next_month
-      end
+        # Monthly subscriptions or yearly without expected_month
+        # Try this month first
+        begin
+          this_month_date = Date.new(today.year, today.month, expected_day)
+          return this_month_date if this_month_date >= today
+        rescue ArgumentError
+          # Day doesn't exist in this month, use end of month
+          return today.end_of_month if today.end_of_month >= today
+        end
 
-      begin
-        Date.new(next_period.year, next_period.month, expected_day)
-      rescue ArgumentError
-        next_period.end_of_month
+        # Use next period based on billing cycle
+        if subscription.billing_cycle_yearly?
+          next_period = today.next_year
+        else
+          next_period = today.next_month
+        end
+
+        begin
+          Date.new(next_period.year, next_period.month, expected_day)
+        rescue ArgumentError
+          next_period.end_of_month
+        end
       end
     end
 
     def calculate_monthly_total(subscriptions)
-      total = subscriptions.active.sum do |sub|
-        sub.billing_cycle_yearly? ? (sub.amount / 12) : sub.amount
+      family_currency = Current.family.currency
+      subscriptions.active.sum(Money.new(0, family_currency)) do |sub|
+        amount = sub.billing_cycle_yearly? ? sub.amount_money / 12 : sub.amount_money
+        sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
       end
-      Money.new(total, Current.family.currency)
     end
 
     def calculate_yearly_total(subscriptions)
-      total = subscriptions.active.sum do |sub|
-        sub.billing_cycle_monthly? ? (sub.amount * 12) : sub.amount
+      family_currency = Current.family.currency
+      subscriptions.active.sum(Money.new(0, family_currency)) do |sub|
+        amount = sub.billing_cycle_monthly? ? sub.amount_money * 12 : sub.amount_money
+        sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
       end
-      Money.new(total, Current.family.currency)
+    end
+
+    def load_exchange_rates_for_form
+      ExchangeRate.where(to_currency: Current.family.currency, date: Date.current)
+                  .pluck(:from_currency, :rate)
+                  .to_h
     end
 
     def build_calendar_data(subscriptions, month)

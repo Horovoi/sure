@@ -1,6 +1,10 @@
-<%# locals: (subscription:, subscription_services:, accounts: []) %>
+<%# locals: (subscription:, subscription_services:, accounts: [], exchange_rates: {}) %>
 
-<%= styled_form_with model: subscription, url: subscription.persisted? ? subscription_path(subscription) : subscriptions_path, class: "space-y-6", data: { controller: "subscription-form" } do |f| %>
+<%= styled_form_with model: subscription, url: subscription.persisted? ? subscription_path(subscription) : subscriptions_path, class: "space-y-6", data: {
+  controller: "subscription-form",
+  subscription_form_family_currency_value: Current.family.currency,
+  subscription_form_exchange_rates_value: exchange_rates.to_json
+} do |f| %>
   <% if subscription.errors.any? %>
     <%= render "shared/form_errors", model: subscription %>
   <% end %>
@@ -88,14 +92,23 @@
           step: 0.01,
           min: 0,
           required: true,
-          value: subscription.amount.present? ? subscription.amount.abs : nil %>
+          value: subscription.amount.present? ? subscription.amount.abs : nil,
+          data: { subscription_form_target: "amountField", action: "input->subscription-form#updateConversionHint" } %>
     </div>
     <div class="space-y-2">
       <%= f.select :currency,
           Money::Currency.as_options.map { |c| [c.iso_code, c.iso_code] },
           { label: t("subscriptions.form.currency"), selected: subscription.currency || Current.family.currency },
-          required: true %>
+          { required: true, data: { subscription_form_target: "currencySelect", action: "change->subscription-form#updateConversionHint" } } %>
     </div>
+  </div>
+
+  <%# Currency conversion hint %>
+  <div class="hidden -mt-4" data-subscription-form-target="conversionHint">
+    <p class="text-xs text-secondary flex items-center gap-1.5 px-1">
+      <%= icon "refresh-cw", size: "xs" %>
+      <span data-subscription-form-target="conversionText"></span>
+    </p>
   </div>
 
   <%# Billing Cycle and Day %>
@@ -107,7 +120,8 @@
             [t("subscriptions.billing_cycle.yearly"), "yearly"]
           ],
           { label: t("subscriptions.form.billing_cycle") },
-          required: true %>
+          required: true,
+          data: { subscription_form_target: "billingCycle", action: "change->subscription-form#billingCycleChanged" } %>
     </div>
     <div class="space-y-2">
       <%= f.number_field :expected_day_of_month,
@@ -117,6 +131,14 @@
           required: true %>
       <p class="text-xs text-subdued"><%= t("subscriptions.form.billing_day_hint") %></p>
     </div>
+  </div>
+
+  <%# Expected Month (for yearly subscriptions) %>
+  <div class="space-y-2 <%= subscription.billing_cycle_yearly? ? "" : "hidden" %>" data-subscription-form-target="monthField">
+    <%= f.select :expected_month,
+        (1..12).map { |m| [Date::MONTHNAMES[m], m] },
+        { include_blank: t("subscriptions.form.expected_month_placeholder"), label: t("subscriptions.form.expected_month") } %>
+    <p class="text-xs text-subdued"><%= t("subscriptions.form.expected_month_hint") %></p>
   </div>
 
   <%# Next Expected Date (for manual override) %>
