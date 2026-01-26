@@ -127,3 +127,6 @@ deploy_guide.md
 backups/
 temp.md
 docs/temp/
+
+# Local seed task for test data
+lib/tasks/seed_from_export.rake
