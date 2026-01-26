@@ -39,7 +39,7 @@
       <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-secondary mt-0.5">
         <% if suggestion.detected_base_currency.present? && suggestion.detected_base_amount.present? %>
           <span class="font-medium text-primary">
-            $<%= number_with_precision(suggestion.detected_base_amount, precision: 2) %> <%= suggestion.detected_base_currency %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
+            <%= Money.new(suggestion.detected_base_amount * 100, suggestion.detected_base_currency).format %> <%= suggestion.detected_base_currency %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
           </span>
           <span class="text-secondary">
             (<%= format_money(-suggestion.amount_money) %> local)

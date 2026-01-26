@@ -1,6 +1,7 @@
 class SubscriptionsController < ApplicationController
   before_action :set_subscription, only: %i[show edit update destroy toggle_status record_transaction skip_occurrence]
   before_action :set_suggestion, only: %i[approve_suggestion dismiss_suggestion]
+  before_action :set_dismissed_suggestion, only: %i[restore_suggestion]
 
   def index
     @subscriptions = Current.family.recurring_transactions
@@ -181,13 +182,23 @@ class SubscriptionsController < ApplicationController
                          .suggested
                          .includes(:merchant, subscription_service: { icon_attachment: :blob })
                          .order(created_at: :desc)
+
+    @dismissed_suggestions = Current.family.recurring_transactions
+                                   .dismissed
+                                   .includes(:merchant, subscription_service: { icon_attachment: :blob })
+                                   .order(dismissed_at: :desc)
+
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
   end
 
   def detect
-    count = SubscriptionSuggestionService.new(Current.family).detect
-    if count > 0
-      redirect_to suggestions_subscriptions_path, notice: t(".found", count: count)
+    new_count = SubscriptionSuggestionService.new(Current.family).detect
+    dismissed_count = Current.family.recurring_transactions.dismissed.count
+
+    if new_count > 0
+      redirect_to suggestions_subscriptions_path, notice: t(".found", count: new_count)
+    elsif dismissed_count > 0
+      redirect_to suggestions_subscriptions_path, notice: t(".none_new_with_dismissed", count: dismissed_count)
     else
       redirect_to subscriptions_path, notice: t(".none_found")
     end
@@ -215,6 +226,19 @@ class SubscriptionsController < ApplicationController
     @suggestion.dismiss_suggestion!
 
     @remaining_count = Current.family.recurring_transactions.suggested.count
+    @dismissed_count = Current.family.recurring_transactions.dismissed.count
+
+    respond_to do |format|
+      format.turbo_stream
+      format.html { redirect_to suggestions_subscriptions_path, notice: t(".success") }
+    end
+  end
+
+  def restore_suggestion
+    @suggestion = @dismissed_suggestion
+    @suggestion.update!(suggestion_status: "suggested", dismissed_at: nil)
+
+    @remaining_dismissed_count = Current.family.recurring_transactions.dismissed.count
 
     respond_to do |format|
       format.turbo_stream
@@ -244,7 +268,7 @@ class SubscriptionsController < ApplicationController
 
   def fetch_exchange_rate
     from_currency = params[:from]&.upcase
-    to_currency = Current.family.currency
+    to_currency = params[:to]&.upcase || Current.family.currency
 
     return render json: { error: "missing_currency" }, status: :bad_request unless from_currency
     return render json: { rate: 1 } if from_currency == to_currency
@@ -276,6 +300,10 @@ class SubscriptionsController < ApplicationController
 
     def set_suggestion
       @suggestion = Current.family.recurring_transactions.suggested.find(params[:id])
+    end
+
+    def set_dismissed_suggestion
+      @dismissed_suggestion = Current.family.recurring_transactions.dismissed.find(params[:id])
     end
 
     def subscription_params

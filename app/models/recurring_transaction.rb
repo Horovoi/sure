@@ -28,6 +28,8 @@ class RecurringTransaction < ApplicationRecord
   validate :merchant_or_name_present
   validate :amount_variance_consistency
 
+  before_save :ensure_next_expected_date_in_future
+
   def merchant_or_name_present
     if merchant_id.blank? && name.blank?
       errors.add(:base, "Either merchant or name must be present")
@@ -117,7 +119,8 @@ class RecurringTransaction < ApplicationRecord
       manual: true,
       expected_amount_min: expected_min,
       expected_amount_max: expected_max,
-      expected_amount_avg: expected_avg
+      expected_amount_avg: expected_avg,
+      inferred_account_id: entry.account_id
     )
   end
 
@@ -507,5 +510,52 @@ class RecurringTransaction < ApplicationRecord
   private
     def monetizable_currency
       currency
+    end
+
+    # Ensure next_expected_date is always in the future
+    def ensure_next_expected_date_in_future
+      return unless next_expected_date.present?
+      return if next_expected_date > Date.current
+
+      # Recalculate based on billing cycle
+      if billing_cycle_yearly?
+        self.next_expected_date = calculate_future_yearly_date
+      else
+        self.next_expected_date = calculate_future_monthly_date
+      end
+    end
+
+    def calculate_future_yearly_date
+      today = Date.current
+      target_month = expected_month || last_occurrence_date&.month || today.month
+      target_day = expected_day_of_month
+      target_year = today.year
+
+      loop do
+        target_date = begin
+          Date.new(target_year, target_month, target_day)
+        rescue ArgumentError
+          Date.new(target_year, target_month, 1).end_of_month
+        end
+
+        return target_date if target_date > today
+        target_year += 1
+      end
+    end
+
+    def calculate_future_monthly_date
+      today = Date.current
+      target_date = today.beginning_of_month
+
+      loop do
+        next_date = begin
+          Date.new(target_date.year, target_date.month, expected_day_of_month)
+        rescue ArgumentError
+          target_date.end_of_month
+        end
+
+        return next_date if next_date > today
+        target_date = target_date.next_month
+      end
     end
 end

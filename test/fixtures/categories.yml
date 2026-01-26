@@ -19,3 +19,15 @@ subcategory:
   parent: food_and_drink
   family: dylan_family
   lucide_icon: utensils
+
+subscriptions:
+  name: Subscriptions
+  color: "#6366f1"
+  family: dylan_family
+  lucide_icon: wifi
+
+subscriptions_streaming:
+  name: Streaming
+  parent: subscriptions
+  family: dylan_family
+  lucide_icon: tv

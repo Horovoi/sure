@@ -1,0 +1,65 @@
+<div id="dismissed_suggestion_<%= suggestion.id %>" class="p-4 flex items-center justify-between gap-4 hover:bg-surface-hover transition-colors opacity-60">
+  <div class="flex items-center gap-3 flex-1 min-w-0">
+    <%# Logo with fallback for broken images %>
+    <div class="relative w-10 h-10 flex-shrink-0">
+      <% logo_url = suggestion.subscription_service&.logo_url || suggestion.merchant&.logo_url %>
+      <% if logo_url.present? %>
+        <%= image_tag logo_url,
+            class: "w-10 h-10 rounded-full object-cover grayscale",
+            loading: "lazy",
+            onerror: "this.style.display='none'; this.nextElementSibling.style.display='flex';" %>
+        <div style="display: none;">
+          <%= render DS::FilledIcon.new(
+            variant: :text,
+            text: suggestion.display_name,
+            size: "lg",
+            rounded: true
+          ) %>
+        </div>
+      <% else %>
+        <%= render DS::FilledIcon.new(
+          variant: :text,
+          text: suggestion.display_name,
+          size: "lg",
+          rounded: true
+        ) %>
+      <% end %>
+    </div>
+
+    <%# Details %>
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-secondary font-medium truncate"><%= suggestion.display_name %></span>
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-secondary">
+          <%= t(".dismissed_badge") %>
+        </span>
+      </div>
+      <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-secondary mt-0.5">
+        <% if suggestion.detected_base_currency.present? && suggestion.detected_base_amount.present? %>
+          <span>
+            <%= Money.new(suggestion.detected_base_amount * 100, suggestion.detected_base_currency).format %> <%= suggestion.detected_base_currency %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
+          </span>
+          <span>
+            (<%= format_money(-suggestion.amount_money) %> local)
+          </span>
+        <% else %>
+          <span>
+            <%= format_money(-suggestion.amount_money) %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
+          </span>
+        <% end %>
+        <% if suggestion.occurrence_count.present? && suggestion.occurrence_count.to_i > 0 %>
+          <span><%= t("subscriptions.suggestions.transaction_count", count: suggestion.occurrence_count.to_i) %></span>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+  <%# Restore button %>
+  <div class="flex items-center gap-1 flex-shrink-0">
+    <%= button_to restore_suggestion_subscription_path(suggestion), method: :post,
+        class: "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-secondary hover:text-primary hover:bg-surface-hover rounded-lg transition-colors" do %>
+      <%= icon "rotate-ccw", size: "sm", color: "current" %>
+      <span><%= t(".restore") %></span>
+    <% end %>
+  </div>
+</div>

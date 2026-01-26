@@ -163,6 +163,7 @@ namespace :subscription_services do
       { name: "Ko-fi", slug: "ko-fi", domain: "ko-fi.com", category: "software", color: "#FF5E5B" },
       { name: "Buy Me a Coffee", slug: "buy-me-a-coffee", domain: "buymeacoffee.com", category: "software", color: "#FFDD00" },
       { name: "Memberful", slug: "memberful", domain: "memberful.com", category: "software", color: "#6772E5" },
+      { name: "Superwhisper", slug: "superwhisper", domain: "superwhisper.com", category: "software", color: "#000000" },
 
       # ============ GAMING (25+) ============
       { name: "Xbox Game Pass", slug: "xbox-game-pass", domain: "xbox.com", category: "gaming", color: "#107C10" },
@@ -252,6 +253,7 @@ namespace :subscription_services do
       # ============ CLOUD STORAGE (15+) ============
       { name: "iCloud+", slug: "icloud-plus", domain: "icloud.com", category: "storage", color: "#3693F3" },
       { name: "Google One", slug: "google-one", domain: "one.google.com", category: "storage", color: "#4285F4" },
+      { name: "Google Drive", slug: "google-drive", domain: "drive.google.com", category: "storage", color: "#4285F4" },
       { name: "OneDrive", slug: "onedrive", domain: "onedrive.live.com", category: "storage", color: "#0078D4" },
       { name: "Backblaze", slug: "backblaze", domain: "backblaze.com", category: "storage", color: "#E21E26" },
       { name: "Carbonite", slug: "carbonite", domain: "carbonite.com", category: "storage", color: "#27B24A" },

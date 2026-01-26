@@ -24,14 +24,36 @@
   </header>
 
   <div id="suggestions_container" class="bg-container rounded-xl shadow-border-xs">
-    <% if @suggestions.empty? %>
+    <% if @suggestions.empty? && @dismissed_suggestions.empty? %>
       <%= render "subscriptions/suggestions_empty_state" %>
     <% else %>
-      <div id="suggestions_list" class="divide-y divide-subdued">
+      <div id="suggestions_list" class="divide-y divide-subdued <%= "empty:hidden" if @suggestions.empty? %>">
         <% @suggestions.each do |suggestion| %>
           <%= render "subscriptions/suggestion", suggestion: suggestion %>
         <% end %>
       </div>
+      <% if @suggestions.empty? %>
+        <div id="no_pending_suggestions" class="p-6 text-center">
+          <p class="text-secondary text-sm"><%= t(".no_pending_suggestions") %></p>
+        </div>
+      <% end %>
     <% end %>
   </div>
+
+  <%# Previously Dismissed Section (collapsible) %>
+  <% if @dismissed_suggestions.any? %>
+    <div id="dismissed_container">
+      <%= render DS::Disclosure.new(
+        title: t(".previously_dismissed", count: @dismissed_suggestions.count),
+        align: :left,
+        open: false
+      ) do %>
+        <div id="dismissed_list" class="bg-container rounded-xl shadow-border-xs divide-y divide-subdued">
+          <% @dismissed_suggestions.each do |suggestion| %>
+            <%= render "subscriptions/dismissed_suggestion", suggestion: suggestion %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
 </div>

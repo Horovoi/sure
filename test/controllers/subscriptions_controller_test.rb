@@ -195,4 +195,116 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
     assert suggestion1.reload.dismissed_at.present?
     assert suggestion2.reload.dismissed_at.present?
   end
+
+  test "suggestions page shows both suggested and dismissed suggestions" do
+    # Create suggested subscription
+    @family.recurring_transactions.create!(
+      name: "Spotify",
+      amount: 9.99,
+      currency: "USD",
+      expected_day_of_month: 15,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "suggested"
+    )
+
+    # Create dismissed subscription
+    @family.recurring_transactions.create!(
+      name: "Hulu",
+      amount: 12.99,
+      currency: "USD",
+      expected_day_of_month: 20,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "dismissed",
+      dismissed_at: 1.day.ago
+    )
+
+    get suggestions_subscriptions_url
+    assert_response :success
+    assert_select "div#suggestions_list"
+    assert_select "div#dismissed_container"
+  end
+
+  test "restore_suggestion moves dismissed suggestion back to suggested" do
+    dismissed = @family.recurring_transactions.create!(
+      name: "Spotify",
+      amount: 9.99,
+      currency: "USD",
+      expected_day_of_month: 15,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "dismissed",
+      dismissed_at: 1.day.ago
+    )
+
+    assert_equal 1, @family.recurring_transactions.dismissed.count
+    assert_equal 0, @family.recurring_transactions.suggested.count
+
+    post restore_suggestion_subscription_url(dismissed)
+
+    assert_redirected_to suggestions_subscriptions_path
+    dismissed.reload
+    assert_equal "suggested", dismissed.suggestion_status
+    assert_nil dismissed.dismissed_at
+    assert_equal 0, @family.recurring_transactions.dismissed.count
+    assert_equal 1, @family.recurring_transactions.suggested.count
+  end
+
+  test "restore_suggestion responds with turbo_stream" do
+    dismissed = @family.recurring_transactions.create!(
+      name: "Spotify",
+      amount: 9.99,
+      currency: "USD",
+      expected_day_of_month: 15,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "dismissed",
+      dismissed_at: 1.day.ago
+    )
+
+    post restore_suggestion_subscription_url(dismissed), as: :turbo_stream
+
+    assert_response :success
+    assert_equal "text/vnd.turbo-stream.html", response.media_type
+  end
+
+  test "cannot restore suggestion from other family" do
+    other_family = families(:empty)
+    other_dismissed = other_family.recurring_transactions.create!(
+      name: "Other Family Dismissed",
+      amount: 10.00,
+      currency: "USD",
+      expected_day_of_month: 1,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "dismissed",
+      dismissed_at: 1.day.ago
+    )
+
+    post restore_suggestion_subscription_url(other_dismissed)
+    assert_response :not_found
+  end
+
+  test "detect redirects to suggestions when only dismissed suggestions exist" do
+    # Create a dismissed suggestion
+    @family.recurring_transactions.create!(
+      name: "Dismissed Service",
+      amount: 9.99,
+      currency: "USD",
+      expected_day_of_month: 15,
+      last_occurrence_date: Date.current,
+      next_expected_date: 1.month.from_now,
+      suggestion_status: "dismissed",
+      dismissed_at: 1.day.ago
+    )
+
+    assert_equal 0, @family.recurring_transactions.suggested.count
+    assert_equal 1, @family.recurring_transactions.dismissed.count
+
+    post detect_subscriptions_url
+
+    assert_redirected_to suggestions_subscriptions_path
+    assert_match(/previously dismissed/, flash[:notice])
+  end
 end

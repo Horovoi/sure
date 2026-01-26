@@ -1,8 +1,34 @@
 <%= turbo_stream.remove "suggestion_#{@suggestion.id}" %>
 
+<%# Add to dismissed list (create section if first dismissed, otherwise prepend to existing list) %>
+<% if @dismissed_count == 1 %>
+  <%# This is the first dismissed suggestion, create the section after suggestions_container %>
+  <%= turbo_stream.after "suggestions_container" do %>
+    <div id="dismissed_container">
+      <%= render DS::Disclosure.new(
+        title: t("subscriptions.suggestions.previously_dismissed", count: 1),
+        align: :left,
+        open: false
+      ) do %>
+        <div id="dismissed_list" class="bg-container rounded-xl shadow-border-xs divide-y divide-subdued">
+          <%= render "subscriptions/dismissed_suggestion", suggestion: @suggestion %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+<% else %>
+  <%# Add to existing dismissed list %>
+  <%= turbo_stream.prepend "dismissed_list" do %>
+    <%= render "subscriptions/dismissed_suggestion", suggestion: @suggestion %>
+  <% end %>
+<% end %>
+
 <% if @remaining_count == 0 %>
   <%= turbo_stream.update "suggestions_header_actions", "" %>
   <%= turbo_stream.update "suggestions_container" do %>
-    <%= render "subscriptions/suggestions_empty_state" %>
+    <div id="suggestions_list" class="divide-y divide-subdued empty:hidden"></div>
+    <div id="no_pending_suggestions" class="p-6 text-center">
+      <p class="text-secondary text-sm"><%= t("subscriptions.suggestions.no_pending_suggestions") %></p>
+    </div>
   <% end %>
 <% end %>

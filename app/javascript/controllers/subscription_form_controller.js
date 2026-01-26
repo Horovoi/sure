@@ -47,14 +47,31 @@ export default class extends Controller {
     const selectedCurrency = this.currencySelectTarget.value
     const familyCurrency = this.familyCurrencyValue
 
-    // Hide hint if same currency, no amount, or invalid amount
-    if (!amount || amount <= 0 || selectedCurrency === familyCurrency || isNaN(amount)) {
+    // Hide hint if no amount or invalid amount
+    if (!amount || amount <= 0 || isNaN(amount)) {
+      this.conversionHintTarget.classList.add("hidden")
+      return
+    }
+
+    // Determine target currency for conversion
+    // - If selected != family currency: convert to family currency
+    // - If selected == family currency: convert UAH<->USD for reference
+    let targetCurrency
+    if (selectedCurrency !== familyCurrency) {
+      targetCurrency = familyCurrency
+    } else if (selectedCurrency === "UAH") {
+      targetCurrency = "USD"
+    } else if (selectedCurrency === "USD") {
+      targetCurrency = "UAH"
+    } else {
+      // No conversion needed for other currencies when matching family currency
       this.conversionHintTarget.classList.add("hidden")
       return
     }
 
     // Get exchange rate for this currency pair
-    let rate = this.exchangeRatesValue[selectedCurrency]
+    const rateKey = `${selectedCurrency}_to_${targetCurrency}`
+    let rate = this.exchangeRatesValue[rateKey]
 
     if (!rate) {
       // Fetch from server (which will also cache to DB)
@@ -62,12 +79,12 @@ export default class extends Controller {
       this.conversionHintTarget.classList.remove("hidden")
 
       try {
-        const response = await fetch(`/subscriptions/fetch_exchange_rate?from=${selectedCurrency}`)
+        const response = await fetch(`/subscriptions/fetch_exchange_rate?from=${selectedCurrency}&to=${targetCurrency}`)
         if (response.ok) {
           const data = await response.json()
           rate = data.rate
           // Cache locally for this session
-          this.exchangeRatesValue = { ...this.exchangeRatesValue, [selectedCurrency]: rate }
+          this.exchangeRatesValue = { ...this.exchangeRatesValue, [rateKey]: rate }
         } else {
           this.conversionHintTarget.classList.add("hidden")
           return
@@ -89,7 +106,7 @@ export default class extends Controller {
     }).format(convertedAmount)
 
     // Update the hint text
-    this.conversionTextTarget.textContent = `${formattedAmount} ${familyCurrency} at current rate`
+    this.conversionTextTarget.textContent = `≈ ${formattedAmount} ${targetCurrency} at current rate`
     this.conversionHintTarget.classList.remove("hidden")
   }
 }

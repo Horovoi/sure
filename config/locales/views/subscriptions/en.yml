@@ -7,6 +7,7 @@ en:
       description: We found potential subscriptions in your transaction history.
       no_suggestions: No pending suggestions
       no_suggestions_back: All caught up! No subscription suggestions to review.
+      no_pending_suggestions: No pending suggestions to review.
       back_to_subscriptions: Back to Subscriptions
       approve_all: Approve All
       approve: Approve
@@ -21,11 +22,22 @@ en:
       approve_local_option: "Keep local currency"
       dismiss_all: Dismiss All
       dismiss_all_confirm: Are you sure you want to dismiss all suggestions?
+      previously_dismissed:
+        one: "Previously Dismissed (1)"
+        other: "Previously Dismissed (%{count})"
+    dismissed_suggestion:
+      restore: Restore
+      dismissed_badge: Dismissed
+    restore_suggestion:
+      success: Suggestion restored
     detect:
       found:
         one: Found %{count} potential subscription
         other: Found %{count} potential subscriptions
       none_found: No subscription patterns detected in your history
+      none_new_with_dismissed:
+        one: No new patterns found. You have %{count} previously dismissed suggestion.
+        other: No new patterns found. You have %{count} previously dismissed suggestions.
     approve_suggestion:
       success: Subscription approved
     dismiss_suggestion:

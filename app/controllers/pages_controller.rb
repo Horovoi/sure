@@ -553,19 +553,21 @@ class PagesController < ApplicationController
     end
 
     def calculate_subscriptions_monthly_total
-      total = Current.family.recurring_transactions.active_subscriptions.sum do |sub|
-        sub.billing_cycle_yearly? ? (sub.amount / 12) : sub.amount
+      family_currency = Current.family.currency
+      Current.family.recurring_transactions.active_subscriptions.sum(Money.new(0, family_currency)) do |sub|
+        amount = sub.billing_cycle_yearly? ? sub.amount_money / 12 : sub.amount_money
+        sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
       end
-      Money.new(total, Current.family.currency)
     end
 
     def calculate_this_week_subscriptions_total
-      total = Current.family.recurring_transactions
+      family_currency = Current.family.currency
+      Current.family.recurring_transactions
         .active_subscriptions
         .where(next_expected_date: Date.current..Date.current.end_of_week)
-        .sum do |sub|
-          sub.billing_cycle_yearly? ? (sub.amount / 12) : sub.amount
+        .sum(Money.new(0, family_currency)) do |sub|
+          amount = sub.billing_cycle_yearly? ? sub.amount_money / 12 : sub.amount_money
+          sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
         end
-      Money.new(total, Current.family.currency)
     end
 end

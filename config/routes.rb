@@ -242,6 +242,7 @@ Rails.application.routes.draw do
       post :skip_occurrence
       post :approve_suggestion
       post :dismiss_suggestion
+      post :restore_suggestion
     end
   end
 
