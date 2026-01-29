@@ -22,4 +22,24 @@ class SubscriptionServicesController < ApplicationController
       }
     }
   end
+
+  def uncached
+    icons_dir = Rails.root.join("public", "icons")
+    services = SubscriptionService.all.reject { |s| File.exist?(icons_dir.join("#{s.slug}.png")) }
+
+    render json: services.map { |s| { id: s.id, domain: s.domain, slug: s.slug } }
+  end
+
+  def cache_icon
+    service = SubscriptionService.find(params[:id])
+    icons_dir = Rails.root.join("public", "icons")
+    FileUtils.mkdir_p(icons_dir)
+
+    if params[:icon].present?
+      File.binwrite(icons_dir.join("#{service.slug}.png"), params[:icon].read)
+      head :ok
+    else
+      head :unprocessable_entity
+    end
+  end
 end

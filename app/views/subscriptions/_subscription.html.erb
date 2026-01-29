@@ -7,7 +7,7 @@
         <% if subscription.subscription_logo_url.present? %>
           <%= image_tag subscription.subscription_logo_url,
               class: "w-8 h-8 rounded-full object-cover",
-              loading: "lazy",
+              width: 32, height: 32,
               onerror: "this.style.display='none'; this.nextElementSibling.style.display='flex';" %>
           <div style="display: none;">
             <%= render DS::FilledIcon.new(

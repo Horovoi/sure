@@ -56,4 +56,25 @@
                       data: { auto_submit_form_target: "auto" } %>
     <% end %>
   </div>
+
+  <% if Setting.brand_fetch_client_id.present? %>
+    <div class="mt-4 pt-4 border-t border-divider"
+         data-controller="icon-cache"
+         data-icon-cache-client-id-value="<%= Setting.brand_fetch_client_id %>"
+         data-icon-cache-size-value="<%= Setting.brand_fetch_logo_size %>">
+      <div class="flex items-center justify-between">
+        <div class="space-y-1">
+          <p class="text-sm"><%= t(".cache_icons_label", default: "Cache subscription icons") %></p>
+          <p class="text-secondary text-sm"><%= t(".cache_icons_description", default: "Download all subscription service icons from Brand Fetch and store them locally.") %></p>
+        </div>
+        <button type="button"
+                class="btn btn--outline text-sm"
+                data-icon-cache-target="button"
+                data-action="click->icon-cache#cache">
+          <%= t(".cache_icons_button", default: "Cache All Icons") %>
+        </button>
+      </div>
+      <p class="text-sm text-secondary mt-2 hidden" data-icon-cache-target="status"></p>
+    </div>
+  <% end %>
 </div>

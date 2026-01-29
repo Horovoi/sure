@@ -6,7 +6,7 @@ class SubscriptionsController < ApplicationController
   def index
     @subscriptions = Current.family.recurring_transactions
                           .subscriptions
-                          .includes(:merchant, :category, subscription_service: { icon_attachment: :blob })
+                          .includes(:merchant, :category, :subscription_service)
                           .order(status: :asc, next_expected_date: :asc, name: :asc)
 
     # Apply filters
@@ -46,7 +46,7 @@ class SubscriptionsController < ApplicationController
     @month = params[:month].present? ? Date.parse(params[:month]) : Date.current.beginning_of_month
     @subscriptions = Current.family.recurring_transactions
                           .active_subscriptions
-                          .includes(:merchant, :category, subscription_service: { icon_attachment: :blob })
+                          .includes(:merchant, :category, :subscription_service)
 
     @calendar_data = build_calendar_data(@subscriptions, @month)
     @monthly_total = calculate_monthly_total(@subscriptions)
@@ -88,11 +88,6 @@ class SubscriptionsController < ApplicationController
 
     if @subscription.save
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
-
-      # Queue icon caching if subscription service is set and icon not cached
-      if @subscription.subscription_service.present? && !@subscription.subscription_service.icon.attached?
-        CacheSubscriptionIconJob.perform_later(@subscription.subscription_service)
-      end
 
       redirect_to subscriptions_path, notice: t(".created")
     else
@@ -180,12 +175,12 @@ class SubscriptionsController < ApplicationController
   def suggestions
     @suggestions = Current.family.recurring_transactions
                          .suggested
-                         .includes(:merchant, subscription_service: { icon_attachment: :blob })
+                         .includes(:merchant, :subscription_service)
                          .order(created_at: :desc)
 
     @dismissed_suggestions = Current.family.recurring_transactions
                                    .dismissed
-                                   .includes(:merchant, subscription_service: { icon_attachment: :blob })
+                                   .includes(:merchant, :subscription_service)
                                    .order(dismissed_at: :desc)
 
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
@@ -205,14 +200,8 @@ class SubscriptionsController < ApplicationController
   end
 
   def approve_suggestion
-    service = @suggestion.subscription_service
     use_base_currency = params[:use_base_currency] == "1"
     @suggestion.approve_suggestion!(use_base_currency: use_base_currency)
-
-    # Queue icon caching if subscription service is set and icon not cached
-    if service.present? && !service.icon.attached?
-      CacheSubscriptionIconJob.perform_later(service)
-    end
 
     @remaining_count = Current.family.recurring_transactions.suggested.count
 
@@ -247,16 +236,7 @@ class SubscriptionsController < ApplicationController
   end
 
   def approve_all_suggestions
-    suggestions = Current.family.recurring_transactions.suggested.includes(:subscription_service)
-
-    suggestions.find_each do |suggestion|
-      service = suggestion.subscription_service
-      suggestion.approve_suggestion!
-
-      if service.present? && !service.icon.attached?
-        CacheSubscriptionIconJob.perform_later(service)
-      end
-    end
+    Current.family.recurring_transactions.suggested.find_each(&:approve_suggestion!)
 
     redirect_to subscriptions_path, notice: t(".success")
   end

@@ -1,17 +1,4 @@
 namespace :subscription_services do
-  desc "Cache all subscription service icons locally"
-  task cache_icons: :environment do
-    services = SubscriptionService.left_joins(:icon_attachment).where(active_storage_attachments: { id: nil })
-    total = services.count
-
-    puts "Caching #{total} icons..."
-    services.find_each.with_index do |service, i|
-      CacheSubscriptionIconJob.perform_later(service)
-      print "\rQueued #{i + 1}/#{total}"
-    end
-    puts "\nDone! Jobs queued for processing."
-  end
-
   desc "Seed subscription services database with popular services"
   task seed: :environment do
     puts "Seeding subscription services..."

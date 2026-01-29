@@ -246,7 +246,14 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :subscription_services, only: [ :index ]
+  resources :subscription_services, only: [ :index ] do
+    collection do
+      get :uncached
+    end
+    member do
+      post :cache_icon
+    end
+  end
 
   resources :accountable_sparklines, only: :show, param: :accountable_type
 

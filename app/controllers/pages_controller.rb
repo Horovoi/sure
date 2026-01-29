@@ -120,7 +120,7 @@ class PagesController < ApplicationController
                                     .where("next_expected_date >= ?", Date.current)
                                     .order(:next_expected_date)
                                     .limit(5)
-                                    .includes(:merchant)
+                                    .includes(:merchant, :subscription_service)
 
     @subscriptions_monthly_total = calculate_subscriptions_monthly_total
     @subscription_suggestion_count = Current.family.recurring_transactions.suggested.count
