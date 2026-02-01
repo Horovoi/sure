@@ -85,10 +85,6 @@ class OnboardingsControllerTest < ActionDispatch::IntegrationTest
     assert_select "h1", text: /What brings you here/i
   end
 
-  test "should get trial" do
-    get trial_onboarding_url
-    assert_response :success
-  end
 
   test "preferences page shows currency formatting example" do
     get preferences_onboarding_url
@@ -139,8 +135,6 @@ end
     get goals_onboarding_url
     assert_response :success
 
-    get trial_onboarding_url
-    assert_response :success
   end
 
   test "onboarding pages require authentication" do
@@ -155,8 +149,6 @@ end
   get goals_onboarding_url
   assert_redirected_to new_session_url
 
-  get trial_onboarding_url
-  assert_redirected_to new_session_url
 end
 
     private

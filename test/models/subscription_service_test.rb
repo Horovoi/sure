@@ -53,20 +53,28 @@ class SubscriptionServiceTest < ActiveSupport::TestCase
     assert_not_includes results, subscription_services(:spotify)
   end
 
-  test "logo_url returns brandfetch URL when client_id is configured" do
+  test "logo_url returns static icon path when icon file exists" do
+    service = subscription_services(:netflix)
+    assert_equal "/icons/netflix.png", service.logo_url
+  end
+
+  test "logo_url returns brandfetch URL when no static icon and client_id is configured" do
     Setting.stubs(:brand_fetch_client_id).returns("test_client_id")
     Setting.stubs(:brand_fetch_logo_size).returns(128)
 
     service = subscription_services(:netflix)
-    expected_url = "https://cdn.brandfetch.io/netflix.com/icon/fallback/lettermark/w/128/h/128?c=test_client_id"
+    Pathname.any_instance.stubs(:exist?).returns(false)
 
+    expected_url = "https://cdn.brandfetch.io/netflix.com/icon/fallback/lettermark/w/128/h/128?c=test_client_id"
     assert_equal expected_url, service.logo_url
   end
 
-  test "logo_url returns nil when client_id is not configured" do
+  test "logo_url returns nil when no static icon and client_id is not configured" do
     Setting.stubs(:brand_fetch_client_id).returns(nil)
 
     service = subscription_services(:netflix)
+    Pathname.any_instance.stubs(:exist?).returns(false)
+
     assert_nil service.logo_url
   end
 end
