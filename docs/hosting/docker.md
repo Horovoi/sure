@@ -6,7 +6,7 @@ This guide covers setting up, updating, and maintaining a self-hosted Sure insta
 
 ### Step 1: Install Docker
 
-1. Install Docker Engine by following [the official guide](https://docs.docker.com/engine/install/)
+1. Install [Docker Engine](https://docs.docker.com/engine/install/) (Linux) or [Docker Desktop](https://docs.docker.com/desktop/) (macOS / Windows)
 2. Start the Docker service
 3. Verify Docker is running:
 
