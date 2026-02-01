@@ -79,14 +79,6 @@ RAILS_ASSUME_SSL: "true"
 Start the app to verify everything works:
 
 ```bash
-docker compose up
-```
-
-Open `http://localhost:3000` in your browser. You should see the login screen.
-
-Once confirmed, stop the process with `Ctrl+C` and run in the background:
-
-```bash
 docker compose up -d
 ```
 
@@ -95,6 +87,9 @@ Verify it's running:
 ```bash
 docker compose ls
 ```
+
+
+Open `http://localhost:3000` in your browser. You should see the login screen.
 
 ### Step 5: Create your account
 
