@@ -1,111 +1,74 @@
 # Self Hosting Sure with Docker
 
-This guide will help you setup, update, and maintain your self-hosted Sure application with Docker Compose. Docker Compose is the most popular and recommended way to self-host the Sure app.
+This guide covers setting up, updating, and maintaining a self-hosted Sure instance with Docker Compose.
 
 ## Setup Guide
 
-Follow the guide below to get your app running.
-
 ### Step 1: Install Docker
 
-Complete the following steps:
-
 1. Install Docker Engine by following [the official guide](https://docs.docker.com/engine/install/)
-2. Start the Docker service on your machine
-3. Verify that Docker is installed correctly and is running by opening up a terminal and running the following command:
+2. Start the Docker service
+3. Verify Docker is running:
 
 ```bash
-# If Docker is setup correctly, this command will succeed
 docker run hello-world
 ```
 
-### Step 2: Configure your Docker Compose file and environment
-
-#### Create a directory for your app to run
-
-Open your terminal and create a directory where your app will run. Below is an example command with a recommended directory:
+### Step 2: Create a directory and download the compose file
 
 ```bash
-# Create a directory on your computer for Docker files (name it whatever you like)
 mkdir -p ~/docker-apps/sure
-
-# Once created, navigate your current working directory to the new folder
 cd ~/docker-apps/sure
+
+# Download the compose file
+curl -o compose.yml https://raw.githubusercontent.com/horovoi/sure/main/compose.example.yml
 ```
 
-#### Copy our sample Docker Compose file
+### Step 3: Configure your environment
 
-Make sure you are in the directory you just created and run the following command:
+#### Create the environment file
 
 ```bash
-# Download the sample compose.yml file from the GitHub repository
-curl -o compose.yml https://raw.githubusercontent.com/we-promise/sure/main/compose.example.yml
+curl -o .env https://raw.githubusercontent.com/horovoi/sure/main/.env.example
 ```
 
-This command will do the following:
+#### Set required variables
 
-1. Fetch the sample docker compose file from our public Github repository
-2. Creates a file in your current directory called `compose.yml` with the contents of the example file
+Open `.env` in a text editor and set these two values:
 
-At this point, the only file in your current working directory should be `compose.yml`.
-
-### Step 3 (optional): Configure your environment
-
-By default, our `compose.example.yml` file runs without any configuration.  
-That said, if you would like extra security (important if you're running outside of a local network), you can follow the steps below to set things up.
-
-If you're running the app locally and don't care much about security, you can skip this step.
-
-#### Create your environment file
-
-In order to configure the app, you will need to create a file called `.env`, which is where Docker will read environment variables from.
-
-To do this, you should get our .env.example as a starting point:
-
-```bash
-curl -o .env https://raw.githubusercontent.com/we-promise/sure/main/.env.example
+```txt
+SECRET_KEY_BASE="<generated-key>"
+POSTGRES_PASSWORD="<your-database-password>"
 ```
 
-#### Generate the app secret key
-
-The app requires an environment variable called `SECRET_KEY_BASE` to run.
-
-We will first need to generate this in the terminal. If you have `openssl` installed on your computer, you can generate it with the following command:
+Generate `SECRET_KEY_BASE` with:
 
 ```bash
 openssl rand -hex 64
 ```
 
-_Alternatively_, you can generate a key without openssl or any external dependencies by pasting the following bash command in your terminal and running it:
+Or without openssl:
 
 ```bash
 head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n' && echo
 ```
 
-Once you have generated a key, save it and move on to the next step.
+#### Optional variables
 
-#### Fill in your environment file
+The `.env.example` file documents all supported variables. Key optional categories:
 
-Open the file named `.env` that we created in a prior step using your favorite text editor.
-
-Fill in this file with the following variables:
-
-```txt
-SECRET_KEY_BASE="replacemewiththegeneratedstringfromthepriorstep"
-POSTGRES_PASSWORD="replacemewithyourdesireddatabasepassword"
-```
+- **Exchange rates** — `EXCHANGE_RATE_PROVIDER` (options: `yahoo_finance`, `twelve_data`, `nbu`). Yahoo Finance is the default and requires no API key. Use `nbu` for official National Bank of Ukraine rates if your accounts use UAH
+- **Brand Fetch** — `BRAND_FETCH_CLIENT_ID` for displaying logos for banks, merchants, and subscription services. Get a client ID at [brandfetch.com](https://brandfetch.com)
+- **OpenAI** — `OPENAI_ACCESS_TOKEN` for AI chat and rules features (incurs API costs)
+- **SMTP** — `SMTP_ADDRESS`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_SENDER` for password resets and email reports
+- **Market data** — `SECURITIES_PROVIDER` for stock prices (options: `yahoo_finance`, `twelve_data`). `TWELVE_DATA_API_KEY` required if using Twelve Data
+- **OIDC** — `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_ISSUER` for OpenID Connect authentication
+- **Storage** — Amazon S3, Cloudflare R2, or generic S3 for file uploads (defaults to local disk)
+- **Custom port** — `PORT=3000` if you need a different port
 
 #### Using HTTPS
 
-Assuming you want to access your instance from the internet, you should have secured your URL address with an SSL certificate.  
-The Docker instance runs in plain HTTP and you need to tell it that you are redirecting your HTTPS stream to the HTTP one.  
-To do this, edit the `compose.yml` file and find the line stating:  
-
-```yaml
-RAILS_ASSUME_SSL: "false"
-```
-
-and change it to `true`
+If you access your instance over HTTPS (e.g., behind a reverse proxy with SSL), edit `compose.yml` and change:
 
 ```yaml
 RAILS_ASSUME_SSL: "true"
@@ -113,102 +76,94 @@ RAILS_ASSUME_SSL: "true"
 
 ### Step 4: Run the app
 
-You are now ready to run the app. Start with the following command to make sure everything is working:
+Start the app to verify everything works:
 
 ```bash
 docker compose up
 ```
 
-This will pull our official Docker image and start the app. You will see logs in your terminal.
+Open `http://localhost:3000` in your browser. You should see the login screen.
 
-Open your browser, and navigate to `http://localhost:3000`.
-
-If everything is working, you will see the Sure login screen.
-
-### Step 5: Create your account
-
-The first time you run the app, you will need to register a new account by hitting "create your account" on the login page.
-
-1. Enter your email
-2. Enter a password
-
-### Step 6: Run the app in the background
-
-Most self-hosting users will want the Sure app to run in the background on their computer so they can access it at all times. To do this, hit `Ctrl+C` to stop the running process, and then run the following command:
+Once confirmed, stop the process with `Ctrl+C` and run in the background:
 
 ```bash
 docker compose up -d
 ```
 
-The `-d` flag will run Docker Compose in "detached" mode. To verify it is running, you can run the following command:
+Verify it's running:
 
-```
+```bash
 docker compose ls
 ```
 
-### Step 7: Enjoy!
+### Step 5: Create your account
 
-Your app is now set up. You can visit it at `http://localhost:3000` in your browser.
+On the login page, click "create your account" and register with your email and password.
 
-If you find bugs or have a feature request, be sure to read through our [contributing guide here](https://github.com/we-promise/sure/wiki/How-to-Contribute-Effectively-to-Sure).
+## How to update
 
-## How to update your app
+The app uses pre-built images from GHCR. By default, the compose file uses `ghcr.io/horovoi/sure:latest`.
 
-The mechanism that updates your self-hosted Sure app is the GHCR (Github Container Registry) Docker image that you see in the `compose.yml` file:
-
-```yml
-image: ghcr.io/we-promise/sure:latest
-```
-
-We recommend using one of the following images, but you can pin your app to whatever version you'd like (see [packages](https://github.com/we-promise/sure/pkgs/container/sure)):
-
-- `ghcr.io/we-promise/sure:latest` (latest `alpha`)
-- `ghcr.io/we-promise/sure:stable` (latest release)
-
-By default, your app _will NOT_ automatically update. To update your self-hosted app, run the following commands in your terminal:
+To update:
 
 ```bash
-cd ~/docker-apps/sure # Navigate to whatever directory you configured the app in
-docker compose pull # This pulls the "latest" published image from GHCR
-docker compose build # This rebuilds the app with updates
-docker compose up --no-deps -d web worker # This restarts the app using the newest version
+cd ~/docker-apps/sure
+docker compose pull
+docker compose up -d
 ```
 
-## How to change which updates your app receives
+To pin a specific version, edit the `image:` lines in `compose.yml` and replace `latest` with a commit SHA tag (see [packages](https://github.com/horovoi/sure/pkgs/container/sure) for available tags).
 
-If you'd like to pin the app to a specific version or tag, all you need to do is edit the `compose.yml` file:
+## Backups
 
-```yml
-image: ghcr.io/we-promise/sure:stable
-```
+The compose file includes an optional backup service using `postgres-backup-local`. To enable it:
 
-After doing this, make sure and restart the app:
+1. Edit `compose.yml` and change the backup volume path (`/opt/sure-data/backups`) to your preferred location
+2. Start with the backup profile:
 
 ```bash
-docker compose pull # This pulls the "latest" published image from GHCR
-docker compose build # This rebuilds the app with updates
-docker compose up --no-deps -d web worker # This restarts the app using the newest version
+docker compose --profile backup up -d
 ```
+
+By default, backups run daily and retain 7 daily, 4 weekly, and 6 monthly snapshots.
+
+## Optional configuration
+
+### Brand Fetch (merchant and subscription icons)
+
+To display logos for banks, merchants, and subscription services, set `BRAND_FETCH_CLIENT_ID` in your `.env` file. Get a client ID at [brandfetch.com](https://brandfetch.com).
+
+You can also configure this in the self-hosting settings UI at `/settings/hosting`.
+
+Optional settings:
+
+- `BRAND_FETCH_HIGH_RES_LOGOS=true` — fetches 120x120 icons instead of the default 40x40
+- **Cache All Icons** button in the settings page downloads icons locally so they load without external requests
+
+### Ukrainian Hryvnia (UAH) users
+
+If your accounts use UAH as their currency, set the exchange rate provider to **National Bank of Ukraine** for accurate UAH rates:
+
+- In the UI: go to `/settings/hosting` and select "National Bank of Ukraine (UAH)" as the exchange rate provider
+- Or in `.env`: set `EXCHANGE_RATE_PROVIDER=nbu`
+
+The NBU provider is free and fetches official rates from the National Bank of Ukraine. Non-UAH currency pairs (e.g., USD/EUR) automatically fall back to Yahoo Finance.
 
 ## Troubleshooting
 
 ### ActiveRecord::DatabaseConnectionError
 
-If you are trying to get Sure started for the **first time** and run into database connection issues, it is likely because Docker has already initialized the Postgres database with a _different_ default role (usually from a previous attempt to start the app).
+If you run into database connection issues on **first startup**, it is likely because Docker initialized Postgres with a different default role from a previous attempt.
 
-If you run into this issue, you can optionally **reset the database**.
+You can **reset the database** (this deletes existing Sure data):
 
-**PLEASE NOTE: this will delete any existing data that you have in your Sure database, so proceed with caution.**  For first-time users of the app just trying to get started, you're generally safe to run the commands below.
-
-By running the commands below, you will delete your existing Sure database and "reset" it.
-
-```
+```bash
 docker compose down
-docker volume rm sure_postgres-data # this is the name of the volume the DB is mounted to
+docker volume rm sure_postgres-data
 docker compose up
-docker compose exec db psql -U sure_user -d sure_development -c "SELECT 1;" # This will verify that the issue is fixed
+docker compose exec db psql -U sure_user -d sure_production -c "SELECT 1;"
 ```
 
-### Slow `.csv` import (processing rows taking longer than expected)
+### Slow .csv import
 
-Importing comma-separated-value file(s) requires the `sure-worker` container to communicate with Redis. Check your worker logs for any unexpected errors, such as connection timeouts or Redis communication failures.
+Importing CSV files requires the worker container to communicate with Redis. Check worker logs for connection timeouts or Redis communication failures.
