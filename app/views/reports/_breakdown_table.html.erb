@@ -17,14 +17,32 @@
   <%# Treemap chart — expenses only %>
   <% if type == :expense && groups.any? && total > 0 %>
     <%
-      treemap_categories = groups.map { |g|
+      days_in_period = defined?(start_date) && defined?(end_date) && start_date && end_date ? (end_date - start_date).to_i + 1 : 30
+      currency = Current.family.currency
+
+      treemap_categories = groups.each_with_index.map { |g, idx|
         pct = (g[:total] / total.to_f * 100)
+        subs = (g[:subcategories] || []).first(3).map { |s|
+          sub_pct = g[:total] > 0 ? (s[:total] / g[:total].to_f * 100).round(1) : 0
+          {
+            name: s[:category_name],
+            color: s[:category_color] || g[:category_color] || "#94a3b8",
+            amount: Money.new(s[:total], currency).format,
+            percentage: sub_pct
+          }
+        }
         {
           name: g[:category_name],
           color: g[:category_color] || "#94a3b8",
           percentage: pct.round(1),
           amount: g[:total],
-          formattedAmount: Money.new(g[:total], Current.family.currency).format
+          formattedAmount: Money.new(g[:total], currency).format,
+          count: g[:count],
+          avgFormatted: g[:count] > 1 ? Money.new(g[:total] / g[:count], currency).format : nil,
+          dailyAvgFormatted: days_in_period > 0 ? Money.new(g[:total] / days_in_period, currency).format : nil,
+          rank: idx + 1,
+          subcategories: subs,
+          totalSubcategories: (g[:subcategories] || []).size
         }
       }.to_json
     %>

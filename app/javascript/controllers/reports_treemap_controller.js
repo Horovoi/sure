@@ -54,6 +54,12 @@ export default class extends Controller {
           color: c.color || "#94a3b8",
           percentage: c.percentage,
           formattedAmount: c.formattedAmount,
+          count: c.count || 0,
+          avgFormatted: c.avgFormatted,
+          dailyAvgFormatted: c.dailyAvgFormatted,
+          rank: c.rank,
+          subcategories: c.subcategories || [],
+          totalSubcategories: c.totalSubcategories || 0,
         })),
       })
       .sum((d) => d.value);
@@ -78,15 +84,16 @@ export default class extends Controller {
       .style("position", "absolute")
       .style("pointer-events", "none")
       .style("opacity", 0)
-      .style("padding", "8px 12px")
-      .style("border-radius", "6px")
+      .style("border-radius", "8px")
       .style("font-size", "12px")
       .style("background", "var(--color-tooltip-bg)")
       .style("border", "1px solid var(--color-tooltip-border)")
-      .style("box-shadow", "0 2px 8px rgba(0,0,0,0.12)")
+      .style("box-shadow", "0 4px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06)")
       .style("color", "var(--color-text-primary)")
       .style("z-index", "10")
-      .style("white-space", "nowrap");
+      .style("min-width", "220px")
+      .style("max-width", "300px")
+      .style("transition", "opacity 0.15s ease");
 
     const leaves = root.leaves();
     const nodes = svg
@@ -314,6 +321,75 @@ export default class extends Controller {
       .attr("opacity", 0.85)
       .text((d) => d.data.name[0].toUpperCase());
 
+    // Tooltip HTML builder
+    const buildTooltipHtml = (d) => {
+      const data = d.data;
+      const pct = Number(data.percentage).toFixed(1);
+      const barW = Math.min(Number(data.percentage), 100);
+
+      // Header: color dot + name + rank
+      let html = `<div style="padding:12px 14px;">`;
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">`;
+      html += `<div style="display:flex;align-items:center;gap:7px;min-width:0;">`;
+      html += `<span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${data.color};box-shadow:0 0 0 2px ${data.color}33;"></span>`;
+      html += `<span style="font-weight:600;font-size:13px;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${data.name}</span>`;
+      html += `</div>`;
+      if (data.rank) {
+        html += `<span style="font-size:10px;font-weight:500;color:var(--color-text-secondary);background:var(--color-tooltip-border);border-radius:4px;padding:1px 5px;white-space:nowrap;">#${data.rank}</span>`;
+      }
+      html += `</div>`;
+
+      // Amount + percentage
+      html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">`;
+      html += `<span style="font-weight:600;font-size:15px;color:var(--color-text-primary);letter-spacing:-0.01em;">${data.formattedAmount}</span>`;
+      html += `<span style="font-size:12px;font-weight:500;color:var(--color-text-secondary);">${pct}%</span>`;
+      html += `</div>`;
+
+      // Percentage bar
+      html += `<div style="height:3px;border-radius:2px;background:var(--color-tooltip-border);margin-bottom:10px;">`;
+      html += `<div style="height:100%;border-radius:2px;width:${barW}%;background:${data.color};opacity:0.75;"></div>`;
+      html += `</div>`;
+
+      // Stats row: count, avg, daily avg
+      const stats = [];
+      const txnLabel = data.count === 1 ? "txn" : "txns";
+      stats.push(`${data.count} ${txnLabel}`);
+      if (data.avgFormatted) stats.push(`${data.avgFormatted} avg`);
+      if (data.dailyAvgFormatted) stats.push(`${data.dailyAvgFormatted}/day`);
+
+      html += `<div style="font-size:11px;color:var(--color-text-secondary);letter-spacing:0.01em;">`;
+      html += stats.join(` <span style="opacity:0.4;margin:0 3px;">&middot;</span> `);
+      html += `</div>`;
+
+      // Subcategories section
+      if (data.subcategories && data.subcategories.length > 0) {
+        html += `<div style="border-top:1px solid var(--color-tooltip-border);margin-top:10px;padding-top:10px;">`;
+
+        data.subcategories.forEach((sub) => {
+          const subBarW = Math.min(sub.percentage, 100);
+          html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px;">`;
+          // Mini bar
+          html += `<div style="width:48px;height:4px;border-radius:2px;background:var(--color-tooltip-border);flex-shrink:0;">`;
+          html += `<div style="height:100%;border-radius:2px;width:${subBarW}%;background:${sub.color};opacity:0.8;"></div>`;
+          html += `</div>`;
+          // Name
+          html += `<span style="color:var(--color-text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub.name}</span>`;
+          // Amount + percentage
+          html += `<span style="color:var(--color-text-secondary);white-space:nowrap;font-variant-numeric:tabular-nums;">${sub.amount}</span>`;
+          html += `</div>`;
+        });
+
+        const remaining = data.totalSubcategories - data.subcategories.length;
+        if (remaining > 0) {
+          html += `<div style="font-size:10px;color:var(--color-text-secondary);opacity:0.7;margin-top:2px;">+${remaining} more</div>`;
+        }
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+      return html;
+    };
+
     // Hover interactions on the group elements
     nodes
       .on("mouseover", (_event, d) => {
@@ -324,20 +400,21 @@ export default class extends Controller {
           );
         tooltip
           .style("opacity", 1)
-          .html(
-            `<strong>${d.data.name}</strong><br>${d.data.formattedAmount} (${Number(d.data.percentage).toFixed(1)}%)`
-          );
+          .html(buildTooltipHtml(d));
       })
       .on("mousemove", (event) => {
         const containerRect = this.element.getBoundingClientRect();
         const tipNode = tooltip.node();
         const tipW = tipNode.offsetWidth || 0;
+        const tipH = tipNode.offsetHeight || 0;
         const cursorX = event.clientX - containerRect.left;
         const cursorY = event.clientY - containerRect.top;
         const fitsRight = cursorX + 12 + tipW < containerRect.width;
+        const maxTop = containerRect.height - tipH - 4;
+        const top = Math.max(4, Math.min(cursorY - 10, maxTop));
         tooltip
           .style("left", fitsRight ? `${cursorX + 12}px` : `${cursorX - tipW - 8}px`)
-          .style("top", `${cursorY - 10}px`);
+          .style("top", `${top}px`);
       })
       .on("mouseout", () => {
         nodes.selectAll("rect").attr("opacity", 0.9);
