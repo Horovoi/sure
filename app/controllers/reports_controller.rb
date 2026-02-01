@@ -243,7 +243,7 @@ class ReportsController < ApplicationController
       when :ytd
         is_last ? 1.year.ago.beginning_of_year.to_date : Date.current.beginning_of_year.to_date
       when :last_6_months
-        is_last ? 7.months.ago.beginning_of_month.to_date : 6.months.ago.beginning_of_month.to_date
+        is_last ? beginning_of_half_year(Date.current - 6.months) : beginning_of_half_year(Date.current)
       when :custom
         1.month.ago.to_date
       else
@@ -269,12 +269,20 @@ class ReportsController < ApplicationController
       when :ytd
         is_last ? 1.year.ago.end_of_year.to_date : Date.current
       when :last_6_months
-        is_last ? 1.month.ago.end_of_month.to_date : Date.current
+        is_last ? end_of_half_year(Date.current - 6.months) : Date.current
       when :custom
         Date.current
       else
         Date.current
       end
+    end
+
+    def beginning_of_half_year(date)
+      date.month <= 6 ? Date.new(date.year, 1, 1) : Date.new(date.year, 7, 1)
+    end
+
+    def end_of_half_year(date)
+      date.month <= 6 ? Date.new(date.year, 6, 30) : Date.new(date.year, 12, 31)
     end
 
     def default_fiscal_mode
