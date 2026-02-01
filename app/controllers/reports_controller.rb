@@ -110,11 +110,11 @@ class ReportsController < ApplicationController
       @previous_income_totals = Current.family.income_statement.income_totals(period: @previous_period)
       @previous_expense_totals = Current.family.income_statement.expense_totals(period: @previous_period)
 
+      # Build trend data (last 6 months) — must be before summary metrics (sparklines)
+      @trends_data = build_trends_data
+
       # Calculate summary metrics
       @summary_metrics = build_summary_metrics
-
-      # Build trend data (last 6 months)
-      @trends_data = build_trends_data
 
       # Net worth metrics
       @net_worth_metrics = build_net_worth_metrics
@@ -305,13 +305,21 @@ class ReportsController < ApplicationController
       # Get budget performance for current period
       budget_percent = calculate_budget_performance
 
+      # Build trend arrays from @trends_data for sparkline charts
+      income_trend = @trends_data.map { |t| t[:income].is_a?(Money) ? t[:income].amount.to_f : t[:income].to_f }
+      expense_trend = @trends_data.map { |t| t[:expenses].is_a?(Money) ? t[:expenses].amount.to_f : t[:expenses].to_f }
+      net_trend = @trends_data.map { |t| t[:net].is_a?(Money) ? t[:net].amount.to_f : t[:net].to_f }
+
       {
         current_income: current_income,
         income_change: income_change,
         current_expenses: current_expenses,
         expense_change: expense_change,
         net_savings: net_savings,
-        budget_percent: budget_percent
+        budget_percent: budget_percent,
+        income_trend: income_trend,
+        expense_trend: expense_trend,
+        net_trend: net_trend
       }
     end
 

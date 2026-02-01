@@ -59,6 +59,7 @@ en:
       avg_monthly_expenses: Avg. Monthly Expenses
       avg_monthly_savings: Avg. Monthly Savings
       no_data: No trend data available
+      view_monthly_details: View monthly details
       spending_patterns: Spending Patterns
       weekday_spending: Weekday Spending
       weekend_spending: Weekend Spending
@@ -113,6 +114,9 @@ en:
           one: "%{count} entry"
           other: "%{count} entries"
         percentage: "% of Total"
+        view_category_details:
+          one: "View category details (%{count} category)"
+          other: "View category details (%{count} categories)"
       pagination:
         showing:
           one: Showing %{count} entry
@@ -126,6 +130,7 @@ en:
       assets_vs_liabilities: Assets vs Liabilities
       total_assets: Assets
       total_liabilities: Liabilities
+      net_worth_total: Net Worth
       no_assets: No assets
       no_liabilities: No liabilities
     investment_performance:

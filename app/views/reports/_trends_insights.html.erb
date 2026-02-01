@@ -6,45 +6,68 @@
       </h3>
 
       <% if trends_data.any? %>
-        <div class="bg-container-inset rounded-xl p-1 overflow-x-auto">
-          <div class="w-max sm:w-full">
-            <div role="columnheader" class="grid grid-cols-5 items-center uppercase text-xs font-medium text-secondary px-4 py-2">
-              <div class="font-medium text-secondary"><%= t("reports.trends.month") %></div>
-              <div class="text-right font-medium text-secondary"><%= t("reports.trends.income") %></div>
-              <div class="text-right font-medium text-secondary"><%= t("reports.trends.expenses") %></div>
-              <div class="text-right font-medium text-secondary"><%= t("reports.trends.net") %></div>
-              <div class="text-right font-medium text-secondary"><%= t("reports.trends.savings_rate") %></div>
-            </div>
-            <div class="bg-container rounded-lg shadow-border-xs">
-              <% trends_data.each_with_index do |trend, idx| %>
-                <div class="grid grid-cols-5 items-center text-secondary text-sm py-3 px-4 lg:px-6">
-                  <div class="flex items-center gap-2 <%= trend[:is_current_month] ? "font-medium" : "" %>">
-                    <%= trend[:month] %>
-                    <% if trend[:is_current_month] %>
-                      <span class="text-xs text-tertiary">(<%= t("reports.trends.current") %>)</span>
-                    <% end %>
+        <%# Bar Chart %>
+        <%
+          chart_trends = trends_data.map { |t|
+            {
+              month: t[:month],
+              income: t[:income].is_a?(Money) ? t[:income].amount.to_f : t[:income].to_f,
+              expenses: t[:expenses].is_a?(Money) ? t[:expenses].amount.to_f : t[:expenses].to_f
+            }
+          }.to_json
+        %>
+        <div class="mb-6"
+             data-controller="reports-trends-bar"
+             data-reports-trends-bar-trends-value="<%= chart_trends %>">
+        </div>
+
+        <%# Foldable monthly table %>
+        <details class="group">
+          <summary class="cursor-pointer text-sm text-secondary hover:text-primary mb-3 flex items-center gap-1">
+            <%= icon "chevron-right", class: "w-4 h-4 group-open:rotate-90 transition-transform" %>
+            <%= t("reports.trends.view_monthly_details") %>
+          </summary>
+
+          <div class="bg-container-inset rounded-xl p-1 overflow-x-auto">
+            <div class="w-max sm:w-full">
+              <div role="columnheader" class="grid grid-cols-5 items-center uppercase text-xs font-medium text-secondary px-4 py-2">
+                <div class="font-medium text-secondary"><%= t("reports.trends.month") %></div>
+                <div class="text-right font-medium text-secondary"><%= t("reports.trends.income") %></div>
+                <div class="text-right font-medium text-secondary"><%= t("reports.trends.expenses") %></div>
+                <div class="text-right font-medium text-secondary"><%= t("reports.trends.net") %></div>
+                <div class="text-right font-medium text-secondary"><%= t("reports.trends.savings_rate") %></div>
+              </div>
+              <div class="bg-container rounded-lg shadow-border-xs">
+                <% trends_data.each_with_index do |trend, idx| %>
+                  <div class="grid grid-cols-5 items-center text-secondary text-sm py-3 px-4 lg:px-6">
+                    <div class="flex items-center gap-2 <%= trend[:is_current_month] ? "font-medium" : "" %>">
+                      <%= trend[:month] %>
+                      <% if trend[:is_current_month] %>
+                        <span class="text-xs text-tertiary">(<%= t("reports.trends.current") %>)</span>
+                      <% end %>
+                    </div>
+                    <div class="text-right">
+                      <%= Money.new(trend[:income], Current.family.currency).format %>
+                    </div>
+                    <div class="text-right">
+                      <%= Money.new(trend[:expenses], Current.family.currency).format %>
+                    </div>
+                    <div class="text-right <%= trend[:net] >= 0 ? "text-success" : "text-destructive" %>">
+                      <%= Money.new(trend[:net], Current.family.currency).format %>
+                    </div>
+                    <div class="text-right <%= trend[:net] >= 0 ? "text-success" : "text-destructive" %>">
+                      <% savings_rate = trend[:income] > 0 ? ((trend[:net].to_f / trend[:income].to_f) * 100).round(1) : 0 %>
+                      <%= savings_rate %>%
+                    </div>
                   </div>
-                  <div class="text-right">
-                    <%= Money.new(trend[:income], Current.family.currency).format %>
-                  </div>
-                  <div class="text-right">
-                    <%= Money.new(trend[:expenses], Current.family.currency).format %>
-                  </div>
-                  <div class="text-right <%= trend[:net] >= 0 ? "text-success" : "text-destructive" %>">
-                    <%= Money.new(trend[:net], Current.family.currency).format %>
-                  </div>
-                  <div class="text-right <%= trend[:net] >= 0 ? "text-success" : "text-destructive" %>">
-                    <% savings_rate = trend[:income] > 0 ? ((trend[:net].to_f / trend[:income].to_f) * 100).round(1) : 0 %>
-                    <%= savings_rate %>%
-                  </div>
-                </div>
-                <% if idx < trends_data.size - 1 %>
-                  <%= render "shared/ruler", classes: "mx-3 lg:mx-4" %>
+                  <% if idx < trends_data.size - 1 %>
+                    <%= render "shared/ruler", classes: "mx-3 lg:mx-4" %>
+                  <% end %>
                 <% end %>
-              <% end %>
+              </div>
             </div>
           </div>
-        </div>
+        </details>
 
         <%# Trend Insights %>
         <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">

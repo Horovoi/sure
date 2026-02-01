@@ -30,6 +30,10 @@
   /* See @layer base block below for dark mode overrides */
   --budget-unused-fill: var(--color-gray-200);
   --budget-unallocated-fill: var(--color-gray-50);
+  --color-text-primary: var(--color-gray-900);
+  --color-text-secondary: var(--color-gray-500);
+  --color-tooltip-bg: #fff;
+  --color-tooltip-border: var(--color-gray-200);
 
   /* Gray scale */
   --color-gray-25: #FAFAFA;
@@ -258,6 +262,10 @@
     /* Dark mode overrides for colors used in Stimulus controllers with SVGs */
     --budget-unused-fill: var(--color-gray-500);
     --budget-unallocated-fill: var(--color-gray-700);
+    --color-text-primary: var(--color-white, #fff);
+    --color-text-secondary: var(--color-gray-300);
+    --color-tooltip-bg: var(--color-gray-700);
+    --color-tooltip-border: var(--color-gray-600);
 
     --shadow-xs: 0px 1px 2px 0px --alpha(var(--color-white) / 8%);
     --shadow-sm: 0px 1px 6px 0px --alpha(var(--color-white) / 8%);

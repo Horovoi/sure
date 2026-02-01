@@ -36,48 +36,30 @@
     </div>
   </div>
 
-  <%# Asset/Liability Breakdown %>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <%# Assets Summary %>
-    <div class="bg-container-inset rounded-xl p-1 overflow-x-auto w-full flex flex-col">
-      <div class="grid grid-cols-2 items-center uppercase text-xs font-medium text-secondary px-4 py-2">
-        <div class="col-span-1 font-medium text-secondary"><%= t("reports.net_worth.total_assets") %></div>
+  <%# Waterfall Chart %>
+  <% if net_worth_metrics[:asset_groups].any? || net_worth_metrics[:liability_groups].any? %>
+    <%
+      assets_json = net_worth_metrics[:asset_groups].map { |g| { name: g[:name], value: g[:total].amount.to_f } }.to_json
+      liabilities_json = net_worth_metrics[:liability_groups].map { |g| { name: g[:name], value: g[:total].amount.to_f } }.to_json
+      net_worth_val = net_worth_metrics[:current_net_worth].amount.to_f
+      currency_symbol = Money::Currency.new(Current.family.currency).symbol
+    %>
+    <div class="relative"
+         data-controller="reports-waterfall-chart"
+         data-reports-waterfall-chart-assets-value="<%= assets_json %>"
+         data-reports-waterfall-chart-liabilities-value="<%= liabilities_json %>"
+         data-reports-waterfall-chart-net-worth-value="<%= net_worth_val %>"
+         data-reports-waterfall-chart-currency-value="<%= currency_symbol %>"
+         data-reports-waterfall-chart-net-worth-label-value="<%= t("reports.net_worth.net_worth_total") %>">
+    </div>
+  <% else %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-container-inset rounded-xl p-4">
+        <p class="text-sm text-secondary text-center"><%= t("reports.net_worth.no_assets") %></p>
       </div>
-      <div class="bg-container rounded-lg shadow-border-xs flex-1 flex flex-col">
-        <% net_worth_metrics[:asset_groups].each_with_index do |group, idx| %>
-          <div class="grid grid-cols-2 items-center text-secondary text-sm py-3 px-4 lg:px-6">
-            <div class="col-span-1 font-medium text-secondary"><%= group[:name] %></div>
-            <div class="col-span-1 font-medium text-secondary justify-self-end text-success"><%= group[:total].format %></div>
-          </div>
-          <% if idx < net_worth_metrics[:asset_groups].size - 1 %>
-            <%= render "shared/ruler", classes: "mx-3 lg:mx-4" %>
-          <% end %>
-        <% end %>
-        <% if net_worth_metrics[:asset_groups].empty? %>
-          <p class="text-sm text-secondary p-2 text-center"><%= t("reports.net_worth.no_assets") %></p>
-        <% end %>
+      <div class="bg-container-inset rounded-xl p-4">
+        <p class="text-sm text-tertiary text-center"><%= t("reports.net_worth.no_liabilities") %></p>
       </div>
     </div>
-
-    <%# Liabilities Summary %>
-    <div class="bg-container-inset rounded-xl p-1 overflow-x-auto w-full flex flex-col">
-      <div class="grid grid-cols-2 items-center uppercase text-xs font-medium text-secondary px-4 py-2">
-        <div class="col-span-1 font-medium text-secondary"><%= t("reports.net_worth.total_liabilities") %></div>
-      </div>
-      <div class="bg-container rounded-lg shadow-border-xs flex-1 flex flex-col">
-        <% net_worth_metrics[:liability_groups].each_with_index do |group, idx| %>
-          <div class="grid grid-cols-2 items-center text-secondary text-sm py-3 px-4 lg:px-6">
-            <div class="col-span-1 font-medium text-secondary"><%= group[:name] %></div>
-            <div class="col-span-1 font-medium text-secondary justify-self-end text-destructive"><%= group[:total].format %></div>
-          </div>
-          <% if idx < net_worth_metrics[:liability_groups].size - 1 %>
-            <%= render "shared/ruler", classes: "mx-3 lg:mx-4" %>
-          <% end %>
-        <% end %>
-        <% if net_worth_metrics[:liability_groups].empty? %>
-          <p class="text-sm text-tertiary py-2"><%= t("reports.net_worth.no_liabilities") %></p>
-        <% end %>
-      </div>
-    </div>
-  </div>
+  <% end %>
 </div>
