@@ -12,7 +12,7 @@ class EntrySearchTest < ActiveSupport::TestCase
     confirmed_entry = create_transaction(account: @account, name: "Confirmed")
     pending_entry = create_pending_transaction(account: @account, name: "Pending", provider: "plaid")
 
-    results = Entry.search(status: ["pending"])
+    results = Entry.search(status: [ "pending" ])
 
     assert_includes results, pending_entry
     assert_not_includes results, confirmed_entry
@@ -22,7 +22,7 @@ class EntrySearchTest < ActiveSupport::TestCase
     confirmed_entry = create_transaction(account: @account, name: "Confirmed")
     pending_entry = create_pending_transaction(account: @account, name: "Pending", provider: "plaid")
 
-    results = Entry.search(status: ["confirmed"])
+    results = Entry.search(status: [ "confirmed" ])
 
     assert_includes results, confirmed_entry
     assert_not_includes results, pending_entry
@@ -42,7 +42,7 @@ class EntrySearchTest < ActiveSupport::TestCase
     confirmed_entry = create_transaction(account: @account, name: "Confirmed")
     lunchflow_pending = create_pending_transaction(account: @account, name: "Lunchflow pending", provider: "lunchflow")
 
-    results = Entry.search(status: ["pending"])
+    results = Entry.search(status: [ "pending" ])
 
     assert_includes results, lunchflow_pending
     assert_not_includes results, confirmed_entry
@@ -53,11 +53,11 @@ class EntrySearchTest < ActiveSupport::TestCase
     pending_entry = create_pending_transaction(account: @account, name: "Pending", provider: "plaid")
 
     # Valuation should appear in confirmed results
-    confirmed_results = Entry.search(status: ["confirmed"])
+    confirmed_results = Entry.search(status: [ "confirmed" ])
     assert_includes confirmed_results, valuation
 
     # Valuation should NOT appear in pending results
-    pending_results = Entry.search(status: ["pending"])
+    pending_results = Entry.search(status: [ "pending" ])
     assert_not_includes pending_results, valuation
     assert_includes pending_results, pending_entry
   end

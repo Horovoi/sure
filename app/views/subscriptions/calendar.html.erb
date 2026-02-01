@@ -62,9 +62,9 @@
         <span class="text-xs text-tertiary">·</span>
         <span class="text-xs font-medium text-primary"><%= format_money(@this_week_total) %></span>
       </div>
-      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg <%= @today_subscriptions.any? ? 'bg-green-500/10' : 'bg-surface-inset' %>">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg <%= @today_subscriptions.any? ? "bg-green-500/10" : "bg-surface-inset" %>">
         <span class="text-xs text-secondary">Due today</span>
-        <span class="text-xs font-medium <%= @today_subscriptions.any? ? 'text-green-600' : 'text-primary' %>">
+        <span class="text-xs font-medium <%= @today_subscriptions.any? ? "text-green-600" : "text-primary" %>">
           <%= @today_subscriptions.size %>
         </span>
       </div>
@@ -96,12 +96,12 @@
           <% has_monthly = subscriptions_on_day.any?(&:billing_cycle_monthly?) %>
           <% has_yearly = subscriptions_on_day.any?(&:billing_cycle_yearly?) %>
 
-          <div class="aspect-[5/4] p-1.5 border-t border-r border-secondary hover:bg-surface-hover transition-colors flex flex-col <%= 'ring-2 ring-green-600 ring-inset rounded-sm' if is_today %>"
+          <div class="aspect-[5/4] p-1.5 border-t border-r border-secondary hover:bg-surface-hover transition-colors flex flex-col <%= "ring-2 ring-green-600 ring-inset rounded-sm" if is_today %>"
                data-action="click->subscription-calendar#showDayDetails mouseenter->subscription-calendar#handleCellMouseEnter mouseleave->subscription-calendar#handleCellMouseLeave touchstart->subscription-calendar#handleCellTouchStart touchend->subscription-calendar#handleCellTouchEnd touchmove->subscription-calendar#handleCellTouchMove"
                data-date="<%= date.iso8601 %>">
             <%# Header: Day number + billing cycle dots %>
             <div class="flex items-start justify-between">
-              <span class="text-sm font-medium <%= is_today ? 'text-green-600' : 'text-primary' %>">
+              <span class="text-sm font-medium <%= is_today ? "text-green-600" : "text-primary" %>">
                 <%= date.day %>
               </span>
 
