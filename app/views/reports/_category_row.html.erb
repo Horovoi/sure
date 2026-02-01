@@ -3,8 +3,8 @@
   is_sub = level == :subcategory
 %>
 
-<div data-category="category-<%= item[:category_id] %>" class="grid grid-cols-4 items-center text-secondary text-sm py-3 px-4 lg:px-6 <%= is_sub ? "pl-7 lg:pl-9" : "" %>">
-  <div class="col-span-2 flex items-center gap-2">
+<div data-category="category-<%= item[:category_id] %>" class="grid grid-cols-[2fr_repeat(4,minmax(0,1fr))] items-center text-secondary text-sm py-3 px-4 lg:px-6">
+  <div class="flex items-center gap-2 min-w-0 <%= is_sub ? "pl-3 lg:pl-3" : "" %>">
     <% if is_sub %>
       <div class="text-subdued">
         <%= icon "corner-down-right" %>
@@ -28,21 +28,34 @@
         rounded: true
       ) %>
     <% end %>
-    <span class="font-medium text-primary">
+    <span class="font-medium text-primary truncate">
       <%= item[:category_name] %>
-    </span>
-    <span class="text-xs text-tertiary whitespace-nowrap">
-      (<%= t("reports.transactions_breakdown.table.entries", count: item[:count]) %>)
     </span>
   </div>
 
-  <div class="col-span-1 text-right">
+  <div class="text-right">
     <span class="text-sm <%= color_class %>">
       <%= Money.new(item[:total], Current.family.currency).format %>
     </span>
   </div>
 
-  <div class="col-span-1 text-right">
+  <div class="text-right">
+    <span class="text-sm text-tertiary">
+      <%= item[:count] %>
+    </span>
+  </div>
+
+  <div class="text-right">
+    <span class="text-sm text-tertiary">
+      <% if item[:count] > 1 %>
+        <%= Money.new(item[:total] / item[:count], Current.family.currency).format %>
+      <% else %>
+        —
+      <% end %>
+    </span>
+  </div>
+
+  <div class="text-right">
     <span class="text-sm text-secondary">
       <%= percentage %>%
     </span>
