@@ -229,21 +229,34 @@ class ReportsController < ApplicationController
     def default_start_date
       is_last = @period_mode == "last"
       use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+      family = Current.family
 
       case @period_type
       when :monthly
         if use_fiscal
           base = is_last ? 1.month.ago : Date.current
-          Current.family.budget_period_start_for(base)
+          family.budget_period_start_for(base)
         else
           is_last ? 1.month.ago.beginning_of_month.to_date : Date.current.beginning_of_month.to_date
         end
       when :quarterly
-        is_last ? 3.months.ago.beginning_of_quarter.to_date : Date.current.beginning_of_quarter.to_date
+        if use_fiscal
+          fiscal_quarter_start(is_last ? 3.months.ago : Date.current, family)
+        else
+          is_last ? 3.months.ago.beginning_of_quarter.to_date : Date.current.beginning_of_quarter.to_date
+        end
       when :ytd
-        is_last ? 1.year.ago.beginning_of_year.to_date : Date.current.beginning_of_year.to_date
+        if use_fiscal
+          fiscal_year_start(is_last ? 1.year.ago : Date.current, family)
+        else
+          is_last ? 1.year.ago.beginning_of_year.to_date : Date.current.beginning_of_year.to_date
+        end
       when :last_6_months
-        is_last ? beginning_of_half_year(Date.current - 6.months) : beginning_of_half_year(Date.current)
+        if use_fiscal
+          fiscal_half_year_start(is_last ? 6.months.ago : Date.current, family)
+        else
+          is_last ? beginning_of_half_year(Date.current - 6.months) : beginning_of_half_year(Date.current)
+        end
       when :custom
         1.month.ago.to_date
       else
@@ -254,22 +267,44 @@ class ReportsController < ApplicationController
     def default_end_date
       is_last = @period_mode == "last"
       use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+      family = Current.family
 
       case @period_type
       when :monthly
         if use_fiscal
           base = is_last ? 1.month.ago : Date.current
-          start = Current.family.budget_period_start_for(base)
-          is_last ? Current.family.budget_period_end_for(start) : Date.current
+          start = family.budget_period_start_for(base)
+          is_last ? family.budget_period_end_for(start) : Date.current
         else
           is_last ? 1.month.ago.end_of_month.to_date : Date.current
         end
       when :quarterly
-        is_last ? 3.months.ago.end_of_quarter.to_date : Date.current
+        if use_fiscal
+          q_start = fiscal_quarter_start(is_last ? 3.months.ago : Date.current, family)
+          # End of 3rd fiscal month in the quarter
+          third_month_start = family.budget_period_start_for(q_start >> 2)
+          is_last ? family.budget_period_end_for(third_month_start) : Date.current
+        else
+          is_last ? 3.months.ago.end_of_quarter.to_date : Date.current
+        end
       when :ytd
-        is_last ? 1.year.ago.end_of_year.to_date : Date.current
+        if use_fiscal
+          y_start = fiscal_year_start(is_last ? 1.year.ago : Date.current, family)
+          # End of 12th fiscal month in the year
+          twelfth_month_start = family.budget_period_start_for(y_start >> 11)
+          is_last ? family.budget_period_end_for(twelfth_month_start) : Date.current
+        else
+          is_last ? 1.year.ago.end_of_year.to_date : Date.current
+        end
       when :last_6_months
-        is_last ? end_of_half_year(Date.current - 6.months) : Date.current
+        if use_fiscal
+          h_start = fiscal_half_year_start(is_last ? 6.months.ago : Date.current, family)
+          # End of 6th fiscal month in the half
+          sixth_month_start = family.budget_period_start_for(h_start >> 5)
+          is_last ? family.budget_period_end_for(sixth_month_start) : Date.current
+        else
+          is_last ? end_of_half_year(Date.current - 6.months) : Date.current
+        end
       when :custom
         Date.current
       else
@@ -283,6 +318,27 @@ class ReportsController < ApplicationController
 
     def end_of_half_year(date)
       date.month <= 6 ? Date.new(date.year, 6, 30) : Date.new(date.year, 12, 31)
+    end
+
+    # Fiscal quarter: find the quarter boundary month (Jan/Apr/Jul/Oct) that
+    # contains the fiscal month for the given date, then return its fiscal start.
+    def fiscal_quarter_start(date, family)
+      fiscal_start = family.budget_period_start_for(date)
+      quarter_month = ((fiscal_start.month - 1) / 3) * 3 + 1 # 1, 4, 7, or 10
+      family.budget_period_start_for(Date.new(fiscal_start.year, quarter_month, family.fiscal_start_day))
+    end
+
+    # Fiscal half-year: H1 = Jan–Jun fiscal months, H2 = Jul–Dec fiscal months
+    def fiscal_half_year_start(date, family)
+      fiscal_start = family.budget_period_start_for(date)
+      half_month = fiscal_start.month <= 6 ? 1 : 7
+      family.budget_period_start_for(Date.new(fiscal_start.year, half_month, family.fiscal_start_day))
+    end
+
+    # Fiscal year: starts at the fiscal month of January
+    def fiscal_year_start(date, family)
+      fiscal_start = family.budget_period_start_for(date)
+      family.budget_period_start_for(Date.new(fiscal_start.year, 1, family.fiscal_start_day))
     end
 
     def default_fiscal_mode
@@ -352,32 +408,61 @@ class ReportsController < ApplicationController
     def build_trends_data
       # Generate month-by-month data based on the current period filter
       trends = []
+      use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+      family = Current.family
 
-      # Generate list of months within the period
-      current_month = @start_date.beginning_of_month
-      end_of_period = @end_date.end_of_month
+      if use_fiscal
+        # Iterate by fiscal month periods
+        current_start = family.budget_period_start_for(@start_date)
 
-      while current_month <= end_of_period
-        month_start = current_month
-        month_end = current_month.end_of_month
+        while current_start <= @end_date
+          fiscal_end = family.budget_period_end_for(current_start)
+          month_end = [ fiscal_end, @end_date ].min
 
-        # Ensure we don't go beyond the end date
-        month_end = @end_date if month_end > @end_date
+          period = Period.custom(start_date: current_start, end_date: month_end)
 
-        period = Period.custom(start_date: month_start, end_date: month_end)
+          income = family.income_statement.income_totals(period: period).total
+          expenses = family.income_statement.expense_totals(period: period).total
 
-        income = Current.family.income_statement.income_totals(period: period).total
-        expenses = Current.family.income_statement.expense_totals(period: period).total
+          current_fiscal_start = family.budget_period_start_for(Date.current)
 
-        trends << {
-          month: month_start.strftime("%b %Y"),
-          is_current_month: (month_start.month == Date.current.month && month_start.year == Date.current.year),
-          income: income,
-          expenses: expenses,
-          net: income - expenses
-        }
+          trends << {
+            month: current_start.strftime("%b %Y"),
+            is_current_month: current_start == current_fiscal_start,
+            income: income,
+            expenses: expenses,
+            net: income - expenses
+          }
 
-        current_month = current_month.next_month
+          current_start = family.budget_period_start_for(current_start >> 1)
+        end
+      else
+        # Calendar month iteration
+        current_month = @start_date.beginning_of_month
+        end_of_period = @end_date.end_of_month
+
+        while current_month <= end_of_period
+          month_start = current_month
+          month_end = current_month.end_of_month
+
+          # Ensure we don't go beyond the end date
+          month_end = @end_date if month_end > @end_date
+
+          period = Period.custom(start_date: month_start, end_date: month_end)
+
+          income = family.income_statement.income_totals(period: period).total
+          expenses = family.income_statement.expense_totals(period: period).total
+
+          trends << {
+            month: month_start.strftime("%b %Y"),
+            is_current_month: (month_start.month == Date.current.month && month_start.year == Date.current.year),
+            income: income,
+            expenses: expenses,
+            net: income - expenses
+          }
+
+          current_month = current_month.next_month
+        end
       end
 
       trends
@@ -672,14 +757,24 @@ class ReportsController < ApplicationController
     end
 
     def build_monthly_breakdown_for_export
+      use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+      family = Current.family
+
       # Generate list of months in the period
       months = []
-      current_month = @start_date.beginning_of_month
-      end_of_period = @end_date.end_of_month
-
-      while current_month <= end_of_period
-        months << current_month
-        current_month = current_month.next_month
+      if use_fiscal
+        current_start = family.budget_period_start_for(@start_date)
+        while current_start <= @end_date
+          months << current_start
+          current_start = family.budget_period_start_for(current_start >> 1)
+        end
+      else
+        current_month = @start_date.beginning_of_month
+        end_of_period = @end_date.end_of_month
+        while current_month <= end_of_period
+          months << current_month
+          current_month = current_month.next_month
+        end
       end
 
       # Get all transactions in the period
@@ -687,7 +782,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: family.id, status: [ "draft", "active" ] })
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -696,7 +791,7 @@ class ReportsController < ApplicationController
 
       # Group by category, type, and month
       breakdown = {}
-      family_currency = Current.family.currency
+      family_currency = family.currency
 
       # Process transactions
       transactions.each do |transaction|
@@ -704,7 +799,7 @@ class ReportsController < ApplicationController
         is_expense = entry.amount > 0
         type = is_expense ? "expense" : "income"
         category_name = transaction.category&.name || "Uncategorized"
-        month_key = entry.date.beginning_of_month
+        month_key = use_fiscal ? family.budget_period_start_for(entry.date) : entry.date.beginning_of_month
 
         # Convert to family currency
         converted_amount = Money.new(entry.amount.abs, entry.currency).exchange_to(family_currency, fallback_rate: 1).amount

@@ -67,14 +67,14 @@
             <% end %>
           </div>
 
-          <%# Fiscal Toggle - only for Month tab when fiscal enabled %>
-          <% if @period_type == :monthly && Current.family.fiscal_month_enabled? %>
+          <%# Fiscal Toggle - for all period tabs (except custom) when fiscal enabled %>
+          <% if @period_type != :custom && Current.family.fiscal_month_enabled? %>
             <div class="inline-flex rounded-md border border-secondary p-0.5 bg-surface-inset">
-              <%= link_to reports_path(period_type: :monthly, period_mode: @period_mode, fiscal_mode: "false"),
+              <%= link_to reports_path(period_type: @period_type, period_mode: @period_mode, fiscal_mode: "false"),
                   class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode != 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
                 <%= t("reports.index.toggles.calendar") %>
               <% end %>
-              <%= link_to reports_path(period_type: :monthly, period_mode: @period_mode, fiscal_mode: "true"),
+              <%= link_to reports_path(period_type: @period_type, period_mode: @period_mode, fiscal_mode: "true"),
                   class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode == 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
                 <%= t("reports.index.toggles.fiscal") %>
               <% end %>
