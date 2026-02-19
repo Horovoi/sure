@@ -1,5 +1,5 @@
 <%# locals: (investment_statement:, period:, **args) %>
-
+<%= turbo_frame_tag "investment_summary_section" do %>
 <% if investment_statement.investment_accounts.any? %>
   <div id="investment-summary" class="space-y-4">
     <div class="flex justify-between gap-4 px-4">
@@ -20,6 +20,34 @@
               <%= format_money(Money.new(trend.value, Current.family.currency)) %>
               (<%= trend.percent_formatted %>)
             </span>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "investment_summary_section" } do |form| %>
+          <div class="flex flex-wrap items-center gap-2">
+            <% investment_options = Period.as_options + [["Custom", "custom"]] %>
+            <% selected_key = period.key || "custom" %>
+            <%= form.select :investment_period,
+                          investment_options,
+                          { selected: selected_key },
+                          data: { "auto-submit-form-target": "auto" },
+                          class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-xs sm:text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+
+            <% if period.key.nil? %>
+              <div class="flex items-center gap-2">
+                <%= form.date_field :investment_start_date,
+                      value: period.start_date,
+                      data: { "auto-submit-form-target": "auto" },
+                      class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+                <span class="text-secondary text-sm">to</span>
+                <%= form.date_field :investment_end_date,
+                      value: period.end_date,
+                      data: { "auto-submit-form-target": "auto" },
+                      class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+              </div>
+            <% end %>
           </div>
         <% end %>
       </div>
@@ -116,4 +144,5 @@
       </div>
     <% end %>
   </div>
+<% end %>
 <% end %>

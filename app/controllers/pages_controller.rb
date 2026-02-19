@@ -78,6 +78,26 @@ class PagesController < ApplicationController
       @period
     end
 
+    # Parse investment_period (independent period for investment summary)
+    investment_period_param = params[:investment_period]
+    @investment_period = if investment_period_param.present?
+      if investment_period_param == "custom"
+        last_30 = Period.last_30_days
+        start_date = safe_parse_date(params[:investment_start_date]) || last_30.start_date
+        end_date   = safe_parse_date(params[:investment_end_date])   || last_30.end_date
+        start_date, end_date = end_date, start_date if start_date > end_date
+        Period.custom(start_date: start_date, end_date: end_date)
+      else
+        begin
+          Period.from_key(investment_period_param)
+        rescue Period::InvalidKeyError
+          @period
+        end
+      end
+    else
+      @period
+    end
+
     # Toggle: show/hide subcategories in Sankey (default: false)
     @cashflow_show_subcategories = if params.key?(:cashflow_show_subcategories)
       ActiveModel::Type::Boolean.new.cast(params[:cashflow_show_subcategories])
@@ -199,7 +219,7 @@ class PagesController < ApplicationController
           key: "investment_summary",
           title: "pages.dashboard.investment_summary.title",
           partial: "pages/dashboard/investment_summary",
-          locals: { investment_statement: @investment_statement, period: @period },
+          locals: { investment_statement: @investment_statement, period: @investment_period },
           visible: Current.family.accounts.any? && @investment_statement.investment_accounts.any?,
           collapsible: true
         },
