@@ -451,10 +451,17 @@ class RecurringTransaction < ApplicationRecord
     ActiveRecord::Base.transaction do
       transaction_amount = amount_for_transaction
 
+      sub_money = Money.new(transaction_amount, currency)
+      converted = if currency == default_account.currency
+                    sub_money
+                  else
+                    sub_money.exchange_to(default_account.currency, date: for_date, fallback_rate: 1)
+                  end
+
       entry = default_account.entries.create!(
         date: for_date,
-        amount: transaction_amount,
-        currency: currency,
+        amount: converted.amount,
+        currency: default_account.currency,
         name: display_name,
         source: "subscription",
         entryable: Transaction.new(
