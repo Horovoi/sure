@@ -22,6 +22,7 @@ es:
         no_data_title: "No hay datos de flujo de caja para este período"
         no_data_description: "Añade transacciones para mostrar datos de flujo de caja o amplía el período de tiempo"
         add_transaction: "Añadir transacción"
+        other_category: "Other %{category}"
       no_accounts:
         title: "Aún no hay cuentas"
         description: "Añade cuentas para mostrar datos de patrimonio neto"

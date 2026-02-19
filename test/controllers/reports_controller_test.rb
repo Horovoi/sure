@@ -242,4 +242,36 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "div[data-category='category-#{subcategory_movies.id}']", text: /Movies/
     assert_select "div[data-category='category-#{subcategory_games.id}']", text: /Games/
   end
+
+  test "index shows synthetic Other subcategory when parent has direct transactions" do
+    parent_category = @family.categories.create!(name: "Housing", classification: "expense", color: "#FF5733", lucide_icon: "home")
+    rent_subcategory = @family.categories.create!(name: "Rent", classification: "expense", parent: parent_category, lucide_icon: "home")
+
+    account = @family.accounts.first
+
+    # Direct transaction on parent category
+    create_transaction(account: account, name: "Home repair", amount: 200, category: parent_category)
+    # Subcategory transaction
+    create_transaction(account: account, name: "Monthly rent", amount: 1500, category: rent_subcategory)
+
+    get reports_path(period_type: :monthly)
+    assert_response :ok
+
+    # Synthetic "Other Housing" row should appear
+    assert_select "div[data-category='category-#{parent_category.id}_other']", text: /Other Housing/
+  end
+
+  test "index does not show synthetic Other subcategory when parent has no direct transactions" do
+    parent_category = @family.categories.create!(name: "Travel", classification: "expense", color: "#2563eb", lucide_icon: "plane")
+    flights_subcategory = @family.categories.create!(name: "Flights", classification: "expense", parent: parent_category, lucide_icon: "plane")
+
+    account = @family.accounts.first
+    create_transaction(account: account, name: "Flight to NYC", amount: 400, category: flights_subcategory)
+
+    get reports_path(period_type: :monthly)
+    assert_response :ok
+
+    # No synthetic row should appear
+    assert_select "div[data-category='category-#{parent_category.id}_other']", count: 0
+  end
 end

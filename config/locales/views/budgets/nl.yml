@@ -4,3 +4,5 @@ nl:
       tabs:
         actual: "Actueel"
         budgeted: "Begroot"
+    budget_categories:
+      other_category: "Other %{category}"

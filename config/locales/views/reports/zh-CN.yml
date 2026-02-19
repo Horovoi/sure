@@ -97,6 +97,7 @@ zh-CN:
       table:
         amount: 金额
         category: 分类
+        other_category: "Other %{category}"
         expense: 支出
         income: 收入
         percentage: 占总比

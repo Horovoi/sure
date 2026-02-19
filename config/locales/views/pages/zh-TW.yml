@@ -25,6 +25,7 @@ zh-TW:
         no_data_title: "此時段內無現金流資料"
         no_data_description: "新增交易紀錄以顯示現金流資料，或擴大時間範圍"
         add_transaction: "新增交易"
+        other_category: "Other %{category}"
       no_accounts:
         title: "尚無帳戶"
         description: "新增帳戶以顯示淨值資料"

@@ -4,6 +4,8 @@ nb:
     changelog:
       title: Hva er nytt
     dashboard:
+      cashflow_sankey:
+        other_category: "Other %{category}"
       net_worth_chart:
         data_not_available: Data ikke tilgjengelig for den valgte perioden
         title: Nettoformue

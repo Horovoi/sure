@@ -98,6 +98,7 @@ zh-TW:
       table:
         category: 類別
         amount: 金額
+        other_category: "Other %{category}"
         type: 類型
         expense: 支出
         income: 收入

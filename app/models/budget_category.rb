@@ -26,6 +26,12 @@ class BudgetCategory < ApplicationRecord
       @budget_category = budget_category
       @budget_subcategories = budget_subcategories
     end
+
+    def other_spending
+      return 0 unless budget_subcategories.any?
+      direct = budget_category.actual_spending - budget_subcategories.sum(&:actual_spending)
+      [ direct, 0 ].max
+    end
   end
 
   class << self

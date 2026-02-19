@@ -5,3 +5,5 @@ ca:
       tabs:
         actual: Real
         budgeted: Pressupostat
+    budget_categories:
+      other_category: "Other %{category}"

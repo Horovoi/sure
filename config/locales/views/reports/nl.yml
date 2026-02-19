@@ -99,6 +99,7 @@ nl:
       table:
         category: Categorie
         amount: Bedrag
+        other_category: "Other %{category}"
         type: Type
         expense: Uitgaven
         income: Inkomen

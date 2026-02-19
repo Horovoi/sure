@@ -99,6 +99,7 @@ es:
       table:
         category: Categoría
         amount: Importe
+        other_category: "Other %{category}"
         type: Tipo
         expense: Gasto
         income: Ingreso

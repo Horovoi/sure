@@ -556,6 +556,27 @@ class ReportsController < ApplicationController
       # Convert to array and sort subcategories
       result = grouped_data.values.map do |parent_data|
         subcategories = parent_data[:subcategories].values.sort_by { |s| sort_direction == "asc" ? s[:total] : -s[:total] }
+
+        # If parent has subcategories AND direct transactions, inject synthetic "Other" entry
+        if subcategories.any?
+          subcategories_total = subcategories.sum { |s| s[:total] }
+          direct_total = parent_data[:total] - subcategories_total
+
+          if direct_total > 0
+            direct_count = parent_data[:count] - subcategories.sum { |s| s[:count] }
+            subcategories << {
+              category_id: "#{parent_data[:category_id]}_other",
+              category_name: I18n.t("reports.transactions_breakdown.table.other_category", category: parent_data[:category_name]),
+              category_color: parent_data[:category_color],
+              category_icon: parent_data[:category_icon],
+              total: direct_total,
+              count: [ direct_count, 1 ].max,
+              synthetic: true
+            }
+            subcategories = subcategories.sort_by { |s| sort_direction == "asc" ? s[:total] : -s[:total] }
+          end
+        end
+
         parent_data.merge(subcategories: subcategories)
       end
 

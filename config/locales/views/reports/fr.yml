@@ -99,6 +99,7 @@ fr:
       table:
         category: Catégorie
         amount: Montant
+        other_category: "Other %{category}"
         type: Type
         expense: Dépenses
         income: Revenus

@@ -5,3 +5,5 @@ zh-CN:
       tabs:
         actual: 实际
         budgeted: 预算
+    budget_categories:
+      other_category: "Other %{category}"

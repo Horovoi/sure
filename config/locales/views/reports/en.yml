@@ -106,6 +106,7 @@ en:
       table:
         category: Category
         amount: Amount
+        other_category: "Other %{category}"
         type: Type
         expense: Expenses
         income: Income

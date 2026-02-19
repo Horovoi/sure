@@ -98,6 +98,7 @@ pt-BR:
       table:
         category: Categoria
         amount: Valor
+        other_category: "Other %{category}"
         type: Tipo
         expense: Despesas
         income: Receitas

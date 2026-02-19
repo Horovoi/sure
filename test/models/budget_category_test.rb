@@ -162,6 +162,32 @@ class BudgetCategoryTest < ActiveSupport::TestCase
     assert_equal 40.0, standalone_bc.percent_of_budget_spent
   end
 
+  test "group other_spending returns direct parent spending when subcategories exist" do
+    # Mock spending: parent=500 total, subcategories=100+150=250, so direct=250
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(500)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(100)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(150)
+
+    group = BudgetCategory::Group.new(@parent_budget_category, [ @subcategory_with_limit_bc, @subcategory_inheriting_bc ])
+    assert_equal 250, group.other_spending
+  end
+
+  test "group other_spending returns zero when no subcategories" do
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(500)
+
+    group = BudgetCategory::Group.new(@parent_budget_category, [])
+    assert_equal 0, group.other_spending
+  end
+
+  test "group other_spending returns zero when subcategories account for all spending" do
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(250)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(100)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(150)
+
+    group = BudgetCategory::Group.new(@parent_budget_category, [ @subcategory_with_limit_bc, @subcategory_inheriting_bc ])
+    assert_equal 0, group.other_spending
+  end
+
   test "parent with only inheriting subcategories shares entire budget" do
     # Set subcategory_with_limit to also inherit
     @subcategory_with_limit_bc.update!(budgeted_spending: 0)

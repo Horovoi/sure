@@ -110,6 +110,7 @@ de:
       table:
         category: Kategorie
         amount: Betrag
+        other_category: "Other %{category}"
         type: Typ
         expense: Ausgaben
         income: Einnahmen

@@ -172,6 +172,7 @@ ca:
       table:
         amount: Import
         category: Categoria
+        other_category: "Other %{category}"
         entries:
           one: entrada
           other: entrades

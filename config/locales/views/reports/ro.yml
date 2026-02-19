@@ -109,6 +109,7 @@ ro:
       table:
         category: Categorie
         amount: Sumă
+        other_category: "Other %{category}"
         type: Tip
         expense: Cheltuieli
         income: Venituri

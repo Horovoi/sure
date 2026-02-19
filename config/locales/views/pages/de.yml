@@ -22,6 +22,7 @@ de:
         no_data_title: "Keine Cashflow-Daten für diesen Zeitraum"
         no_data_description: "Füge Transaktionen hinzu, um Cashflow-Daten anzuzeigen, oder erweitere den Zeitraum."
         add_transaction: "Transaktion hinzufügen"
+        other_category: "Other %{category}"
       no_accounts:
         title: "Noch keine Konten vorhanden"
         description: "Füge Konten hinzu, um Daten zum Nettovermögen anzuzeigen."

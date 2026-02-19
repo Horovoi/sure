@@ -362,7 +362,7 @@ class PagesController < ApplicationController
               direct_percentage = total_income_val.zero? ? 0 : (direct_val / total_income_val * 100).round(1)
               direct_idx = add_node.call(
                 "income_#{ct.category.id}_direct",
-                "#{node_display_name} (Direct)",
+                I18n.t("pages.dashboard.cashflow_sankey.other_category", category: node_display_name),
                 direct_val,
                 direct_percentage,
                 node_color
@@ -478,7 +478,7 @@ class PagesController < ApplicationController
               direct_percentage = total_expense_val.zero? ? 0 : (direct_val / total_expense_val * 100).round(1)
               direct_idx = add_node.call(
                 "expense_#{ct.category.id}_direct",
-                "#{node_display_name} (Direct)",
+                I18n.t("pages.dashboard.cashflow_sankey.other_category", category: node_display_name),
                 direct_val,
                 direct_percentage,
                 node_color

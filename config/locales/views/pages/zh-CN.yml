@@ -12,6 +12,7 @@ zh-CN:
         add_transaction: 添加交易
         no_data_description: 添加交易记录以显示现金流数据或扩大时间范围
         no_data_title: 此时间段内无现金流数据
+        other_category: "Other %{category}"
         title: 现金流
       drag_to_reorder: 拖动以重新排序模块
       net_worth_chart:

@@ -13,6 +13,7 @@ ca:
         no_data_description: Afegeix transaccions per mostrar dades de flux de caixa
           o amplia el període de temps
         no_data_title: No hi ha dades de flux de caixa per a aquest període de temps
+        other_category: "Other %{category}"
         title: Flux de caixa
       drag_to_reorder: Arrossega per reordenar la secció
       investment_summary:

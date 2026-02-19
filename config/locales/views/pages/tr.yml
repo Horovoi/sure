@@ -4,6 +4,8 @@ tr:
     changelog:
       title: Yenilikler
     dashboard:
+      cashflow_sankey:
+        other_category: "Other %{category}"
       net_worth_chart:
         data_not_available: Seçilen dönem için veri mevcut değil
         title: Net Değer

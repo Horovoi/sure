@@ -22,6 +22,7 @@ ro:
         no_data_title: "Nu există date despre fluxul de numerar pentru această perioadă"
         no_data_description: "Adaugă tranzacții pentru a afișa datele despre fluxul de numerar sau extinde perioada de timp"
         add_transaction: "Adaugă tranzacție"
+        other_category: "Other %{category}"
       no_accounts:
         title: "Niciun cont încă"
         description: "Adaugă conturi pentru a afișa datele despre averea netă"

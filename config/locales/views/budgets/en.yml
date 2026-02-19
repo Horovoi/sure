@@ -1,9 +1,9 @@
 ---
-zh-TW:
+en:
   budgets:
     show:
       tabs:
-        actual: 實際
-        budgeted: 預算
+        actual: Actual
+        budgeted: Budgeted
     budget_categories:
       other_category: "Other %{category}"
