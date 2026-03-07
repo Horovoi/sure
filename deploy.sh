@@ -28,7 +28,7 @@ sed -i '' "s/BUILD_COMMIT_SHA=.*/BUILD_COMMIT_SHA=$COMMIT_SHA/" .env.production
 export BUILD_COMMIT_SHA=$COMMIT_SHA
 
 # Pre-deploy database backup
-BACKUP_DIR="${BACKUP_DIR:-$HOME/sure-backups}"
+BACKUP_DIR="${BACKUP_DIR:-$(pwd)/backups}"
 mkdir -p "$BACKUP_DIR/pre-deploy"
 
 DB_CONTAINER=$(docker compose -f docker-compose.prod.yml --env-file .env.production ps -q db 2>/dev/null)

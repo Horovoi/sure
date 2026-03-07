@@ -105,7 +105,7 @@ services:
     image: prodrigestivill/postgres-backup-local
     restart: unless-stopped
     volumes:
-      - ${BACKUP_DIR:-/opt/sure-backups}:/backups
+      - ${BACKUP_DIR:-./backups}:/backups
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_DB=${POSTGRES_DB:-sure_production}
