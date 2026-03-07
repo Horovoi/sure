@@ -93,45 +93,45 @@
         <%= t("reports.summary.income_minus_expenses") %>
       </p>
 
-      <% if metrics[:has_debt] && metrics[:debt_change] && metrics[:debt_change].amount < 0 %>
-        <p class="text-sm <%= metrics[:adjusted_surplus] >= 0 ? "text-success" : "text-destructive" %>">
-          <%= t("reports.summary.after_debt") %>: <%= metrics[:adjusted_surplus].format %>
-        </p>
-      <% end %>
     </div>
   </div>
 
-  <%# Budget Performance Card %>
+  <%# Savings Rate Card %>
   <div class="bg-container rounded-xl shadow-border-xs p-6">
     <div class="flex items-start justify-between mb-3">
       <div class="flex items-center gap-2">
-        <%= icon("gauge", class: "w-5 h-5") %>
+        <%= icon("percent", class: "w-5 h-5") %>
         <h3 class="text-sm font-medium text-secondary">
-          <%= t("reports.summary.budget_performance") %>
+          <%= t("reports.summary.savings_rate") %>
         </h3>
       </div>
     </div>
 
     <div class="space-y-2">
-      <% if metrics[:budget_percent] %>
-        <p class="text-2xl font-semibold text-primary">
-          <%= metrics[:budget_percent] %>%
-        </p>
+      <p class="text-2xl font-semibold <%= metrics[:savings_rate] >= 0 ? "text-success" : "text-destructive" %>">
+        <%= metrics[:savings_rate] %>%
+      </p>
 
-        <div class="space-y-1.5">
-          <div class="h-2 bg-surface-inset rounded-full overflow-hidden">
-            <div class="h-full <%= metrics[:budget_percent] >= 100 ? "bg-destructive" : metrics[:budget_percent] >= 80 ? "bg-warning" : "bg-success" %> rounded-full transition-all"
-                 style="width: <%= [metrics[:budget_percent], 100].min %>%"></div>
-          </div>
+      <p class="text-sm text-tertiary">
+        <%= t("reports.summary.kept_from_earned",
+              kept: metrics[:net_savings].format,
+              earned: metrics[:current_income].format) %>
+      </p>
 
-          <p class="text-sm text-tertiary">
-            <%= t("reports.summary.of_budget_used") %>
+      <% if metrics[:has_debt] && metrics[:debt_change] && metrics[:debt_change].amount != 0 %>
+        <% if metrics[:debt_change].amount < 0 %>
+          <p class="text-sm <%= metrics[:adjusted_surplus] >= 0 ? "text-success" : "text-destructive" %>">
+            <%= t("reports.summary.after_paydown_adjusted",
+                  paydown: metrics[:debt_change].abs.format,
+                  surplus: metrics[:adjusted_surplus].format,
+                  rate: metrics[:adjusted_savings_rate]) %>
           </p>
-        </div>
-      <% else %>
-        <p class="text-base text-tertiary">
-          <%= t("reports.summary.no_budget_data") %>
-        </p>
+        <% else %>
+          <p class="text-sm text-warning">
+            <%= t("reports.summary.new_debt_context",
+                  amount: metrics[:debt_change].format) %>
+          </p>
+        <% end %>
       <% end %>
     </div>
   </div>

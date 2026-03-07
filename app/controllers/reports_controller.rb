@@ -391,6 +391,10 @@ class ReportsController < ApplicationController
       debt_change = @has_non_loan_liabilities ? @debt_flow.debt_change : Money.new(0, Current.family.currency)
       adjusted_surplus = debt_change.amount < 0 ? net_savings + debt_change : net_savings
 
+      # Savings rate
+      savings_rate = current_income.amount > 0 ? ((net_savings.amount / current_income.amount.to_f) * 100).round(1) : 0.0
+      adjusted_savings_rate = current_income.amount > 0 ? ((adjusted_surplus.amount / current_income.amount.to_f) * 100).round(1) : 0.0
+
       {
         current_income: current_income,
         income_change: income_change,
@@ -400,6 +404,8 @@ class ReportsController < ApplicationController
         debt_change: debt_change,
         adjusted_surplus: adjusted_surplus,
         has_debt: @has_non_loan_liabilities,
+        savings_rate: savings_rate,
+        adjusted_savings_rate: adjusted_savings_rate,
         budget_percent: budget_percent,
         income_trend: income_trend,
         expense_trend: expense_trend,
@@ -720,11 +726,22 @@ class ReportsController < ApplicationController
         { name: group.name, total: Money.new(group.total, currency) }
       end.reject { |g| g[:total].zero? }
 
+      # Net worth change attribution: what drove the period change
+      attribution = nil
+      if trend && trend.value.is_a?(Money)
+        nw_change = trend.value
+        net_savings = Money.new(@current_income_totals.total - @current_expense_totals.total, currency)
+        debt_change_money = @has_non_loan_liabilities ? @debt_flow.debt_change : Money.new(0, currency)
+        other = nw_change - net_savings - debt_change_money
+        attribution = { cash_flow: net_savings, debt_change: debt_change_money, other: other, total: nw_change }
+      end
+
       {
         current_net_worth: Money.new(current_net_worth, currency),
         total_assets: Money.new(total_assets, currency),
         total_liabilities: Money.new(total_liabilities, currency),
         trend: trend,
+        attribution: attribution,
         asset_groups: asset_groups,
         liability_groups: liability_groups
       }

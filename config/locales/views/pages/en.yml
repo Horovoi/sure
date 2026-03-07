@@ -27,6 +27,9 @@ en:
         add_transaction: "Add transaction"
         other_category: "Other %{category}"
         debt_paydown: "Debt Paydown"
+        surplus_bridge_positive: "This period's surplus of %{surplus} contributed to net worth growing by %{nw_change}"
+        surplus_bridge_negative: "This period's surplus of %{surplus} partially offset other changes that reduced net worth by %{nw_change}"
+        surplus_bridge_flat: "This period's surplus of %{surplus} will contribute to net worth growth"
       no_accounts:
         title: "No accounts yet"
         description: "Add accounts to display net worth data"

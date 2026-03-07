@@ -32,6 +32,10 @@ en:
       vs_previous: vs previous period
       income_minus_expenses: Income minus expenses
       after_debt: "After debt"
+      savings_rate: "Savings Rate"
+      kept_from_earned: "%{kept} kept from %{earned} earned"
+      after_paydown_adjusted: "After %{paydown} paydown: %{surplus} adjusted (%{rate}%)"
+      new_debt_context: "+%{amount} new debt this period"
       of_budget_used: of budget used
       no_budget_data: No budget data for this period
     budget_performance:
@@ -137,6 +141,10 @@ en:
       net_worth_total: Net Worth
       no_assets: No assets
       no_liabilities: No liabilities
+      from_cash_flow: "Cash flow (income − expenses)"
+      from_debt_changes: "Debt changes"
+      from_other: "Other changes"
+      other_tooltip: "Investment gains/losses, property value changes, exchange rate effects, and other non-cash-flow movements"
     investment_performance:
       title: Investment Performance
       portfolio_value: Portfolio Value

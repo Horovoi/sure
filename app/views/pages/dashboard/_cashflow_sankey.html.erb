@@ -1,4 +1,4 @@
-<%# locals: (sankey_data:, period:, sankey_data_with_subcategories: nil, sankey_data_without_subcategories: nil) %>
+<%# locals: (sankey_data:, period:, sankey_data_with_subcategories: nil, sankey_data_without_subcategories: nil, nw_trend: nil) %>
 <%= turbo_frame_tag "cashflow_sankey_section" do %>
 <div id="cashflow-sankey-chart">
   <div class="flex flex-col gap-3 px-4 mb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -72,6 +72,25 @@
         data-period-end="<%= period.end_date %>"
         class="w-full h-full"></div>
     </div>
+    <% surplus_node = sankey_data[:nodes]&.find { |n| n[:name] == "Surplus" } %>
+    <% if surplus_node && surplus_node[:value] > 0 %>
+      <div class="px-4 mt-2 text-xs text-tertiary flex items-center gap-1">
+        <%= icon("info", size: "xs") %>
+        <% surplus_money = Money.new(surplus_node[:value], Current.family.currency) %>
+        <% if nw_trend && nw_trend.value.is_a?(Money) && nw_trend.value.amount > 0 %>
+          <span><%= t("pages.dashboard.cashflow_sankey.surplus_bridge_positive",
+                       surplus: surplus_money.format,
+                       nw_change: nw_trend.value.format(signify_positive: true)) %></span>
+        <% elsif nw_trend && nw_trend.value.is_a?(Money) && nw_trend.value.amount < 0 %>
+          <span><%= t("pages.dashboard.cashflow_sankey.surplus_bridge_negative",
+                       surplus: surplus_money.format,
+                       nw_change: nw_trend.value.abs.format) %></span>
+        <% else %>
+          <span><%= t("pages.dashboard.cashflow_sankey.surplus_bridge_flat",
+                       surplus: surplus_money.format) %></span>
+        <% end %>
+      </div>
+    <% end %>
   <% else %>
     <div class="h-[340px] lg:h-[380px] bg-container py-4 flex flex-col items-center justify-center">
       <div class="space-y-3 text-center flex flex-col items-center">

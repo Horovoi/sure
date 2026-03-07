@@ -208,7 +208,7 @@ class PagesController < ApplicationController
           key: "cashflow_sankey",
           title: "pages.dashboard.cashflow_sankey.title",
           partial: "pages/dashboard/cashflow_sankey",
-          locals: { sankey_data: @cashflow_sankey_data, period: @cashflow_period },
+          locals: { sankey_data: @cashflow_sankey_data, period: @cashflow_period, nw_trend: @balance_sheet.net_worth_series(period: @cashflow_period)&.trend },
           visible: Current.family.accounts.any?,
           collapsible: true
         },
