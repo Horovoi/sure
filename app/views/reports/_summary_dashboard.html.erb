@@ -92,6 +92,12 @@
       <p class="text-sm text-tertiary">
         <%= t("reports.summary.income_minus_expenses") %>
       </p>
+
+      <% if metrics[:has_debt] && metrics[:debt_change] && metrics[:debt_change].amount < 0 %>
+        <p class="text-sm <%= metrics[:adjusted_surplus] >= 0 ? "text-success" : "text-destructive" %>">
+          <%= t("reports.summary.after_debt") %>: <%= metrics[:adjusted_surplus].format %>
+        </p>
+      <% end %>
     </div>
   </div>
 
