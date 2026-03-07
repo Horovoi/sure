@@ -25,6 +25,49 @@ class FamilyResetJobTest < ActiveJob::TestCase
     assert_equal 0, @family.categories.reload.count
   end
 
+  test "creates pre-reset export before destroying data" do
+    @plaid_provider.stubs(:remove_item)
+
+    initial_account_count = @family.accounts.count
+    assert initial_account_count > 0
+
+    assert_difference -> { @family.family_exports.count }, 1 do
+      FamilyResetJob.perform_now(@family)
+    end
+
+    export = @family.family_exports.last
+    assert_equal "completed", export.status
+    assert export.export_file.attached?
+    assert export.export_file.filename.to_s.start_with?("pre_reset_")
+
+    # Data should still be destroyed
+    assert_equal 0, @family.accounts.reload.count
+  end
+
+  test "proceeds with reset even if pre-reset export fails" do
+    @plaid_provider.stubs(:remove_item)
+
+    Family::DataExporter.any_instance.stubs(:generate_export).raises(StandardError, "Storage error")
+
+    initial_account_count = @family.accounts.count
+    assert initial_account_count > 0
+
+    assert_nothing_raised do
+      FamilyResetJob.perform_now(@family)
+    end
+
+    assert_equal 0, @family.accounts.reload.count
+  end
+
+  test "skips export when family has no accounts" do
+    @plaid_provider.stubs(:remove_item)
+    @family.accounts.destroy_all
+
+    assert_no_difference -> { @family.family_exports.count } do
+      FamilyResetJob.perform_now(@family)
+    end
+  end
+
   test "resets family data even when Plaid credentials are invalid" do
     # Use existing plaid item from fixtures
     plaid_item = plaid_items(:one)
