@@ -1,8 +1,11 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
+# If running the rails server then migrate existing database
+# NOTE: Use db:migrate instead of db:prepare to prevent accidental
+# db:setup + db:seed which destroys production data.
+# For first-time setup, run db:prepare manually.
 if [ "${1}" == "./bin/rails" ] && [ "${2}" == "server" ]; then
-  ./bin/rails db:prepare
+  ./bin/rails db:migrate
 fi
 
 exec "${@}"
