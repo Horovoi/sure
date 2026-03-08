@@ -115,6 +115,8 @@ class SubscriptionsController < ApplicationController
                           subscription_params[:expected_day_of_month].to_i != @subscription.expected_day_of_month
     user_set_next_date = subscription_params[:next_expected_date].present?
 
+    @subscription.allow_past_next_expected_date = true if user_set_next_date
+
     if @subscription.update(subscription_params)
       if billing_day_changed && !user_set_next_date
         @subscription.next_expected_date = calculate_next_expected_date(@subscription)

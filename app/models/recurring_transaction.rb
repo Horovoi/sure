@@ -28,6 +28,8 @@ class RecurringTransaction < ApplicationRecord
   validate :merchant_or_name_present
   validate :amount_variance_consistency
 
+  attr_accessor :allow_past_next_expected_date
+
   before_save :ensure_next_expected_date_in_future
 
   def merchant_or_name_present
@@ -522,6 +524,7 @@ class RecurringTransaction < ApplicationRecord
     # Ensure next_expected_date is always in the future
     def ensure_next_expected_date_in_future
       return unless next_expected_date.present?
+      return if allow_past_next_expected_date
       return if next_expected_date > Date.current
 
       # Recalculate based on billing cycle
