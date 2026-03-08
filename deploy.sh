@@ -31,18 +31,26 @@ export BUILD_COMMIT_SHA=$COMMIT_SHA
 BACKUP_DIR="${BACKUP_DIR:-$(pwd)/backups}"
 mkdir -p "$BACKUP_DIR/pre-deploy"
 
-DB_CONTAINER=$(docker compose -f docker-compose.prod.yml --env-file .env.production ps -q db 2>/dev/null)
-if [ -n "$DB_CONTAINER" ] && docker inspect -f '{{.State.Running}}' "$DB_CONTAINER" 2>/dev/null | grep -q true; then
+# Check if database volume has data (not just if container is running)
+COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.production"
+PROJECT_NAME=$(${COMPOSE} config --format json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "sure")
+FULL_VOLUME="${PROJECT_NAME}_postgres-data"
+
+if docker volume inspect "$FULL_VOLUME" &>/dev/null; then
+  # Volume exists — ensure DB is running for backup
+  echo "💾 Starting database for pre-deploy backup..."
+  ${COMPOSE} up -d db
+  ${COMPOSE} exec db sh -c 'until pg_isready -U ${POSTGRES_USER:-sure_user}; do sleep 1; done'
+
   TIMESTAMP=$(date +%Y%m%d_%H%M%S)
   BACKUP_FILE="$BACKUP_DIR/pre-deploy/sure_pre_deploy_${TIMESTAMP}_${COMMIT_SHA}.sql.gz"
-  echo "💾 Creating pre-deploy backup..."
 
   # Source .env.production to get DB credentials
   set -a
   source .env.production
   set +a
 
-  docker compose -f docker-compose.prod.yml --env-file .env.production exec -T db \
+  ${COMPOSE} exec -T db \
     pg_dump -U "${POSTGRES_USER:-sure_user}" "${POSTGRES_DB:-sure_production}" | gzip > "$BACKUP_FILE"
 
   if [ $? -eq 0 ] && [ -s "$BACKUP_FILE" ]; then
@@ -56,8 +64,7 @@ if [ -n "$DB_CONTAINER" ] && docker inspect -f '{{.State.Running}}' "$DB_CONTAIN
   # Clean up old pre-deploy backups (keep last 10)
   ls -tp "$BACKUP_DIR/pre-deploy"/sure_pre_deploy_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -- 2>/dev/null || true
 else
-  echo "⚠️  No running database container found. Skipping pre-deploy backup."
-  echo "   This is expected on first deploy."
+  echo "ℹ️  No database volume found. Skipping pre-deploy backup (first deploy)."
 fi
 
 # Deploy
