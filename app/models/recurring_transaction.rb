@@ -455,10 +455,10 @@ class RecurringTransaction < ApplicationRecord
 
       sub_money = Money.new(transaction_amount, currency)
       converted = if currency == default_account.currency
-                    sub_money
-                  else
-                    sub_money.exchange_to(default_account.currency, date: for_date, fallback_rate: 1)
-                  end
+        sub_money
+      else
+        sub_money.exchange_to(default_account.currency, date: for_date, fallback_rate: 1)
+      end
 
       entry = default_account.entries.create!(
         date: for_date,
