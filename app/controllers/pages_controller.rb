@@ -109,24 +109,19 @@ class PagesController < ApplicationController
     income_totals = Current.family.income_statement.income_totals(period: @cashflow_period)
     expense_totals = Current.family.income_statement.expense_totals(period: @cashflow_period)
 
-    # Compute debt flow (liability balance changes) for the cashflow period
-    debt_flow = DebtFlowStatement.new(Current.family).period_totals(period: @cashflow_period)
-
     # Build both variants for use in fullscreen overlay controls
     @cashflow_sankey_data_with_subcategories = build_cashflow_sankey_data(
       income_totals,
       expense_totals,
       family_currency,
-      include_subcategories: true,
-      debt_flow: debt_flow
+      include_subcategories: true
     )
 
     @cashflow_sankey_data_without_subcategories = build_cashflow_sankey_data(
       income_totals,
       expense_totals,
       family_currency,
-      include_subcategories: false,
-      debt_flow: debt_flow
+      include_subcategories: false
     )
 
     # Choose the currently selected dataset for compact view
@@ -208,7 +203,7 @@ class PagesController < ApplicationController
           key: "cashflow_sankey",
           title: "pages.dashboard.cashflow_sankey.title",
           partial: "pages/dashboard/cashflow_sankey",
-          locals: { sankey_data: @cashflow_sankey_data, period: @cashflow_period, nw_trend: @balance_sheet.net_worth_series(period: @cashflow_period)&.trend },
+          locals: { sankey_data: @cashflow_sankey_data, period: @cashflow_period },
           visible: Current.family.accounts.any?,
           collapsible: true
         },
@@ -278,7 +273,7 @@ class PagesController < ApplicationController
       Provider::Registry.get_provider(:github)
     end
 
-    def build_cashflow_sankey_data(income_totals, expense_totals, currency, include_subcategories: true, debt_flow: nil)
+    def build_cashflow_sankey_data(income_totals, expense_totals, currency, include_subcategories: true)
       nodes = []
       links = []
       node_indices = {}
@@ -530,26 +525,12 @@ class PagesController < ApplicationController
         end
       end
 
-      # --- Process Debt Flow ---
-      debt_change_val = debt_flow&.debt_change&.amount&.to_f&.round(2) || 0.0
-      leftover = (total_income_val - total_expense_val).round(2)
-
-      if debt_change_val < 0
-        # Net debt paydown: show as outflow from Cash Flow
-        paydown_val = debt_change_val.abs
-        paydown_percentage = total_income_val.zero? ? 0 : (paydown_val / total_income_val * 100).round(1)
-        paydown_idx = add_node.call("debt_paydown_node", I18n.t("pages.dashboard.cashflow_sankey.debt_paydown"), paydown_val, paydown_percentage, "var(--color-warning)")
-        links << { source: cash_flow_idx, target: paydown_idx, value: paydown_val, color: "var(--color-warning)", percentage: paydown_percentage }
-      end
-
       # --- Process Surplus ---
-      # Only adjust surplus for debt paydown (ΔLiab < 0). New debt (ΔLiab > 0) is already
-      # captured in expenses via accrual basis — adding it as inflow would be double-counting.
-      adjusted_leftover = debt_change_val < 0 ? (leftover + debt_change_val).round(2) : leftover
-      if adjusted_leftover.positive?
-        percentage_of_total_for_surplus = total_income_val.zero? ? 0 : (adjusted_leftover / total_income_val * 100).round(1)
-        surplus_idx = add_node.call("surplus_node", "Surplus", adjusted_leftover, percentage_of_total_for_surplus, "var(--color-success)")
-        links << { source: cash_flow_idx, target: surplus_idx, value: adjusted_leftover, color: "var(--color-success)", percentage: percentage_of_total_for_surplus }
+      leftover = (total_income_val - total_expense_val).round(2)
+      if leftover.positive?
+        percentage_of_total_income_for_surplus = total_income_val.zero? ? 0 : (leftover / total_income_val * 100).round(1)
+        surplus_idx = add_node.call("surplus_node", "Surplus", leftover, percentage_of_total_income_for_surplus, "var(--color-success)")
+        links << { source: cash_flow_idx, target: surplus_idx, value: leftover, color: "var(--color-success)", percentage: percentage_of_total_income_for_surplus }
       end
 
       # Update Cash Flow and Income node percentages (relative to total income)

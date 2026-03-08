@@ -31,11 +31,6 @@ en:
       budget_performance: Budget Performance
       vs_previous: vs previous period
       income_minus_expenses: Income minus expenses
-      after_debt: "After debt"
-      savings_rate: "Savings Rate"
-      kept_from_earned: "%{kept} kept from %{earned} earned"
-      after_paydown_adjusted: "After %{paydown} paydown: %{surplus} adjusted (%{rate}%)"
-      new_debt_context: "+%{amount} new debt this period"
       of_budget_used: of budget used
       no_budget_data: No budget data for this period
     budget_performance:
@@ -63,8 +58,6 @@ en:
       avg_monthly_income: Avg. Monthly Income
       avg_monthly_expenses: Avg. Monthly Expenses
       avg_monthly_savings: Avg. Monthly Savings
-      avg_monthly_debt_change: Avg. Monthly Debt Change
-      debt: Debt
       no_data: No trend data available
       view_monthly_details: View monthly details
       spending_patterns: Spending Patterns
@@ -141,10 +134,6 @@ en:
       net_worth_total: Net Worth
       no_assets: No assets
       no_liabilities: No liabilities
-      from_cash_flow: "Cash flow (income − expenses)"
-      from_debt_changes: "Debt changes"
-      from_other: "Other changes"
-      other_tooltip: "Investment gains/losses, property value changes, exchange rate effects, and other non-cash-flow movements"
     investment_performance:
       title: Investment Performance
       portfolio_value: Portfolio Value
@@ -173,17 +162,6 @@ en:
       holdings: Holdings
       sell_trades: Sell Trades
       and_more: "+%{count} more"
-    debt_flows:
-      title: Debt Flows
-      description: Track changes in your credit card and other non-loan liability balances
-      paydown: Debt Paydown
-      paydown_description: Liability balances that decreased
-      new_debt: New Debt
-      new_debt_description: Liability balances that increased
-      net_change: Net Debt Change
-      net_change_description: Overall change in debt
-      account: Account
-      change: Change
     investment_flows:
       title: Investment Flows
       description: Track money flowing into and out of your investment accounts

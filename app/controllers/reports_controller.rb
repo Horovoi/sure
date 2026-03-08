@@ -128,10 +128,6 @@ class ReportsController < ApplicationController
       # Investment flows (contributions/withdrawals)
       @investment_flows = InvestmentFlowStatement.new(Current.family).period_totals(period: @period)
 
-      # Debt flows (liability balance changes, excluding loans)
-      @debt_flow = DebtFlowStatement.new(Current.family).period_totals(period: @period)
-      @has_non_loan_liabilities = Current.family.accounts.visible.liabilities.where(accountable_type: %w[CreditCard OtherLiability]).exists?
-
       # Flags for view rendering
       @has_accounts = Current.family.accounts.any?
     end
@@ -176,14 +172,6 @@ class ReportsController < ApplicationController
           partial: "reports/investment_flows",
           locals: { investment_flows: @investment_flows },
           visible: @investment_metrics[:has_investments] && (@investment_flows.contributions.amount > 0 || @investment_flows.withdrawals.amount > 0),
-          collapsible: true
-        },
-        {
-          key: "debt_flows",
-          title: "reports.debt_flows.title",
-          partial: "reports/debt_flows",
-          locals: { debt_flow: @debt_flow },
-          visible: @has_non_loan_liabilities && (@debt_flow.paydown.amount > 0 || @debt_flow.new_debt.amount > 0),
           collapsible: true
         },
         {
@@ -386,26 +374,12 @@ class ReportsController < ApplicationController
       expense_trend = @trends_data.map { |t| t[:expenses].is_a?(Money) ? t[:expenses].amount.to_f : t[:expenses].to_f }
       net_trend = @trends_data.map { |t| t[:net].is_a?(Money) ? t[:net].amount.to_f : t[:net].to_f }
 
-      # Debt-adjusted surplus: only adjust for paydowns (ΔLiab < 0) which consume income.
-      # New debt (ΔLiab > 0) is already captured in expenses via accrual basis.
-      debt_change = @has_non_loan_liabilities ? @debt_flow.debt_change : Money.new(0, Current.family.currency)
-      adjusted_surplus = debt_change.amount < 0 ? net_savings + debt_change : net_savings
-
-      # Savings rate
-      savings_rate = current_income.amount > 0 ? ((net_savings.amount / current_income.amount.to_f) * 100).round(1) : 0.0
-      adjusted_savings_rate = current_income.amount > 0 ? ((adjusted_surplus.amount / current_income.amount.to_f) * 100).round(1) : 0.0
-
       {
         current_income: current_income,
         income_change: income_change,
         current_expenses: current_expenses,
         expense_change: expense_change,
         net_savings: net_savings,
-        debt_change: debt_change,
-        adjusted_surplus: adjusted_surplus,
-        has_debt: @has_non_loan_liabilities,
-        savings_rate: savings_rate,
-        adjusted_savings_rate: adjusted_savings_rate,
         budget_percent: budget_percent,
         income_trend: income_trend,
         expense_trend: expense_trend,
@@ -436,7 +410,6 @@ class ReportsController < ApplicationController
       trends = []
       use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
       family = Current.family
-      debt_statement = @has_non_loan_liabilities ? DebtFlowStatement.new(family) : nil
 
       if use_fiscal
         # Iterate by fiscal month periods
@@ -450,7 +423,6 @@ class ReportsController < ApplicationController
 
           income = family.income_statement.income_totals(period: period).total
           expenses = family.income_statement.expense_totals(period: period).total
-          debt_change = debt_statement&.period_totals(period: period)&.debt_change&.amount || 0
 
           current_fiscal_start = family.budget_period_start_for(Date.current)
 
@@ -459,8 +431,7 @@ class ReportsController < ApplicationController
             is_current_month: current_start == current_fiscal_start,
             income: income,
             expenses: expenses,
-            net: income - expenses,
-            debt_change: debt_change
+            net: income - expenses
           }
 
           current_start = family.budget_period_start_for(current_start >> 1)
@@ -481,15 +452,13 @@ class ReportsController < ApplicationController
 
           income = family.income_statement.income_totals(period: period).total
           expenses = family.income_statement.expense_totals(period: period).total
-          debt_change = debt_statement&.period_totals(period: period)&.debt_change&.amount || 0
 
           trends << {
             month: month_start.strftime("%b %Y"),
             is_current_month: (month_start.month == Date.current.month && month_start.year == Date.current.year),
             income: income,
             expenses: expenses,
-            net: income - expenses,
-            debt_change: debt_change
+            net: income - expenses
           }
 
           current_month = current_month.next_month
@@ -726,22 +695,11 @@ class ReportsController < ApplicationController
         { name: group.name, total: Money.new(group.total, currency) }
       end.reject { |g| g[:total].zero? }
 
-      # Net worth change attribution: what drove the period change
-      attribution = nil
-      if trend && trend.value.is_a?(Money)
-        nw_change = trend.value
-        net_savings = Money.new(@current_income_totals.total - @current_expense_totals.total, currency)
-        debt_change_money = @has_non_loan_liabilities ? @debt_flow.debt_change : Money.new(0, currency)
-        other = nw_change - net_savings - debt_change_money
-        attribution = { cash_flow: net_savings, debt_change: debt_change_money, other: other, total: nw_change }
-      end
-
       {
         current_net_worth: Money.new(current_net_worth, currency),
         total_assets: Money.new(total_assets, currency),
         total_liabilities: Money.new(total_liabilities, currency),
         trend: trend,
-        attribution: attribution,
         asset_groups: asset_groups,
         liability_groups: liability_groups
       }
