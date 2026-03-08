@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_26_174720) do
+ActiveRecord::Schema[7.2].define(version: 2026_02_11_120002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -498,7 +498,23 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_26_174720) do
     t.boolean "recurring_transactions_disabled", default: false, null: false
     t.boolean "use_fiscal_months", default: false, null: false
     t.integer "fiscal_month_start_day", default: 1, null: false
+    t.string "vector_store_id"
     t.check_constraint "fiscal_month_start_day >= 1 AND fiscal_month_start_day <= 31", name: "fiscal_month_start_day_range"
+  end
+
+  create_table "family_documents", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "filename", null: false
+    t.string "content_type"
+    t.bigint "file_size"
+    t.string "provider_file_id"
+    t.string "status", default: "pending", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id"], name: "index_family_documents_on_family_id"
+    t.index ["provider_file_id"], name: "index_family_documents_on_provider_file_id"
+    t.index ["status"], name: "index_family_documents_on_status"
   end
 
   create_table "family_exports", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -656,6 +672,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_26_174720) do
     t.string "amount_type_inflow_value"
     t.integer "rows_to_skip", default: 0, null: false
     t.integer "rows_count", default: 0, null: false
+    t.text "ai_summary"
+    t.string "document_type"
+    t.jsonb "extracted_data", default: {}, null: false
     t.index ["family_id"], name: "index_imports_on_family_id"
   end
 
@@ -1321,6 +1340,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_26_174720) do
   add_foreign_key "eval_results", "eval_samples"
   add_foreign_key "eval_runs", "eval_datasets"
   add_foreign_key "eval_samples", "eval_datasets"
+  add_foreign_key "family_documents", "families"
   add_foreign_key "family_exports", "families"
   add_foreign_key "family_merchant_associations", "families"
   add_foreign_key "family_merchant_associations", "merchants"

@@ -1,6 +1,7 @@
 class Family < ApplicationRecord
   include CoinbaseConnectable
   include PlaidConnectable, LunchflowConnectable, EnableBankingConnectable, Syncable, AutoTransferMatchable, CoinstatsConnectable
+  include VectorSearchable
 
   DATE_FORMATS = [
     [ "MM-DD-YYYY", "%m-%d-%Y" ],

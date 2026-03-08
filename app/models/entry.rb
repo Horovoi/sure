@@ -276,27 +276,36 @@ class Entry < ApplicationRecord
       30.years.ago.to_date
     end
 
-    def bulk_update!(bulk_update_params)
+    def bulk_update!(bulk_update_params, update_tags: false)
       bulk_attributes = {
         date: bulk_update_params[:date],
         notes: bulk_update_params[:notes],
         entryable_attributes: {
           category_id: bulk_update_params[:category_id],
-          merchant_id: bulk_update_params[:merchant_id],
-          tag_ids: bulk_update_params[:tag_ids]
+          merchant_id: bulk_update_params[:merchant_id]
         }.compact_blank
       }.compact_blank
 
-      return 0 if bulk_attributes.blank?
+      tag_ids = Array.wrap(bulk_update_params[:tag_ids]).reject(&:blank?)
+      has_updates = bulk_attributes.present? || update_tags
+
+      return 0 unless has_updates
 
       transaction do
         all.each do |entry|
-          bulk_attributes[:entryable_attributes][:id] = entry.entryable_id if bulk_attributes[:entryable_attributes].present?
-          entry.update! bulk_attributes
+          if bulk_attributes.present?
+            bulk_attributes[:entryable_attributes][:id] = entry.entryable_id if bulk_attributes[:entryable_attributes].present?
+            entry.update! bulk_attributes
+          end
+
+          if update_tags && entry.transaction?
+            entry.transaction.tag_ids = tag_ids
+            entry.transaction.save!
+            entry.entryable.lock_attr!(:tag_ids) if entry.transaction.tags.any?
+          end
 
           entry.lock_saved_attributes!
           entry.mark_user_modified!
-          entry.entryable.lock_attr!(:tag_ids) if entry.transaction? && entry.transaction.tags.any?
         end
       end
 

@@ -68,13 +68,23 @@ else
 fi
 
 # Deploy
-echo "🔄 Deploying containers..."
-docker compose -f docker-compose.prod.yml --env-file .env.production pull
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+echo "🔄 Pulling updated images..."
+${COMPOSE} pull
+
+echo "🧱 Starting database dependencies..."
+${COMPOSE} up -d db redis
+${COMPOSE} exec db sh -c 'until pg_isready -U ${POSTGRES_USER:-sure_user} -d ${POSTGRES_DB:-sure_production}; do sleep 1; done'
+${COMPOSE} exec redis sh -c 'until redis-cli ping | grep -q PONG; do sleep 1; done'
+
+echo "🗄️ Running database migrations..."
+${COMPOSE} run --rm web bin/rails db:migrate
+
+echo "🚀 Starting application services..."
+${COMPOSE} up -d web worker
 
 echo "✅ Deployment complete!"
 echo "🌐 Application should be available at: http://localhost:${PORT:-3333}"
 
 # Show running containers
 echo "📋 Running containers:"
-docker compose -f docker-compose.prod.yml ps
+${COMPOSE} ps

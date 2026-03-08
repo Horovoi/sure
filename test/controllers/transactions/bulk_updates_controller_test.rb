@@ -32,4 +32,20 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
       assert_equal [ Tag.first.id, Tag.second.id ], transaction.entryable.tag_ids.sort
     end
   end
+
+  test "bulk update preserves tags when tag_ids are omitted" do
+    entry = entries(:transaction)
+    original_tag_ids = entry.entryable.tag_ids.sort
+
+    post transactions_bulk_update_url, params: {
+      bulk_update: {
+        entry_ids: [ entry.id ],
+        notes: "Only updating notes"
+      }
+    }
+
+    assert_redirected_to transactions_url
+    assert_equal "Only updating notes", entry.reload.notes
+    assert_equal original_tag_ids, entry.entryable.reload.tag_ids.sort
+  end
 end

@@ -16,6 +16,14 @@ class LunchflowEntry::Processor
       return nil
     end
 
+    if pending? && external_id.start_with?("lunchflow_pending_")
+      existing_posted = find_existing_posted_version
+      if existing_posted
+        Rails.logger.info "LunchflowEntry::Processor - Skipping pending transaction (posted version already exists): pending=#{external_id}, posted=#{existing_posted.external_id}"
+        return existing_posted
+      end
+    end
+
     # Wrap import in error handling to catch validation and save errors
     begin
       import_adapter.import_transaction(
@@ -60,9 +68,24 @@ class LunchflowEntry::Processor
     end
 
     def external_id
+      @external_id ||= calculate_external_id
+    end
+
+    def calculate_external_id
       id = data[:id].presence
-      raise ArgumentError, "Lunchflow transaction missing required field 'id'" unless id
-      "lunchflow_#{id}"
+      return "lunchflow_#{id}" if id.present?
+
+      raise ArgumentError, "Lunchflow pending transaction missing required fields for temporary ID generation" unless pending?
+
+      fingerprint_parts = [
+        data[:accountId],
+        data[:merchant].presence || name,
+        amount.to_s("F"),
+        currency,
+        date.iso8601
+      ]
+      digest = Digest::SHA256.hexdigest(fingerprint_parts.join("|")).first(24)
+      "lunchflow_pending_#{digest}"
     end
 
     def name
@@ -120,6 +143,26 @@ class LunchflowEntry::Processor
 
     def log_invalid_currency(currency_value)
       Rails.logger.warn("Invalid currency code '#{currency_value}' in LunchFlow transaction #{external_id}, falling back to account currency")
+    end
+
+    def pending?
+      ActiveModel::Type::Boolean.new.cast(data[:isPending])
+    end
+
+    def find_existing_posted_version
+      return nil unless account.present?
+
+      query = account.entries
+        .where(source: "lunchflow")
+        .where(amount: amount)
+        .where(currency: currency)
+        .where("date BETWEEN ? AND ?", date, date + 8)
+        .where("external_id NOT LIKE 'lunchflow_pending_%'")
+        .where.not(external_id: nil)
+        .order(date: :asc)
+
+      query = query.where(name: name) if data[:merchant].present?
+      query.first
     end
 
     def date

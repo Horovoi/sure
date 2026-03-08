@@ -1,0 +1,21 @@
+<%
+  header_title "Join #{@invitation.family.name}"
+%>
+
+<div class="space-y-1 mb-6 text-center">
+  <p class="text-secondary">
+    <%= @invitation.inviter.display_name %> invited you to join this household as <%= @invitation.role.to_s.humanize.downcase %>.
+  </p>
+</div>
+
+<div class="space-y-4">
+  <%= link_to new_registration_path(invitation: @invitation.token),
+      class: "block w-full rounded-md border border-secondary bg-container px-4 py-3 text-center text-sm font-medium text-primary hover:bg-secondary transition" do %>
+    Create a new account
+  <% end %>
+
+  <%= link_to new_session_path(invitation: @invitation.token),
+      class: "block w-full rounded-md border border-secondary bg-container px-4 py-3 text-center text-sm font-medium text-primary hover:bg-secondary transition" do %>
+    Sign in with an existing account
+  <% end %>
+</div>

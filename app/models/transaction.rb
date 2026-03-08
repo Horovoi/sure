@@ -29,6 +29,7 @@ class Transaction < ApplicationRecord
 
   # Internal movement labels that should be excluded from budget (auto cash management)
   INTERNAL_MOVEMENT_LABELS = [ "Transfer", "Sweep In", "Sweep Out", "Exchange" ].freeze
+  TRANSFER_KINDS = %w[funds_movement cc_payment loan_payment].freeze
 
   # Pending transaction scopes - filter based on provider pending flags in extra JSONB
   # Works with any provider that stores pending status in extra["provider_name"]["pending"]
@@ -54,7 +55,7 @@ class Transaction < ApplicationRecord
 
   # Overarching grouping method for all transfer-type transactions
   def transfer?
-    funds_movement? || cc_payment? || loan_payment?
+    kind.in?(TRANSFER_KINDS)
   end
 
   def set_category!(category)

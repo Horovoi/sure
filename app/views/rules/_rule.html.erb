@@ -11,11 +11,15 @@
           <span class="font-mono text-xs">IF</span>
         </div>
         <p class="flex items-center flex-wrap gap-1.5 m-0">
+          <% first_condition = rule.conditions.first %>
+          <% first_sub_condition = first_condition&.compound? ? first_condition.sub_conditions.first : nil %>
           <span class="px-2 py-1 border border-secondary rounded-full">
-            <% if rule.conditions.first.compound? %>
-              <%= rule.conditions.first.sub_conditions.first.filter.label %> <%= rule.conditions.first.sub_conditions.first.operator %> <%= rule.conditions.first.sub_conditions.first.value_display %>
+            <% if first_condition&.compound? && first_sub_condition.present? %>
+              <%= first_sub_condition.filter.label %> <%= first_sub_condition.operator %> <%= first_sub_condition.value_display %>
+            <% elsif first_condition.present? %>
+              <%= first_condition.filter.label %> <%= first_condition.operator %> <%= first_condition.value_display %>
             <% else %>
-              <%= rule.conditions.first.filter.label %> <%= rule.conditions.first.operator %> <%= rule.conditions.first.value_display %>
+              No conditions
             <% end %>
           </span>
           <% if rule.conditions.count > 1 %>

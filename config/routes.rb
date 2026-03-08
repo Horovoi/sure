@@ -163,7 +163,7 @@ Rails.application.routes.draw do
 
   resources :transfers, only: %i[new create destroy show update]
 
-  resources :imports, only: %i[index new show create destroy] do
+  resources :imports, only: %i[index new show create update destroy] do
     member do
       post :publish
       put :revert
@@ -340,7 +340,12 @@ Rails.application.routes.draw do
       resources :tags, only: %i[index show create update destroy]
 
       resources :transactions, only: [ :index, :show, :create, :update, :destroy ]
+      resources :holdings, only: [ :index, :show ]
+      resources :trades, only: [ :index, :show, :create, :update, :destroy ]
+      resources :valuations, only: [ :show, :create, :update ]
       resources :imports, only: [ :index, :show, :create ]
+      delete "users/reset", to: "users#reset"
+      delete "users/me", to: "users#destroy"
       resource :usage, only: [ :show ], controller: :usage
       post :sync, to: "sync#create"
 
@@ -360,6 +365,8 @@ Rails.application.routes.draw do
       end
     end
   end
+
+  post "mcp", to: "mcp#handle"
 
 
 

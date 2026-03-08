@@ -8,6 +8,18 @@ class Assistant
       config = config_for(chat)
       new(chat, instructions: config[:instructions], functions: config[:functions])
     end
+
+    def function_classes
+      [
+        Assistant::Function::GetTransactions,
+        Assistant::Function::GetAccounts,
+        Assistant::Function::GetHoldings,
+        Assistant::Function::GetBalanceSheet,
+        Assistant::Function::GetIncomeStatement,
+        Assistant::Function::ImportBankStatement,
+        Assistant::Function::SearchFamilyFiles
+      ]
+    end
   end
 
   def initialize(chat, instructions: nil, functions: [])

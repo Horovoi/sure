@@ -14,13 +14,7 @@ module Assistant::Configurable
 
     private
       def default_functions
-        [
-          Assistant::Function::GetTransactions,
-          Assistant::Function::GetAccounts,
-          Assistant::Function::GetHoldings,
-          Assistant::Function::GetBalanceSheet,
-          Assistant::Function::GetIncomeStatement
-        ]
+        Assistant.function_classes
       end
 
       def default_instructions(preferred_currency, preferred_date_format)

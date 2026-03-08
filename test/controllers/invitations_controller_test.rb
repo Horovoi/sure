@@ -77,9 +77,34 @@ class InvitationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal I18n.t("invitations.create.failure"), flash[:alert]
   end
 
-  test "should accept invitation and redirect to registration" do
+  test "should accept invitation and render account choice" do
     get accept_invitation_url(@invitation.token)
-    assert_redirected_to new_registration_path(invitation: @invitation.token)
+    assert_response :success
+    assert_select "a[href='#{new_registration_path(invitation: @invitation.token)}']"
+    assert_select "a[href='#{new_session_path(invitation: @invitation.token)}']"
+  end
+
+  test "create invitation auto-accepts for an existing user" do
+    invited_user = users(:empty)
+
+    assert_difference("Invitation.count") do
+      assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+        post invitations_url, params: {
+          invitation: {
+            email: invited_user.email,
+            role: "member"
+          }
+        }
+      end
+    end
+
+    invitation = Invitation.order(created_at: :desc).first
+
+    assert_redirected_to settings_profile_path
+    assert_equal "Existing user added to the household.", flash[:notice]
+    assert invitation.accepted_at.present?
+    assert_equal @admin.family, invited_user.reload.family
+    assert_equal "member", invited_user.role
   end
 
   test "should not accept invalid invitation token" do

@@ -66,6 +66,12 @@ module SettingsHelper
     end
   end
 
+  def enable_banking_callback_url
+    return callback_enable_banking_items_url if Rails.env.production?
+
+    ENV.fetch("DEV_WEBHOOKS_URL", root_url.chomp("/")) + "/enable_banking_items/callback"
+  end
+
   private
     def not_self_hosted?
       !self_hosted?

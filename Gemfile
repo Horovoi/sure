@@ -60,6 +60,7 @@ gem "countries"
 # OAuth & API Security
 gem "doorkeeper"
 gem "rack-attack", "~> 6.6"
+gem "rack-cors"
 gem "pundit"
 gem "faraday"
 gem "faraday-retry"
@@ -78,6 +79,7 @@ gem "rotp", "~> 6.3"
 gem "rqrcode", "~> 3.0"
 gem "activerecord-import"
 gem "rubyzip", "~> 2.3"
+gem "pdf-reader"
 
 # OpenID Connect, OAuth & SAML authentication
 gem "omniauth", "~> 2.1"

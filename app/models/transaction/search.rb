@@ -125,7 +125,7 @@ class Transaction::Search
       return query unless types.present?
       return query if types.sort == [ "expense", "income", "transfer" ]
 
-      transfer_condition = "transactions.kind IN ('funds_movement', 'cc_payment', 'loan_payment')"
+      transfer_condition = "transactions.kind IN (#{Transaction::TRANSFER_KINDS.map { |kind| ActiveRecord::Base.connection.quote(kind) }.join(', ')})"
       # investment_contribution is always an expense regardless of amount sign
       # (handles both manual outflows and provider-imported inflows like 401k contributions)
       investment_contribution_condition = "transactions.kind = 'investment_contribution'"

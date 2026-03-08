@@ -105,19 +105,27 @@ class Api::V1::TransactionsController < Api::V1::BaseController
 end
 
   def update
-    if @entry.update(entry_params_for_update)
-      @entry.sync_account_later
-      @entry.lock_saved_attributes!
-      @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
+    Entry.transaction do
+      if @entry.update(entry_params_for_update)
+        if tags_provided?
+          @entry.transaction.tag_ids = transaction_params[:tag_ids] || []
+          @entry.transaction.save!
+          @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
+        end
 
-      @transaction = @entry.transaction
-      render :show
-    else
-      render json: {
-        error: "validation_failed",
-        message: "Transaction could not be updated",
-        errors: @entry.errors.full_messages
-      }, status: :unprocessable_entity
+        @entry.sync_account_later
+        @entry.lock_saved_attributes!
+
+        @transaction = @entry.transaction
+        render :show
+      else
+        render json: {
+          error: "validation_failed",
+          message: "Transaction could not be updated",
+          errors: @entry.errors.full_messages
+        }, status: :unprocessable_entity
+        raise ActiveRecord::Rollback
+      end
     end
 
   rescue => e
@@ -230,9 +238,11 @@ end
       if params[:type].present?
         case params[:type].downcase
         when "income"
-          query = query.joins(:entry).where("entries.amount < 0")
+          query = query.joins(:entry).where("entries.amount < 0").where.not(kind: Transaction::TRANSFER_KINDS)
         when "expense"
-          query = query.joins(:entry).where("entries.amount > 0")
+          query = query.joins(:entry).where("entries.amount >= 0").where.not(kind: Transaction::TRANSFER_KINDS)
+        when "transfer"
+          query = query.where(kind: Transaction::TRANSFER_KINDS)
         end
       end
 
@@ -283,8 +293,7 @@ end
         entryable_attributes: {
           id: @entry.entryable_id,
           category_id: transaction_params[:category_id],
-          merchant_id: transaction_params[:merchant_id],
-          tag_ids: transaction_params[:tag_ids]
+          merchant_id: transaction_params[:merchant_id]
         }.compact_blank
       }
 
@@ -294,6 +303,11 @@ end
       end
 
       entry_params.compact
+    end
+
+    def tags_provided?
+      transaction = params[:transaction]
+      transaction.respond_to?(:key?) && transaction.key?(:tag_ids)
     end
 
     def calculate_signed_amount
