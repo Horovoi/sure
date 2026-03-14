@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+@source "../../views";
+@source "../../components";
+@source "../../helpers";
+@source "../../javascript";
+
 @import "./sure-design-system.css";
 
 @import "./geist-font.css";
