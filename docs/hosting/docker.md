@@ -2,6 +2,8 @@
 
 This guide covers setting up, updating, and maintaining a self-hosted Sure instance with Docker Compose.
 
+> **Supported architectures:** Docker images are published as multi-architecture manifests supporting both **AMD64** (Intel/AMD) and **ARM64** (Apple Silicon, AWS Graviton). Docker automatically pulls the correct image for your platform.
+
 ## Setup Guide
 
 ### Step 1: Install Docker
@@ -143,6 +145,23 @@ If your accounts use UAH as their currency, set the exchange rate provider to **
 - Or in `.env`: set `EXCHANGE_RATE_PROVIDER=nbu`
 
 The NBU provider is free and fetches official rates from the National Bank of Ukraine. Non-UAH currency pairs (e.g., USD/EUR) automatically fall back to Yahoo Finance.
+
+### Pinning a specific CPU architecture
+
+Docker automatically selects the correct image for your host. If you need to force a specific architecture (e.g., running AMD64 under emulation on Apple Silicon), add `platform` to the `web` and `worker` services in `compose.yml`:
+
+```yaml
+services:
+  web:
+    image: ghcr.io/horovoi/sure:latest
+    platform: linux/amd64
+    # ... rest of config
+
+  worker:
+    image: ghcr.io/horovoi/sure:latest
+    platform: linux/amd64
+    # ... rest of config
+```
 
 ## Troubleshooting
 

@@ -22,16 +22,14 @@ Set your commit SHA and build the image:
 # Set the latest commit SHA
 export BUILD_COMMIT_SHA="fdc989d2f652"  # Using short SHA
 
-# Build the image with commit SHA tag
-docker build \
+# Build multi-arch image and push to registry
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
   --build-arg BUILD_COMMIT_SHA=$BUILD_COMMIT_SHA \
   -t ghcr.io/horovoi/sure:$BUILD_COMMIT_SHA \
   -t ghcr.io/horovoi/sure:latest \
+  --push \
   .
-
-# Push both tags
-docker push ghcr.io/horovoi/sure:$BUILD_COMMIT_SHA
-docker push ghcr.io/horovoi/sure:latest
 ```
 
 ## Step 3: Verify Image is Available
@@ -105,16 +103,14 @@ FULL_SHA=$(git rev-parse HEAD)
 echo "🚀 Deploying commit: $COMMIT_SHA (full: $FULL_SHA)"
 
 # Build and push image
-echo "📦 Building image..."
-docker build \
+echo "📦 Building multi-arch image and pushing to registry..."
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
   --build-arg BUILD_COMMIT_SHA=$FULL_SHA \
   -t ghcr.io/horovoi/sure:$COMMIT_SHA \
   -t ghcr.io/horovoi/sure:latest \
+  --push \
   .
-
-echo "⬆️  Pushing to registry..."
-docker push ghcr.io/horovoi/sure:$COMMIT_SHA
-docker push ghcr.io/horovoi/sure:latest
 
 # Update environment file
 echo "⚙️  Updating environment..."

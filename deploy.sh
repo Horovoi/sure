@@ -8,17 +8,23 @@ FULL_SHA=$(git rev-parse HEAD)
 
 echo "🚀 Deploying commit: $COMMIT_SHA (full: $FULL_SHA)"
 
-# Build and push image
-echo "📦 Building image..."
-docker build \
+# Ensure a buildx builder with multi-platform support exists
+BUILDER_NAME="sure-multiarch"
+if ! docker buildx inspect "$BUILDER_NAME" &>/dev/null; then
+  echo "🔧 Creating buildx builder: $BUILDER_NAME"
+  docker buildx create --name "$BUILDER_NAME" --driver docker-container --bootstrap
+fi
+
+# Build multi-arch image and push to registry
+echo "📦 Building multi-arch image and pushing to registry..."
+docker buildx build \
+  --builder "$BUILDER_NAME" \
+  --platform linux/amd64,linux/arm64 \
   --build-arg BUILD_COMMIT_SHA=$FULL_SHA \
   -t ghcr.io/horovoi/sure:$COMMIT_SHA \
   -t ghcr.io/horovoi/sure:latest \
+  --push \
   .
-
-echo "⬆️  Pushing to registry..."
-docker push ghcr.io/horovoi/sure:$COMMIT_SHA
-docker push ghcr.io/horovoi/sure:latest
 
 # Update environment file
 echo "⚙️  Updating environment..."
