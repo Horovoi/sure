@@ -94,31 +94,33 @@ class Transaction::Search
     def apply_category_filter(query, categories)
       return query unless categories.present?
 
-      # Get parent category IDs for the given category names
-      parent_category_ids = family.categories.where(name: categories).pluck(:id)
+      include_uncategorized = categories.include?("Uncategorized")
+      named_categories = categories.reject { |c| c == "Uncategorized" }
 
-      # Build condition based on whether parent_category_ids is empty
-      if parent_category_ids.empty?
-        query = query.left_joins(:category).where(
-          "categories.name IN (?) OR (
-          categories.id IS NULL AND (transactions.kind NOT IN ('funds_movement', 'cc_payment'))
-        )",
-          categories
-        )
-      else
-        query = query.left_joins(:category).where(
-          "categories.name IN (?) OR categories.parent_id IN (?) OR (
-          categories.id IS NULL AND (transactions.kind NOT IN ('funds_movement', 'cc_payment'))
-        )",
-          categories, parent_category_ids
-        )
+      # Get parent category IDs so subcategories are included when a parent is selected
+      parent_category_ids = named_categories.present? ?
+        family.categories.where(name: named_categories).pluck(:id) : []
+
+      conditions = []
+      binds = []
+
+      if named_categories.present?
+        if parent_category_ids.present?
+          conditions << "categories.name IN (?) OR categories.parent_id IN (?)"
+          binds.push(named_categories, parent_category_ids)
+        else
+          conditions << "categories.name IN (?)"
+          binds.push(named_categories)
+        end
       end
 
-      if categories.exclude?("Uncategorized")
-        query = query.where.not(category_id: nil)
+      if include_uncategorized
+        conditions << "(categories.id IS NULL AND transactions.kind NOT IN ('funds_movement', 'cc_payment'))"
       end
 
-      query
+      return query if conditions.empty?
+
+      query.left_joins(:category).where(conditions.join(" OR "), *binds)
     end
 
     def apply_type_filter(query, types)
@@ -165,11 +167,17 @@ class Transaction::Search
       return query if statuses.uniq.sort == [ "confirmed", "pending" ] # Both selected = no filter
 
       pending_condition = <<~SQL.squish
-        (transactions.extra -> 'plaid' ->> 'pending')::boolean = true
+        EXISTS (
+          SELECT 1 FROM jsonb_each(transactions.extra) AS pd
+          WHERE (pd.value ->> 'pending')::boolean = true
+        )
       SQL
 
       confirmed_condition = <<~SQL.squish
-        (transactions.extra -> 'plaid' ->> 'pending')::boolean IS DISTINCT FROM true
+        NOT EXISTS (
+          SELECT 1 FROM jsonb_each(transactions.extra) AS pd
+          WHERE (pd.value ->> 'pending')::boolean = true
+        )
       SQL
 
       case statuses.sort
