@@ -1,6 +1,8 @@
 require "test_helper"
 
 class AccountsControllerTest < ActionDispatch::IntegrationTest
+  include EntriesTestHelper
+
   setup do
     sign_in @user = users(:family_admin)
     @account = accounts(:depository)
@@ -14,6 +16,70 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
   test "should get show" do
     get account_url(@account)
     assert_response :success
+  end
+
+  test "show accepts advanced account-page filters" do
+    matching_entry = create_transaction(
+      account: @account,
+      name: "Account filter match",
+      date: Date.current,
+      amount: 25,
+      category: categories(:food_and_drink),
+      merchant: merchants(:amazon),
+      tags: [ tags(:one) ]
+    )
+    create_transaction(
+      account: @account,
+      name: "Account filter other",
+      date: Date.current,
+      amount: 25,
+      category: categories(:subscriptions),
+      merchant: merchants(:netflix),
+      tags: [ tags(:two) ]
+    )
+
+    get account_url(@account), params: {
+      q: {
+        start_date: Date.current.to_s,
+        end_date: Date.current.to_s,
+        search: "Account filter match",
+        amount: "25",
+        amount_operator: "equal",
+        categories: [ categories(:food_and_drink).name ],
+        merchants: [ merchants(:amazon).name ],
+        tags: [ tags(:one).name ],
+        types: [ "expense" ],
+        status: [ "confirmed" ]
+      }
+    }
+
+    assert_response :success
+    assert_includes response.body, matching_entry.name
+    assert_not_includes response.body, "Account filter other"
+  end
+
+  test "show ignores blank account page state params when filters submit" do
+    create_transaction(account: @account, name: "Blank state filter target", category: categories(:food_and_drink))
+
+    get account_url(@account), params: {
+      tab: "",
+      chart_view: "",
+      period: "",
+      start_date: "",
+      end_date: "",
+      per_page: "",
+      q: {
+        search: "",
+        start_date: "",
+        end_date: "",
+        amount_operator: "equal",
+        amount: "",
+        categories: [ categories(:food_and_drink).name ]
+      }
+    }
+
+    assert_response :success
+    assert_includes response.body, "Balance"
   end
 
   test "should sync account" do
@@ -164,5 +230,60 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     get select_provider_account_url(@account)
     assert_redirected_to account_url(@account)
     assert_equal "Account is already linked to a provider", flash[:alert]
+  end
+
+  test "clear_filter removes array filter and preserves account page state without page" do
+    delete clear_filter_account_url(@account), params: {
+      param_key: "categories",
+      param_value: categories(:food_and_drink).name,
+      tab: "activity",
+      chart_view: "balance",
+      period: "custom",
+      start_date: "2026-03-01",
+      end_date: "2026-03-15",
+      page: "3",
+      per_page: "50",
+      q: {
+        categories: [ categories(:food_and_drink).name, categories(:subscriptions).name ],
+        types: [ "expense" ],
+        amount: "25",
+        amount_operator: "equal"
+      }
+    }
+
+    assert_redirected_to account_url(
+      @account,
+      tab: "activity",
+      chart_view: "balance",
+      period: "custom",
+      start_date: "2026-03-01",
+      end_date: "2026-03-15",
+      per_page: "50",
+      q: {
+        categories: [ categories(:subscriptions).name ],
+        types: [ "expense" ],
+        amount: "25",
+        amount_operator: "equal"
+      }
+    )
+  end
+
+  test "clear_filter removes scalar amount filter and clears amount operator" do
+    delete clear_filter_account_url(@account), params: {
+      param_key: "amount",
+      param_value: "equal to 25",
+      tab: "activity",
+      q: {
+        amount: "25",
+        amount_operator: "equal",
+        types: [ "expense" ]
+      }
+    }
+
+    assert_redirected_to account_url(
+      @account,
+      tab: "activity",
+      q: { types: [ "expense" ] }
+    )
   end
 end

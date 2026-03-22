@@ -160,12 +160,20 @@ en:
           on_or_after: on or after %{date}
           on_or_before: on or before %{date}
           transfer: Transfer
+          balance_update: Balance update
+          trade: Trade
           confirmed: Confirmed
           pending: Pending
         type_filter:
           expense: Expense
           income: Income
           transfer: Transfer
+        account_type_filter:
+          expense: Expense
+          income: Income
+          transfer: Transfer
+          balance_update: Balance update
+          trade: Trade
         status_filter:
           confirmed: Confirmed
           pending: Pending

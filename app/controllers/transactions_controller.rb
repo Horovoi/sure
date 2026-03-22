@@ -435,6 +435,8 @@ class TransactionsController < ApplicationController
     end
 
     def should_restore_params?
+      return false if params[:clear_filters].present? || params[:filter_cleared].present?
+
       request.query_parameters.blank? && (stored_params["q"].present? || stored_params["page"].present? || stored_params["per_page"].present?)
     end
 

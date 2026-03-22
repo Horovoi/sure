@@ -23,7 +23,7 @@ module AccountableResource
   end
 
   def show
-    @chart_view = params[:chart_view] || "balance"
+    @chart_view = params[:chart_view].presence || "balance"
     @q = params.fetch(:q, {}).permit(:search)
     entries = @account.entries.search(@q).reverse_chronological
 

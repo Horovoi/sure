@@ -7,7 +7,7 @@ module Periodable
 
   private
     def set_period
-      period_param = params[:period] || Current.user&.default_period
+      period_param = params[:period].presence || Current.user&.default_period
 
       if period_param == "custom"
         last_30 = Period.last_30_days

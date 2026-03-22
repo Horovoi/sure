@@ -1,5 +1,5 @@
 class AccountsController < ApplicationController
-  before_action :set_account, only: %i[sync sparkline toggle_active show destroy unlink confirm_unlink select_provider]
+  before_action :set_account, only: %i[sync sparkline toggle_active show destroy unlink confirm_unlink select_provider clear_filter]
   include Periodable
 
   def index
@@ -33,9 +33,9 @@ class AccountsController < ApplicationController
   end
 
   def show
-    @chart_view = params[:chart_view] || "balance"
-    @tab = params[:tab]
-    @q = params.fetch(:q, {}).permit(:search, status: [])
+    @chart_view = params[:chart_view].presence || "balance"
+    @tab = params[:tab].presence
+    @q = account_search_params
     entries = @account.entries.where(excluded: false).search(@q).reverse_chronological
 
     @pagy, @entries = pagy(entries, limit: safe_per_page)
@@ -126,6 +126,26 @@ class AccountsController < ApplicationController
     end
   end
 
+  def clear_filter
+    q_params = account_search_params
+
+    param_key = params[:param_key]
+    param_value = params[:param_value]
+
+    if q_params[param_key].is_a?(Array)
+      q_params[param_key].delete(param_value)
+      q_params.delete(param_key) if q_params[param_key].empty?
+    else
+      q_params.delete(param_key)
+    end
+    q_params.delete("amount_operator") if param_key == "amount"
+
+    redirect_params = account_page_state_params
+    redirect_params[:q] = q_params if q_params.present?
+
+    redirect_to account_path(@account, redirect_params)
+  end
+
   def select_provider
     if @account.linked?
       redirect_to account_path(@account), alert: t("accounts.select_provider.already_linked")
@@ -164,6 +184,19 @@ class AccountsController < ApplicationController
 
     def set_account
       @account = family.accounts.find(params[:id])
+    end
+
+    def account_search_params
+      cleaned = params.fetch(:q, {}).permit(
+        :start_date, :end_date, :search, :amount, :amount_operator,
+        categories: [], merchants: [], types: [], tags: [], status: []
+      ).to_h.compact_blank
+      cleaned.delete("amount_operator") if cleaned["amount"].blank?
+      cleaned
+    end
+
+    def account_page_state_params
+      params.permit(:tab, :chart_view, :period, :start_date, :end_date, :per_page).to_h.compact_blank
     end
 
     # Builds sync stats maps for all provider types to avoid N+1 queries in views

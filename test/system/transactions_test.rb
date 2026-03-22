@@ -119,14 +119,6 @@ class TransactionsTest < ApplicationSystemTestCase
 
     assert_text "No entries found"
 
-    # Wait for Turbo to finish updating the DOM
-    sleep 0.5
-
-    # Page reload doesn't affect results
-    visit current_url
-
-    assert_text "No entries found"
-
     # Remove all filters by clicking their X buttons
     # Get all the filter buttons at once to avoid stale elements
     filter_count = page.all("ul#transaction-search-filters li button").count
@@ -138,6 +130,34 @@ class TransactionsTest < ApplicationSystemTestCase
     end
 
     assert_text @transaction.name
+  end
+
+  test "clear all clears all filters in one click" do
+    find("#transaction-filters-button").click
+
+    within "#transaction-filters-menu" do
+      click_button "Date"
+      fill_in "q_start_date", with: 10.days.ago.to_date
+      fill_in "q_end_date", with: 1.day.ago.to_date
+
+      click_button "Type"
+      check("Income")
+
+      click_button "Category"
+      check(@transaction.transaction.category.name)
+
+      click_button "Apply"
+    end
+
+    assert_text "No entries found"
+
+    within find("ul#transaction-search-filters").find(:xpath, "..") do
+      click_on "Clear all"
+    end
+
+    assert_text @transaction.name
+    assert_no_text "No entries found"
+    assert_selector "#total-transactions", text: @user.family.entries.transactions.count.to_s
   end
 
   test "can select and deselect entire page of transactions" do

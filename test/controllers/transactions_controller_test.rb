@@ -191,6 +191,31 @@ end
     assert_response :success
   end
 
+  test "clear_filters bypasses stored params restoration" do
+    family = @user.family
+    Session.order(:created_at).last.update!(
+      prev_transaction_page_params: {
+        q: { "categories" => [ "Food" ] },
+        page: 3,
+        per_page: 25
+      }
+    )
+
+    search = Transaction::Search.new(family, filters: {})
+    totals = OpenStruct.new(
+      count: 0,
+      expense_money: Money.new(0, family.currency),
+      income_money: Money.new(0, family.currency)
+    )
+
+    Transaction::Search.expects(:new).with(family, filters: {}).returns(search)
+    search.expects(:totals).returns(totals)
+
+    get transactions_url(clear_filters: true, per_page: 50)
+
+    assert_response :success
+  end
+
   test "mark_as_recurring creates a manual recurring transaction" do
     family = families(:empty)
     sign_in users(:empty)

@@ -1,4 +1,5 @@
-<%= render "transactions/searches/filters_bar" %>
+<%= render "transactions/searches/filters_bar",
+    clear_all_url: transactions_path(clear_filters: true, per_page: params[:per_page].presence) %>
 
 <div id="entry-selection-bar" data-bulk-select-target="selectionBar" class="flex justify-center hidden">
   <%= render "transactions/selection_bar" %>

@@ -1,3 +1,4 @@
+<%# locals: (clear_filter_url_builder: nil, clear_all_url: nil) %>
 <div class="flex items-center justify-between gap-2 mb-4">
   <ul id="transaction-search-filters" class="flex items-center flex-wrap gap-2">
     <% @q.reject { |key| key == "amount_operator" }.each do |param_key, param_value| %>
@@ -13,10 +14,12 @@
                                else
                                  t(@q[:amount_operator])
                                end %>
-          <%= render partial: "transactions/searches/filters/badge", locals: { param_key: "amount", param_value: "#{amount_operator} #{param_value}" } %>
+          <% clear_url = clear_filter_url_builder ? clear_filter_url_builder.call("amount", "#{amount_operator} #{param_value}") : clear_filter_transactions_path(param_key: "amount", param_value: "#{amount_operator} #{param_value}", **request.query_parameters) %>
+          <%= render partial: "transactions/searches/filters/badge", locals: { param_key: "amount", param_value: "#{amount_operator} #{param_value}", clear_url: clear_url } %>
         <% else %>
           <% Array(param_value).each do |value| %>
-            <%= render partial: "transactions/searches/filters/badge", locals: { param_key: param_key, param_value: value } %>
+            <% clear_url = clear_filter_url_builder ? clear_filter_url_builder.call(param_key, value) : clear_filter_transactions_path(param_key: param_key, param_value: value, **request.query_parameters) %>
+            <%= render partial: "transactions/searches/filters/badge", locals: { param_key: param_key, param_value: value, clear_url: clear_url } %>
           <% end %>
         <% end %>
       <% end %>
@@ -24,16 +27,13 @@
   </ul>
 
   <% if @q.present? %>
-    <%= render DS::Button.new(
+    <% resolved_clear_all_url = clear_all_url || transactions_path(clear_filters: true, per_page: params[:per_page].presence) %>
+    <%= render DS::Link.new(
       text: "Clear all",
-      type: "button",
       variant: "ghost",
       icon: "x",
-      data: {
-        controller: "clear-search",
-        action: "click->clear-search#reset",
-        "clear-search-form-id-value": "transactions-search"
-      }
+      href: resolved_clear_all_url,
+      data: { turbo_frame: "_top" }
     ) %>
   <% end %>
 </div>

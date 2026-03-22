@@ -16,8 +16,10 @@ module TransactionsHelper
     "transactions/searches/filters/#{filter[:key]}"
   end
 
-  def get_default_transaction_search_filter
-    transaction_search_filters[0]
+  def account_search_filters
+    transaction_search_filters
+      .reject { |f| f[:key] == "account_filter" }
+      .map { |f| f[:key] == "type_filter" ? f.merge(key: "account_type_filter") : f }
   end
 
   # ---- Transaction extra details helpers ----

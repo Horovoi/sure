@@ -62,16 +62,98 @@ class EntrySearchTest < ActiveSupport::TestCase
     assert_includes pending_results, pending_entry
   end
 
+  test "mixed income and trade type filter returns both transaction and trade entries" do
+    income_entry = create_transaction(account: @account, name: "Salary", amount: -150)
+    trade_entry = create_trade(securities(:aapl), account: accounts(:investment), qty: 2, date: Date.current)
+    expense_entry = create_transaction(account: @account, name: "Groceries", amount: 40)
+    valuation_entry = create_valuation(account: @account, name: "Snapshot", date: Date.current - 1.day)
+
+    results = Entry.search(types: %w[income trade])
+
+    assert_includes results, income_entry
+    assert_includes results, trade_entry
+    assert_not_includes results, expense_entry
+    assert_not_includes results, valuation_entry
+  end
+
+  test "mixed balance update and expense type filter returns both valuation and expense entries" do
+    valuation_entry = create_valuation(account: @account, name: "Snapshot", date: Date.current - 1.day)
+    expense_entry = create_transaction(account: @account, name: "Coffee", amount: 25)
+    income_entry = create_transaction(account: @account, name: "Paycheck", amount: -200)
+
+    results = Entry.search(types: %w[balance_update expense])
+
+    assert_includes results, valuation_entry
+    assert_includes results, expense_entry
+    assert_not_includes results, income_entry
+  end
+
+  test "selecting all five types behaves like no type filter" do
+    expense_entry = create_transaction(account: @account, name: "Coffee", amount: 25)
+    income_entry = create_transaction(account: @account, name: "Paycheck", amount: -200)
+    transfer_entry = create_transaction(account: @account, name: "Transfer", amount: 50, kind: "funds_movement")
+    valuation_entry = create_valuation(account: @account, name: "Snapshot", date: Date.current - 1.day)
+    trade_entry = create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: Date.current)
+
+    scoped_ids = [ expense_entry, income_entry, transfer_entry, valuation_entry, trade_entry ].map(&:id)
+
+    results = Entry.search(types: %w[income expense transfer balance_update trade]).where(id: scoped_ids)
+
+    assert_equal scoped_ids.sort, results.ids.sort
+  end
+
+  test "category, merchant, and tag filters only match transaction entries" do
+    matching_entry = create_transaction(
+      account: @account,
+      name: "Matched purchase",
+      amount: 60,
+      category: categories(:food_and_drink),
+      merchant: merchants(:amazon),
+      tags: [ tags(:one) ]
+    )
+    trade_entry = create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: Date.current)
+    valuation_entry = create_valuation(account: @account, name: "Snapshot", date: Date.current - 1.day)
+
+    assert_equal [ matching_entry.id ], Entry.search(categories: [ categories(:food_and_drink).name ]).where(id: [ matching_entry.id, trade_entry.id, valuation_entry.id ]).ids
+    assert_equal [ matching_entry.id ], Entry.search(merchants: [ merchants(:amazon).name ]).where(id: [ matching_entry.id, trade_entry.id, valuation_entry.id ]).ids
+    assert_equal [ matching_entry.id ], Entry.search(tags: [ tags(:one).name ]).where(id: [ matching_entry.id, trade_entry.id, valuation_entry.id ]).ids
+  end
+
+  test "transaction-specific filters compose with status date and search" do
+    matching_entry = create_pending_transaction(
+      account: @account,
+      name: "Composable lunch",
+      provider: "plaid",
+      date: Date.current,
+      amount: 42,
+      category: categories(:food_and_drink)
+    )
+    create_transaction(account: @account, name: "Composable lunch old", amount: 42, date: 2.days.ago, category: categories(:food_and_drink))
+    create_transaction(account: @account, name: "Composable lunch income", amount: -42, date: Date.current, category: categories(:food_and_drink))
+
+    results = Entry.search(
+      search: "Composable lunch",
+      start_date: Date.current.to_s,
+      end_date: Date.current.to_s,
+      status: [ "pending" ],
+      types: [ "expense" ],
+      categories: [ categories(:food_and_drink).name ]
+    )
+
+    assert_includes results, matching_entry
+    assert_equal [ matching_entry.id ], results.where(id: Entry.where("entries.name LIKE ?", "Composable lunch%").select(:id)).ids
+  end
+
   private
 
-    def create_pending_transaction(account:, name:, provider:, date: Date.current)
-      transaction = Transaction.new(extra: { provider => { "pending" => true } })
+    def create_pending_transaction(account:, name:, provider:, date: Date.current, amount: 100, **transaction_attributes)
+      transaction = Transaction.new(transaction_attributes.merge(extra: { provider => { "pending" => true } }))
       Entry.create!(
         account: account,
         name: name,
         date: date,
         currency: "USD",
-        amount: 100,
+        amount: amount,
         entryable: transaction
       )
     end
