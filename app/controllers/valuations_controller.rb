@@ -5,6 +5,12 @@ class ValuationsController < ApplicationController
     @account = Current.family.accounts.find(params.dig(:entry, :account_id))
     @entry = @account.entries.build(entry_params.merge(currency: @account.currency))
 
+    if entry_params[:amount].blank?
+      @error_message = t("valuations.errors.amount_required")
+      render :new, status: :unprocessable_entity
+      return
+    end
+
     @reconciliation_dry_run = @entry.account.create_reconciliation(
       balance: entry_params[:amount],
       date: entry_params[:date],
@@ -22,6 +28,13 @@ class ValuationsController < ApplicationController
   def confirm_update
     @entry = Current.family.entries.find(params[:id])
     @account = @entry.account
+
+    if entry_params[:amount].blank?
+      @error_message = t("valuations.errors.amount_required")
+      render :show, status: :unprocessable_entity
+      return
+    end
+
     @entry.assign_attributes(entry_params.merge(currency: @account.currency))
 
     @reconciliation_dry_run = @entry.account.update_reconciliation(
