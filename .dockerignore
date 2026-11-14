@@ -43,3 +43,11 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+
+# Ignore local database backups and private working files. They must never be
+# copied into the image: the image is pushed to a registry.
+/backups/
+/temp.md
+/docs/temp/
+/.claude/settings.local.json
+/.ruby-lsp/
