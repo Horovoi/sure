@@ -21,18 +21,17 @@
 
       <div class="mt-4 md:mt-0">
         <% if Current.user.otp_required? %>
-          <%= render DS::Button.new(
-            text: t(".disable_mfa"),
-            variant: "secondary",
-            href: disable_mfa_path,
-            method: :delete,
-            confirm: CustomConfirm.new(
-              title: t(".disable_mfa_confirm"),
-              body: t(".disable_mfa_confirm"),
-              btn_text: t(".disable_mfa"),
-              destructive: true
-            )
-          ) %>
+          <%# Disabling needs a current code (or a backup code), like signing in %>
+          <%= styled_form_with url: disable_mfa_path, method: :delete,
+                class: "flex items-end gap-2",
+                data: { turbo_confirm: t(".disable_mfa_confirm") } do |form| %>
+            <%= form.text_field :code,
+                  required: true,
+                  autocomplete: "one-time-code",
+                  inputmode: "text",
+                  label: t(".disable_mfa_code_label") %>
+            <%= form.submit t(".disable_mfa"), class: "shrink-0" %>
+          <% end %>
         <% else %>
           <%= render DS::Link.new(
             text: t(".enable_mfa"),

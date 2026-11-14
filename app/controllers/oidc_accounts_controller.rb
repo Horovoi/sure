@@ -4,7 +4,7 @@ class OidcAccountsController < ApplicationController
 
   def link
     # Check if there's pending OIDC auth in session
-    @pending_auth = session[:pending_oidc_auth]
+    @pending_auth = pending_oidc_auth
 
     if @pending_auth.nil?
       redirect_to new_session_path, alert: "No pending OIDC authentication found"
@@ -20,7 +20,7 @@ class OidcAccountsController < ApplicationController
   end
 
   def create_link
-    @pending_auth = session[:pending_oidc_auth]
+    @pending_auth = pending_oidc_auth
 
     if @pending_auth.nil?
       redirect_to new_session_path, alert: "No pending OIDC authentication found"
@@ -51,7 +51,7 @@ class OidcAccountsController < ApplicationController
 
       # Check if user has MFA enabled
       if user.otp_required?
-        session[:mfa_user_id] = user.id
+        start_mfa_step_for(user)
         redirect_to verify_mfa_path
       else
         @session = create_session_for(user)
@@ -67,7 +67,7 @@ class OidcAccountsController < ApplicationController
 
   def new_user
     # Check if there's pending OIDC auth in session
-    @pending_auth = session[:pending_oidc_auth]
+    @pending_auth = pending_oidc_auth
 
     if @pending_auth.nil?
       redirect_to new_session_path, alert: "No pending OIDC authentication found"
@@ -83,7 +83,7 @@ class OidcAccountsController < ApplicationController
   end
 
   def create_user
-    @pending_auth = session[:pending_oidc_auth]
+    @pending_auth = pending_oidc_auth
 
     if @pending_auth.nil?
       redirect_to new_session_path, alert: "No pending OIDC authentication found"
@@ -150,7 +150,22 @@ class OidcAccountsController < ApplicationController
     end
   end
 
+  PENDING_AUTH_TTL = 15.minutes
+
   private
+    # The IdP login waiting to be linked or turned into an account. It is
+    # only valid for PENDING_AUTH_TTL after the IdP callback.
+    def pending_oidc_auth
+      pending = session[:pending_oidc_auth]
+      return nil if pending.blank?
+
+      if Time.current.to_i - pending["started_at"].to_i > PENDING_AUTH_TTL.to_i
+        session.delete(:pending_oidc_auth)
+        return nil
+      end
+
+      pending
+    end
 
     def jit_signup_allowed?(email)
       return false if AuthConfig.jit_link_only?

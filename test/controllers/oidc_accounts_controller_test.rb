@@ -12,7 +12,8 @@ class OidcAccountsControllerTest < ActionController::TestCase
       "email" => @user.email,
       "name" => "Bob Dylan",
       "first_name" => "Bob",
-      "last_name" => "Dylan"
+      "last_name" => "Dylan",
+      "started_at" => Time.current.to_i
     }
   end
 
@@ -94,7 +95,8 @@ class OidcAccountsControllerTest < ActionController::TestCase
       "email" => "newuser@example.com",
       "name" => "New User",
       "first_name" => "New",
-      "last_name" => "User"
+      "last_name" => "User",
+      "started_at" => Time.current.to_i
     }
   end
 
@@ -303,5 +305,14 @@ class OidcAccountsControllerTest < ActionController::TestCase
       post :create_link, params: { email: @user.email, password: user_password_test }
     end
     assert_response :unprocessable_entity
+  end
+
+  test "a pending SSO login expires" do
+    session[:pending_oidc_auth] = pending_auth.merge("started_at" => 16.minutes.ago.to_i)
+
+    get :link
+
+    assert_redirected_to new_session_path
+    assert_nil session[:pending_oidc_auth]
   end
 end

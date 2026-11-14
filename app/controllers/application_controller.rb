@@ -34,6 +34,13 @@ class ApplicationController < ActionController::Base
       end
     end
 
+    # Password (or SSO) step done; the MFA step must follow within
+    # MfaController::MFA_STEP_TTL.
+    def start_mfa_step_for(user)
+      session[:mfa_user_id] = user.id
+      session[:mfa_started_at] = Time.current.to_i
+    end
+
     def store_pending_invitation_if_valid
       token = params[:invitation].to_s.presence
       return if token.blank?

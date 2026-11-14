@@ -61,7 +61,7 @@ class SessionsController < ApplicationController
     if user
       if user.otp_required?
         log_super_admin_override_login(user)
-        session[:mfa_user_id] = user.id
+        start_mfa_step_for(user)
         redirect_to verify_mfa_path
       else
         log_super_admin_override_login(user)
@@ -75,7 +75,8 @@ class SessionsController < ApplicationController
   end
 
   def destroy
-    user = Current.user
+    # The signed-in person, not the user they may be impersonating
+    user = Current.true_user
     id_token = session[:id_token_hint]
     login_provider = session[:sso_login_provider]
 
@@ -86,10 +87,11 @@ class SessionsController < ApplicationController
       user.oidc_identities.first
     end
 
-    # Destroy local session
+    # Destroy local session, and start a fresh cookie session so nothing
+    # from this login survives it (return_to, pending MFA, OIDC or invitation)
     @session.destroy
-    session.delete(:id_token_hint)
-    session.delete(:sso_login_provider)
+    cookies.delete(:session_token)
+    reset_session
 
     # Check if we should redirect to IdP for federated logout
     if oidc_identity && id_token.present?
@@ -142,7 +144,7 @@ class SessionsController < ApplicationController
 
       # MFA check: If user has MFA enabled, require verification
       if user.otp_required?
-        session[:mfa_user_id] = user.id
+        start_mfa_step_for(user)
         redirect_to verify_mfa_path
       else
         @session = create_session_for(user)
@@ -157,7 +159,8 @@ class SessionsController < ApplicationController
         email: auth.info&.email,
         name: auth.info&.name,
         first_name: auth.info&.first_name,
-        last_name: auth.info&.last_name
+        last_name: auth.info&.last_name,
+        started_at: Time.current.to_i
       }
       redirect_to link_oidc_account_path
     end
@@ -189,7 +192,7 @@ class SessionsController < ApplicationController
 
   private
     def set_session
-      @session = Current.user.sessions.find(params[:id])
+      @session = Current.true_user.sessions.find(params[:id])
     end
 
     def log_super_admin_override_login(user)

@@ -216,9 +216,9 @@ class User < ApplicationRecord
   end
 
   def verify_otp?(code)
-    return false if otp_secret.blank?
+    return false if otp_secret.blank? || code.blank?
     return true if verify_backup_code?(code)
-    totp.verify(code, drift_behind: 15)
+    totp.verify(code.to_s.strip, drift_behind: 15).present?
   end
 
   def provisioning_uri
@@ -363,18 +363,18 @@ class User < ApplicationRecord
       ROTP::TOTP.new(otp_secret, issuer: "Sure Finances")
     end
 
+    # Consumes the code with one conditional UPDATE, so the same backup code
+    # cannot be used twice by concurrent requests.
     def verify_backup_code?(code)
-      return false if otp_backup_codes.blank?
+      return false if code.blank? || otp_backup_codes.blank?
 
-      # Find and remove the used backup code
-      if (index = otp_backup_codes.index(code))
-        remaining_codes = otp_backup_codes.dup
-        remaining_codes.delete_at(index)
-        update_column(:otp_backup_codes, remaining_codes)
-        true
-      else
-        false
-      end
+      code = code.to_s.strip
+      consumed = self.class.where(id: id)
+        .where("? = ANY(otp_backup_codes)", code)
+        .update_all([ "otp_backup_codes = array_remove(otp_backup_codes, ?)", code ]) == 1
+      self.otp_backup_codes = otp_backup_codes - [ code ] if consumed
+      clear_attribute_change(:otp_backup_codes) if consumed
+      consumed
     end
 
     def generate_backup_codes

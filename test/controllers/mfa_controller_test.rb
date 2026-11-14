@@ -113,17 +113,86 @@ class MfaControllerTest < ActionDispatch::IntegrationTest
     assert_not Session.exists?(user_id: @user.id)
   end
 
-  test "disable removes MFA" do
+  test "disable with a valid code removes MFA" do
+    as_signed_in_session do
+      @user.setup_mfa!
+      @user.enable_mfa!
+    end
+    totp = ROTP::TOTP.new(@user.otp_secret, issuer: "Sure Finances")
+
+    delete disable_mfa_path, params: { code: totp.now }
+
+    assert_redirected_to settings_security_path
+    assert_not @user.reload.otp_required?
+    assert_nil @user.otp_secret
+    assert_empty @user.otp_backup_codes
+  end
+
+  test "security settings ask for a code to disable MFA" do
+    as_signed_in_session do
+      @user.setup_mfa!
+      @user.enable_mfa!
+    end
+
+    get settings_security_path
+
+    assert_response :success
+    assert_select "form[action='#{disable_mfa_path}'] input[name='code']"
+  end
+
+  test "disable without a valid code keeps MFA on" do
     as_signed_in_session do
       @user.setup_mfa!
       @user.enable_mfa!
     end
 
     delete disable_mfa_path
-
     assert_redirected_to settings_security_path
-    assert_not @user.reload.otp_required?
-    assert_nil @user.otp_secret
-    assert_empty @user.otp_backup_codes
+    assert @user.reload.otp_required?
+
+    delete disable_mfa_path, params: { code: "000000" }
+    assert @user.reload.otp_required?
+  end
+
+  test "a wrong code on the enable step does not turn off MFA that is already on" do
+    as_signed_in_session do
+      @user.setup_mfa!
+      @user.enable_mfa!
+    end
+
+    post mfa_path, params: { code: "invalid" }
+
+    assert_redirected_to root_path
+    assert @user.reload.otp_required?
+    assert @user.otp_secret.present?
+  end
+
+  test "a backup code works only once" do
+    as_signed_in_session do
+      @user.setup_mfa!
+      @user.enable_mfa!
+    end
+    code = @user.otp_backup_codes.first
+    stale_copy = User.find(@user.id)
+
+    assert @user.verify_otp?(code)
+    assert_not stale_copy.verify_otp?(code), "a second request holding the old codes must not reuse it"
+    assert_not_includes @user.reload.otp_backup_codes, code
+  end
+
+  test "the MFA step expires" do
+    @user.setup_mfa!
+    @user.enable_mfa!
+    sign_out
+
+    post sessions_path, params: { email: @user.email, password: user_password_test }
+    assert_redirected_to verify_mfa_path
+
+    travel 11.minutes do
+      totp = ROTP::TOTP.new(@user.otp_secret, issuer: "Sure Finances")
+      post verify_mfa_path, params: { code: totp.now }
+      assert_redirected_to new_session_path
+      assert_not Session.exists?(user_id: @user.id)
+    end
   end
 end
