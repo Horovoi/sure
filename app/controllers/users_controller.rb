@@ -33,7 +33,9 @@ class UsersController < ApplicationController
       @user.profile_image.purge if should_purge_profile_image?
 
       # Add a special notice if AI was just enabled or disabled
-      notice = if !was_ai_enabled && @user.ai_enabled
+      notice = if family_attributes_refused?
+        t(".family_settings_admin_only")
+      elsif !was_ai_enabled && @user.ai_enabled
         "AI Assistant has been enabled successfully."
       elsif was_ai_enabled && !@user.ai_enabled
         "AI Assistant has been disabled."
@@ -124,13 +126,20 @@ class UsersController < ApplicationController
       params.require(:user).permit(:rule_prompt_dismissed_at, :rule_prompts_disabled)
     end
 
+    # Household settings (currency, locale, fiscal months, ...) belong to the
+    # whole family, so only a family admin may change them.
+    def family_attributes_refused?
+      params.dig(:user, :family_attributes).present? && !Current.user.admin?
+    end
+
     def user_params
-      params.require(:user).permit(
+      permitted = params.require(:user).permit(
         :first_name, :last_name, :email, :profile_image, :redirect_to, :delete_profile_image, :onboarding_step,
         :show_sidebar, :default_period, :default_account_order, :show_ai_sidebar, :ai_enabled, :theme,
         family_attributes: [ :name, :currency, :country, :locale, :date_format, :timezone, :use_fiscal_months, :fiscal_month_start_day, :id ],
         goals: []
       )
+      family_attributes_refused? ? permitted.except(:family_attributes) : permitted
     end
 
     def set_user

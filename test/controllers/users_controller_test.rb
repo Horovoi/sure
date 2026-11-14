@@ -208,4 +208,28 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     get root_url
     assert_redirected_to new_session_url
   end
+
+  test "a family member cannot change household settings" do
+    member = users(:family_member)
+    family = member.family
+    sign_in member
+
+    patch user_url(member), params: { user: {
+      first_name: "Jake",
+      family_attributes: { currency: "EUR", use_fiscal_months: "1", fiscal_month_start_day: 15, name: "Renamed" }
+    } }
+
+    assert_redirected_to settings_profile_url
+    assert_equal I18n.t("users.update.family_settings_admin_only"), flash[:notice]
+    assert_equal "Jake", member.reload.first_name
+    family.reload
+    assert_not_equal "EUR", family.currency
+    assert_not_equal "Renamed", family.name
+  end
+
+  test "a family admin can change household settings" do
+    patch user_url(@user), params: { user: { family_attributes: { name: "New Name" } } }
+
+    assert_equal "New Name", @user.family.reload.name
+  end
 end
