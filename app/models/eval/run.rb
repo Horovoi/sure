@@ -87,7 +87,7 @@ class Eval::Run < ApplicationRecord
       self.total_cost = results.sum(:cost)
     end
 
-    def record_failure(error)
+    def record_failure(error = "Run did not finish")
       self.completed_at = Time.current
       self.error_message = error.is_a?(Exception) ? "#{error.class}: #{error.message}" : error.to_s
     end
