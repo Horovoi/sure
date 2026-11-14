@@ -36,5 +36,5 @@
     <% end %>
   </div>
 
-  <%= form.submit "Apply configuration", disabled: import.complete? %>
+  <%= form.submit "Apply configuration", disabled: !import.editable? %>
 <% end %>

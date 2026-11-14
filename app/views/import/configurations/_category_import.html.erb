@@ -9,6 +9,6 @@
                        method: :patch,
                        class: "space-y-3" do |form| %>
     <p class="text-sm text-secondary"><%= t("import.configurations.category_import.instructions") %></p>
-    <%= form.submit t("import.configurations.category_import.button_label"), disabled: import.complete? %>
+    <%= form.submit t("import.configurations.category_import.button_label"), disabled: !import.editable? %>
   <% end %>
 </div>

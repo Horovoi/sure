@@ -168,6 +168,7 @@ Rails.application.routes.draw do
       post :publish
       put :revert
       put :apply_template
+      post :retry_processing
     end
 
     resource :upload, only: %i[show update], module: :import

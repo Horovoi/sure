@@ -49,6 +49,18 @@
                     <%= render "shared/badge" do %>
                       <%= t("imports.table.row.status.in_progress") %>
                     <% end %>
+                  <% elsif import.processing? %>
+                    <%= render "shared/badge", color: "warning", pulse: true do %>
+                      <%= t("imports.table.row.status.processing") %>
+                    <% end %>
+                  <% elsif import.processing_failed? %>
+                    <%= render "shared/badge", color: "error" do %>
+                      <%= t("imports.table.row.status.processing_failed") %>
+                    <% end %>
+                  <% elsif import.indexed? %>
+                    <%= render "shared/badge", color: "success" do %>
+                      <%= t("imports.table.row.status.indexed") %>
+                    <% end %>
                   <% elsif import.importing? %>
                     <%= render "shared/badge", color: "warning", pulse: true do %>
                       <%= t("imports.table.row.status.uploading") %>
@@ -58,8 +70,12 @@
                       <%= t("imports.table.row.status.failed") %>
                     <% end %>
                   <% elsif import.reverting? %>
-                    <%= render "shared/badge", color: "warning" do %>
+                    <%= render "shared/badge", color: "warning", pulse: true do %>
                       <%= t("imports.table.row.status.reverting") %>
+                    <% end %>
+                  <% elsif import.reverted? %>
+                    <%= render "shared/badge" do %>
+                      <%= t("imports.table.row.status.reverted") %>
                     <% end %>
                   <% elsif import.revert_failed? %>
                     <%= render "shared/badge", color: "error" do %>
@@ -73,7 +89,7 @@
                 </td>
                 <td class="px-2 py-3 text-right">
                   <div class="flex items-center justify-end gap-2">
-                    <% if import.complete? || import.revert_failed? %>
+                    <% if import.revertable? %>
                       <%= button_to revert_import_path(import),
                                     method: :put,
                                     class: "flex items-center gap-2",
@@ -84,7 +100,7 @@
                         <%= icon "rotate-ccw", class: "w-5 h-5 text-destructive" %>
                       <% end %>
 
-                    <% else %>
+                    <% elsif import.deletable? %>
                       <%= button_to import_path(import),
                                     method: :delete,
                                     class: "flex items-center gap-2 text-destructive hover:text-destructive-hover",

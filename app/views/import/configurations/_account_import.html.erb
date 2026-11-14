@@ -14,5 +14,5 @@
                     required: @import.date_col_label.present? %>
   </div>
 
-  <%= form.submit "Apply configuration", disabled: import.complete? %>
+  <%= form.submit "Apply configuration", disabled: !import.editable? %>
 <% end %>

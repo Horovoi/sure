@@ -1,5 +1,8 @@
 class Import::RowsController < ApplicationController
+  include ImportEditable
+
   before_action :set_import_row
+  before_action :ensure_import_editable, only: :update
 
   def update
     @row.update_and_sync(row_params)

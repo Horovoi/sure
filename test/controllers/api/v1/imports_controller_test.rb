@@ -74,6 +74,30 @@ class Api::V1::ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "-10.00", import.rows.first.amount # Normalized
   end
 
+  test "auto-publish builds the category mappings first" do
+    csv_content = "date,amount,name,category\n2023-01-01,-10.00,Test Transaction,Brand new category"
+
+    post api_v1_imports_url,
+         params: {
+           raw_file_content: csv_content,
+           date_col_label: "date",
+           amount_col_label: "amount",
+           name_col_label: "name",
+           category_col_label: "category",
+           account_id: @account.id,
+           date_format: "%Y-%m-%d",
+           publish: "true"
+         },
+         headers: { Authorization: "Bearer #{@token}" }
+
+    assert_response :created
+    import = Import.find(JSON.parse(response.body)["data"]["id"])
+    assert import.importing?
+
+    mapping = import.mappings.categories.find_by!(key: "Brand new category")
+    assert mapping.create_when_empty
+  end
+
   test "should create import and auto-publish when configured and requested" do
     csv_content = "date,amount,name\n2023-01-01,-10.00,Test Transaction"
 
