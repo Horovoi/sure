@@ -39,7 +39,7 @@
     <% end %>
   </div>
 
-  <% if Setting.onboarding_state == "invite_only" %>
+  <% if Setting.onboarding_state == "invite_only" && Current.user.super_admin? %>
     <div class="flex items-center justify-between mb-4">
       <div>
         <span class="text-primary text-base font-medium"><%= t(".generated_tokens") %></span>
