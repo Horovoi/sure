@@ -1,5 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 
+let lastTemplateKey = 0;
+
 // Connects to data-controller="rules"
 export default class extends Controller {
   static targets = [
@@ -49,8 +51,11 @@ export default class extends Controller {
     listEl.insertAdjacentHTML("beforeend", html);
   }
 
+  // Keys for nested-attribute templates. Date.now() alone repeats when two
+  // items are added within the same millisecond, and Rails then merges them.
   #uniqueKey() {
-    return Date.now();
+    lastTemplateKey = Math.max(Date.now(), lastTemplateKey + 1);
+    return lastTemplateKey;
   }
 
   // Updates the prefix visibility of all conditions and condition groups
