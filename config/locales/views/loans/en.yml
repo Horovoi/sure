@@ -12,12 +12,13 @@ en:
       term_months_placeholder: '360'
     new:
       title: Enter loan details
-    overview:
-      interest_rate: Interest Rate
-      monthly_payment: Monthly Payment
-      not_applicable: N/A
-      original_principal: Original Principal
-      remaining_principal: Remaining Principal
-      term: Term
-      type: Type
-      unknown: Unknown
+    tabs:
+      overview:
+        interest_rate: Interest Rate
+        monthly_payment: Monthly Payment
+        not_applicable: N/A
+        original_principal: Original Principal
+        remaining_principal: Remaining Principal
+        term: Term
+        type: Type
+        unknown: Unknown

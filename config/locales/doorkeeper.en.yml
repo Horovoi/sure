@@ -132,6 +132,10 @@ en:
         forbidden_token:
           missing_scope: 'Access to this resource requires scope "%{oauth_scopes}".'
 
+    scopes:
+      read: 'View your accounts, transactions and other financial data'
+      read_write: 'View and change your accounts, transactions and other financial data'
+
     flash:
       applications:
         create:

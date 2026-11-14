@@ -189,7 +189,7 @@ class Settings::HostingsController < ApplicationController
     end
 
     def ensure_admin
-      redirect_to settings_hosting_path, alert: t(".not_authorized") unless Current.user.admin?
+      redirect_to settings_hosting_path, alert: t("settings.hostings.not_authorized") unless Current.user.admin?
     end
 
     def sync_auto_sync_scheduler!
@@ -197,7 +197,7 @@ class Settings::HostingsController < ApplicationController
     rescue StandardError => error
       Rails.logger.error("[AutoSyncScheduler] Failed to sync scheduler: #{error.message}")
       Rails.logger.error(error.backtrace.join("\n"))
-      flash[:alert] = t(".scheduler_sync_failed")
+      flash[:alert] = t("settings.hostings.update.scheduler_sync_failed")
     end
 
     def sync_scheduled_jobs_manager!
@@ -205,7 +205,7 @@ class Settings::HostingsController < ApplicationController
     rescue StandardError => error
       Rails.logger.error("[ScheduledJobsManager] Failed to sync scheduler: #{error.message}")
       Rails.logger.error(error.backtrace.join("\n"))
-      flash[:alert] = t(".scheduler_sync_failed")
+      flash[:alert] = t("settings.hostings.update.scheduler_sync_failed")
     end
 
     def current_user_timezone

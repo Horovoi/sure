@@ -58,8 +58,8 @@ Rails.application.configure do
 
   config.active_job.queue_adapter = :test
 
-  # Raises error for missing translations.
-  # config.i18n.raise_on_missing_translations = true
+  # A missing translation fails the test instead of rendering a placeholder
+  config.i18n.raise_on_missing_translations = true
 
   # Annotate rendered view with file names.
   # config.action_view.annotate_rendered_view_with_filenames = true

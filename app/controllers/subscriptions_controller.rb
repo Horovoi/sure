@@ -91,7 +91,7 @@ class SubscriptionsController < ApplicationController
     if @subscription.save
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
 
-      redirect_to subscriptions_path, notice: t(".created")
+      redirect_to subscriptions_path, notice: t("subscriptions.created")
     else
       @subscription_services = SubscriptionService.alphabetically
       @accounts = Current.family.accounts.visible.alphabetically
@@ -123,7 +123,7 @@ class SubscriptionsController < ApplicationController
         @subscription.save!
       end
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
-      redirect_to subscriptions_path, notice: t(".updated")
+      redirect_to subscriptions_path, notice: t("subscriptions.updated")
     else
       @subscription_services = SubscriptionService.alphabetically
       @accounts = Current.family.accounts.visible.alphabetically
@@ -134,7 +134,7 @@ class SubscriptionsController < ApplicationController
 
   def destroy
     @subscription.destroy!
-    redirect_to subscriptions_path, notice: t(".deleted")
+    redirect_to subscriptions_path, notice: t("subscriptions.deleted")
   end
 
   def toggle_status

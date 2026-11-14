@@ -11,6 +11,7 @@ en:
       loading_message: Loading Lunch Flow accounts...
       loading_title: Loading
     link_accounts:
+      no_api_key: Lunch Flow API key is not configured. Please configure it in Settings.
       all_already_linked:
         one: "The selected account (%{names}) is already linked"
         other: "All %{count} selected accounts are already linked: %{names}"
@@ -43,6 +44,7 @@ en:
       total: Total
       unlinked: Unlinked
     select_accounts:
+      no_credentials_configured: Please configure your Lunch Flow API key first in Provider Settings.
       accounts_selected: accounts selected
       api_error: "API error: %{message}"
       cancel: Cancel
@@ -54,6 +56,7 @@ en:
       no_name_placeholder: "(No name)"
       title: Select Lunch Flow Accounts
     select_existing_account:
+      no_credentials_configured: Please configure your Lunch Flow API key first in Provider Settings.
       account_already_linked: This account is already linked to a provider
       all_accounts_already_linked: All Lunch Flow accounts are already linked
       api_error: "API error: %{message}"
@@ -67,6 +70,7 @@ en:
       no_name_placeholder: "(No name)"
       title: "Link %{account_name} with Lunch Flow"
     link_existing_account:
+      no_api_key: Lunch Flow API key is not configured. Please configure it in Settings.
       account_already_linked: This account is already linked to a provider
       api_error: "API error: %{message}"
       invalid_account_name: Cannot link account with blank name

@@ -14,6 +14,8 @@ en:
       valuations: Value
       value: value
     new:
+      amount: Amount
+      submit: Add balance update
       title: New balance
     show:
       amount: Amount

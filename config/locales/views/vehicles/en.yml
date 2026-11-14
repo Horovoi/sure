@@ -15,11 +15,12 @@ en:
       year_placeholder: '2023'
     new:
       title: Enter vehicle details
-    overview:
-      current_price: Current Price
-      make_model: Make & Model
-      mileage: Mileage
-      purchase_price: Purchase Price
-      trend: Trend
-      unknown: Unknown
-      year: Year
+    tabs:
+      overview:
+        current_price: Current Price
+        make_model: Make & Model
+        mileage: Mileage
+        purchase_price: Purchase Price
+        trend: Trend
+        unknown: Unknown
+        year: Year
