@@ -24,8 +24,11 @@ export default class extends Controller {
 
     this.hoverTimeout = null
     this.longPressTimeout = null
+    this.hideTimeout = null
     this.touchStartTime = null
     this.cleanup = null
+
+    document.addEventListener("keydown", this.handleKeydown)
   }
 
   showDayDetails(event) {
@@ -123,7 +126,8 @@ export default class extends Controller {
 
     if (elapsed >= this.longPressDelayValue) {
       event.preventDefault()
-      setTimeout(() => this.hideHoverCard(), 2000)
+      clearTimeout(this.hideTimeout)
+      this.hideTimeout = setTimeout(() => this.hideHoverCard(), 2000)
     }
   }
 
@@ -260,11 +264,13 @@ export default class extends Controller {
     document.removeEventListener("keydown", this.handleKeydown)
     clearTimeout(this.hoverTimeout)
     clearTimeout(this.longPressTimeout)
+    clearTimeout(this.hideTimeout)
     if (this.cleanup) this.cleanup()
+    this.cleanup = null
   }
 
   handleKeydown = (event) => {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && this.hasDrawerTarget && !this.drawerTarget.classList.contains("hidden")) {
       this.closeDayDetails()
     }
   }

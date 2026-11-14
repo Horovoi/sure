@@ -1,5 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 
+let lastTemplateKey = 0;
+
 // Connects to data-controller="rule--conditions"
 export default class extends Controller {
   static values = { conditionFilters: Array };
@@ -119,8 +121,11 @@ export default class extends Controller {
     return newFormField;
   }
 
+  // Keys for nested-attribute templates. Date.now() alone repeats when two
+  // items are added within the same millisecond, and Rails then merges them.
   #uniqueKey() {
-    return Date.now();
+    lastTemplateKey = Math.max(Date.now(), lastTemplateKey + 1);
+    return lastTemplateKey;
   }
 
   #toggleValueFieldVisibility() {

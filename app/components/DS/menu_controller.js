@@ -19,7 +19,11 @@ export default class extends Controller {
   };
 
   connect() {
+    // The DOM is the source of truth for whether the menu is open: a page
+    // restored from the Turbo cache must not start with show=false while the
+    // content is still visible.
     this.show = this.showValue;
+    this.contentTarget.classList.toggle("hidden", !this.show);
     this.boundUpdate = this.update.bind(this);
     this.addEventListeners();
     this.startAutoUpdate();
@@ -35,7 +39,7 @@ export default class extends Controller {
     this.buttonTarget.addEventListener("click", this.toggle);
     this.element.addEventListener("keydown", this.handleKeydown);
     document.addEventListener("click", this.handleOutsideClick);
-    document.addEventListener("turbo:load", this.handleTurboLoad);
+    document.addEventListener("turbo:before-cache", this.handleBeforeCache);
     document.addEventListener("turbo:submit-end", this.handleTurboSubmitEnd);
   }
 
@@ -43,12 +47,13 @@ export default class extends Controller {
     this.buttonTarget.removeEventListener("click", this.toggle);
     this.element.removeEventListener("keydown", this.handleKeydown);
     document.removeEventListener("click", this.handleOutsideClick);
-    document.removeEventListener("turbo:load", this.handleTurboLoad);
+    document.removeEventListener("turbo:before-cache", this.handleBeforeCache);
     document.removeEventListener("turbo:submit-end", this.handleTurboSubmitEnd);
   }
 
-  handleTurboLoad = () => {
-    if (!this.show) this.close();
+  // Never cache a page with an open menu
+  handleBeforeCache = () => {
+    this.close();
   };
 
   handleTurboSubmitEnd = (event) => {

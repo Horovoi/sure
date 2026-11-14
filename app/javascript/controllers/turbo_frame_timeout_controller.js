@@ -1,23 +1,49 @@
 import { Controller } from "@hotwired/stimulus"
 
 // Connects to data-controller="turbo-frame-timeout"
+// Shows "Timeout" when a frame's request takes too long. The timer starts when
+// the frame actually sends its request, so lazy frames below the fold do not
+// time out before they were ever fetched.
 export default class extends Controller {
   static values = { timeout: { type: Number, default: 10000 } }
 
   connect() {
-    this.timeoutId = setTimeout(() => {
-      this.handleTimeout()
-    }, this.timeoutValue)
+    this.startTimeout = this.startTimeout.bind(this)
+    this.clearTimeout = this.clearTimeout.bind(this)
 
-    // Listen for successful frame loads to clear timeout
-    this.element.addEventListener("turbo:frame-load", this.clearTimeout.bind(this))
+    this.element.addEventListener("turbo:before-fetch-request", this.startTimeout)
+    // Clear on success and on failure: a failed fetch renders its own content
+    this.element.addEventListener("turbo:frame-load", this.clearTimeout)
+    this.element.addEventListener("turbo:fetch-request-error", this.clearTimeout)
+    this.element.addEventListener("turbo:frame-missing", this.clearTimeout)
+
+    // An eager frame may have started its request before this controller
+    // connected
+    if (this.element.hasAttribute("busy")) this.startTimeout()
   }
 
   disconnect() {
+    this.element.removeEventListener("turbo:before-fetch-request", this.startTimeout)
+    this.element.removeEventListener("turbo:frame-load", this.clearTimeout)
+    this.element.removeEventListener("turbo:fetch-request-error", this.clearTimeout)
+    this.element.removeEventListener("turbo:frame-missing", this.clearTimeout)
     this.clearTimeout()
   }
 
-  clearTimeout() {
+  startTimeout(event) {
+    // Requests of nested frames bubble up; only time this frame's own
+    if (event && event.target !== this.element) return
+
+    this.clearTimeout()
+    this.timeoutId = setTimeout(() => {
+      this.timeoutId = null
+      this.handleTimeout()
+    }, this.timeoutValue)
+  }
+
+  clearTimeout(event) {
+    if (event && event.target !== this.element) return
+
     if (this.timeoutId) {
       clearTimeout(this.timeoutId)
       this.timeoutId = null
@@ -39,4 +65,4 @@ export default class extends Controller {
       </div>
     `
   }
-} 
+}
