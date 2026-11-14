@@ -1,5 +1,9 @@
 import { Controller } from "@hotwired/stimulus"
 
+// Each icon is independent (one download from the CDN, one upload to the app),
+// so several are processed at once instead of waiting for each to finish.
+const CONCURRENT_ICONS = 4
+
 export default class extends Controller {
   static targets = ["button", "status"]
 
@@ -21,44 +25,58 @@ export default class extends Controller {
       const total = services.length
       let cached = 0
       let failed = 0
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+      let nextIndex = 0
 
-      const clientId = this.element.dataset.iconCacheClientIdValue
-      const logoSize = this.element.dataset.iconCacheSizeValue || "40"
+      const worker = async () => {
+        while (nextIndex < total) {
+          const service = services[nextIndex++]
+          this.statusTarget.textContent = `Caching ${cached + failed + 1}/${total} — ${service.domain}...`
 
-      for (const service of services) {
-        this.statusTarget.textContent = `Caching ${cached + failed + 1}/${total} — ${service.domain}...`
-
-        try {
-          const iconUrl = `https://cdn.brandfetch.io/${service.domain}/icon/fallback/lettermark/w/${logoSize}/h/${logoSize}?c=${clientId}`
-          const iconResponse = await fetch(iconUrl)
-
-          if (!iconResponse.ok || !iconResponse.headers.get("content-type")?.startsWith("image/")) {
+          if (await this.cacheIcon(service)) {
+            cached++
+          } else {
             failed++
-            continue
           }
-
-          const blob = await iconResponse.blob()
-          const formData = new FormData()
-          formData.append("icon", blob, `${service.slug}.png`)
-
-          await fetch(`/subscription_services/${service.id}/cache_icon`, {
-            method: "POST",
-            headers: { "X-CSRF-Token": csrfToken },
-            body: formData
-          })
-
-          cached++
-        } catch {
-          failed++
         }
       }
+
+      await Promise.all(Array.from({ length: Math.min(CONCURRENT_ICONS, total) }, worker))
 
       this.statusTarget.textContent = `Done! Cached: ${cached}, Failed: ${failed}, Total: ${total}`
     } catch (error) {
       this.statusTarget.textContent = `Error: ${error.message}`
     } finally {
       this.buttonTarget.disabled = false
+    }
+  }
+
+  // Downloads one service's icon and stores it on the server. Returns whether it was cached.
+  async cacheIcon(service) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+    const clientId = this.element.dataset.iconCacheClientIdValue
+    const logoSize = this.element.dataset.iconCacheSizeValue || "40"
+
+    try {
+      const iconUrl = `https://cdn.brandfetch.io/${service.domain}/icon/fallback/lettermark/w/${logoSize}/h/${logoSize}?c=${clientId}`
+      const iconResponse = await fetch(iconUrl)
+
+      if (!iconResponse.ok || !iconResponse.headers.get("content-type")?.startsWith("image/")) {
+        return false
+      }
+
+      const blob = await iconResponse.blob()
+      const formData = new FormData()
+      formData.append("icon", blob, `${service.slug}.png`)
+
+      await fetch(`/subscription_services/${service.id}/cache_icon`, {
+        method: "POST",
+        headers: { "X-CSRF-Token": csrfToken },
+        body: formData
+      })
+
+      return true
+    } catch {
+      return false
     }
   }
 }
