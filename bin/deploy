@@ -52,8 +52,10 @@ start_version() {
   cat "$tmp" > "$ENV_FILE"
   rm -f "$tmp"
 
-  quiet prod up -d --wait web worker backup
+  quiet prod up -d --wait web worker
   wait_for_http "http://localhost:$port/up"
+  # Started without waiting: its health check only runs every five minutes
+  quiet prod up -d backup
 }
 
 if [ -n "$rollback" ]; then
@@ -85,6 +87,7 @@ if [ "$rehearse" = 1 ]; then
   start_staging
   echo "  the new version starts and serves pages on the copy"
   stop_staging_app
+  quiet staging stop db redis
 fi
 
 step "Backing up production"
