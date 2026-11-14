@@ -52,17 +52,17 @@ image_exists() { docker image inspect "sure:$1" >/dev/null 2>&1; }
 build_commit() {
   local tag="$1" dir="tmp/build-$1" status=0
   echo "  building sure:$tag from a clean checkout"
-  quiet git worktree add --detach "$dir" "$tag"
-  quiet docker build -t "sure:$tag" --build-arg BUILD_COMMIT_SHA="$(git rev-parse "$tag")" "$dir" || status=$?
-  quiet git worktree remove --force "$dir"
+  quiet git worktree add --detach "$dir" "$tag" || return 1
+  quiet docker build -t "sure:$tag" --build-arg BUILD_COMMIT_SHA="$(git rev-parse "$tag")" "$dir" || status=1
+  quiet git worktree remove --force "$dir" || status=1
   return $status
 }
 
 # Prints the tag for a ref, building its image first if there is none yet
 ensure_image() {
   local tag
-  tag=$(tag_for "$1")
-  image_exists "$tag" || build_commit "$tag" >&2
+  tag=$(tag_for "$1") || return 1
+  image_exists "$tag" || build_commit "$tag" >&2 || return 1
   echo "$tag"
 }
 
@@ -101,19 +101,25 @@ check_no_rows_lost() {
     }' "$1" "$2"
 }
 
+# Note on error handling: bash ignores `set -e` inside a function whose result the
+# caller tests (`if f`, `f || ...`). The functions below are called that way, so
+# every step that can fail is checked explicitly.
+
 # Migration versions that an image has and a stack's database does not
 pending_migrations() {
   local have want
-  have=$(echo "select version from schema_migrations" | sql "$1" | sort)
-  want=$(docker run --rm --entrypoint sh "sure:$2" -c 'ls db/migrate' | sed -n 's/^\([0-9]\{14\}\)_.*/\1/p' | sort)
+  have=$(echo "select version from schema_migrations" | sql "$1" | sort) || return 1
+  want=$(docker run --rm --entrypoint sh "sure:$2" -c 'ls db/migrate' | sed -n 's/^\([0-9]\{14\}\)_.*/\1/p' | sort) || return 1
+  [ -n "$want" ] || return 1
   comm -13 <(echo "$have") <(echo "$want")
 }
 
 # Runs pending migrations in a stack and checks that no table lost rows.
-# Returns 1 if rows were lost. Does nothing when there is nothing to migrate.
+# Returns 0 if all is well (or there was nothing to migrate), 1 if a table lost
+# rows, 2 if the migration itself failed.
 migrate_checked() {
   local stack="$1" pending before after
-  pending=$(pending_migrations "$stack" "$TAG")
+  pending=$(pending_migrations "$stack" "$TAG") || { echo "  ✗ could not read the migration state" >&2; return 2; }
   if [ -z "$pending" ]; then
     echo "  no pending migrations"
     return 0
@@ -121,9 +127,12 @@ migrate_checked() {
 
   echo "  $(echo "$pending" | wc -l | tr -d ' ') pending migration(s): $(echo "$pending" | tr '\n' ' ')"
   before=$(mktemp) after=$(mktemp)
-  table_counts "$stack" > "$before"
-  "$stack" run --rm web bin/rails db:migrate
-  table_counts "$stack" > "$after"
+  table_counts "$stack" > "$before" || return 2
+  if ! "$stack" run --rm web bin/rails db:migrate; then
+    echo "  ✗ the migration failed" >&2
+    return 2
+  fi
+  table_counts "$stack" > "$after" || return 2
 
   if check_no_rows_lost "$before" "$after"; then
     echo "  migrated; no table lost rows ($(wc -l < "$after" | tr -d ' ') tables checked)"

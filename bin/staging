@@ -29,6 +29,15 @@ ensure_copy() {
   staging_has_data || refresh_staging
 }
 
+# Brings the copy's schema up to the selected image. Lost rows are only reported
+# here (it is a copy); a migration that fails stops the command.
+migrate_on_copy() {
+  local status=0
+  migrate_checked staging || status=$?
+  [ "$status" != 2 ] || die "the migration failed on the copy"
+  [ "$status" != 1 ] || echo "  (continuing: this is the copy)"
+}
+
 # Environment for running the app from the working tree against the copy
 copy_env() {
   local secret
@@ -83,7 +92,7 @@ case "$command" in
 
     ensure_copy
     step "Starting sure:$TAG on the copy"
-    migrate_checked staging || echo "  (continuing: this is the copy)"
+    migrate_on_copy
     # shellcheck disable=SC2086
     start_staging $worker
     echo "✓ sure:$TAG is running on the copy: http://localhost:$STAGING_PORT"
@@ -125,7 +134,7 @@ case "$command" in
 
     refresh_staging
     step "Preparing the benchmark"
-    migrate_checked staging || echo "  (continuing: this is the copy)"
+    migrate_on_copy
     staging run --rm --no-deps web-new bin/rails runner /bench/prepare.rb | tail -1 | sed 's/^/  /'
 
     step "Measuring sure:$BENCH_OLD (twice, as a noise control) against sure:$BENCH_NEW"

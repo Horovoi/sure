@@ -81,7 +81,11 @@ echo "  built in ${SECONDS}s"
 if [ "$rehearse" = 1 ]; then
   refresh_staging
   step "Rehearsing sure:$TAG on the copy"
-  if ! migrate_checked staging && [ "$allow_row_loss" != 1 ]; then
+  status=0
+  migrate_checked staging || status=$?
+  if [ "$status" = 2 ]; then
+    die "Rehearsal failed: the migration does not run on a copy of production. Production was not touched."
+  elif [ "$status" = 1 ] && [ "$allow_row_loss" != 1 ]; then
     die "Rehearsal failed. Production was not touched. Re-run with --allow-row-loss if the loss is intended."
   fi
   start_staging
@@ -102,10 +106,15 @@ echo "  $backup ($(du -h "$backup" | cut -f1 | tr -d ' '))"
 ls -t "$backup_dir"/sure_pre_deploy_*.sql.gz 2>/dev/null | tail -n +11 | while read -r old; do rm -f "$old"; done
 
 step "Migrating production"
-if [ -n "$(pending_migrations prod "$TAG")" ]; then
+pending=$(pending_migrations prod "$TAG") || die "could not read the migration state of production; nothing was changed"
+if [ -n "$pending" ]; then
   quiet prod stop web worker
-  if ! migrate_checked prod && [ "$allow_row_loss" != 1 ]; then
-    die "Stopped before starting the new version. The app is down. The backup from before the migration is $backup. To continue anyway: bin/deploy --allow-row-loss"
+  status=0
+  migrate_checked prod || status=$?
+  if [ "$status" = 2 ]; then
+    die "The migration failed and the app is stopped. Rails rolled the failing migration back; any earlier ones in this deploy stay applied. Backup from before: $backup. Previous version: bin/deploy --rollback ${previous:-<commit>}"
+  elif [ "$status" = 1 ] && [ "$allow_row_loss" != 1 ]; then
+    die "Stopped before starting the new version; the app is down. Backup from before the migration: $backup. To continue anyway: bin/deploy --allow-row-loss"
   fi
 else
   echo "  no pending migrations"
