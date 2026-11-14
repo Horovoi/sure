@@ -1,7 +1,10 @@
 class Import::UploadsController < ApplicationController
+  include ImportEditable
+
   layout "imports"
 
   before_action :set_import
+  before_action :ensure_import_editable, only: :update
 
   def show
   end
@@ -18,6 +21,8 @@ class Import::UploadsController < ApplicationController
       @import.account = Current.family.accounts.find_by(id: params.dig(:import, :account_id))
       @import.assign_attributes(raw_file_str: csv_str, col_sep: upload_params[:col_sep])
       @import.save!(validate: false)
+      # Rows and mappings came from the previous file and account
+      @import.reset_configuration!
 
       redirect_to import_configuration_path(@import, template_hint: true), notice: "CSV uploaded successfully."
     else

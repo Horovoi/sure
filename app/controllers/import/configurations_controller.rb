@@ -1,7 +1,10 @@
 class Import::ConfigurationsController < ApplicationController
+  include ImportEditable
+
   layout "imports"
 
   before_action :set_import
+  before_action :ensure_import_editable, only: :update
 
   def show
   end

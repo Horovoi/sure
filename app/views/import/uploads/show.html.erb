@@ -48,7 +48,7 @@
             </div>
           </div>
 
-          <%= form.submit "Upload CSV", disabled: @import.complete? %>
+          <%= form.submit "Upload CSV", disabled: !@import.editable? %>
         <% end %>
       <% end %>
 
@@ -66,7 +66,7 @@
                        placeholder: "Paste your CSV file contents here",
                        "data-auto-submit-form-target": "auto" %>
 
-          <%= form.submit "Upload CSV", disabled: @import.complete? %>
+          <%= form.submit "Upload CSV", disabled: !@import.editable? %>
         <% end %>
       <% end %>
     <% end %>

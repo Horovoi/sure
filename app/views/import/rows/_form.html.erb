@@ -25,7 +25,7 @@
                   idx == row.import.column_keys.count - 1 ? "group-first:rounded-tr-lg group-last:rounded-br-lg" : "",
                   "focus:outline-none focus:z-10 relative",
                 ],
-                disabled: row.import.complete? %>
+                disabled: !row.import.editable? %>
 
           <% if !cell_is_valid?(row, key) %>
             <span class="absolute right-2 top-1/2 -translate-y-1/2 text-destructive md:hidden"

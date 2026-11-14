@@ -22,7 +22,7 @@ The `GET /api/v1/imports` endpoint supports the following query parameters:
 | --- | --- | --- |
 | `page` | integer | Page number (default: 1) |
 | `per_page` | integer | Items per page (default: 25, max: 100) |
-| `status` | string | Filter by status: `pending`, `importing`, `complete`, `failed`, `reverting`, `revert_failed` |
+| `status` | string | Filter by status: `pending`, `processing`, `processing_failed`, `indexed`, `importing`, `complete`, `failed`, `reverting`, `reverted`, `revert_failed` (the `processing`, `processing_failed` and `indexed` states are used by PDF imports only) |
 | `type` | string | Filter by import type: `TransactionImport`, `TradeImport`, etc. |
 
 ## Import object

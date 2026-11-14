@@ -3,6 +3,9 @@
 <div class="text-center space-y-2 mb-4 mx-auto max-w-md">
   <h1 class="text-3xl text-primary font-medium"><%= t(".title") %></h1>
   <p class="text-secondary text-sm"><%= t(".description") %></p>
+  <% if import.reverted? %>
+    <p class="text-secondary text-sm"><%= t(".reverted_notice") %></p>
+  <% end %>
 </div>
 
 <div class="mx-auto max-w-2xl space-y-4">

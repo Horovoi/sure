@@ -4,11 +4,12 @@ class Import::ConfirmsController < ApplicationController
   before_action :set_import
 
   def show
-    if @import.mapping_steps.empty?
-      return redirect_to import_path(@import)
+    unless @import.cleaned?
+      return redirect_to import_clean_path(@import), alert: "You have invalid data, please edit until all errors are resolved"
     end
 
-    redirect_to import_clean_path(@import), alert: "You have invalid data, please edit until all errors are resolved" unless @import.cleaned?
+    # Nothing to map: a cleaned import without mapping steps is publishable, so this cannot loop
+    redirect_to import_path(@import) if @import.mapping_steps.empty?
   end
 
   private

@@ -4,16 +4,22 @@
 
 <%= content_for :previous_path, @import.is_a?(PdfImport) ? imports_path : import_confirm_path(@import) %>
 
-<% if @import.is_a?(PdfImport) %>
-  <%= render "imports/pdf_import", import: @import %>
-<% elsif @import.importing? %>
+<% case @import.status %>
+<% when "importing" %>
   <%= render "imports/importing", import: @import %>
-<% elsif @import.complete? %>
+<% when "complete" %>
   <%= render "imports/success", import: @import %>
-<% elsif @import.failed? %>
+<% when "failed" %>
   <%= render "imports/failure", import: @import %>
-<% elsif @import.revert_failed? %>
+<% when "reverting" %>
+  <%= render "imports/reverting", import: @import %>
+<% when "revert_failed" %>
   <%= render "imports/revert_failure", import: @import %>
 <% else %>
-  <%= render "imports/ready", import: @import %>
+  <%# pending, reverted, and the PDF-only processing, processing_failed and indexed %>
+  <% if @import.is_a?(PdfImport) %>
+    <%= render "imports/pdf_import", import: @import %>
+  <% else %>
+    <%= render "imports/ready", import: @import %>
+  <% end %>
 <% end %>

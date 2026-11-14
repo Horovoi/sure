@@ -69,9 +69,24 @@ en:
         instructions_5: No commas, no currency symbols, and no parentheses in numbers.
         title: Import your data
   imports:
+    not_editable: This import can no longer be changed.
+    destroy:
+      not_deletable: This import can't be deleted while it is running or still published. Revert it first.
     index:
       title: Imports
       new: New Import
+    pdf_import:
+      retry_processing: Retry processing
+    publish:
+      not_publishable: This import can't be published in its current state.
+    retry_processing:
+      not_retryable: This document can't be processed again in its current state.
+      started: Processing has started again.
+    revert:
+      not_revertable: This import can't be reverted in its current state.
+    reverting:
+      description: The data from this import is being removed in the background. Check the imports menu for status updates or click 'Check status' to refresh the page.
+      title: Reverting import
     table:
       title: Imports
       header:
@@ -83,7 +98,11 @@ en:
         status:
           in_progress: In progress
           uploading: Processing rows
+          processing: Processing
+          processing_failed: Processing failed
+          indexed: Indexed
           reverting: Reverting
+          reverted: Reverted
           revert_failed: Revert failed
           complete: Complete
           failed: Failed
@@ -108,4 +127,5 @@ en:
     ready:
       description: Here's a summary of the new items that will be added to your account
         once you publish this import.
+      reverted_notice: This import was reverted. You can review it and publish it again.
       title: Confirm your import data

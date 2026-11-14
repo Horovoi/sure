@@ -9,6 +9,6 @@
                        method: :patch,
                        class: "space-y-3" do |form| %>
     <p class="text-sm text-secondary"><%= t("import.configurations.rule_import.process_help") %></p>
-    <%= form.submit t("import.configurations.rule_import.process_button"), disabled: import.complete? %>
+    <%= form.submit t("import.configurations.rule_import.process_button"), disabled: !import.editable? %>
   <% end %>
 </div>

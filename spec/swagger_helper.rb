@@ -351,7 +351,7 @@ RSpec.configure do |config|
             properties: {
               id: { type: :string, format: :uuid },
               type: { type: :string, enum: %w[TransactionImport TradeImport AccountImport MintImport CategoryImport RuleImport] },
-              status: { type: :string, enum: %w[pending complete importing reverting revert_failed failed] },
+              status: { type: :string, enum: %w[pending processing processing_failed indexed importing complete failed reverting reverted revert_failed] },
               created_at: { type: :string, format: :'date-time' },
               updated_at: { type: :string, format: :'date-time' },
               account_id: { type: :string, format: :uuid, nullable: true },
@@ -365,7 +365,7 @@ RSpec.configure do |config|
             properties: {
               id: { type: :string, format: :uuid },
               type: { type: :string, enum: %w[TransactionImport TradeImport AccountImport MintImport CategoryImport RuleImport] },
-              status: { type: :string, enum: %w[pending complete importing reverting revert_failed failed] },
+              status: { type: :string, enum: %w[pending processing processing_failed indexed importing complete failed reverting reverted revert_failed] },
               created_at: { type: :string, format: :'date-time' },
               updated_at: { type: :string, format: :'date-time' },
               account_id: { type: :string, format: :uuid, nullable: true },

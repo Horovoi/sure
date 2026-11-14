@@ -46,4 +46,29 @@ class Import::UploadsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_equal "Must be valid CSV with headers and at least one row of data", flash[:alert]
   end
+
+  test "uploading a new file drops rows and mappings from the previous one" do
+    @import.update_column(:rows_count, @import.rows.count)
+    @import.mappings.create!(type: "Import::CategoryMapping", key: "Old")
+
+    patch import_upload_url(@import), params: {
+      import: { raw_file_str: file_fixture("imports/valid.csv").read, col_sep: "," }
+    }
+
+    @import.reload
+    assert_empty @import.rows
+    assert_empty @import.mappings
+    assert_equal 0, @import.rows_count
+  end
+
+  test "a running import cannot get a new file" do
+    @import.update_column(:status, "importing")
+
+    patch import_upload_url(@import), params: {
+      import: { raw_file_str: file_fixture("imports/valid.csv").read, col_sep: "," }
+    }
+
+    assert_redirected_to import_path(@import)
+    assert_nil @import.reload.raw_file_str
+  end
 end

@@ -1,10 +1,13 @@
 class Import::MappingsController < ApplicationController
+  include ImportEditable
+
   before_action :set_import
+  before_action :ensure_import_editable
 
   def update
-    mapping = @import.mappings.find(params[:id])
+    @mapping = @import.mappings.find(params[:id])
 
-    mapping.update! \
+    @mapping.update! \
       create_when_empty: create_when_empty,
       mappable: mappable,
       value: mapping_params[:value]
@@ -21,23 +24,15 @@ class Import::MappingsController < ApplicationController
       @import = Current.family.imports.find(params[:import_id])
     end
 
+    # The mappable class comes from the mapping itself, never from the request
     def mappable
+      mappable_class = @mapping.mappable_class
       return nil unless mappable_class.present?
 
       @mappable ||= mappable_class.find_by(id: mapping_params[:mappable_id], family: Current.family)
     end
 
     def create_when_empty
-      return false unless mapping_class.present?
-
-      mapping_params[:mappable_id] == mapping_class::CREATE_NEW_KEY
-    end
-
-    def mappable_class
-      mapping_params[:mappable_type]&.constantize
-    end
-
-    def mapping_class
-      mapping_params[:type]&.constantize
+      mapping_params[:mappable_id] == Import::Mapping::CREATE_NEW_KEY
     end
 end

@@ -57,29 +57,41 @@ class CategoryImport < Import
   end
 
   def generate_rows_from_csv
-    rows.destroy_all
+    transaction do
+      rows.destroy_all
 
-    validate_required_headers!
-
-    name_header = header_for("name")
-    color_header = header_for("color")
-    parent_header = header_for("parent_category", "parent category")
-    classification_header = header_for("classification")
-    icon_header = header_for("lucide_icon", "lucide icon", "icon")
-
-    csv_rows.each do |row|
-      rows.create!(
-        name: row[name_header].to_s.strip,
-        category_color: row[color_header].to_s.strip,
-        category_parent: row[parent_header].to_s.strip,
-        category_classification: row[classification_header].to_s.strip,
-        category_icon: row[icon_header].to_s.strip,
-        currency: default_currency
-      )
+      validate_required_headers!
+      create_rows_from_csv
     end
+
+    refresh_rows_count!
   end
 
   private
+    # Categories are not tied to the import, so publishing cannot be undone.
+    def supports_revert?
+      false
+    end
+
+    def create_rows_from_csv
+      name_header = header_for("name")
+      color_header = header_for("color")
+      parent_header = header_for("parent_category", "parent category")
+      classification_header = header_for("classification")
+      icon_header = header_for("lucide_icon", "lucide icon", "icon")
+
+      csv_rows.each do |row|
+        rows.create!(
+          name: row[name_header].to_s.strip,
+          category_color: row[color_header].to_s.strip,
+          category_parent: row[parent_header].to_s.strip,
+          category_classification: row[classification_header].to_s.strip,
+          category_icon: row[icon_header].to_s.strip,
+          currency: default_currency
+        )
+      end
+    end
+
     def validate_required_headers!
       missing_headers = required_column_keys.map(&:to_s).reject { |key| header_for(key).present? }
       return if missing_headers.empty?

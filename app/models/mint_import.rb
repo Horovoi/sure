@@ -18,7 +18,7 @@ class MintImport < Import
     end
 
     rows.insert_all!(mapped_rows)
-    update_column(:rows_count, rows.count)
+    refresh_rows_count!
   end
 
   def import!

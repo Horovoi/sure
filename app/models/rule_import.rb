@@ -50,21 +50,25 @@ class RuleImport < Import
   end
 
   def generate_rows_from_csv
-    rows.destroy_all
+    transaction do
+      rows.destroy_all
 
-    csv_rows.each do |row|
-      normalized_row = normalize_rule_row(row)
+      csv_rows.each do |row|
+        normalized_row = normalize_rule_row(row)
 
-      rows.create!(
-        name: normalized_row[:name].to_s.strip,
-        resource_type: normalized_row[:resource_type].to_s.strip,
-        active: parse_boolean(normalized_row[:active]),
-        effective_date: normalized_row[:effective_date].to_s.strip,
-        conditions: normalized_row[:conditions].to_s.strip,
-        actions: normalized_row[:actions].to_s.strip,
-        currency: default_currency
-      )
+        rows.create!(
+          name: normalized_row[:name].to_s.strip,
+          resource_type: normalized_row[:resource_type].to_s.strip,
+          active: parse_boolean(normalized_row[:active]),
+          effective_date: normalized_row[:effective_date].to_s.strip,
+          conditions: normalized_row[:conditions].to_s.strip,
+          actions: normalized_row[:actions].to_s.strip,
+          currency: default_currency
+        )
+      end
     end
+
+    refresh_rows_count!
   end
 
   def parsed_csv
@@ -72,6 +76,10 @@ class RuleImport < Import
   end
 
   private
+    # Rules are not tied to the import, so publishing cannot be undone.
+    def supports_revert?
+      false
+    end
 
     def normalize_rule_row(row)
       fields = row.fields
