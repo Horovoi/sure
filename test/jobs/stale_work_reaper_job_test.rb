@@ -34,6 +34,16 @@ class StaleWorkReaperJobTest < ActiveJob::TestCase
     assert_equal 1, result["AssistantMessage"]
   end
 
+  test "fails rule runs whose jobs never reported back" do
+    rule = families(:dylan_family).rules.create!(resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    run = RuleRun.create!(rule: rule, rule_name: "r", execution_type: "manual", status: "pending", pending_jobs_count: 1, executed_at: 3.hours.ago)
+    run.update_columns(created_at: 3.hours.ago, updated_at: 3.hours.ago)
+
+    StaleWorkReaperJob.perform_now
+
+    assert_equal "failed", run.reload.status
+  end
+
   test "is scheduled every 15 minutes" do
     schedule = YAML.load_file(Rails.root.join("config/schedule.yml"))
     assert_equal "StaleWorkReaperJob", schedule.dig("reap_stale_work", "class")

@@ -12,6 +12,10 @@ class StaleWorkReaperJob < ApplicationJob
       stale: -> { Import.stale },
       reap: ->(import) { import.mark_stale! if import.may_mark_stale? }
     },
+    "RuleRun" => {
+      stale: -> { RuleRun.stale },
+      reap: ->(run) { run.fail!("Timed out after #{RuleRun::STALE_AFTER.inspect} waiting for its jobs") if run.may_fail? }
+    },
     "AssistantMessage" => {
       stale: -> { AssistantMessage.stale },
       reap: ->(turn) { turn.fail_turn(AssistantMessage::StaleTurnError.new("The reply did not finish. Try again.")) }

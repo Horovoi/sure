@@ -65,7 +65,7 @@ class Family::SyncerTest < ActiveSupport::TestCase
     @family.rules.stubs(:where).with(active: true).returns([ active_rule ])
 
     # Expect apply_later to be called only for the active rule
-    active_rule.expects(:apply_later).once
+    active_rule.expects(:apply_later).with(execution_type: "scheduled").once
     disabled_rule.expects(:apply_later).never
 
     # Mock the account and plaid item syncs to avoid side effects
