@@ -58,6 +58,12 @@ class Account < ApplicationRecord
 
   accepts_nested_attributes_for :accountable, update_only: true
 
+  # delegated_type builds the accountable with `accountable_type.constantize`, and
+  # accountable_type often comes from request params. Allow only the account types.
+  def accountable_class
+    Accountable.from_type(accountable_type) || raise(ArgumentError, "Unknown account type: #{accountable_type.inspect}")
+  end
+
   # Account state machine
   aasm column: :status, timestamps: true do
     state :active, initial: true

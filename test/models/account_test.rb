@@ -160,4 +160,14 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal %q("a".status IN ('draft','active')), Account.visible_status_sql("a")
     assert_equal Account.visible.pluck(:id).sort, Account.where(Account.visible_status_sql).pluck(:id).sort
   end
+
+  test "an account type from params must be a known account type" do
+    error = assert_raises(ArgumentError) do
+      Account.new(family: @family, name: "x", balance: 0, currency: "USD", accountable_type: "Kernel", accountable_attributes: {})
+    end
+    assert_match "Unknown account type", error.message
+
+    account = Account.new(family: @family, name: "x", balance: 0, currency: "USD", accountable_type: "Depository", accountable_attributes: {})
+    assert_kind_of Depository, account.accountable
+  end
 end

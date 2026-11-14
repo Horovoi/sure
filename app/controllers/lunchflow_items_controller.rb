@@ -138,6 +138,11 @@ class LunchflowItemsController < ApplicationController
       return
     end
 
+    unless Accountable::TYPES.include?(accountable_type)
+      redirect_to new_account_path, alert: t(".invalid_account_type")
+      return
+    end
+
     # Create or find lunchflow_item for this family
     lunchflow_item = Current.family.lunchflow_items.first_or_create!(
       name: "Lunch Flow Connection"

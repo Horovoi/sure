@@ -18,6 +18,7 @@ en:
       invalid_account_names:
         one: "Cannot link account with blank name"
         other: "Cannot link %{count} accounts with blank names"
+      invalid_account_type: Unknown account type
       link_failed: Failed to link accounts
       no_accounts_selected: Please select at least one account
       partial_invalid: "Successfully linked %{created_count} account(s), %{already_linked_count} were already linked, %{invalid_count} account(s) had invalid names"
