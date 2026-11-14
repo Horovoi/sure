@@ -57,14 +57,10 @@ bin/staging down                # Stop staging
 
 ## Pre-PR Checklist
 
-Run all of these before opening a pull request:
+Run this before opening a pull request:
 
 ```bash
-bin/rails test                           # Required
-bin/rails test:system                    # When applicable
-bin/rubocop -f github -a                 # Required
-bundle exec erb_lint ./app/**/*.erb -a   # Required
-bin/brakeman --no-pager                  # Required
+bin/ci   # autoloading, rubocop, erb_lint, brakeman, tests, system tests (about 4 minutes)
 ```
 
-Only proceed if ALL checks pass.
+The steps are listed in `config/ci.rb`. Only proceed if ALL of them pass.
