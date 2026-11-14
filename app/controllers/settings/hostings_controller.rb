@@ -33,6 +33,13 @@ class Settings::HostingsController < ApplicationController
   end
 
   def update
+    # Validate every schedule value before writing any setting, so an invalid time can't
+    # leave the form half-saved with the cron schedule out of step with the settings.
+    if (alert_key = invalid_schedule_param)
+      flash[:alert] = t(".#{alert_key}")
+      return redirect_to settings_hosting_path
+    end
+
     if hosting_params.key?(:onboarding_state)
       onboarding_state = hosting_params[:onboarding_state].to_s
       Setting.onboarding_state = onboarding_state
@@ -184,6 +191,22 @@ class Settings::HostingsController < ApplicationController
         :scheduled_jobs_start_time, :scheduled_jobs_timezone,
         :data_cleaner_time, :security_health_check_time, :subscription_transactions_time
       )
+    end
+
+    def invalid_schedule_param
+      time_fields = %i[auto_sync_time scheduled_jobs_start_time data_cleaner_time security_health_check_time subscription_transactions_time]
+      time_fields.each do |field|
+        next unless hosting_params.key?(field)
+        value = hosting_params[field]
+        required = %i[auto_sync_time scheduled_jobs_start_time].include?(field)
+        next if value.blank? && !required
+        return :invalid_sync_time unless Setting.valid_auto_sync_time?(value)
+      end
+
+      timezone = hosting_params[:scheduled_jobs_timezone]
+      return :invalid_timezone if timezone.present? && !Setting.valid_auto_sync_timezone?(timezone)
+
+      nil
     end
 
     def ensure_admin

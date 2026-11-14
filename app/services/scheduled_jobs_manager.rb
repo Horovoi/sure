@@ -47,46 +47,18 @@ class ScheduledJobsManager
 
       def upsert_job(job_key, config)
         time_str = effective_time_for(job_key)
-        timezone_str = timezone
+        days = job_key == :security_health_check ? "1-5" : "*" # health checks run on weekdays only
 
-        cron = build_cron_expression(time_str, timezone_str, job_key)
-
-        job = Sidekiq::Cron::Job.create(
+        CronJobWriter.upsert(
           name: config[:cron_name],
-          cron: cron,
-          class: config[:class],
-          queue: "scheduled",
+          klass: config[:class],
+          cron: CronJobWriter.daily_cron(time_str, timezone, days: days),
           description: job_description(job_key)
         )
-
-        if job.nil? || (job.respond_to?(:valid?) && !job.valid?)
-          error_msg = job.respond_to?(:errors) ? job.errors.to_a.join(", ") : "unknown error"
-          Rails.logger.error("[ScheduledJobsManager] Failed to create cron job #{job_key}: #{error_msg}")
-          raise StandardError, "Failed to create schedule for #{job_key}: #{error_msg}"
-        end
-
-        Rails.logger.info("[ScheduledJobsManager] Updated #{job_key} with schedule: #{cron} (#{time_str} #{timezone_str})")
-        job
-      end
-
-      def build_cron_expression(time_str, timezone_str, job_key)
-        hour, minute = parse_time(time_str)
-        tz = ActiveSupport::TimeZone[timezone_str] || ActiveSupport::TimeZone["UTC"]
-
-        local_time = tz.now.change(hour: hour, min: minute, sec: 0)
-        utc_time = local_time.utc
-
-        # SecurityHealthCheckJob runs only on weekdays
-        if job_key == :security_health_check
-          "#{utc_time.min} #{utc_time.hour} * * 1-5"
-        else
-          "#{utc_time.min} #{utc_time.hour} * * *"
-        end
       end
 
       def parse_time(time_str)
-        return [ 3, 0 ] unless time_str.present? && time_str.match?(/\A\d{1,2}:\d{2}\z/)
-        time_str.split(":").map(&:to_i)
+        CronJobWriter.parse_time(time_str)
       end
 
       def add_minutes(time_str, minutes)

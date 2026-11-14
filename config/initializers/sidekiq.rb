@@ -58,6 +58,20 @@ end
 
 Sidekiq.configure_server do |config|
   config.redis = redis_config
+
+  # Jobs scheduled from Settings (nightly sync, data cleaner, health checks, subscription
+  # transactions) live only in Redis. Rebuild them from the settings on every start, after
+  # sidekiq-cron has loaded config/schedule.yml (its startup hook is registered first, when
+  # the gem loads), so a lost or stale Redis copy can never silently stop them.
+  config.on(:startup) do
+    Rails.application.executor.wrap do
+      AutoSyncScheduler.sync!
+      ScheduledJobsManager.sync!
+    rescue => e
+      Rails.logger.error("[Sidekiq startup] Could not reconcile scheduled jobs: #{e.class}: #{e.message}")
+      Sentry.capture_exception(e)
+    end
+  end
 end
 
 Sidekiq.configure_client do |config|
@@ -65,6 +79,8 @@ Sidekiq.configure_client do |config|
 end
 
 Sidekiq::Cron.configure do |config|
-  # 10 min "catch-up" window in case worker process is re-deploying when cron tick occurs
-  config.reschedule_grace_period = 600
+  # Catch-up window for a tick missed while the worker was down: a deploy, or the Mac
+  # asleep overnight (Docker pauses with it). The most recent missed run of each job is
+  # enqueued once when the worker is back; a daily job never runs twice for one day.
+  config.reschedule_grace_period = 23.hours.to_i
 end

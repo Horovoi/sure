@@ -7,17 +7,11 @@ import_market_data:
     mode: "full"
     clear_cache: false
   
-clean_syncs:
-  cron: "0 * * * *" # every hour
-  class: "SyncCleanerJob"
+reap_stale_work:
+  cron: "*/15 * * * *" # every 15 minutes
+  class: "StaleWorkReaperJob"
   queue: "scheduled"
-  description: "Cleans up stale syncs"
-
-run_security_health_checks:
-  cron: "0 2 * * 1-5" # 2:00 AM EST / 3:00 AM EDT (NY time) Monday through Friday
-  class: "SecurityHealthCheckJob"
-  queue: "scheduled"
-  description: "Runs security health checks to detect issues with security data"
+  description: "Moves syncs, imports, rule runs and other work stuck in progress to a final state"
 
 sync_hourly:
   cron: "0 * * * *" # every hour at the top of the hour
@@ -25,14 +19,6 @@ sync_hourly:
   queue: "scheduled"
   description: "Syncs provider items that opt-in to hourly syncing"
 
-clean_data:
-  cron: "0 3 * * *" # daily at 3:00 AM
-  class: "DataCleanerJob"
-  queue: "scheduled"
-  description: "Cleans up old data (e.g., expired merchant associations)"
-
-generate_subscription_transactions:
-  cron: "0 6 * * *" # daily at 6:00 AM
-  class: "GenerateSubscriptionTransactionsJob"
-  queue: "scheduled"
-  description: "Generates transactions for due subscriptions on manual accounts"
+# clean_data, run_security_health_checks and generate_subscription_transactions are
+# scheduled from Settings by ScheduledJobsManager at every Sidekiq start; do not add
+# them here, or this file overwrites the configured times on every boot.
