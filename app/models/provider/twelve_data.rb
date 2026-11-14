@@ -222,18 +222,6 @@ class Provider::TwelveData < Provider
   private
     attr_reader :api_key
 
-    # Keep this provider's own error classes (the default turns every error into Error)
-    def default_error_transformer(error)
-      case error
-      when Error
-        error
-      when Faraday::Error
-        Error.new(error.message, details: error.response&.dig(:body))
-      else
-        Error.new(error.message)
-      end
-    end
-
     def base_url
       ENV["TWELVE_DATA_URL"] || "https://api.twelvedata.com"
     end

@@ -43,9 +43,12 @@ class Provider
       )
     end
 
-    # Override to set class-level error transformation for methods using `with_provider_response`
+    # Override to set class-level error transformation for methods using `with_provider_response`.
+    # An error that is already this provider's own (its Error or a subclass) is kept as it is.
     def default_error_transformer(error)
-      if error.is_a?(Faraday::Error)
+      if error.is_a?(self.class::Error)
+        error
+      elsif error.is_a?(Faraday::Error)
         self.class::Error.new(
           error.message,
           details: error.response&.dig(:body),

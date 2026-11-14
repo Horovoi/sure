@@ -102,11 +102,16 @@ class ExchangeRate::Importer
       total_upsert_count
     end
 
-    # Since provider may not return values on weekends and holidays, we grab the first rate from the provider that is on or before the start date
+    # The rate carried into the first date we fill when that date has none: the latest one known on or
+    # before it (the provider may skip weekends and holidays, hence the fetch buffer). Never the rate at
+    # start_date when the fill starts later: that one can be years old.
     def start_rate_value
-      provider_rate_value = provider_rates.select { |date, _| date <= start_date }.max_by { |date, _| date }&.last
-      db_rate_value = db_rates[start_date]&.rate
-      provider_rate_value || db_rate_value
+      [ provider_rates, db_rates ].each do |rates|
+        value = rates.select { |date, _| date <= effective_start_date }.max_by { |date, _| date }&.last&.rate
+        return value if value.present? && value.to_f > 0
+      end
+
+      nil
     end
 
     # No need to fetch/upsert rates for dates that we already have in the DB (unless provisional)

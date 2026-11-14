@@ -161,17 +161,4 @@ class Provider::Nbu < Provider
       raise Error, "Start date cannot be after end date" if start_date > end_date
       raise Error, "Date range too large (max 1 year)" if end_date > start_date + 1.year
     end
-
-    # Override to preserve custom error subclasses
-    def default_error_transformer(error)
-      case error
-      when Error
-        # Already our error type, return as-is
-        error
-      when Faraday::Error
-        Error.new(error.message, details: error.response&.dig(:body))
-      else
-        Error.new(error.message)
-      end
-    end
 end
