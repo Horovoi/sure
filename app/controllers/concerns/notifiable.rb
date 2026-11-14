@@ -33,7 +33,13 @@ module Notifiable
       items
     end
 
+    # The CTA hash comes back with string keys after a redirect (the flash is stored as
+    # JSON), and with the symbol keys it was set with in the same request.
     def resolve_cta(cta)
+      return unless cta.respond_to?(:to_h)
+
+      cta = cta.to_h.with_indifferent_access
+
       case cta[:type]
       when "category_rule"
         { partial: "rules/category_rule_cta", locals: { cta: } }
