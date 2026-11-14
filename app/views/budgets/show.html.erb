@@ -10,7 +10,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <%# Budget Donut %>
       <div class="h-[300px] bg-container rounded-xl shadow-border-xs p-8">
-        <% if @budget.available_to_allocate.negative? %>
+        <% if @budget.over_allocated? %>
           <%= render "budgets/over_allocation_warning", budget: @budget %>
         <% else %>
           <%= render "budgets/budget_donut", budget: @budget %>
@@ -18,7 +18,7 @@
       </div>
 
       <%# Actuals Summary %>
-      <% if @budget.initialized? && @budget.available_to_allocate.positive? %>
+      <% if @budget.initialized? && !@budget.over_allocated? %>
         <%= render DS::Tabs.new(active_tab: params[:tab].presence || "budgeted") do |tabs| %>
           <% tabs.with_nav do |nav| %>
             <% nav.with_btn(id: "budgeted", label: t("budgets.show.tabs.budgeted")) %>
