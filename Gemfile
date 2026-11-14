@@ -3,7 +3,7 @@ source "https://rubygems.org"
 ruby file: ".ruby-version"
 
 # Rails
-gem "rails", "~> 7.2.2"
+gem "rails", "~> 8.1.0"
 
 # Drivers
 gem "pg", "~> 1.5"
@@ -22,7 +22,7 @@ gem "lucide-rails"
 # Hotwire + UI
 gem "stimulus-rails"
 gem "turbo-rails"
-gem "view_component"
+gem "view_component", "~> 4.0"
 
 # https://github.com/lookbook-hq/lookbook/issues/712
 # TODO: Remove max version constraint when fixed
@@ -31,6 +31,7 @@ gem "lookbook", "2.3.11"
 gem "hotwire_combobox"
 
 # Background Jobs
+gem "connection_pool", "~> 2.5" # sidekiq 8.0.5 predates connection_pool 3 support (8.0.10 / 8.1.0)
 gem "sidekiq"
 gem "sidekiq-cron"
 
@@ -128,6 +129,7 @@ end
 group :test do
   gem "capybara"
   gem "selenium-webdriver"
+  gem "minitest", "~> 5.25" # Minitest 6 drops minitest/mock; migrate the suite first
   gem "mocha"
   gem "vcr"
   gem "webmock"

@@ -74,8 +74,9 @@ class Transfer < ApplicationRecord
     from_account&.family || to_account&.family
   end
 
+  # Nil-safe: the new-transfer form asks an unsaved transfer for its date
   def date
-    inflow_transaction.entry.date
+    inflow_transaction&.entry&.date
   end
 
   def sync_account_later
