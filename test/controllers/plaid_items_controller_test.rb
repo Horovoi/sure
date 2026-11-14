@@ -3,6 +3,7 @@ require "ostruct"
 
 class PlaidItemsControllerTest < ActionDispatch::IntegrationTest
   setup do
+    enable_bank_connections
     sign_in @user = users(:family_admin)
   end
 

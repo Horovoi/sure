@@ -1,4 +1,6 @@
 class PlaidItemsController < ApplicationController
+  require_bank_connections
+
   before_action :set_plaid_item, only: %i[edit destroy sync]
 
   def new

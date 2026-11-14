@@ -68,6 +68,13 @@ module ActiveSupport
       ClimateControl.modify(**overrides, &block)
     end
 
+    # Bank and crypto connection providers are off unless BANK_CONNECTIONS_ENABLED
+    # is set (see BankConnections). Tests that exercise them turn the switch on,
+    # for the rest of the test.
+    def enable_bank_connections
+      BankConnections.stubs(:enabled?).returns(true)
+    end
+
     def with_self_hosting
       Rails.configuration.stubs(:app_mode).returns("self_hosted".inquiry)
       yield

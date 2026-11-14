@@ -1,4 +1,6 @@
 class WebhooksController < ApplicationController
+  require_bank_connections
+
   skip_before_action :verify_authenticity_token
   skip_authentication
 

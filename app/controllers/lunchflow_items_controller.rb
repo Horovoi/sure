@@ -1,4 +1,6 @@
 class LunchflowItemsController < ApplicationController
+  require_bank_connections
+
   before_action :set_lunchflow_item, only: [ :show, :edit, :update, :destroy, :sync, :setup_accounts, :complete_account_setup ]
 
   def index

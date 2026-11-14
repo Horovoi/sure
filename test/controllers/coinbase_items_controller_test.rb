@@ -4,6 +4,7 @@ class CoinbaseItemsControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   setup do
+    enable_bank_connections
     sign_in users(:family_admin)
     @family = families(:dylan_family)
     @coinbase_item = CoinbaseItem.create!(

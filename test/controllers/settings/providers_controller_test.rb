@@ -2,6 +2,7 @@ require "test_helper"
 
 class Settings::ProvidersControllerTest < ActionDispatch::IntegrationTest
   setup do
+    enable_bank_connections
     sign_in users(:family_admin)
 
     # Ensure provider adapters are loaded for all tests
