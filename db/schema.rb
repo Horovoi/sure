@@ -476,6 +476,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
     t.date "date", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "provisional", default: false, null: false
     t.index ["from_currency", "to_currency", "date"], name: "index_exchange_rates_on_base_converted_date_unique", unique: true
     t.index ["from_currency"], name: "index_exchange_rates_on_from_currency"
     t.index ["to_currency"], name: "index_exchange_rates_on_to_currency"
@@ -597,6 +598,20 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
     t.index ["impersonator_id"], name: "index_impersonation_sessions_on_impersonator_id"
   end
 
+  create_table "import_claimed_entries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "import_id", null: false
+    t.uuid "entry_id", null: false
+    t.uuid "previous_import_id"
+    t.uuid "previous_category_id"
+    t.uuid "previous_tag_ids", default: [], null: false, array: true
+    t.text "previous_notes"
+    t.boolean "previous_import_locked", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["entry_id", "import_id"], name: "index_import_claimed_entries_on_entry_id_and_import_id", unique: true
+    t.index ["import_id"], name: "index_import_claimed_entries_on_import_id"
+  end
+
   create_table "import_mappings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "type", null: false
     t.string "key"
@@ -642,7 +657,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
 
   create_table "imports", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.jsonb "column_mappings"
-    t.string "status"
+    t.string "status", default: "pending", null: false
     t.string "raw_file_str"
     t.string "normalized_csv_str"
     t.datetime "created_at", null: false
@@ -1071,9 +1086,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
     t.integer "failed_fetch_count", default: 0, null: false
     t.datetime "last_health_check_at"
     t.string "website_url"
+    t.string "status", default: "online", null: false
     t.index "upper((ticker)::text), COALESCE(upper((exchange_operating_mic)::text), ''::text)", name: "index_securities_on_ticker_and_exchange_operating_mic_unique", unique: true
     t.index ["country_code"], name: "index_securities_on_country_code"
     t.index ["exchange_operating_mic"], name: "index_securities_on_exchange_operating_mic"
+    t.index ["status"], name: "index_securities_on_status"
   end
 
   create_table "security_prices", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1352,6 +1369,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
   add_foreign_key "impersonation_session_logs", "impersonation_sessions"
   add_foreign_key "impersonation_sessions", "users", column: "impersonated_id"
   add_foreign_key "impersonation_sessions", "users", column: "impersonator_id"
+  add_foreign_key "import_claimed_entries", "entries", on_delete: :cascade
+  add_foreign_key "import_claimed_entries", "imports", on_delete: :cascade
   add_foreign_key "import_rows", "imports"
   add_foreign_key "imports", "families"
   add_foreign_key "invitations", "families"
