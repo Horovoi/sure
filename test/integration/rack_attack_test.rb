@@ -20,4 +20,8 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     throttles = Rack::Attack.throttles.keys
     assert_includes throttles, "api/requests", "API requests should have rate limiting"
   end
+
+  test "throttling is enabled only in production and staging" do
+    refute Rack::Attack.enabled, "the test environment must not be throttled"
+  end
 end

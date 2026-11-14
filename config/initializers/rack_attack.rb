@@ -8,8 +8,8 @@ class Rack::Attack
     /masscan/i
   ].freeze
 
-  # Enable Rack::Attack
-  enabled = Rails.env.production? || Rails.env.staging?
+  # Throttle and block only in production and staging (the middleware stays installed)
+  self.enabled = Rails.env.production? || Rails.env.staging?
 
   # Throttle requests to the OAuth token endpoint
   throttle("oauth/token", limit: 10, period: 1.minute) do |request|
