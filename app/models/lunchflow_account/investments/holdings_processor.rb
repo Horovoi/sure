@@ -159,7 +159,7 @@ class LunchflowAccount::Investments::HoldingsProcessor
       rescue => e
         Rails.logger.warn "Lunchflow: resolver failed for symbol=#{sym}: #{e.class} - #{e.message}; falling back to offline security" unless is_custom
         Security.find_or_initialize_by(ticker: sym).tap do |sec|
-          sec.offline = true if sec.respond_to?(:offline) && sec.offline != true
+          sec.mark_manual unless sec.manual?
           sec.name = description.presence if sec.name.blank? && description.present?
           sec.save! if sec.changed?
         end

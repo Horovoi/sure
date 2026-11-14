@@ -1,5 +1,5 @@
 class Security < ApplicationRecord
-  include Provided
+  include AASM, Provided
 
   # ISO 10383 MIC codes mapped to user-friendly exchange names
   # Source: https://www.iso20022.org/market-identifier-codes
@@ -15,7 +15,40 @@ class Security < ApplicationRecord
   validates :ticker, presence: true
   validates :ticker, uniqueness: { scope: :exchange_operating_mic, case_sensitive: false }
 
-  scope :online, -> { where(offline: false) }
+  # Whether we may ask the price provider about this security:
+  # - online: healthy
+  # - degraded: some recent health checks did not find it, still fetched
+  # - unavailable: the provider stopped pricing it; never fetched, price history kept,
+  #   rechecked by Security::HealthChecker and back to online when found again
+  # - manual: entered by the user or not known to the provider; never fetched or checked
+  FETCHABLE_STATUSES = %w[online degraded].freeze
+
+  aasm column: :status, whiny_persistence: true do
+    state :online, initial: true
+    state :degraded
+    state :unavailable
+    state :manual
+
+    event :record_health_check_success do
+      transitions from: %i[online degraded unavailable], to: :online, after: :reset_failed_fetches
+    end
+
+    event :record_health_check_failure do
+      transitions from: %i[online degraded unavailable], to: :unavailable,
+                  guard: :failure_limit_reached?, after: :count_failed_fetch
+      transitions from: %i[online degraded], to: :degraded, after: :count_failed_fetch
+    end
+
+    event :mark_manual do
+      transitions from: %i[online degraded unavailable manual], to: :manual
+    end
+  end
+
+  scope :fetchable, -> { where(status: FETCHABLE_STATUSES) }
+
+  # `offline` is a legacy mirror of the status, kept so the previous app version still
+  # reads it correctly. Nothing in this version reads it.
+  before_save { self.offline = !fetchable? }
 
   # Returns user-friendly exchange name for a MIC code
   def self.exchange_name_for(mic)
@@ -25,6 +58,10 @@ class Security < ApplicationRecord
 
   def exchange_name
     self.class.exchange_name_for(exchange_operating_mic)
+  end
+
+  def fetchable?
+    FETCHABLE_STATUSES.include?(status)
   end
 
   def current_price
@@ -58,6 +95,19 @@ class Security < ApplicationRecord
   end
 
   private
+    def failure_limit_reached?
+      failed_fetch_count.to_i + 1 > Security::HealthChecker::MAX_CONSECUTIVE_FAILURES
+    end
+
+    def count_failed_fetch
+      self.failed_fetch_count = failed_fetch_count.to_i + 1
+      self.failed_fetch_at = Time.current
+    end
+
+    def reset_failed_fetches
+      self.failed_fetch_count = 0
+      self.failed_fetch_at = nil
+    end
 
     def extract_domain(url)
       uri = URI.parse(url)

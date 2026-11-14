@@ -355,7 +355,7 @@ class CoinbaseAccount::Processor
         Security.find_or_create_by(ticker: ticker) do |security|
           security.name = transaction_data.dig("amount", "currency") || crypto_code
           security.exchange_operating_mic = "XCBS" # Coinbase exchange MIC
-          security.offline = true if security.respond_to?(:offline=)
+          security.mark_manual
         end
       end
     end

@@ -11,7 +11,7 @@ class Security::ResolverTest < ActiveSupport::TestCase
     db_security = Security.create!(ticker: "TSLA", exchange_operating_mic: "XNAS", country_code: "US")
 
     # The resolver should return the DB record and never hit the provider
-    Security.expects(:search_provider).never
+    Security.expects(:provider_search).never
 
     resolved = Security::Resolver.new("TSLA", exchange_operating_mic: "XNAS", country_code: "US").resolve
 
@@ -23,7 +23,7 @@ class Security::ResolverTest < ActiveSupport::TestCase
     exact_match = Security.new(ticker: "NVDA", exchange_operating_mic: "XNAS", country_code: "US")
     near_miss   = Security.new(ticker: "NVDA", exchange_operating_mic: "XNYS", country_code: "US")
 
-    Security.expects(:search_provider)
+    Security.expects(:provider_search)
             .with("NVDA", exchange_operating_mic: "XNAS", country_code: "US")
             .returns([ near_miss, exact_match ])
 
@@ -44,7 +44,7 @@ class Security::ResolverTest < ActiveSupport::TestCase
     other     = Security.new(ticker: "TEST2", exchange_operating_mic: "XNYS", country_code: "GB")
 
     # Return in reverse-priority order to prove the sorter works
-    Security.expects(:search_provider)
+    Security.expects(:provider_search)
             .with("TEST", exchange_operating_mic: "XNAS")
             .returns([ other, preferred ])
 
@@ -59,16 +59,38 @@ class Security::ResolverTest < ActiveSupport::TestCase
     end
   end
 
-  test "resolves offline security" do
-    Security.expects(:search_provider).returns([])
+  test "resolves a symbol the provider does not know as a manual security" do
+    Security.expects(:provider_search).returns([])
 
     assert_difference "Security.count", 1 do
       resolved = Security::Resolver.new("FOO").resolve
 
-      assert resolved.persisted?, "Offline security should be saved"
+      assert resolved.persisted?, "Manual security should be saved"
       assert_equal "FOO", resolved.ticker
-      assert resolved.offline, "Offline securities should be flagged offline"
+      assert resolved.manual?
+      assert resolved.offline, "legacy offline column mirrors the status"
     end
+  end
+
+  test "keeps a security fetchable when the provider could not be asked" do
+    # nil: no provider configured, or the search failed (rate limit, outage)
+    Security.expects(:provider_search).returns(nil)
+
+    resolved = Security::Resolver.new("FOO").resolve
+
+    assert resolved.persisted?
+    assert resolved.online?, "the health checker decides once it can reach the provider"
+    assert_nil resolved.last_health_check_at
+  end
+
+  test "does not change the status of an existing security without a match" do
+    existing = Security.create!(ticker: "BAR", country_code: "GB")
+    Security.expects(:provider_search).returns([])
+
+    resolved = Security::Resolver.new("BAR", country_code: "US").resolve
+
+    assert_equal existing, resolved
+    assert resolved.reload.online?
   end
 
   test "returns nil when symbol blank" do

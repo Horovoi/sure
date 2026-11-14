@@ -11,7 +11,15 @@ module Security::Provided
     end
 
     def search_provider(symbol, country_code: nil, exchange_operating_mic: nil)
-      return [] if provider.nil? || symbol.blank?
+      provider_search(symbol, country_code: country_code, exchange_operating_mic: exchange_operating_mic) || []
+    end
+
+    # Like search_provider, but returns nil instead of [] when the provider could not
+    # answer (none configured, or the request failed), so callers can tell
+    # "the provider does not know this symbol" from "we could not ask".
+    def provider_search(symbol, country_code: nil, exchange_operating_mic: nil)
+      return nil if provider.nil?
+      return [] if symbol.blank?
 
       params = {
         country_code: country_code,
@@ -44,8 +52,6 @@ module Security::Provided
         else
           securities
         end
-      else
-        []
       end
     end
   end
@@ -54,6 +60,9 @@ module Security::Provided
     price = prices.find_by(date: date)
 
     return price if price.present?
+
+    # Manual and unavailable securities are never fetched
+    return nil unless fetchable?
 
     # Make sure we have a data provider before fetching
     return nil unless provider.present?
@@ -66,16 +75,13 @@ module Security::Provided
     return nil unless response.success? # Provider error
 
     price = response.data
-    Security::Price.find_or_create_by!(
-      security_id: self.id,
-      date: price.date,
-      price: price.price,
-      currency: price.currency
-    ) if cache
+    cache_provider_price(price) if cache
     price
   end
 
   def import_provider_details(clear_cache: false)
+    return unless fetchable?
+
     unless provider.present?
       Rails.logger.warn("No provider configured for Security.import_provider_details")
       return
@@ -106,6 +112,8 @@ module Security::Provided
   end
 
   def import_provider_prices(start_date:, end_date:, clear_cache: false)
+    return 0 unless fetchable?
+
     unless provider.present?
       Rails.logger.warn("No provider configured for Security.import_provider_prices")
       return 0
@@ -123,5 +131,21 @@ module Security::Provided
   private
     def provider
       self.class.provider
+    end
+
+    # The provider may answer with an earlier date (a weekend asks for Friday) whose row
+    # already exists, possibly as a provisional gap-fill with another value. Write by the
+    # unique key so the real price replaces it instead of failing validation.
+    def cache_provider_price(price)
+      Security::Price.upsert(
+        {
+          security_id: id,
+          date: price.date,
+          currency: price.currency,
+          price: price.price,
+          provisional: false
+        },
+        unique_by: %i[security_id date currency]
+      )
     end
 end

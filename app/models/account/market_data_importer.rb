@@ -55,7 +55,7 @@ class Account::MarketDataImporter
 
     return if first_trade_dates.empty?
 
-    Security.where(id: first_trade_dates.keys).each do |security|
+    Security.fetchable.where(id: first_trade_dates.keys).each do |security|
       security.import_provider_prices(
         start_date: first_trade_dates[security.id],
         end_date: Date.current
