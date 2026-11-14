@@ -2,6 +2,8 @@ require "test_helper"
 
 class SyncHourlyJobTest < ActiveJob::TestCase
   test "syncs all active items for each hourly syncable class" do
+    enable_bank_connections
+
     mock_item = mock("coinstats_item")
     mock_item.expects(:sync_later).once
 
@@ -14,6 +16,8 @@ class SyncHourlyJobTest < ActiveJob::TestCase
   end
 
   test "continues syncing other items when one fails" do
+    enable_bank_connections
+
     failing_item = mock("failing_item")
     failing_item.expects(:sync_later).raises(StandardError.new("Test error"))
     failing_item.stubs(:id).returns(1)
@@ -29,5 +33,12 @@ class SyncHourlyJobTest < ActiveJob::TestCase
     assert_nothing_raised do
       SyncHourlyJob.perform_now
     end
+  end
+
+  test "skips provider items when bank connections are disabled" do
+    CoinstatsItem.expects(:active).never
+    CoinstatsItem.any_instance.expects(:sync_later).never
+
+    SyncHourlyJob.perform_now
   end
 end
