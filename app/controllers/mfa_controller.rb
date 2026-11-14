@@ -32,8 +32,7 @@ class MfaController < ApplicationController
     if @user&.verify_otp?(params[:code])
       session.delete(:mfa_user_id)
       @session = create_session_for(@user)
-      flash[:notice] = "Household invitation accepted." if accept_pending_invitation_for(@user)
-      redirect_to root_path
+      redirect_to after_sign_in_path_for(@user)
     else
       flash.now[:alert] = t(".invalid_code")
       render :verify, status: :unprocessable_entity

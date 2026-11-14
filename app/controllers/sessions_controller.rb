@@ -64,8 +64,7 @@ class SessionsController < ApplicationController
       else
         log_super_admin_override_login(user)
         @session = create_session_for(user)
-        flash[:notice] = "Household invitation accepted." if accept_pending_invitation_for(user)
-        redirect_to root_path
+        redirect_to after_sign_in_path_for(user)
       end
     else
       flash.now[:alert] = t(".invalid_credentials")
@@ -142,8 +141,7 @@ class SessionsController < ApplicationController
         redirect_to verify_mfa_path
       else
         @session = create_session_for(user)
-        flash[:notice] = "Household invitation accepted." if accept_pending_invitation_for(user)
-        redirect_to root_path
+        redirect_to after_sign_in_path_for(user)
       end
     else
       # No existing OIDC identity - need to link to account

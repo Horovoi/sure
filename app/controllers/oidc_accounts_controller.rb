@@ -16,7 +16,7 @@ class OidcAccountsController < ApplicationController
 
     # Determine whether we should offer JIT account creation for this
     # pending auth, based on JIT mode and allowed domains.
-    @allow_account_creation = !AuthConfig.jit_link_only? && AuthConfig.allowed_oidc_domain?(@email)
+    @allow_account_creation = jit_signup_allowed?(@email)
   end
 
   def create_link
@@ -27,8 +27,10 @@ class OidcAccountsController < ApplicationController
       return
     end
 
-    # Verify user's password to confirm identity
+    # Verify user's password to confirm identity. Linking is a password
+    # login, so it follows the same local-login rules as the login form.
     user = User.authenticate_by(email: params[:email], password: params[:password])
+    user = nil unless user&.active? && AuthConfig.local_login_allowed_for?(user)
 
     if user
       # Create the OIDC identity link
@@ -53,12 +55,7 @@ class OidcAccountsController < ApplicationController
         redirect_to verify_mfa_path
       else
         @session = create_session_for(user)
-        notice = if accept_pending_invitation_for(user)
-          "Household invitation accepted."
-        else
-          "Account successfully linked to #{@pending_auth['provider']}"
-        end
-        redirect_to root_path, notice: notice
+        redirect_to after_sign_in_path_for(user), notice: "Account successfully linked to #{@pending_auth['provider']}"
       end
     else
       @email = params[:email]
@@ -95,10 +92,11 @@ class OidcAccountsController < ApplicationController
 
     email = @pending_auth["email"]
 
-    # Respect global JIT configuration: in link_only mode or when the email
-    # domain is not allowed, block JIT account creation and send the user
-    # back to the login page with a clear message.
-    unless !AuthConfig.jit_link_only? && AuthConfig.allowed_oidc_domain?(email)
+    # Respect global JIT configuration and the instance signup gate: in
+    # link_only mode, when the email domain is not allowed, or when signup is
+    # closed (or invite-only without an invitation for this email), block JIT
+    # account creation and send the user back to the login page.
+    unless jit_signup_allowed?(email)
       redirect_to new_session_path, alert: "SSO account creation is disabled. Please contact an administrator."
       return
     end
@@ -146,14 +144,32 @@ class OidcAccountsController < ApplicationController
 
       # Create session and log them in
       @session = create_session_for(@user)
-      notice = accept_pending_invitation_for(@user) ? "Household invitation accepted." : "Welcome! Your account has been created."
-      redirect_to root_path, notice: notice
+      redirect_to after_sign_in_path_for(@user), notice: "Welcome! Your account has been created."
     else
       render :new_user, status: :unprocessable_entity
     end
   end
 
   private
+
+    def jit_signup_allowed?(email)
+      return false if AuthConfig.jit_link_only?
+      return false unless AuthConfig.allowed_oidc_domain?(email)
+      return false if signup_closed?
+
+      # invite_code_required? is false when @invitation is set: a pending
+      # invitation for this email stands in for an invite code.
+      @invitation = pending_session_invitation_for(email)
+      !invite_code_required?
+    end
+
+    def pending_session_invitation_for(email)
+      token = session[:pending_invitation_token].to_s
+      return nil if token.blank? || email.blank?
+
+      invitation = Invitation.pending.find_by(token: token)
+      invitation if invitation&.email.to_s.casecmp?(email.to_s)
+    end
 
     # Convert pending auth hash to OmniAuth-like structure
     def build_auth_hash(pending_auth)

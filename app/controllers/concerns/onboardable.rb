@@ -19,6 +19,7 @@ module Onboardable
       return false if path.starts_with?("/settings")
       return false if path.starts_with?("/onboarding")
       return false if path.starts_with?("/users")
+      return false if path.starts_with?("/invitations") # accept a household invitation before onboarding
       return false if path.starts_with?("/api")  # Exclude API endpoints from onboarding redirects
 
       [
