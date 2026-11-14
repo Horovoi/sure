@@ -22,15 +22,17 @@ class MarketDataImporter
       return
     end
 
-    # Import all securities that aren't marked as "offline" (i.e. they're available from the provider)
-    Security.online.find_each do |security|
-      security.import_provider_prices(
-        start_date: get_first_required_price_date(security),
-        end_date: end_date,
-        clear_cache: clear_cache
-      )
+    # Import every security we may ask the provider about (not manual or unavailable)
+    Security.fetchable.find_each do |security|
+      isolate_failure(security_id: security.id, ticker: security.ticker) do
+        security.import_provider_prices(
+          start_date: get_first_required_price_date(security),
+          end_date: end_date,
+          clear_cache: clear_cache
+        )
 
-      security.import_provider_details(clear_cache: clear_cache)
+        security.import_provider_details(clear_cache: clear_cache)
+      end
     end
   end
 
@@ -44,18 +46,31 @@ class MarketDataImporter
       # pair is a Hash with keys :source, :target, and :start_date
       start_date = snapshot? ? default_start_date : pair[:start_date]
 
-      ExchangeRate.import_provider_rates(
-        from: pair[:source],
-        to: pair[:target],
-        start_date: start_date,
-        end_date: end_date,
-        clear_cache: clear_cache
-      )
+      isolate_failure(from: pair[:source], to: pair[:target]) do
+        ExchangeRate.import_provider_rates(
+          from: pair[:source],
+          to: pair[:target],
+          start_date: start_date,
+          end_date: end_date,
+          clear_cache: clear_cache
+        )
+      end
     end
   end
 
   private
     attr_reader :mode, :clear_cache
+
+    # One security or currency pair that raises must not abort the rest of the run
+    # (a job retry would then start again from scratch)
+    def isolate_failure(**context)
+      yield
+    rescue => e
+      Rails.logger.error("MarketDataImporter failed for #{context.inspect}: #{e.class} - #{e.message}")
+      Sentry.capture_exception(e) do |scope|
+        scope.set_context("market_data", context)
+      end
+    end
 
     def snapshot?
       mode.to_sym == :snapshot

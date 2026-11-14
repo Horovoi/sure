@@ -2,6 +2,9 @@ class ExchangeRate::Importer
   MissingExchangeRateError = Class.new(StandardError)
   MissingStartRateError = Class.new(StandardError)
 
+  # Gap-filled rates for days this recent are provisional: the provider may still publish them
+  PROVISIONAL_LOOKBACK_DAYS = 7
+
   def initialize(exchange_rate_provider:, from:, to:, start_date:, end_date:, clear_cache: false)
     @exchange_rate_provider = exchange_rate_provider
     @from = from
@@ -33,19 +36,25 @@ class ExchangeRate::Importer
     end
 
     gapfilled_rates = effective_start_date.upto(end_date).map do |date|
-      db_rate_value = db_rates[date]&.rate
+      db_rate = db_rates[date]
+      db_rate_value = db_rate&.rate
       provider_rate_value = provider_rates[date]&.rate
 
-      chosen_rate = if clear_cache
-        provider_rate_value || db_rate_value   # overwrite when possible
+      chosen_rate, source = if clear_cache
+        provider_rate_value ? [ provider_rate_value, :provider ] : [ db_rate_value, :db ] # overwrite when possible
+      elsif db_rate&.provisional
+        [ provider_rate_value, :provider ]     # a gap-fill: only a provider rate replaces it
+      elsif db_rate_value
+        [ db_rate_value, :db ]                 # keep what we have
       else
-        db_rate_value || provider_rate_value   # fill gaps
+        [ provider_rate_value, :provider ]     # fill gaps
       end
 
       # Gapfill with LOCF strategy (last observation carried forward)
       # Treat nil or zero rates as invalid and use previous rate
       if chosen_rate.nil? || chosen_rate.to_f <= 0
         chosen_rate = prev_rate_value
+        source = :locf
       end
 
       prev_rate_value = chosen_rate
@@ -54,7 +63,8 @@ class ExchangeRate::Importer
         from_currency: from,
         to_currency: to,
         date: date,
-        rate: chosen_rate
+        rate: chosen_rate,
+        provisional: provisional?(date: date, source: source, db_rate: db_rate)
       }
     end
 
@@ -63,6 +73,16 @@ class ExchangeRate::Importer
 
   private
     attr_reader :exchange_rate_provider, :from, :to, :start_date, :end_date, :clear_cache
+
+    # A provider rate is final. A recent gap-fill is provisional; an old one is final
+    # (the provider has no rate for that day, e.g. a weekend). A kept DB rate keeps its flag.
+    def provisional?(date:, source:, db_rate:)
+      case source
+      when :provider then false
+      when :locf then date >= PROVISIONAL_LOOKBACK_DAYS.days.ago.to_date
+      else db_rate&.provisional || false
+      end
+    end
 
     def upsert_rows(rows)
       batch_size = 200
@@ -89,14 +109,14 @@ class ExchangeRate::Importer
       provider_rate_value || db_rate_value
     end
 
-    # No need to fetch/upsert rates for dates that we already have in the DB
+    # No need to fetch/upsert rates for dates that we already have in the DB (unless provisional)
     def effective_start_date
       return start_date if clear_cache
 
       first_missing_date = nil
 
       start_date.upto(end_date) do |date|
-        unless db_rates.key?(date)
+        if !db_rates.key?(date) || db_rates[date].provisional
           first_missing_date = date
           break
         end
@@ -129,7 +149,7 @@ class ExchangeRate::Importer
     end
 
     def all_rates_exist?
-      db_count == expected_count
+      db_count == expected_count && db_rates.values.none?(&:provisional)
     end
 
     def expected_count

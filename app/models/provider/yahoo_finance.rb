@@ -7,7 +7,7 @@ class Provider::YahooFinance < Provider
   InvalidSecurityPriceError = Class.new(Error)
   RateLimitError = Class.new(Error)
   AuthenticationError = Class.new(Error)
-  InvalidSymbolError = Class.new(Error)
+  InvalidSymbolError = Class.new(Error) { include SecurityConcept::SecurityNotFound }
   MarketClosedError = Class.new(Error)
 
   # Cache duration for repeated requests (5 minutes)
@@ -281,7 +281,7 @@ class Provider::YahooFinance < Provider
       data = JSON.parse(response.body)
       chart_data = data.dig("chart", "result", 0)
 
-      raise Error, "No chart data found for #{symbol}" unless chart_data
+      raise InvalidSymbolError, "No chart data found for #{symbol}" unless chart_data
 
       timestamps = chart_data.dig("timestamp") || []
       quotes = chart_data.dig("indicators", "quote", 0) || {}

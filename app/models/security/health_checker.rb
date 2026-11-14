@@ -1,11 +1,14 @@
-# There are hundreds of thousands of market securities that Sure must handle.
-# Due to the always-changing nature of the market, the health checker is responsible
-# for periodically checking active securities to ensure we can still fetch prices for them.
+# The health checker periodically asks the price provider whether it still knows each
+# security, and moves the security between the price statuses in Security:
+# - found: back to "online" and the failure counter resets
+# - the provider says it does not know the symbol, or has no bar in the last
+#   LOOKBACK days: one failed check ("degraded"); after more than
+#   MAX_CONSECUTIVE_FAILURES in a row, "unavailable" (no longer fetched; price
+#   history is kept and the security is still rechecked)
+# - no provider configured, rate limits, outages and other errors: inconclusive,
+#   nothing changes and the security is checked again on the next run
 #
-# Each security goes through some basic health checks.  If failed, this class is responsible for:
-# - Marking failed attempts and incrementing the failed attempts counter
-# - Marking the security offline if enough consecutive failed checks occur
-# - When we move a security "offline", delete all prices for that security as we assume they are bad data
+# "manual" securities (entered by the user, unknown to the provider) are never checked.
 #
 # The health checker is run daily through SecurityHealthCheckJob (see config/schedule.yml), but not all
 # securities will be checked every day (we run in batches)
@@ -14,8 +17,17 @@ class Security::HealthChecker
   HEALTH_CHECK_INTERVAL = 7.days
   DAILY_BATCH_SIZE = 1000
 
+  # Look for the latest available daily bar rather than today's, which does not exist
+  # yet when the job runs (02:00 UTC) and never exists on weekends and holidays.
+  LOOKBACK = 14.days
+
   class << self
     def check_all
+      unless Security.provider
+        Rails.logger.warn("No securities provider configured, skipping security health checks")
+        return
+      end
+
       # No daily limit for unchecked securities (they are prioritized)
       never_checked_scope.find_each do |security|
         new(security).run_check
@@ -28,17 +40,21 @@ class Security::HealthChecker
     end
 
     private
-      # If a security has never had a health check, we prioritize it, regardless of batch size
-      def never_checked_scope
-        Security.where(last_health_check_at: nil)
+      def checkable_scope
+        Security.where.not(status: "manual")
       end
 
-      # Any securities not checked for 30 days are due
+      # If a security has never had a health check, we prioritize it, regardless of batch size
+      def never_checked_scope
+        checkable_scope.where(last_health_check_at: nil)
+      end
+
+      # Any securities not checked for HEALTH_CHECK_INTERVAL are due
       # We only process the batch size, which means some "due" securities will not be checked today
       # This is by design, to prevent all securities from coming due at the same time
       def due_for_check_scope
-        Security.where(last_health_check_at: ..HEALTH_CHECK_INTERVAL.ago)
-                .order(last_health_check_at: :asc)
+        checkable_scope.where(last_health_check_at: ..HEALTH_CHECK_INTERVAL.ago)
+                       .order(last_health_check_at: :asc)
       end
   end
 
@@ -47,19 +63,27 @@ class Security::HealthChecker
   end
 
   def run_check
+    return if security.manual?
+    return unless provider.present?
+
     Rails.logger.info("Running health check for #{security.ticker}")
 
-    if latest_provider_price
-      handle_success
+    case check_result
+    when :found
+      security.last_health_check_at = Time.current
+      security.record_health_check_success!
+    when :not_found
+      security.last_health_check_at = Time.current
+      security.record_health_check_failure!
     else
-      handle_failure
+      # Inconclusive: leave the security as it is and check it again on the next run
+      Rails.logger.warn("Inconclusive health check for #{security.ticker}, will retry")
     end
   rescue => e
+    # Unexpected errors are inconclusive too: not counted, and retried on the next run
     Sentry.capture_exception(e) do |scope|
       scope.set_tags(security_id: @security.id)
     end
-  ensure
-    security.update!(last_health_check_at: Time.current)
   end
 
   private
@@ -69,52 +93,21 @@ class Security::HealthChecker
       Security.provider
     end
 
-    def latest_provider_price
-      return nil unless provider.present?
-
-      response = provider.fetch_security_price(
+    # :found, :not_found or :inconclusive
+    def check_result
+      response = provider.fetch_security_prices(
         symbol: security.ticker,
         exchange_operating_mic: security.exchange_operating_mic,
-        date: Date.current
+        start_date: LOOKBACK.ago.to_date,
+        end_date: Date.current
       )
 
-      return nil unless response.success?
-
-      response.data.price
-    end
-
-    # On success, reset any failure counters and ensure it is "online"
-    def handle_success
-      security.update!(
-        offline: false,
-        failed_fetch_count: 0,
-        failed_fetch_at: nil
-      )
-    end
-
-    def handle_failure
-      new_failure_count = security.failed_fetch_count.to_i + 1
-      new_failure_at = Time.current
-
-      if new_failure_count > MAX_CONSECUTIVE_FAILURES
-        convert_to_offline_security!
+      if response.success?
+        response.data.any? { |price| price.price.to_f > 0 } ? :found : :not_found
+      elsif response.error.is_a?(Provider::SecurityConcept::SecurityNotFound)
+        :not_found
       else
-        security.update!(
-          failed_fetch_count: new_failure_count,
-          failed_fetch_at: new_failure_at
-        )
-      end
-    end
-
-    # The "offline" state tells our MarketDataImporter (daily cron) to skip this security when fetching prices
-    def convert_to_offline_security!
-      Security.transaction do
-        security.update!(
-          offline: true,
-          failed_fetch_count: MAX_CONSECUTIVE_FAILURES + 1,
-          failed_fetch_at: Time.current
-        )
-        security.prices.delete_all
+        :inconclusive
       end
     end
 end

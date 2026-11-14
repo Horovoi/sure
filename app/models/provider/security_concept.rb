@@ -5,6 +5,11 @@ module Provider::SecurityConcept
   SecurityInfo = Data.define(:symbol, :name, :links, :logo_url, :description, :kind, :exchange_operating_mic)
   Price = Data.define(:symbol, :date, :price, :currency, :exchange_operating_mic)
 
+  # Mixed into a provider error class that means "the provider does not know this
+  # security", as opposed to rate limits, outages or configuration problems.
+  # Security::HealthChecker counts only these as failed checks.
+  SecurityNotFound = Module.new
+
   def search_securities(symbol, country_code: nil, exchange_operating_mic: nil)
     raise NotImplementedError, "Subclasses must implement #search_securities"
   end

@@ -3,6 +3,8 @@ require "test_helper"
 class Security::HealthCheckerTest < ActiveSupport::TestCase
   include ProviderTestHelper
 
+  NotFoundError = Class.new(Provider::Error) { include Provider::SecurityConcept::SecurityNotFound }
+
   setup do
     # Clean slate
     Holding.destroy_all
@@ -14,145 +16,159 @@ class Security::HealthCheckerTest < ActiveSupport::TestCase
     Security.stubs(:provider).returns(@provider)
 
     # Brand new, no health check has been run yet
-    @new_security = Security.create!(
-      ticker: "NEW",
-      offline: false,
-      last_health_check_at: nil
-    )
-
-    # New security, offline
-    # This will be checked, but unless it gets a price, we keep it offline
-    @new_offline_security = Security.create!(
-      ticker: "NEW_OFFLINE",
-      offline: true,
-      last_health_check_at: nil
-    )
+    @new_security = Security.create!(ticker: "NEW", last_health_check_at: nil)
 
     # Online, recently checked, healthy
-    @healthy_security = Security.create!(
-      ticker: "HEALTHY",
-      offline: false,
-      last_health_check_at: 2.hours.ago
-    )
+    @healthy_security = Security.create!(ticker: "HEALTHY", last_health_check_at: 2.hours.ago)
 
     # Online, due for a health check
     @due_for_check_security = Security.create!(
       ticker: "DUE",
-      offline: false,
       last_health_check_at: Security::HealthChecker::HEALTH_CHECK_INTERVAL.ago - 1.day
     )
 
-    # Offline, recently checked (keep offline, don't check)
-    @offline_security = Security.create!(
-      ticker: "OFFLINE",
-      offline: true,
-      last_health_check_at: 20.days.ago
+    # Unavailable and due: still rechecked so it can come back
+    @unavailable_security = Security.create!(
+      ticker: "GONE",
+      status: "unavailable",
+      failed_fetch_count: 6,
+      failed_fetch_at: 8.days.ago,
+      last_health_check_at: Security::HealthChecker::HEALTH_CHECK_INTERVAL.ago - 1.day
     )
 
-    # Currently offline, but has had no health check and actually has prices (needs to convert to "online")
-    @offline_never_checked_with_prices = Security.create!(
-      ticker: "OFFLINE_NEVER_CHECKED",
-      offline: true,
-      last_health_check_at: nil
-    )
+    # Manual securities are never checked, even if never checked before
+    @manual_security = Security.create!(ticker: "MANUAL", status: "manual", last_health_check_at: nil)
   end
 
-  test "any security without a health check runs" do
-    to_check = Security.where(last_health_check_at: nil).or(Security.where(last_health_check_at: ..Security::HealthChecker::HEALTH_CHECK_INTERVAL.ago))
-    Security::HealthChecker.any_instance.expects(:run_check).times(to_check.count)
+  test "checks never-checked and due securities, but not manual ones" do
+    checked = []
+    Security::HealthChecker.stubs(:new).with { |security| checked << security.ticker }.returns(stub(run_check: nil))
+
     Security::HealthChecker.check_all
+
+    assert_equal %w[DUE GONE NEW], checked.sort
   end
 
-  test "offline security with no health check that fails stays offline" do
-    hc = Security::HealthChecker.new(@new_offline_security)
+  test "does nothing without a provider" do
+    Security.stubs(:provider).returns(nil)
+    Security::HealthChecker.expects(:new).never
 
-    @provider.expects(:fetch_security_price)
-      .with(
-        symbol: @new_offline_security.ticker,
-        exchange_operating_mic: @new_offline_security.exchange_operating_mic,
-        date: Date.current
-      )
-      .returns(
-        provider_error_response(StandardError.new("No prices found"))
-      )
-      .once
+    Security::HealthChecker.check_all
 
-    hc.run_check
-
-    assert_equal 1, @new_offline_security.failed_fetch_count
-    assert @new_offline_security.offline?
+    assert_nil @new_security.reload.last_health_check_at
   end
 
-  test "after enough consecutive health check failures, security goes offline and prices are deleted" do
-    # Create one test price
-    Security::Price.create!(
-      security: @due_for_check_security,
-      date: Date.current,
-      price: 100,
-      currency: "USD"
-    )
+  test "asks for the latest bar in the lookback window instead of today" do
+    travel_to Time.zone.parse("2026-11-16 02:00 UTC") do # a Monday, before the day's bar exists
+      expect_prices(@new_security, start_date: Date.new(2026, 11, 2), end_date: Date.new(2026, 11, 16))
+        .returns(provider_success_response([ price(Date.new(2026, 11, 13)) ]))
 
-    hc = Security::HealthChecker.new(@due_for_check_security)
-
-    @provider.expects(:fetch_security_price)
-      .with(
-        symbol: @due_for_check_security.ticker,
-        exchange_operating_mic: @due_for_check_security.exchange_operating_mic,
-        date: Date.current
-      )
-      .returns(provider_error_response(StandardError.new("No prices found")))
-      .times(Security::HealthChecker::MAX_CONSECUTIVE_FAILURES + 1)
-
-    Security::HealthChecker::MAX_CONSECUTIVE_FAILURES.times do
-      hc.run_check
+      Security::HealthChecker.new(@new_security).run_check
     end
 
-    refute @due_for_check_security.offline?
-    assert_equal 1, @due_for_check_security.prices.count
-
-    # We've now exceeded the max consecutive failures, so the security should be marked offline
-    hc.run_check
-    assert @due_for_check_security.offline?
-    assert_equal 0, @due_for_check_security.prices.count
+    assert @new_security.reload.online?
+    assert_equal 0, @new_security.failed_fetch_count
+    assert_not_nil @new_security.last_health_check_at
   end
 
-  test "failure incrementor increases for each health check failure" do
-    hc = Security::HealthChecker.new(@due_for_check_security)
+  test "a not-found answer counts as a failed check and degrades the security" do
+    expect_prices(@due_for_check_security).returns(provider_error_response(NotFoundError.new("symbol not found")))
 
-    @provider.expects(:fetch_security_price)
-      .with(
-        symbol: @due_for_check_security.ticker,
-        exchange_operating_mic: @due_for_check_security.exchange_operating_mic,
-        date: Date.current
-      )
-      .returns(provider_error_response(StandardError.new("No prices found")))
-      .twice
+    Security::HealthChecker.new(@due_for_check_security).run_check
 
-    hc.run_check
+    @due_for_check_security.reload
+    assert @due_for_check_security.degraded?
+    assert @due_for_check_security.fetchable?
     assert_equal 1, @due_for_check_security.failed_fetch_count
-
-    hc.run_check
-    assert_equal 2, @due_for_check_security.failed_fetch_count
+    assert_in_delta Time.current, @due_for_check_security.last_health_check_at, 5.seconds
   end
 
-  test "failure incrementor resets to 0 when health check succeeds" do
-    hc = Security::HealthChecker.new(@offline_never_checked_with_prices)
+  test "no bars in the lookback window counts as a failed check" do
+    expect_prices(@due_for_check_security).returns(provider_success_response([]))
 
-    @provider.expects(:fetch_security_price)
-      .with(
-        symbol: @offline_never_checked_with_prices.ticker,
-        exchange_operating_mic: @offline_never_checked_with_prices.exchange_operating_mic,
-        date: Date.current
+    Security::HealthChecker.new(@due_for_check_security).run_check
+
+    assert_equal 1, @due_for_check_security.reload.failed_fetch_count
+  end
+
+  test "after enough consecutive failures the security becomes unavailable and keeps its prices" do
+    Security::Price.create!(security: @due_for_check_security, date: Date.current, price: 100, currency: "USD")
+
+    expect_prices(@due_for_check_security)
+      .returns(provider_error_response(NotFoundError.new("symbol not found")))
+      .times(Security::HealthChecker::MAX_CONSECUTIVE_FAILURES + 1)
+
+    hc = Security::HealthChecker.new(@due_for_check_security)
+    Security::HealthChecker::MAX_CONSECUTIVE_FAILURES.times { hc.run_check }
+
+    assert @due_for_check_security.reload.degraded?
+
+    hc.run_check
+
+    @due_for_check_security.reload
+    assert @due_for_check_security.unavailable?
+    refute @due_for_check_security.fetchable?
+    assert @due_for_check_security.offline, "legacy offline column mirrors the status"
+    assert_equal 1, @due_for_check_security.prices.count
+  end
+
+  test "rate limits, outages and missing configuration are not counted" do
+    [
+      Provider::YahooFinance::RateLimitError.new("rate limited"),
+      Provider::TwelveData::Error.new("the server responded with status 500"),
+      Provider::TwelveData::InvalidSecurityPriceError.new("API error (code: 429): You have run out of API credits")
+    ].each do |error|
+      expect_prices(@due_for_check_security).returns(provider_error_response(error)).once
+      Security::HealthChecker.new(@due_for_check_security).run_check
+    end
+
+    @due_for_check_security.reload
+    assert @due_for_check_security.online?
+    assert_equal 0, @due_for_check_security.failed_fetch_count
+    assert_operator @due_for_check_security.last_health_check_at, :<, 7.days.ago, "inconclusive checks are retried on the next run"
+  end
+
+  test "an unexpected error is neither counted nor stamped" do
+    expect_prices(@due_for_check_security).raises(StandardError, "boom")
+
+    Security::HealthChecker.new(@due_for_check_security).run_check
+
+    @due_for_check_security.reload
+    assert_equal 0, @due_for_check_security.failed_fetch_count
+    assert_operator @due_for_check_security.last_health_check_at, :<, 7.days.ago
+  end
+
+  test "an unavailable security that is found again goes back online" do
+    expect_prices(@unavailable_security).returns(provider_success_response([ price(Date.current) ]))
+
+    Security::HealthChecker.new(@unavailable_security).run_check
+
+    @unavailable_security.reload
+    assert @unavailable_security.online?
+    refute @unavailable_security.offline
+    assert_equal 0, @unavailable_security.failed_fetch_count
+    assert_nil @unavailable_security.failed_fetch_at
+  end
+
+  test "a manual security is never turned online" do
+    @provider.expects(:fetch_security_prices).never
+
+    Security::HealthChecker.new(@manual_security).run_check
+
+    assert @manual_security.reload.manual?
+  end
+
+  private
+    def expect_prices(security, start_date: Security::HealthChecker::LOOKBACK.ago.to_date, end_date: Date.current)
+      @provider.expects(:fetch_security_prices).with(
+        symbol: security.ticker,
+        exchange_operating_mic: security.exchange_operating_mic,
+        start_date: start_date,
+        end_date: end_date
       )
-      .returns(provider_success_response(OpenStruct.new(price: 100, date: Date.current, currency: "USD")))
-      .once
+    end
 
-    assert @offline_never_checked_with_prices.offline?
-
-    hc.run_check
-
-    refute @offline_never_checked_with_prices.offline?
-    assert_equal 0, @offline_never_checked_with_prices.failed_fetch_count
-    assert_nil @offline_never_checked_with_prices.failed_fetch_at
-  end
+    def price(date)
+      Provider::SecurityConcept::Price.new(symbol: "X", date: date, price: 100, currency: "USD", exchange_operating_mic: nil)
+    end
 end
