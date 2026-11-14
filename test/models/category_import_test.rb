@@ -94,4 +94,26 @@ class CategoryImportTest < ActiveSupport::TestCase
     error = assert_raises(ActiveRecord::RecordInvalid) { import.generate_rows_from_csv }
     assert_includes error.message, "Missing required columns: name"
   end
+
+  test "a published category import cannot be reverted" do
+    import = @family.imports.create!(type: "CategoryImport", raw_file_str: @csv, col_sep: ",")
+    import.update_column(:status, "complete")
+
+    assert_not import.revertable?
+    assert import.deletable?
+    assert_raises(Import::NotRevertableError) { import.revert_later }
+  end
+
+  test "an invalid row keeps the previous rows instead of a partial set" do
+    import = @family.imports.create!(type: "CategoryImport", raw_file_str: @csv, col_sep: ",")
+    import.generate_rows_from_csv
+    assert_equal 3, import.reload.rows_count
+
+    import.update!(raw_file_str: "name,color\nNew one,#000000\n,#ffffff\n")
+
+    assert_raises(ActiveRecord::RecordInvalid) { Import.find(import.id).generate_rows_from_csv }
+
+    assert_equal [ "Food & Drink", "Groceries", "Salary" ], import.rows.order(:name).pluck(:name)
+    assert_equal 3, import.reload.rows_count
+  end
 end

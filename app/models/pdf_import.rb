@@ -19,7 +19,8 @@ class PdfImport < Import
             date: row.date_iso,
             amount: row.signed_amount,
             name: row.name,
-            currency: row.currency,
+            # Rows are extracted before an account is chosen, so their currency is only a guess
+            currency: account.currency,
             notes: row.notes,
             import: self,
             import_locked: true
@@ -39,7 +40,10 @@ class PdfImport < Import
     ai_summary.present?
   end
 
+  # Starts (or retries) AI processing. Raises AASM::InvalidTransition unless the
+  # import is new or its processing failed.
   def process_with_ai_later
+    start_processing!
     ProcessPdfJob.perform_later(self)
   end
 
@@ -109,7 +113,7 @@ class PdfImport < Import
       rows.destroy_all
 
       unless has_extracted_transactions?
-        update_column(:rows_count, 0)
+        refresh_rows_count!
         return
       end
 
@@ -128,7 +132,7 @@ class PdfImport < Import
       end
 
       Import::Row.insert_all!(mapped_rows) if mapped_rows.any?
-      update_column(:rows_count, mapped_rows.size)
+      refresh_rows_count!
     end
   end
 
@@ -145,7 +149,7 @@ class PdfImport < Import
   end
 
   def publishable?
-    account.present? && statement_with_transactions? && cleaned? && mappings.all?(&:valid?)
+    account.present? && statement_with_transactions? && cleaned? && mappings_valid?
   end
 
   def column_keys
@@ -173,6 +177,10 @@ class PdfImport < Import
   end
 
   private
+    def awaiting_processing?
+      !ai_processed?
+    end
+
     def format_date_for_import(date_str)
       return "" if date_str.blank?
 

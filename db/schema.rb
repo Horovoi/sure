@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_02_11_120002) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_14_185235) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -597,6 +597,20 @@ ActiveRecord::Schema[7.2].define(version: 2026_02_11_120002) do
     t.index ["impersonator_id"], name: "index_impersonation_sessions_on_impersonator_id"
   end
 
+  create_table "import_claimed_entries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "import_id", null: false
+    t.uuid "entry_id", null: false
+    t.uuid "previous_import_id"
+    t.uuid "previous_category_id"
+    t.uuid "previous_tag_ids", default: [], null: false, array: true
+    t.text "previous_notes"
+    t.boolean "previous_import_locked", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["entry_id", "import_id"], name: "index_import_claimed_entries_on_entry_id_and_import_id", unique: true
+    t.index ["import_id"], name: "index_import_claimed_entries_on_import_id"
+  end
+
   create_table "import_mappings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "type", null: false
     t.string "key"
@@ -642,7 +656,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_02_11_120002) do
 
   create_table "imports", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.jsonb "column_mappings"
-    t.string "status"
+    t.string "status", default: "pending", null: false
     t.string "raw_file_str"
     t.string "normalized_csv_str"
     t.datetime "created_at", null: false
@@ -1350,6 +1364,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_02_11_120002) do
   add_foreign_key "impersonation_session_logs", "impersonation_sessions"
   add_foreign_key "impersonation_sessions", "users", column: "impersonated_id"
   add_foreign_key "impersonation_sessions", "users", column: "impersonator_id"
+  add_foreign_key "import_claimed_entries", "entries", on_delete: :cascade
+  add_foreign_key "import_claimed_entries", "imports", on_delete: :cascade
   add_foreign_key "import_rows", "imports"
   add_foreign_key "imports", "families"
   add_foreign_key "invitations", "families"

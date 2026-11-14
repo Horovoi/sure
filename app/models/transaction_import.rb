@@ -43,6 +43,9 @@ class TransactionImport < Import
         )
 
         if duplicate_entry
+          # Remember what the entry looked like so revert can restore it
+          claim_entry!(duplicate_entry)
+
           # Update existing transaction instead of creating a new one
           duplicate_entry.transaction.category = category if category.present?
           duplicate_entry.transaction.tags = tags if tags.any?
