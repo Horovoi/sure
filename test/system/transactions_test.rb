@@ -167,6 +167,43 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_selection_count(0)
   end
 
+  test "searching drops selected transactions that are no longer shown" do
+    hidden_after_search = @transactions.first
+    still_shown = @transactions.find { |entry| entry.name == "two" }
+
+    transaction_checkbox(hidden_after_search).check
+    assert_selection_count(1)
+
+    # Narrow the list so the selected row is no longer on screen
+    search_for("two")
+    assert_no_selector "#" + dom_id(hidden_after_search)
+    assert_selection_count(0)
+
+    # Selecting a visible row must not carry the hidden one along
+    transaction_checkbox(still_shown).check
+    assert_selection_count(1)
+
+    # A row that stays visible keeps its selection across a search
+    search_for("tw")
+    assert_selector "#" + dom_id(still_shown)
+    assert_selection_count(1)
+    assert transaction_checkbox(still_shown).checked?
+  end
+
+  test "changing page drops the selection of the previous page" do
+    all_transactions_checkbox.check
+    assert_selection_count(number_of_transactions_on_page)
+
+    within "#transactions_results nav" do
+      find("a", exact_text: "2").click
+    end
+    assert_no_selector "#" + dom_id(@transactions.first)
+
+    assert_selection_count(0)
+    transaction_checkbox(@transactions.last).check
+    assert_selection_count(1)
+  end
+
   test "can select and deselect groups of transactions" do
     date_transactions_checkbox(1.day.ago.to_date).check
     assert_selection_count(2)
@@ -256,6 +293,13 @@ class TransactionsTest < ApplicationSystemTestCase
 
     def date_transactions_checkbox(date)
       find("#selection_entry_#{date}")
+    end
+
+    def search_for(text)
+      within "form#transactions-search" do
+        fill_in "Search transactions ...", with: text
+        find("#q_search").send_keys(:tab) # Trigger blur to submit form
+      end
     end
 
     def transaction_checkbox(transaction)

@@ -25,6 +25,26 @@ export default class extends Controller {
     document.removeEventListener("turbo:load", this._updateView);
   }
 
+  // The rows, groups and selection bar can be replaced without this controller
+  // reconnecting (a search turbo-stream or a page change replaces the
+  // transactions_results frame). The selection must only ever hold rows the
+  // user can see, so reconcile it whenever they change.
+  rowTargetConnected() {
+    this._scheduleReconcile();
+  }
+
+  rowTargetDisconnected() {
+    this._scheduleReconcile();
+  }
+
+  groupTargetConnected() {
+    this._scheduleReconcile();
+  }
+
+  selectionBarTargetConnected() {
+    this._scheduleReconcile();
+  }
+
   bulkEditDrawerHeaderTargetConnected(element) {
     const headingTextEl = element.querySelector("h2");
     headingTextEl.innerText = `Edit ${
@@ -35,6 +55,7 @@ export default class extends Controller {
   submitBulkRequest(e) {
     const form = e.target.closest("form");
     const scope = e.params.scope;
+    this._reconcileSelection();
     this._addHiddenFormInputsForSelectedIds(
       form,
       `${scope}[entry_ids][]`,
@@ -123,8 +144,33 @@ export default class extends Controller {
       .map((t) => t.dataset.id);
   }
 
+  // Removing and adding targets in one DOM replacement fires many callbacks,
+  // so run the reconcile once, after they are all delivered.
+  _scheduleReconcile() {
+    if (this._reconcileScheduled) return;
+    this._reconcileScheduled = true;
+
+    queueMicrotask(() => {
+      this._reconcileScheduled = false;
+      if (!this.element.isConnected) return;
+      this._reconcileSelection();
+      this._updateView();
+    });
+  }
+
+  _reconcileSelection() {
+    const visibleIds = new Set(
+      this.rowTargets.filter((row) => !row.disabled).map((row) => row.dataset.id),
+    );
+    const selectedIds = this.selectedIdsValue.filter((id) => visibleIds.has(id));
+
+    if (selectedIds.length !== this.selectedIdsValue.length) {
+      this.selectedIdsValue = selectedIds;
+    }
+  }
+
   _updateView = () => {
-    this._updateSelectionBar();
+    if (this.hasSelectionBarTarget) this._updateSelectionBar();
     this._updateGroups();
     this._updateRows();
   };
