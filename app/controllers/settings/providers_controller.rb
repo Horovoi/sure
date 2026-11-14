@@ -1,4 +1,6 @@
 class Settings::ProvidersController < ApplicationController
+  require_bank_connections
+
   layout "settings"
 
   guard_feature unless: -> { self_hosted? }

@@ -1,4 +1,6 @@
 class Settings::BankSyncController < ApplicationController
+  require_bank_connections
+
   layout "settings"
 
   def show

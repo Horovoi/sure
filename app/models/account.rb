@@ -32,9 +32,9 @@ class Account < ApplicationRecord
     visible.manual
   }
 
-  scope :listable_manual, -> {
-    manual.where.not(status: :pending_deletion)
-  }
+  scope :listable, -> { where.not(status: :pending_deletion) }
+
+  scope :listable_manual, -> { manual.listable }
 
   has_one_attached :logo
 

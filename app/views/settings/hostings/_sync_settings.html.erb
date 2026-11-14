@@ -1,5 +1,8 @@
-<% env_configured = ENV["PLAID_INCLUDE_PENDING"].present? %>
+<%# Pending transactions only come from bank connections (Plaid), so the toggle is hidden without them %>
+<% show_include_pending = bank_connections_enabled? %>
+<% env_configured = ENV["PLAID_INCLUDE_PENDING"].present? && show_include_pending %>
 <div class="space-y-4">
+  <% if show_include_pending %>
   <div class="flex items-center justify-between">
     <div class="space-y-1">
       <p class="text-sm"><%= t(".include_pending_label") %></p>
@@ -16,6 +19,7 @@
                       data: { auto_submit_form_target: "auto" } %>
     <% end %>
   </div>
+  <% end %>
 
   <div class="flex items-center justify-between">
     <div class="space-y-1">

@@ -2,6 +2,7 @@ require "test_helper"
 
 class CoinstatsItemsControllerTest < ActionDispatch::IntegrationTest
   setup do
+    enable_bank_connections
     sign_in users(:family_admin)
     @family = families(:dylan_family)
     @coinstats_item = CoinstatsItem.create!(

@@ -9,6 +9,10 @@ module ApplicationHelper
     Rails.configuration.x.brand_name
   end
 
+  def bank_connections_enabled?
+    BankConnections.enabled?
+  end
+
   def styled_form_with(**options, &block)
     options[:builder] = StyledFormBuilder
     form_with(**options, &block)

@@ -15,6 +15,7 @@ en:
       cannot_delete_linked: "Cannot delete a linked account. Please unlink it first."
     empty:
       empty_message: Add an account either via connection, importing or entering manually.
+      empty_message_manual: Add an account by importing it or entering it manually.
       new_account: New account
       no_accounts: No accounts yet
     form:

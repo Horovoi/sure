@@ -1,4 +1,6 @@
 class CoinstatsItemsController < ApplicationController
+  require_bank_connections
+
   before_action :set_coinstats_item, only: [ :show, :edit, :update, :destroy, :sync ]
 
   def index
