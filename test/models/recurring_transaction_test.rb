@@ -624,7 +624,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false
+      subscription_state: "pattern"
     )
 
     # Create a subscription
@@ -636,7 +636,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     subscriptions = @family.recurring_transactions.subscriptions
@@ -654,7 +654,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     # Create inactive subscription
@@ -666,7 +666,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "inactive",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     active_subs = @family.recurring_transactions.active_subscriptions
@@ -683,7 +683,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "monthly"
     )
 
@@ -700,7 +700,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.year.from_now,
       status: "active",
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "yearly"
     )
 
@@ -716,7 +716,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "monthly"
     )
 
@@ -733,7 +733,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.year.from_now,
       status: "active",
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "yearly"
     )
 
@@ -750,7 +750,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.new(2025, 1, 15),
       next_expected_date: Date.new(2026, 1, 15),
       status: "active",
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "yearly"
     )
 
@@ -767,7 +767,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     assert_equal @merchant.name, subscription.display_name
@@ -782,7 +782,7 @@ class RecurringTransactionTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     assert_equal "Custom Subscription", subscription.display_name

@@ -13,17 +13,19 @@ class RecurringTransaction
       end
 
       # Detect and mark subscriptions for a family
-      # Creates suggestions with suggestion_status: "suggested" instead of directly marking as subscription
+      # Moves plain patterns to "suggested" instead of directly marking them as subscriptions
       # Dismissed suggestions stay dismissed (shown in "Previously Dismissed" section)
       # Skips confirmed subscriptions
       def detect_for_family(family)
-        # Process all non-subscription records that haven't been suggested yet
+        # Process plain patterns only: not suggested, dismissed or confirmed yet
         family.recurring_transactions
-          .where(is_subscription: false)
-          .where(suggestion_status: nil)
+          .pattern
           .find_each do |recurring|
             # Skip if subscription already exists for same merchant/name
             next if existing_subscription_for?(family, recurring)
+
+            # A dismissal covers the merchant or name, whatever its amount
+            next if dismissed_for?(family, recurring)
 
             if likely_subscription?(recurring)
               service = find_matching_service(recurring)
@@ -33,7 +35,6 @@ class RecurringTransaction
               billing_cycle = detect_billing_cycle(transaction_dates, amount: recurring.amount)
 
               updates = {
-                suggestion_status: "suggested",
                 subscription_service_id: service&.id,
                 billing_cycle: billing_cycle
               }
@@ -57,7 +58,8 @@ class RecurringTransaction
                 )
               end
 
-              recurring.update!(updates)
+              recurring.assign_attributes(updates)
+              recurring.suggest!
             end
           end
       end
@@ -73,14 +75,6 @@ class RecurringTransaction
           lookback_months: 24
         )
         entries.map(&:date)
-      end
-
-      # Auto-approve subscriptions that user manually marked
-      def auto_approve_for_family(family)
-        family.recurring_transactions
-          .where(is_subscription: true)
-          .where(suggestion_status: "suggested")
-          .update_all(suggestion_status: nil)
       end
 
       # Find matching SubscriptionService by name
@@ -178,6 +172,16 @@ class RecurringTransaction
             normalized: normalized
           )
           .exists?
+      end
+
+      # Whether the user dismissed a suggestion for the same merchant or name
+      def dismissed_for?(family, recurring)
+        scope = family.recurring_transactions.dismissed.where.not(id: recurring.id)
+        if recurring.merchant_id.present?
+          scope.where(merchant_id: recurring.merchant_id).exists?
+        else
+          scope.where(merchant_id: nil, name: recurring.name).exists?
+        end
       end
 
       # Calculate next expected date for yearly subscriptions (ensures it's in the future)

@@ -328,11 +328,11 @@ class TransactionsController < ApplicationController
       )
 
       # Mark as subscription with detected billing cycle
-      recurring_transaction.update!(
-        is_subscription: true,
+      recurring_transaction.assign_attributes(
         billing_cycle: billing_cycle,
         category_id: find_subscriptions_category&.id
       )
+      recurring_transaction.approve!
 
       respond_to do |format|
         format.html do
