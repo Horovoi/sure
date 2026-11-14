@@ -73,7 +73,9 @@ module Enrichable
         end
       end
 
-      unless save
+      # A new record is only being filled in (callers such as the Plaid processor set
+      # the rest and save it themselves), so its values stay assigned.
+      unless save || new_record?
         Rails.logger.warn("#{self.class.name} #{id} not enriched from #{source}: #{errors.full_messages.to_sentence}")
         restore_attributes
         raise ActiveRecord::Rollback
