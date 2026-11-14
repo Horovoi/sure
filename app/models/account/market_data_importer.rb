@@ -51,13 +51,13 @@ class Account::MarketDataImporter
   def import_security_prices
     return unless Security.provider
 
-    account_securities = account.trades.map(&:security).uniq
+    first_trade_dates = first_required_price_dates
 
-    return if account_securities.empty?
+    return if first_trade_dates.empty?
 
-    account_securities.each do |security|
+    Security.where(id: first_trade_dates.keys).each do |security|
       security.import_provider_prices(
-        start_date: first_required_price_date(security),
+        start_date: first_trade_dates[security.id],
         end_date: Date.current
       )
 
@@ -66,11 +66,12 @@ class Account::MarketDataImporter
   end
 
   private
-    # Calculates the first date we require a price for the given security scoped to this account
-    def first_required_price_date(security)
+    # The first date we require a price for each security traded in this account,
+    # keyed by security id. One grouped query instead of one lookup per security.
+    def first_required_price_dates
       account.trades.with_entry
-                    .where(security: security)
                     .where(entries: { account_id: account.id })
+                    .group(:security_id)
                     .minimum("entries.date")
     end
 
