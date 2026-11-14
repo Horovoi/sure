@@ -42,6 +42,25 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "hides the pending transactions toggle when bank connections are disabled" do
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "input[name=?]", "setting[syncs_include_pending]", count: 0
+      assert_select "input[name=?]", "setting[auto_sync_enabled]"
+    end
+  end
+
+  test "shows the pending transactions toggle when bank connections are enabled" do
+    enable_bank_connections
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "input[name=?]", "setting[syncs_include_pending]"
+    end
+  end
+
   test "can update settings when self hosting is enabled" do
     with_self_hosting do
       patch settings_hosting_url, params: { setting: { twelve_data_api_key: "1234567890" } }

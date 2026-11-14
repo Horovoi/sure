@@ -2,7 +2,7 @@ module SettingsHelper
   SETTINGS_ORDER = [
     # General section
     { name: "Accounts", path: :accounts_path },
-    { name: "Bank Sync", path: :settings_bank_sync_path },
+    { name: "Bank Sync", path: :settings_bank_sync_path, condition: :bank_connections_enabled? },
     { name: "Preferences", path: :settings_preferences_path },
     { name: "Profile Info", path: :settings_profile_path },
     { name: "Security", path: :settings_security_path },

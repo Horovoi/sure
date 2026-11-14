@@ -65,6 +65,8 @@ module AccountableResource
 
   private
     def set_link_options
+      return @provider_configs = [] unless BankConnections.enabled?
+
       account_type_name = accountable_type.name
 
       # Get all available provider configs dynamically for this account type
