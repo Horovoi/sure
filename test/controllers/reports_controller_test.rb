@@ -88,6 +88,16 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "budget performance never creates a budget on a page view" do
+    @family.budgets.destroy_all
+
+    assert_no_difference -> { Budget.count } do
+      get reports_path(period_type: :monthly)
+    end
+    assert_response :ok
+    assert_equal 0, controller.instance_variable_get(:@summary_metrics)[:budget_percent]
+  end
+
   test "index calculates summary metrics correctly" do
     get reports_path(period_type: :monthly)
     assert_response :ok

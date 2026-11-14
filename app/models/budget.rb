@@ -45,6 +45,14 @@ class Budget < ApplicationRecord
       start >= earliest_start && start <= current_start
     end
 
+    # Read-only: the budget whose period contains the date, or nil. Unlike
+    # find_or_bootstrap it never creates, moves or syncs a budget, so pages
+    # that only show a figure from it can call it on every GET.
+    def find_for_date(family, date)
+      period_start = family.budget_period_start_for(date)
+      family.budgets.find_by(start_date: period_start, end_date: family.budget_period_end_for(period_start))
+    end
+
     def find_or_bootstrap(family, start_date:)
       return nil unless budget_date_valid?(start_date, family: family)
 
