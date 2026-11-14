@@ -13,6 +13,9 @@ class Account < ApplicationRecord
   has_many :trades, through: :entries, source: :entryable, source_type: "Trade"
   has_many :holdings, dependent: :destroy
   has_many :balances, dependent: :destroy
+  # Recurring rows only point at the account (the one to post to, or the one the pattern was seen on)
+  has_many :default_recurring_transactions, class_name: "RecurringTransaction", foreign_key: :default_account_id, inverse_of: :default_account, dependent: :nullify
+  has_many :inferred_recurring_transactions, class_name: "RecurringTransaction", foreign_key: :inferred_account_id, inverse_of: :inferred_account, dependent: :nullify
 
   monetize :balance, :cash_balance
 
@@ -23,6 +26,11 @@ class Account < ApplicationRecord
   VISIBLE_STATUSES = %w[draft active].freeze
 
   scope :visible, -> { where(status: VISIBLE_STATUSES) }
+
+  # A deletion still pending after this long lost its job; the stale work reaper restores
+  # the account (disabled, data intact) so it can be deleted again instead of hanging
+  STALE_DELETION_AFTER = 1.hour
+  scope :stale_deletion, -> { where(status: "pending_deletion", updated_at: ...STALE_DELETION_AFTER.ago) }
 
   # Accounts counted in totals such as net worth. A draft (a property whose setup
   # wizard is not finished) is listed, but its balance is not counted yet.

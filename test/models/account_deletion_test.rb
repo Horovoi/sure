@@ -15,6 +15,31 @@ class AccountDeletionTest < ActiveSupport::TestCase
     assert @account.reload.pending_deletion?
   end
 
+  test "an account that recurring transactions point at can be deleted" do
+    recurring = @account.family.recurring_transactions.create!(
+      name: "Gym", amount: 30, currency: "USD", expected_day_of_month: 5,
+      last_occurrence_date: 1.month.ago.to_date, next_expected_date: 5.days.from_now.to_date,
+      default_account: @account, inferred_account: @account
+    )
+    @account.destroy_later
+
+    DestroyJob.perform_now(@account)
+
+    refute Account.exists?(@account.id)
+    assert_nil recurring.reload.default_account_id
+    assert_nil recurring.inferred_account_id
+  end
+
+  test "a destroy job that runs after the account was restored does nothing" do
+    @account.destroy_later
+    @account.restore!
+
+    DestroyJob.perform_now(@account)
+
+    assert Account.exists?(@account.id)
+    assert @account.reload.disabled?
+  end
+
   test "a failed destroy restores the account instead of leaving it stuck" do
     @account.destroy_later
     Account.any_instance.stubs(:destroy).raises(ActiveRecord::InvalidForeignKey, "boom")

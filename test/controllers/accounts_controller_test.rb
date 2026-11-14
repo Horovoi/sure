@@ -213,7 +213,9 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     @account.reload
     assert @account.disabled?
 
-    patch toggle_active_account_url(@account)
+    assert_difference -> { @account.syncs.count }, 1 do
+      patch toggle_active_account_url(@account)
+    end
     assert_redirected_to accounts_path
     @account.reload
     assert @account.active?

@@ -87,6 +87,8 @@ class AccountsController < ApplicationController
       @account.disable!
     elsif @account.disabled?
       @account.enable!
+      # Family syncs skip disabled accounts, so its balances and holdings may be out of date
+      @account.sync_later
     end
     redirect_to accounts_path
   end
