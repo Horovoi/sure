@@ -37,7 +37,7 @@ When you arrive at the main dashboard, showing **No accounts yet**, you're all s
 > If you'd like to use an integration with a data provider instead, see:
 > 
 > - [**Lunch Flow**](https://www.lunchflow.app/)
-> - [**Plaid**](/docs/hosting/plaid.md)
+> - [**Plaid**](https://github.com/we-promise/sure/blob/main/docs/hosting/plaid.md)
 > - [**Enable Banking**](https://enablebanking.com/) (beta)
 > - [**CoinStats**](https://coinstats.app//) (beta)
 >
