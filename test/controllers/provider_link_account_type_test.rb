@@ -4,6 +4,8 @@ require "test_helper"
 # not an account type must be refused before it reaches the account model.
 class ProviderLinkAccountTypeTest < ActionDispatch::IntegrationTest
   setup do
+    # These flows only exist while bank connections are on
+    enable_bank_connections
     sign_in users(:family_admin)
   end
 
