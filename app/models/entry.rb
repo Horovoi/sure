@@ -291,11 +291,21 @@ class Entry < ApplicationRecord
 
       return 0 unless has_updates
 
+      # A date change moves the entry in the balance history, so its account must
+      # resync from the earlier of the two dates, as a single update does.
+      sync_windows = {}
+
       transaction do
         all.each do |entry|
           if bulk_attributes.present?
             bulk_attributes[:entryable_attributes][:id] = entry.entryable_id if bulk_attributes[:entryable_attributes].present?
             entry.update! bulk_attributes
+
+            if entry.saved_change_to_date?
+              start_date = [ entry.date_previously_was, entry.date ].compact.min
+              account, earliest = sync_windows[entry.account_id]
+              sync_windows[entry.account_id] = [ account || entry.account, [ earliest, start_date ].compact.min ]
+            end
           end
 
           if update_tags && entry.transaction?
@@ -307,6 +317,10 @@ class Entry < ApplicationRecord
           entry.lock_saved_attributes!
           entry.mark_user_modified!
         end
+      end
+
+      sync_windows.each_value do |account, start_date|
+        account.sync_later(window_start_date: start_date)
       end
 
       all.size

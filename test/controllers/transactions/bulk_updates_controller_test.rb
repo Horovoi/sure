@@ -48,4 +48,23 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Only updating notes", entry.reload.notes
     assert_equal original_tag_ids, entry.entryable.reload.tag_ids.sort
   end
+
+  test "bulk date change syncs each account once from the earliest date" do
+    entry = entries(:transaction)
+    old_date = entry.date
+    new_date = old_date - 10.days
+
+    Account.any_instance.expects(:sync_later).with(window_start_date: new_date).once
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], date: new_date } }
+
+    assert_equal new_date, entry.reload.date
+  end
+
+  test "bulk update without a date change does not sync" do
+    entry = entries(:transaction)
+    Account.any_instance.expects(:sync_later).never
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Only notes" } }
+  end
 end
