@@ -28,7 +28,8 @@ export default class extends Controller {
     });
 
     this.colorInputTarget.addEventListener("input", (e) => {
-      this.picker.setColor(e.target.value);
+      // The picker only exists while the palette section is shown
+      this.picker?.setColor(e.target.value);
     });
 
     this.detailsTarget.addEventListener("toggle", (e) => {
@@ -45,19 +46,32 @@ export default class extends Controller {
     if (!this.presetColorsValue.includes(this.colorInputTarget.value)) {
       this.colorPickerRadioBtnTarget.checked = true;
     }
+  }
 
+  connect() {
     document.addEventListener("mousedown", this.handleOutsideClick);
   }
 
+  disconnect() {
+    document.removeEventListener("mousedown", this.handleOutsideClick);
+    this.destroyPicker();
+  }
+
   initPicker() {
-    const pickerContainer = document.createElement("div");
-    pickerContainer.classList.add("pickerContainer");
-    this.pickerSectionTarget.append(pickerContainer);
+    // Only one picker at a time, in this form's own container (a global
+    // ".pickerContainer" selector would pick another form's container)
+    this.destroyPicker();
+
+    if (!this.pickerContainer) {
+      this.pickerContainer = document.createElement("div");
+      this.pickerContainer.classList.add("pickerContainer");
+      this.pickerSectionTarget.append(this.pickerContainer);
+    }
 
     this.picker = Pickr.create({
       el: this.pickerBtnTarget,
       theme: "monolith",
-      container: ".pickerContainer",
+      container: this.pickerContainer,
       useAsButton: true,
       showAlways: true,
       default: this.colorInputTarget.value,
@@ -145,6 +159,7 @@ export default class extends Controller {
   }
 
   autoAdjust(e) {
+    if (!this.picker) return;
     const currentRGBA = this.picker.getColor();
     const adjustedRGBA = this.darkenColor(currentRGBA).toString();
     this.picker.setColor(adjustedRGBA);
@@ -222,8 +237,13 @@ export default class extends Controller {
     this.paletteSectionTarget.classList.add("hidden");
     this.pickerSectionTarget.classList.add("hidden");
     this.updatePopupPosition()
+    this.destroyPicker();
+  }
+
+  destroyPicker() {
     if (this.picker) {
       this.picker.destroyAndRemove();
+      this.picker = null;
     }
   }
 
