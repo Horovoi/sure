@@ -197,7 +197,10 @@ refresh_staging() {
 
 # Starts the selected image on the staging data and checks that it serves pages
 start_staging() {
-  quiet staging "$@" up -d --wait web proxy
+  local services=(web proxy)
+  # `--profile worker` alone starts nothing extra when services are named: add it
+  [[ " $* " == *" worker "* ]] && services+=(worker)
+  quiet staging "$@" up -d --wait "${services[@]}"
   wait_for_http "http://localhost:$STAGING_PORT/up"
   wait_for_http "http://localhost:$STAGING_PORT/sessions/new"
 }
