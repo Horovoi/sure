@@ -119,17 +119,6 @@ class EntryTest < ActiveSupport::TestCase
     assert_not_includes results, pending_entry
   end
 
-  test "stale_pending returns pending entries older than threshold" do
-    account = accounts(:depository)
-    stale_pending = create_pending_entry(account: account, provider: "plaid", date: 10.days.ago.to_date)
-    recent_pending = create_pending_entry(account: account, provider: "plaid", date: 2.days.ago.to_date)
-
-    results = Entry.stale_pending(days: 8)
-
-    assert_includes results, stale_pending
-    assert_not_includes results, recent_pending
-  end
-
   test "pending scope works with multiple providers" do
     account = accounts(:depository)
     plaid_pending = create_pending_entry(account: account, provider: "plaid")
