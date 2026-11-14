@@ -13,12 +13,29 @@ class Account < ApplicationRecord
   has_many :trades, through: :entries, source: :entryable, source_type: "Trade"
   has_many :holdings, dependent: :destroy
   has_many :balances, dependent: :destroy
+  # Recurring rows only point at the account (the one to post to, or the one the pattern was seen on)
+  has_many :default_recurring_transactions, class_name: "RecurringTransaction", foreign_key: :default_account_id, inverse_of: :default_account, dependent: :nullify
+  has_many :inferred_recurring_transactions, class_name: "RecurringTransaction", foreign_key: :inferred_account_id, inverse_of: :inferred_account, dependent: :nullify
 
   monetize :balance, :cash_balance
 
   enum :classification, { asset: "asset", liability: "liability" }, validate: { allow_nil: true }
 
-  scope :visible, -> { where(status: [ "draft", "active" ]) }
+  # Statuses of accounts the user sees in lists and reports. Disabled accounts and
+  # accounts being deleted are hidden. Use `visible`, or `visible_status_sql` in raw SQL.
+  VISIBLE_STATUSES = %w[draft active].freeze
+
+  scope :visible, -> { where(status: VISIBLE_STATUSES) }
+
+  # A deletion still pending after this long lost its job; the stale work reaper restores
+  # the account (disabled, data intact) so it can be deleted again instead of hanging
+  STALE_DELETION_AFTER = 1.hour
+  scope :stale_deletion, -> { where(status: "pending_deletion", updated_at: ...STALE_DELETION_AFTER.ago) }
+
+  # Accounts counted in totals such as net worth. A draft (a property whose setup
+  # wizard is not finished) is listed, but its balance is not counted yet.
+  scope :counted_in_totals, -> { where(status: "active") }
+
   scope :assets, -> { where(classification: "asset") }
   scope :liabilities, -> { where(classification: "liability") }
   scope :alphabetically, -> { order(:name) }
@@ -32,9 +49,9 @@ class Account < ApplicationRecord
     visible.manual
   }
 
-  scope :listable_manual, -> {
-    manual.where.not(status: :pending_deletion)
-  }
+  scope :listable, -> { where.not(status: :pending_deletion) }
+
+  scope :listable_manual, -> { manual.listable }
 
   has_one_attached :logo
 
@@ -49,8 +66,14 @@ class Account < ApplicationRecord
 
   accepts_nested_attributes_for :accountable, update_only: true
 
+  # delegated_type builds the accountable with `accountable_type.constantize`, and
+  # accountable_type often comes from request params. Allow only the account types.
+  def accountable_class
+    Accountable.from_type(accountable_type) || raise(ArgumentError, "Unknown account type: #{accountable_type.inspect}")
+  end
+
   # Account state machine
-  aasm column: :status, timestamps: true do
+  aasm column: :status do
     state :active, initial: true
     state :draft
     state :disabled
@@ -71,9 +94,21 @@ class Account < ApplicationRecord
     event :mark_for_deletion do
       transitions from: [ :draft, :active, :disabled ], to: :pending_deletion
     end
+
+    # A deletion that failed leaves the account disabled (hidden from totals but listed,
+    # with its data intact) so the user can look at it or delete it again.
+    event :restore do
+      transitions from: :pending_deletion, to: :disabled
+    end
   end
 
   class << self
+    # SQL condition for `visible`, for raw SQL that names the accounts table differently.
+    #   Account.visible_status_sql("a") # => %q("a".status IN ('draft','active'))
+    def visible_status_sql(table = table_name)
+      "#{connection.quote_table_name(table)}.status IN (#{VISIBLE_STATUSES.map { |s| connection.quote(s) }.join(',')})"
+    end
+
     def create_and_sync(attributes, skip_initial_sync: false)
       attributes[:accountable_attributes] ||= {} # Ensure accountable is created, even if empty
       # Default cash_balance to balance unless explicitly provided (e.g., Crypto sets it to 0)
@@ -168,19 +203,24 @@ class Account < ApplicationRecord
     provider&.logo_url
   end
 
+  # Idempotent: a second click while the deletion is queued does nothing
   def destroy_later
-    mark_for_deletion!
+    with_lock do
+      return unless may_mark_for_deletion?
+      mark_for_deletion!
+    end
     DestroyJob.perform_later(self)
   end
 
-  # Override destroy to handle error recovery for accounts
-  def destroy
-    super
-  rescue => e
-    # If destruction fails, transition back to disabled state
-    # This provides a cleaner recovery path than the generic scheduled_for_deletion flag
-    disable! if may_disable?
-    raise e
+  # Syncs skip records that are being deleted (Sync#perform checks this)
+  def scheduled_for_deletion?
+    pending_deletion?
+  end
+
+  # Called by DestroyJob when the destroy raised or was halted
+  def recover_from_failed_destroy!
+    reload
+    restore! if may_restore?
   end
 
   def current_holdings
@@ -203,6 +243,11 @@ class Account < ApplicationRecord
   def lock_saved_attributes!
     super
     accountable.lock_saved_attributes!
+  end
+
+  # Matches the `counted_in_totals` scope.
+  def counted_in_totals?
+    active?
   end
 
   def first_valuation

@@ -105,7 +105,8 @@ class RulesController < ApplicationController
   end
 
   def confirm_all
-    @rules = Current.family.rules
+    # Apply-all only applies active rules, so the preview counts only those.
+    @rules = Current.family.rules.where(active: true)
     @total_affected_count = Rule.total_affected_resource_count(@rules)
 
     # Compute AI cost estimation if any rule has auto_categorize action

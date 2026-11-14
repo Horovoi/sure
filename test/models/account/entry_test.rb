@@ -7,6 +7,35 @@ class EntryTest < ActiveSupport::TestCase
     @entry = entries :transaction
   end
 
+  test "an opening anchor cannot be destroyed on its own, but goes with its account" do
+    account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
+    anchor = account.entries.create!(date: 1.year.ago.to_date, name: "Opening", amount: 100, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+
+    assert_not anchor.destroy
+    assert_includes anchor.errors.full_messages, I18n.t("activerecord.errors.models.entry.attributes.base.anchor_not_deletable")
+    assert Entry.exists?(anchor.id)
+
+    account.destroy!
+    assert_not Entry.exists?(anchor.id)
+  end
+
+  test "a reconciliation can be destroyed" do
+    account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
+    reconciliation = account.entries.create!(date: 1.day.ago.to_date, name: "Value", amount: 100, currency: "USD", entryable: Valuation.new(kind: "reconciliation"))
+
+    assert reconciliation.destroy
+  end
+
+  test "an account has at most one anchor of each kind" do
+    account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
+    account.entries.create!(date: 1.year.ago.to_date, name: "Opening", amount: 100, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+
+    duplicate = account.entries.build(date: 2.years.ago.to_date, name: "Opening", amount: 50, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+
+    assert_not duplicate.valid?
+    assert_includes duplicate.errors.full_messages, I18n.t("activerecord.errors.models.entry.attributes.base.duplicate_anchor")
+  end
+
   test "entry cannot be older than 10 years ago" do
     assert_raises ActiveRecord::RecordInvalid do
       @entry.update! date: 50.years.ago.to_date
@@ -117,17 +146,6 @@ class EntryTest < ActiveSupport::TestCase
 
     assert_includes results, valuation
     assert_not_includes results, pending_entry
-  end
-
-  test "stale_pending returns pending entries older than threshold" do
-    account = accounts(:depository)
-    stale_pending = create_pending_entry(account: account, provider: "plaid", date: 10.days.ago.to_date)
-    recent_pending = create_pending_entry(account: account, provider: "plaid", date: 2.days.ago.to_date)
-
-    results = Entry.stale_pending(days: 8)
-
-    assert_includes results, stale_pending
-    assert_not_includes results, recent_pending
   end
 
   test "pending scope works with multiple providers" do

@@ -108,7 +108,7 @@ class CoinbaseAccount::HoldingsProcessor
         )
         # Fall back to creating an offline security
         Security.find_or_initialize_by(ticker: ticker).tap do |sec|
-          sec.offline = true if sec.respond_to?(:offline=) && sec.offline != true
+          sec.mark_manual unless sec.manual?
           sec.name = crypto_name if sec.name.blank?
           sec.exchange_operating_mic = "XCBS" # Coinbase exchange MIC
           sec.save! if sec.changed?

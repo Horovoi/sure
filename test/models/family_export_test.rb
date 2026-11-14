@@ -102,14 +102,20 @@ class FamilyExportTest < ActiveSupport::TestCase
   test "can transition through statuses" do
     assert_equal "pending", @export.status
 
-    @export.processing!
+    @export.start!
     assert_equal "processing", @export.status
 
-    @export.completed!
+    @export.complete!
     assert_equal "completed", @export.status
+  end
 
-    @export.failed!
+  test "only allowed transitions happen" do
+    assert_raises(AASM::InvalidTransition) { @export.complete! } # pending cannot complete
+
+    @export.start!
+    @export.fail!
     assert_equal "failed", @export.status
+    assert_raises(AASM::InvalidTransition) { @export.start! } # failed exports are final
   end
 
   test "ordered scope returns exports in descending order" do

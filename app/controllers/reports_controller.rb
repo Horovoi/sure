@@ -393,14 +393,16 @@ class ReportsController < ApplicationController
       ((current_value - previous_value) / previous_value * 100).round(1)
     end
 
+    # Share of the current budget spent, as the budget page shows it: the budget for the
+    # fiscal period that contains today, spending over the budgeted amount.
     def calculate_budget_performance
-      # Only calculate if we're looking at current month
-      return nil unless @period_type == :monthly && @start_date.beginning_of_month.to_date == Date.current.beginning_of_month.to_date
+      # Only calculate if we're looking at the current month
+      return nil unless @period_type == :monthly && (@start_date.to_date..@end_date.to_date).cover?(Date.current)
 
-      budget = Budget.find_or_bootstrap(Current.family, start_date: @start_date.beginning_of_month.to_date)
-      return 0 if budget.nil? || budget.allocated_spending.zero?
+      budget = Budget.find_for_date(Current.family, Date.current)
+      return 0 if budget.nil? || !budget.initialized?
 
-      (budget.actual_spending / budget.allocated_spending * 100).round(1)
+      budget.percent_of_budget_spent.round(1)
     rescue StandardError
       nil
     end
@@ -474,7 +476,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: :parent)
@@ -486,7 +488,7 @@ class ReportsController < ApplicationController
       trades = Trade
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Trade", excluded: false, date: @period.date_range })
         .includes(entry: :account, category: :parent)
 
@@ -611,10 +613,10 @@ class ReportsController < ApplicationController
 
     def build_gains_by_tax_treatment(investment_statement)
       currency = Current.family.currency
-      # Eager-load account and accountable to avoid N+1 when accessing tax_treatment
-      current_holdings = investment_statement.current_holdings
-        .includes(account: :accountable)
-        .to_a
+      # The statement already loaded these for the figures above; add the accountables
+      # (tax_treatment reads them) in one query
+      current_holdings = investment_statement.loaded_current_holdings
+      ActiveRecord::Associations::Preloader.new(records: current_holdings.map(&:account).uniq, associations: :accountable).call
 
       # Group holdings by tax treatment (from account)
       holdings_by_treatment = current_holdings.group_by { |h| h.account.tax_treatment || :taxable }
@@ -649,15 +651,16 @@ class ReportsController < ApplicationController
         trades = trades_by_treatment[treatment] || []
 
         # Sum unrealized gains from holdings (only those with known cost basis)
+        # Holdings and trades are in their own currency; convert before adding them up
         unrealized = holdings.sum do |h|
           trend = h.trend
-          trend ? trend.value : 0
+          trend ? investment_statement.to_family_money(trend.value).amount : 0
         end
 
         # Sum realized gains from sell trades
         realized = trades.sum do |t|
           gain = t.realized_gain_loss
-          gain ? gain.value : 0
+          gain ? investment_statement.to_family_money(gain.value).amount : 0
         end
 
         # Only include treatment groups that have some activity
@@ -757,7 +760,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -804,7 +807,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -1130,7 +1133,7 @@ class ReportsController < ApplicationController
 
       @api_key = ApiKey.find_by_value(api_key_value)
 
-      unless @api_key && @api_key.active?
+      unless @api_key && @api_key.active? && @api_key.user.active?
         render plain: "Invalid or expired API key", status: :unauthorized
         return false
       end
@@ -1158,14 +1161,7 @@ class ReportsController < ApplicationController
         return false
       end
 
-      # Find or create a session for this API request
-      # We need to find or create a persisted session so that Current.user delegation works properly
-      session = @current_user.sessions.first_or_create!(
-        user_agent: request.user_agent,
-        ip_address: request.ip
-      )
-
-      Current.session = session
+      Current.session = Session.ephemeral_for(@current_user, request)
 
       # Verify the delegation chain works
       unless Current.user

@@ -393,4 +393,99 @@ class TransactionImportTest < ActiveSupport::TestCase
     assert_equal "Transaction 1", rows.first.name
     assert_equal "100", rows.first.amount
   end
+
+  test "revert hands a claimed manual entry back with its category, tags and notes" do
+    account = accounts(:depository)
+    existing_entry = account.entries.create!(
+      date: Date.new(2024, 1, 1),
+      amount: 100,
+      currency: "USD",
+      name: "Coffee Shop",
+      notes: "typed by hand",
+      entryable: Transaction.new(category: categories(:food_and_drink), tags: [ tags(:one) ])
+    )
+
+    configure_claiming_import(account, "01/01/2024,Coffee Shop,100,Income,Trips|Emergency fund,from csv")
+    @import.sync_mappings
+    @import.publish
+
+    assert @import.reload.complete?
+    existing_entry.reload
+    assert_equal @import.id, existing_entry.import_id
+    assert_equal "from csv", existing_entry.notes
+
+    @import.revert_later
+    assert_no_difference -> { Entry.count } do
+      @import.revert
+    end
+
+    assert @import.reload.reverted?
+    existing_entry.reload
+    assert_nil existing_entry.import_id
+    assert_equal "typed by hand", existing_entry.notes
+    assert_not existing_entry.import_locked
+    assert_equal categories(:food_and_drink), existing_entry.transaction.category
+    assert_equal [ tags(:one) ], existing_entry.transaction.tags.to_a
+    assert_empty @import.claimed_entries
+  end
+
+  test "revert works after a claimed entry's earlier category and tag were deleted" do
+    account = accounts(:depository)
+    category = account.family.categories.create!(name: "Short lived", color: "#000000", classification: "expense", lucide_icon: "shapes")
+    tag = account.family.tags.create!(name: "Short lived")
+    existing_entry = account.entries.create!(
+      date: Date.new(2024, 1, 1), amount: 100, currency: "USD", name: "Coffee Shop",
+      entryable: Transaction.new(category: category, tags: [ tag, tags(:one) ])
+    )
+
+    configure_claiming_import(account, "01/01/2024,Coffee Shop,100,Income,Trips,from csv")
+    @import.sync_mappings
+    @import.publish
+    assert @import.reload.complete?
+
+    category.destroy!
+    tag.destroy!
+
+    @import.revert_later
+    @import.revert
+
+    assert @import.reload.reverted?
+    assert_nil existing_entry.transaction.reload.category
+    assert_equal [ tags(:one) ], existing_entry.transaction.tags.to_a
+  end
+
+  test "revert returns an entry claimed from an earlier import to that import" do
+    account = accounts(:depository)
+    earlier = imports(:trade)
+    earlier.update_column(:status, "complete")
+    entry = account.entries.create!(date: Date.new(2024, 1, 1), amount: 100, currency: "USD", name: "Coffee Shop", import: earlier, entryable: Transaction.new)
+
+    configure_claiming_import(account, "01/01/2024,Coffee Shop,100,,,")
+    @import.publish
+    assert_equal @import.id, entry.reload.import_id
+
+    @import.revert_later
+    @import.revert
+
+    assert_equal earlier.id, entry.reload.import_id
+  end
+
+  private
+    def configure_claiming_import(account, row)
+      @import.update!(
+        account: account,
+        raw_file_str: "date,name,amount,category,tags,notes\n#{row}\n",
+        date_col_label: "date",
+        amount_col_label: "amount",
+        name_col_label: "name",
+        category_col_label: "category",
+        tags_col_label: "tags",
+        notes_col_label: "notes",
+        date_format: "%m/%d/%Y",
+        amount_type_strategy: "signed_amount",
+        signage_convention: "inflows_negative"
+      )
+      @import.generate_rows_from_csv
+      @import.reload
+    end
 end

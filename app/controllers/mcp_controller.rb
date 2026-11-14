@@ -116,10 +116,14 @@ class McpController < ApplicationController
         return
       end
 
-      Current.session = @mcp_user.sessions.build(
-        user_agent: request.user_agent,
-        ip_address: request.ip
-      )
+      # The user's AI switch covers external AI clients too. Only the switch is checked, not ai_available?:
+      # the MCP tools read the user's data and need no LLM provider configured in this app.
+      unless @mcp_user.ai_enabled
+        render json: { error: "AI features are disabled for the MCP user" }, status: :forbidden
+        return
+      end
+
+      Current.session = Session.ephemeral_for(@mcp_user, request)
     end
 
     def mcp_user

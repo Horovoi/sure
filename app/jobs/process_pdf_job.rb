@@ -1,42 +1,54 @@
 class ProcessPdfJob < ApplicationJob
   queue_as :medium_priority
 
+  # Runs the AI steps for a PdfImport in the processing state. Each step skips work a
+  # previous attempt already finished (AI summary, vault upload, extraction), so a retry
+  # after a failure does not repeat paid calls or upload the document twice.
+  # Failures end in processing_failed, which the user can retry; the job is not retried.
   def perform(pdf_import)
     return unless pdf_import.is_a?(PdfImport)
-    return unless pdf_import.pdf_uploaded?
-    return if pdf_import.complete?
-    return if pdf_import.ai_processed? && (!pdf_import.statement_with_transactions? || pdf_import.rows_count > 0)
 
-    pdf_import.update!(status: :importing)
+    unless pdf_import.processing?
+      Rails.logger.warn("ProcessPdfJob: import #{pdf_import.id} is #{pdf_import.status}, not processing. Skipping.")
+      return
+    end
 
-    begin
-      process_result = pdf_import.process_with_ai
-      document_type = resolve_document_type(pdf_import, process_result)
-      upload_to_vector_store(pdf_import, document_type: document_type)
+    process(pdf_import)
+  rescue ActiveRecord::RecordNotFound
+    Rails.logger.info("ProcessPdfJob: import #{pdf_import.id} was deleted while processing")
+  end
 
-      if statement_with_transactions?(document_type)
-        pdf_import.extract_transactions
+  private
+    def process(pdf_import)
+      raise "PDF file is missing" unless pdf_import.pdf_uploaded?
+
+      pdf_import.process_with_ai unless pdf_import.ai_processed?
+      upload_to_vector_store(pdf_import)
+
+      if pdf_import.statement_with_transactions?
+        pdf_import.extract_transactions unless pdf_import.has_extracted_transactions?
         pdf_import.generate_rows_from_extracted_data
         pdf_import.sync_mappings
       end
 
-      final_status = statement_with_transactions?(document_type) && pdf_import.rows_count > 0 ? :pending : :complete
-      pdf_import.update!(status: final_status)
+      if pdf_import.statement_with_transactions? && pdf_import.rows_count > 0
+        pdf_import.mark_ready!
+      else
+        pdf_import.mark_indexed!
+      end
+    rescue ActiveRecord::RecordNotFound
+      raise
     rescue StandardError => error
       sanitized_error = sanitize_error_message(error)
       Rails.logger.error("PDF processing failed for import #{pdf_import.id}: #{error.class.name} - #{sanitized_error}")
 
       begin
-        pdf_import.update!(status: :failed, error: sanitized_error)
-      rescue StandardError => update_error
-        Rails.logger.error("Failed to update import status for #{pdf_import.id}: #{update_error.message}")
+        pdf_import.fail_processing!(sanitized_error)
+      rescue AASM::InvalidTransition => transition_error
+        Rails.logger.error("Failed to update import status for #{pdf_import.id}: #{transition_error.message}")
       end
-
-      raise
     end
-  end
 
-  private
     def sanitize_error_message(error)
       case error
       when RuntimeError, ArgumentError
@@ -46,7 +58,7 @@ class ProcessPdfJob < ApplicationJob
       end
     end
 
-    def upload_to_vector_store(pdf_import, document_type:)
+    def upload_to_vector_store(pdf_import)
       return unless VectorStore.configured?
 
       filename = pdf_import.pdf_file.filename.to_s
@@ -55,19 +67,9 @@ class ProcessPdfJob < ApplicationJob
       family_document = pdf_import.family.upload_document(
         file_content: file_content,
         filename: filename,
-        metadata: { "type" => document_type, "import_id" => pdf_import.id }
+        metadata: { "type" => pdf_import.document_type, "import_id" => pdf_import.id }
       )
 
       Rails.logger.warn("ProcessPdfJob: Vector store upload failed for import #{pdf_import.id}") unless family_document
-    end
-
-    def resolve_document_type(pdf_import, process_result)
-      return process_result.document_type if process_result.respond_to?(:document_type) && process_result.document_type.present?
-
-      pdf_import.reload.document_type
-    end
-
-    def statement_with_transactions?(document_type)
-      document_type.in?(%w[bank_statement credit_card_statement])
     end
 end

@@ -94,76 +94,29 @@ class RecurringTransaction
         end
       end
 
-      # Create or update RecurringTransaction records
+      # Create or update RecurringTransaction records.
+      # Identity is (merchant or name, currency). The amount is not part of
+      # it: an existing row matches when its amount is within the tolerance
+      # of the pattern's average, which drifts with FX rates and prices.
+      claimed_ids = []
       recurring_patterns.each do |pattern|
-        # Build find conditions based on whether it's merchant-based or name-based
-        find_conditions = {
-          amount: pattern[:amount],
-          currency: pattern[:currency]
-        }
-
-        if pattern[:merchant_id].present?
-          find_conditions[:merchant_id] = pattern[:merchant_id]
-          find_conditions[:name] = nil
-        else
-          find_conditions[:name] = pattern[:name]
-          find_conditions[:merchant_id] = nil
-        end
-
         begin
-          recurring_transaction = family.recurring_transactions.find_or_initialize_by(find_conditions)
+          recurring_transaction = find_existing(pattern, excluding: claimed_ids)
 
-          # Handle manual recurring transactions specially
-          if recurring_transaction.persisted? && recurring_transaction.manual?
-            # Update variance for manual recurring transactions
-            update_manual_recurring_variance(recurring_transaction, pattern)
-            next
-          end
+          if recurring_transaction
+            claimed_ids << recurring_transaction.id
 
-          # Set the name or merchant_id on new records
-          if recurring_transaction.new_record?
-            if pattern[:merchant_id].present?
-              recurring_transaction.merchant_id = pattern[:merchant_id]
+            if recurring_transaction.manual?
+              update_manual_recurring_variance(recurring_transaction, pattern)
             else
-              recurring_transaction.name = pattern[:name]
+              refresh_existing(recurring_transaction, pattern)
             end
-            # New auto-detected recurring transactions are not manual
-            recurring_transaction.manual = false
+          else
+            create_from_pattern(pattern)
           end
-
-          recurring_transaction.assign_attributes(
-            expected_day_of_month: pattern[:expected_day_of_month],
-            last_occurrence_date: pattern[:last_occurrence_date],
-            next_expected_date: calculate_next_expected_date(pattern[:last_occurrence_date], pattern[:expected_day_of_month]),
-            occurrence_count: pattern[:occurrence_count],
-            status: recurring_transaction.new_record? ? "active" : recurring_transaction.status,
-            inferred_account_id: pattern[:inferred_account_id],
-            detected_base_currency: pattern[:detected_base_currency],
-            detected_base_amount: pattern[:detected_base_amount]
-          )
-
-          recurring_transaction.save!
         rescue ActiveRecord::RecordNotUnique
-          # Race condition: another process created the same record between find and save.
-          # Retry with find to get the existing record and update it.
-          recurring_transaction = family.recurring_transactions.find_by(find_conditions)
-          next unless recurring_transaction
-
-          # Skip manual recurring transactions
-          if recurring_transaction.manual?
-            update_manual_recurring_variance(recurring_transaction, pattern)
-            next
-          end
-
-          recurring_transaction.update!(
-            expected_day_of_month: pattern[:expected_day_of_month],
-            last_occurrence_date: pattern[:last_occurrence_date],
-            next_expected_date: calculate_next_expected_date(pattern[:last_occurrence_date], pattern[:expected_day_of_month]),
-            occurrence_count: pattern[:occurrence_count],
-            inferred_account_id: pattern[:inferred_account_id],
-            detected_base_currency: pattern[:detected_base_currency],
-            detected_base_amount: pattern[:detected_base_amount]
-          )
+          # A concurrent run wrote the same row; the next run refreshes it.
+          next
         end
       end
 
@@ -174,6 +127,19 @@ class RecurringTransaction
       RecurringTransaction::SubscriptionDetector.detect_for_family(family)
 
       recurring_patterns.size
+    end
+
+    # Existing row with the pattern's identity whose amount is within the
+    # tolerance; the closest one when several match.
+    def find_existing(pattern, excluding: [])
+      candidates = family.recurring_transactions
+        .with_identity(merchant_id: pattern[:merchant_id], name: pattern[:name], currency: pattern[:currency])
+        .where.not(id: excluding)
+        .to_a
+
+      candidates
+        .select { |recurring| amount_matches?(recurring, pattern[:amount]) }
+        .min_by { |recurring| [ (recurring.amount - pattern[:amount]).abs, recurring.subscription? ? 0 : 1 ] }
     end
 
     # Update variance for existing manual recurring transactions
@@ -196,14 +162,7 @@ class RecurringTransaction
         last_entry = matching_entries.max_by(&:date)
 
         # Recalculate variance from all occurrences (including identical amounts)
-        recurring.update!(
-          expected_amount_min: matching_amounts.min,
-          expected_amount_max: matching_amounts.max,
-          expected_amount_avg: matching_amounts.sum / matching_amounts.size,
-          occurrence_count: matching_amounts.size,
-          last_occurrence_date: last_entry.date,
-          next_expected_date: calculate_next_expected_date(last_entry.date, recurring.expected_day_of_month)
-        )
+        update_manual_recurring(recurring, matching_amounts, last_occurrence_date: [ recurring.last_occurrence_date, last_entry.date ].compact.max)
       end
     end
 
@@ -223,21 +182,118 @@ class RecurringTransaction
 
         # Update if we have any matching transactions
         if matching_entries.any?
-          matching_amounts = matching_entries.map(&:amount)
-
-          recurring_transaction.update!(
-            expected_amount_min: matching_amounts.min,
-            expected_amount_max: matching_amounts.max,
-            expected_amount_avg: matching_amounts.sum / matching_amounts.size,
-            occurrence_count: matching_amounts.size,
-            last_occurrence_date: pattern[:last_occurrence_date],
-            next_expected_date: calculate_next_expected_date(pattern[:last_occurrence_date], recurring_transaction.expected_day_of_month)
-          )
+          update_manual_recurring(recurring_transaction, matching_entries.map(&:amount), last_occurrence_date: pattern[:last_occurrence_date])
         end
       end
     end
 
     private
+      def amount_matches?(recurring, amount)
+        reference = recurring.amount
+        tolerance = [ reference.abs, amount.abs ].max * AMOUNT_TOLERANCE
+        return true if (reference - amount).abs <= tolerance
+
+        # Manual rows track a range of observed amounts
+        recurring.has_amount_variance? &&
+          amount.between?(recurring.expected_amount_min - tolerance, recurring.expected_amount_max + tolerance)
+      end
+
+      # next_expected_date only moves forward: moving it back would make an
+      # already-handled period overdue again. A subscription may stay overdue
+      # (the generation job handles it); any other manual row only projects
+      # the next date, so it is rolled past today.
+      def update_manual_recurring(recurring, amounts, last_occurrence_date:)
+        recurring.assign_attributes(
+          expected_amount_min: amounts.min,
+          expected_amount_max: amounts.max,
+          expected_amount_avg: amounts.sum / amounts.size,
+          occurrence_count: amounts.size,
+          last_occurrence_date: last_occurrence_date,
+          next_expected_date: forward_only(recurring.next_expected_date, calculate_next_expected_date(last_occurrence_date, recurring.expected_day_of_month))
+        )
+        recurring.roll_next_expected_date_forward unless recurring.subscription?
+        recurring.save!
+      end
+
+      def forward_only(current, candidate)
+        [ current, candidate ].compact.max
+      end
+
+      # Stale rows come back when the pattern resumes. A row the user paused
+      # stays inactive. Legacy rows without a reason come back only when they
+      # are plain detected patterns.
+      def reactivatable?(recurring)
+        return false unless recurring.inactive?
+
+        recurring.inactive_reason == "stale" || (recurring.inactive_reason.nil? && !recurring.user_managed?)
+      end
+
+      def create_from_pattern(pattern)
+        recurring = family.recurring_transactions.new(
+          merchant_id: pattern[:merchant_id],
+          name: pattern[:merchant_id].present? ? nil : pattern[:name],
+          amount: pattern[:amount],
+          currency: pattern[:currency],
+          manual: false,
+          status: "active",
+          expected_day_of_month: pattern[:expected_day_of_month],
+          last_occurrence_date: pattern[:last_occurrence_date],
+          next_expected_date: calculate_next_expected_date(pattern[:last_occurrence_date], pattern[:expected_day_of_month]),
+          occurrence_count: pattern[:occurrence_count],
+          inferred_account_id: pattern[:inferred_account_id],
+          detected_base_currency: pattern[:detected_base_currency],
+          detected_base_amount: pattern[:detected_base_amount]
+        )
+        # Detected patterns do not generate transactions, so their projected
+        # date is always the next one after today.
+        recurring.roll_next_expected_date_forward
+        recurring.save!
+      end
+
+      def refresh_existing(recurring, pattern)
+        if recurring.subscription?
+          refresh_subscription(recurring, pattern)
+        else
+          refresh_detected(recurring, pattern)
+        end
+
+        recurring.reactivate if reactivatable?(recurring)
+
+        recurring.save!
+      end
+
+      # Plain patterns, suggestions and dismissed suggestions follow the data.
+      def refresh_detected(recurring, pattern)
+        recurring.assign_attributes(
+          amount: pattern[:amount],
+          expected_day_of_month: pattern[:expected_day_of_month],
+          last_occurrence_date: pattern[:last_occurrence_date],
+          next_expected_date: calculate_next_expected_date(pattern[:last_occurrence_date], pattern[:expected_day_of_month]),
+          occurrence_count: pattern[:occurrence_count],
+          inferred_account_id: pattern[:inferred_account_id],
+          detected_base_currency: pattern[:detected_base_currency],
+          detected_base_amount: pattern[:detected_base_amount]
+        )
+        recurring.roll_next_expected_date_forward
+      end
+
+      # Approved subscriptions keep what the user set (amount, billing day,
+      # cycle). Only a newer occurrence moves the dates, and only forward,
+      # so an overdue period is never skipped.
+      def refresh_subscription(recurring, pattern)
+        recurring.assign_attributes(
+          inferred_account_id: pattern[:inferred_account_id],
+          detected_base_currency: pattern[:detected_base_currency],
+          detected_base_amount: pattern[:detected_base_amount]
+        )
+
+        last_date = pattern[:last_occurrence_date]
+        return unless recurring.last_occurrence_date.nil? || last_date > recurring.last_occurrence_date
+
+        recurring.last_occurrence_date = last_date
+        recurring.next_expected_date = forward_only(recurring.next_expected_date, recurring.calculate_next_expected_date(last_date))
+      end
+
       # Check if days cluster together (within ~5 days variance)
       # Uses circular distance to handle month-boundary wrapping (e.g., 28, 29, 30, 31, 1, 2)
       def days_cluster_together?(days)

@@ -167,6 +167,43 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_selection_count(0)
   end
 
+  test "searching drops selected transactions that are no longer shown" do
+    hidden_after_search = @transactions.first
+    still_shown = @transactions.find { |entry| entry.name == "two" }
+
+    transaction_checkbox(hidden_after_search).check
+    assert_selection_count(1)
+
+    # Narrow the list so the selected row is no longer on screen
+    search_for("two")
+    assert_no_selector "#" + dom_id(hidden_after_search)
+    assert_selection_count(0)
+
+    # Selecting a visible row must not carry the hidden one along
+    transaction_checkbox(still_shown).check
+    assert_selection_count(1)
+
+    # A row that stays visible keeps its selection across a search
+    search_for("tw")
+    assert_selector "#" + dom_id(still_shown)
+    assert_selection_count(1)
+    assert transaction_checkbox(still_shown).checked?
+  end
+
+  test "changing page drops the selection of the previous page" do
+    all_transactions_checkbox.check
+    assert_selection_count(number_of_transactions_on_page)
+
+    within "#transactions_results nav" do
+      find("a", exact_text: "2").click
+    end
+    assert_no_selector "#" + dom_id(@transactions.first)
+
+    assert_selection_count(0)
+    transaction_checkbox(@transactions.last).check
+    assert_selection_count(1)
+  end
+
   test "can select and deselect groups of transactions" do
     date_transactions_checkbox(1.day.ago.to_date).check
     assert_selection_count(2)
@@ -221,15 +258,29 @@ class TransactionsTest < ApplicationSystemTestCase
   end
 
   test "transfers should always sum to zero" do
+    # Between two cash accounts: a transfer into an investment account is an investment
+    # contribution, which counts as spending
     asset_account = accounts(:other_asset)
-    investment_account = accounts(:investment)
+    cash_account = accounts(:depository)
     outflow_entry = create_transaction("outflow", Date.current, 500, account: asset_account)
-    inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: investment_account)
+    inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: cash_account)
     @user.family.auto_match_transfers!
     visit transactions_url
 
     within "#entry-group-" + Date.current.to_s + "-totals" do
       assert_text "-$100.00" # transaction eleven from setup
+    end
+  end
+
+  test "a transfer into an investment account counts as spending" do
+    outflow_entry = create_transaction("outflow", Date.current, 500, account: accounts(:other_asset))
+    inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: accounts(:investment))
+    @user.family.auto_match_transfers!
+    assert outflow_entry.transaction.reload.investment_contribution?
+    visit transactions_url
+
+    within "#entry-group-" + Date.current.to_s + "-totals" do
+      assert_text "-$600.00" # the contribution plus transaction eleven from setup
     end
   end
 
@@ -256,6 +307,13 @@ class TransactionsTest < ApplicationSystemTestCase
 
     def date_transactions_checkbox(date)
       find("#selection_entry_#{date}")
+    end
+
+    def search_for(text)
+      within "form#transactions-search" do
+        fill_in "Search transactions ...", with: text
+        find("#q_search").send_keys(:tab) # Trigger blur to submit form
+      end
     end
 
     def transaction_checkbox(transaction)

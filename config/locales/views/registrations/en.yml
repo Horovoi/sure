@@ -12,6 +12,7 @@ en:
     create:
       failure: There was a problem signing up.
       invalid_invite_code: Invalid invite code, please try again.
+      invitation_used: This invitation has already been used.
       success: You have signed up successfully.
     new:
       invitation_message: "%{inviter} has invited you to join as a %{role}"

@@ -4,7 +4,7 @@ class BalanceSheet::NetWorthSeriesBuilder
   end
 
   def net_worth_series(period: Period.last_30_days)
-    Rails.cache.fetch(cache_key(period)) do
+    Rails.cache.fetch(cache_key(period), expires_in: Family::AGGREGATE_CACHE_TTL) do
       builder = Balance::ChartSeriesBuilder.new(
         account_ids: visible_account_ids,
         currency: family.currency,
@@ -20,7 +20,7 @@ class BalanceSheet::NetWorthSeriesBuilder
     attr_reader :family
 
     def visible_account_ids
-      @visible_account_ids ||= family.accounts.visible.with_attached_logo.pluck(:id)
+      @visible_account_ids ||= family.accounts.counted_in_totals.pluck(:id)
     end
 
     def cache_key(period)

@@ -121,4 +121,83 @@ class BudgetTest < ActiveSupport::TestCase
 
     assert_not_nil budget.previous_budget_param
   end
+
+  test "viewing a budget keeps the amount of a category switched to income, hidden" do
+    category = @family.categories.create!(name: "Side gig", classification: "expense", color: "#000000", lucide_icon: "briefcase")
+    budget = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    budget.budget_categories.find_by!(category: category).update!(budgeted_spending: 300)
+
+    category.update!(classification: "income")
+    budget = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+
+    assert_not_includes budget.budget_categories.map(&:category_id), category.id
+    assert_equal 300, budget.all_budget_categories.find_by!(category: category).budgeted_spending
+
+    category.update!(classification: "expense")
+    budget = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+
+    assert_equal 300, budget.budget_categories.find_by!(category: category).budgeted_spending
+  end
+
+  test "allocation_state names each stage of a budget" do
+    category = @family.categories.create!(name: "Groceries", classification: "expense", color: "#000000", lucide_icon: "apple")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_category = budget.budget_categories.find_by!(category: category)
+
+    budget_category.update!(budgeted_spending: 100)
+    assert_equal :not_set_up, budget.reload.allocation_state
+    assert_not budget.over_allocated?
+
+    budget.update!(budgeted_spending: 100)
+    assert_equal :fully_allocated, budget.reload.allocation_state
+    assert budget.allocations_valid?
+
+    budget.update!(budgeted_spending: 200)
+    assert_equal :under_allocated, budget.reload.allocation_state
+
+    budget.update!(budgeted_spending: 50)
+    assert_equal :over_allocated, budget.reload.allocation_state
+    assert_not budget.allocations_valid?
+
+    budget_category.update!(budgeted_spending: 0)
+    assert_equal :unallocated, budget.reload.allocation_state
+  end
+
+  test "income figures treat a missing expected income as zero" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 100, expected_income: nil)
+
+    assert_equal 0, budget.actual_income_percent
+    assert_equal(-budget.actual_income, budget.remaining_expected_income)
+    assert_equal 0, budget.surplus_percent
+  end
+
+  test "a budget made before the fiscal start day changed is moved to the month's new period" do
+    travel_to Date.new(2026, 3, 20) do
+      budget = Budget.find_or_bootstrap(@family, start_date: Date.new(2026, 2, 1))
+      budget.update!(budgeted_spending: 1234)
+      assert_equal [ Date.new(2026, 2, 1), Date.new(2026, 2, 28) ], [ budget.start_date, budget.end_date ]
+
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+      found = Budget.find_or_bootstrap(@family, start_date: Budget.param_to_date("feb-2026", family: @family))
+
+      assert_equal budget.id, found.id
+      assert_equal [ Date.new(2026, 2, 10), Date.new(2026, 3, 9) ], [ found.start_date, found.end_date ]
+      assert_equal 1234, found.budgeted_spending
+      assert_equal "feb-2026", found.to_param
+    end
+  end
+
+  test "a stranded budget is left alone when the new period is already taken" do
+    travel_to Date.new(2026, 3, 20) do
+      old = Budget.find_or_bootstrap(@family, start_date: Date.new(2026, 2, 1))
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+      Budget.create!(family: @family, start_date: Date.new(2026, 2, 10), end_date: Date.new(2026, 3, 9), currency: "USD")
+
+      found = Budget.find_or_bootstrap(@family, start_date: Date.new(2026, 2, 15))
+
+      assert_not_equal old.id, found.id
+      assert_equal Date.new(2026, 2, 1), old.reload.start_date
+    end
+  end
 end

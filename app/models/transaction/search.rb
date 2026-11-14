@@ -47,11 +47,11 @@ class Transaction::Search
   # Computes totals for the specific search
   def totals
     @totals ||= begin
-      Rails.cache.fetch("transaction_search_totals/#{cache_key_base}") do
+      Rails.cache.fetch("transaction_search_totals/#{cache_key_base}", expires_in: Family::AGGREGATE_CACHE_TTL) do
         result = transactions_scope
                   .select(
-                    "COALESCE(SUM(CASE WHEN transactions.kind = 'investment_contribution' THEN ABS(entries.amount * COALESCE(er.rate, 1)) WHEN entries.amount >= 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment') THEN ABS(entries.amount * COALESCE(er.rate, 1)) ELSE 0 END), 0) as expense_total",
-                    "COALESCE(SUM(CASE WHEN entries.amount < 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment', 'investment_contribution') THEN ABS(entries.amount * COALESCE(er.rate, 1)) ELSE 0 END), 0) as income_total",
+                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN transactions.kind = 'investment_contribution' THEN ABS(entries.amount * COALESCE(er.rate, 1)) WHEN entries.amount >= 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment') THEN ABS(entries.amount * COALESCE(er.rate, 1)) ELSE 0 END), 0) as expense_total",
+                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN entries.amount < 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment', 'investment_contribution') THEN ABS(entries.amount * COALESCE(er.rate, 1)) ELSE 0 END), 0) as income_total",
                     "COUNT(entries.id) as transactions_count"
                   )
                   .joins(
@@ -84,7 +84,7 @@ class Transaction::Search
 
     def apply_active_accounts_filter(query, active_accounts_only_filter)
       if active_accounts_only_filter
-        query.where(accounts: { status: [ "draft", "active" ] })
+        query.merge(Account.visible)
       else
         query
       end
@@ -127,26 +127,21 @@ class Transaction::Search
       return query unless types.present?
       return query if types.sort == [ "expense", "income", "transfer" ]
 
-      transfer_condition = "transactions.kind IN (#{Transaction::TRANSFER_KINDS.map { |kind| ActiveRecord::Base.connection.quote(kind) }.join(', ')})"
-      # investment_contribution is always an expense regardless of amount sign
-      # (handles both manual outflows and provider-imported inflows like 401k contributions)
-      investment_contribution_condition = "transactions.kind = 'investment_contribution'"
-      expense_condition = "(entries.amount >= 0 OR #{investment_contribution_condition})"
-      income_condition = "(entries.amount <= 0 AND NOT #{investment_contribution_condition})"
+      transfer, expense, income = Transaction.type_conditions.values_at(:transfer, :expense, :income)
 
       condition = case types.sort
       when [ "transfer" ]
-        transfer_condition
+        transfer
       when [ "expense" ]
-        Arel.sql("#{expense_condition} AND NOT (#{transfer_condition})")
+        expense.and(transfer.not)
       when [ "income" ]
-        Arel.sql("#{income_condition} AND NOT (#{transfer_condition})")
+        income.and(transfer.not)
       when [ "expense", "transfer" ]
-        Arel.sql("#{expense_condition} OR #{transfer_condition}")
+        expense.or(transfer)
       when [ "income", "transfer" ]
-        Arel.sql("#{income_condition} OR #{transfer_condition}")
+        income.or(transfer)
       when [ "expense", "income" ]
-        Arel.sql("NOT (#{transfer_condition})")
+        transfer.not
       end
 
       query.where(condition)

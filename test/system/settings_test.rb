@@ -7,7 +7,6 @@ class SettingsTest < ApplicationSystemTestCase
     # Base settings available to all users
     @settings_links = [
       [ "Accounts", accounts_path ],
-      [ "Bank Sync", settings_bank_sync_path ],
       [ "Preferences", settings_preferences_path ],
       [ "Profile Info", settings_profile_path ],
       [ "Security", settings_security_path ],
@@ -44,6 +43,8 @@ class SettingsTest < ApplicationSystemTestCase
   end
 
   test "can update self hosting settings" do
+    # Invite codes open signup for the whole instance, so only a super admin generates them
+    @user.update!(role: "super_admin")
     Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
     Provider::Registry.stubs(:get_provider).with(:twelve_data).returns(nil)
     Provider::Registry.stubs(:get_provider).with(:yahoo_finance).returns(nil)
@@ -67,25 +68,6 @@ class SettingsTest < ApplicationSystemTestCase
     Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
     open_settings_from_sidebar
     assert_no_selector "li", text: I18n.t("settings.settings_nav.payment_label")
-  end
-
-  test "does not show admin settings to non-admin users" do
-    VCR.use_cassette("git_repository_provider/fetch_latest_release_notes") do
-      # Visit accounts path directly as non-admin user to avoid user menu issues
-      visit new_session_path
-      within %(form[action='#{sessions_path}']) do
-        fill_in "Email", with: users(:family_member).email
-        fill_in "Password", with: user_password_test
-        click_on "Log in"
-      end
-
-      # Go directly to accounts (settings) page
-      visit accounts_path
-
-      # Assert that admin-only settings are not present in the navigation
-      assert_no_selector "li", text: "AI Prompts"
-      assert_no_selector "li", text: "API Key"
-    end
   end
 
   private

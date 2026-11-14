@@ -64,6 +64,22 @@ class Transaction < ApplicationRecord
 
   scope :from_subscription, -> { where.not(recurring_transaction_id: nil) }
 
+  # Arel conditions behind the income / expense / transfer filters, for a query that has
+  # entries joined. Built as nodes, not SQL strings, so callers combine them with and/or/not.
+  # A query without transactions joined passes its own tests for the two kinds.
+  def self.type_conditions(transfer: arel_table[:kind].in(TRANSFER_KINDS), investment_contribution: arel_table[:kind].eq("investment_contribution"))
+    amount = Entry.arel_table[:amount]
+
+    {
+      transfer: transfer,
+      investment_contribution: investment_contribution,
+      # An investment contribution is always an expense, whatever its sign (manual outflows
+      # and provider-imported inflows such as 401k contributions alike)
+      expense: amount.gteq(0).or(investment_contribution),
+      income: amount.lteq(0).and(investment_contribution.not)
+    }
+  end
+
   # Overarching grouping method for all transfer-type transactions
   def transfer?
     kind.in?(TRANSFER_KINDS)

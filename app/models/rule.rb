@@ -54,8 +54,14 @@ class Rule < ApplicationRecord
     transaction_ids.size
   end
 
+  # Returns an Integer (transactions modified) when every action is synchronous.
+  # When any action queues async jobs, returns a Hash:
+  #   modified_count:      sync modifications plus transactions queued for async jobs
+  #   sync_modified_count: modifications already made synchronously
+  #   jobs_count:          async jobs queued
   def apply(ignore_attribute_locks: false, rule_run: nil)
-    total_modified = 0
+    sync_modified = 0
+    async_queued = 0
     total_async_jobs = 0
     has_async = false
 
@@ -65,9 +71,9 @@ class Rule < ApplicationRecord
       if result.is_a?(Hash) && result[:async]
         has_async = true
         total_async_jobs += result[:jobs_count] || 0
-        total_modified += result[:modified_count] || 0
+        async_queued += result[:modified_count] || 0
       elsif result.is_a?(Integer)
-        total_modified += result
+        sync_modified += result
       else
         # Log unexpected result type but don't fail
         Rails.logger.warn("Rule#apply: Unexpected result type from action #{action.id}: #{result.class} (value: #{result.inspect})")
@@ -75,14 +81,16 @@ class Rule < ApplicationRecord
     end
 
     if has_async
-      { modified_count: total_modified, async: true, jobs_count: total_async_jobs }
+      { modified_count: sync_modified + async_queued, sync_modified_count: sync_modified, async: true, jobs_count: total_async_jobs }
     else
-      total_modified
+      sync_modified
     end
   end
 
-  def apply_later(ignore_attribute_locks: false)
-    RuleJob.perform_later(self, ignore_attribute_locks: ignore_attribute_locks)
+  # execution_type is "manual" for user-triggered runs and "scheduled" for
+  # runs triggered by a sync.
+  def apply_later(ignore_attribute_locks: false, execution_type: "manual")
+    RuleJob.perform_later(self, ignore_attribute_locks: ignore_attribute_locks, execution_type: execution_type)
   end
 
   def primary_condition_title

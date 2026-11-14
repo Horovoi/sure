@@ -1,6 +1,10 @@
 class Import < ApplicationRecord
+  include AASM
+
   MaxRowCountExceededError = Class.new(StandardError)
   MappingError = Class.new(StandardError)
+  NotPublishableError = Class.new(RuntimeError)
+  NotRevertableError = Class.new(RuntimeError)
 
   MAX_CSV_SIZE = 10.megabytes
   MAX_PDF_SIZE = 25.megabytes
@@ -37,14 +41,85 @@ class Import < ApplicationRecord
 
   scope :ordered, -> { order(created_at: :desc) }
 
-  enum :status, {
-    pending: "pending",
-    complete: "complete",
-    importing: "importing",
-    reverting: "reverting",
-    revert_failed: "revert_failed",
-    failed: "failed"
-  }, validate: true, default: "pending"
+  # How long an import may sit in an in-progress state before the stale work reaper
+  # moves it to its failure state with #mark_stale!.
+  STALE_AFTER = 15.minutes
+  IN_PROGRESS_STATES = %w[processing importing reverting].freeze
+
+  # pending           - being configured (CSV wizard), or a PDF ready for review
+  # processing        - PdfImport only: AI is reading the document
+  # processing_failed - PdfImport only: AI processing failed; can be retried
+  # indexed           - PdfImport only: stored in the document vault, nothing to publish
+  # importing         - ImportJob is writing entries
+  # complete          - published
+  # failed            - publishing failed and was rolled back; can be edited and retried
+  # reverting         - RevertImportJob is removing the published data
+  # reverted          - published data removed; can be edited and published again
+  # revert_failed     - reverting failed and was rolled back; can be retried
+  aasm column: :status, requires_lock: true, whiny_persistence: true do
+    state :pending, initial: true
+    state :processing
+    state :processing_failed
+    state :indexed
+    state :importing
+    state :complete
+    state :failed
+    state :reverting
+    state :reverted
+    state :revert_failed
+
+    event :start_processing, before: :clear_error do
+      transitions from: :pending, to: :processing, guard: :awaiting_processing?
+      transitions from: :processing_failed, to: :processing
+    end
+
+    event :mark_ready do
+      transitions from: :processing, to: :pending
+    end
+
+    event :mark_indexed do
+      transitions from: :processing, to: :indexed
+    end
+
+    event :fail_processing, before: :assign_error do
+      transitions from: :processing, to: :processing_failed
+    end
+
+    event :start_import, before: :clear_error do
+      transitions from: %i[pending failed reverted], to: :importing
+    end
+
+    event :complete_import do
+      transitions from: :importing, to: :complete
+    end
+
+    event :fail_import, before: :assign_error do
+      transitions from: :importing, to: :failed
+    end
+
+    event :start_revert, before: :clear_error do
+      transitions from: %i[complete revert_failed], to: :reverting, guard: :supports_revert?
+    end
+
+    event :finish_revert do
+      transitions from: :reverting, to: :reverted
+    end
+
+    event :fail_revert, before: :assign_error do
+      transitions from: :reverting, to: :revert_failed
+    end
+
+    # Terminal failure for work whose job never finished (worker killed, enqueue lost).
+    # Called by the stale work reaper.
+    event :mark_stale, before: :assign_stale_error do
+      transitions from: :processing, to: :processing_failed
+      transitions from: :importing, to: :failed
+      transitions from: :reverting, to: :revert_failed
+    end
+  end
+
+  scope :in_progress, -> { where(status: IN_PROGRESS_STATES) }
+  scope :stale, -> { in_progress.where(updated_at: ...STALE_AFTER.ago) }
 
   validates :type, inclusion: { in: TYPES }
   validates :amount_type_strategy, inclusion: { in: AMOUNT_TYPE_STRATEGIES }
@@ -59,6 +134,10 @@ class Import < ApplicationRecord
   has_many :mappings, dependent: :destroy
   has_many :accounts, dependent: :destroy
   has_many :entries, dependent: :destroy
+  has_many :claimed_entries, class_name: "Import::ClaimedEntry", dependent: :delete_all
+
+  # Hand claimed entries back before the dependent destroys above remove them.
+  before_destroy :release_claimed_entries!, prepend: true
 
   class << self
     def parse_csv_str(csv_str, col_sep: ",")
@@ -74,44 +153,91 @@ class Import < ApplicationRecord
 
   def publish_later
     raise MaxRowCountExceededError if row_count_exceeded?
-    raise "Import is not publishable" unless publishable?
+    raise NotPublishableError, "Import is not publishable" unless publishable?
 
-    update! status: :importing
+    start_import!
 
     ImportJob.perform_later(self)
   end
 
+  # Publishes synchronously. A pending, failed or reverted import is started first;
+  # an import in any other state is left alone. Entries and the complete state are
+  # written in one transaction, so a failure leaves nothing behind.
   def publish
-    raise MaxRowCountExceededError if row_count_exceeded?
+    start_import! if may_start_import?
 
-    import!
+    with_lock do
+      unless importing?
+        Rails.logger.warn("Import #{id} is #{status}, not importing. Skipping publish.")
+        return
+      end
+
+      raise MaxRowCountExceededError if row_count_exceeded?
+
+      import!
+      complete_import!
+    end
 
     family.sync_later
-
-    update! status: :complete
   rescue => error
-    update! status: :failed, error: error.message
+    record_failure(:fail_import, error)
   end
 
   def revert_later
-    raise "Import is not revertable" unless revertable?
+    raise NotRevertableError, "Import is not revertable" unless revertable?
 
-    update! status: :reverting
+    start_revert!
 
     RevertImportJob.perform_later(self)
   end
 
   def revert
-    Import.transaction do
-      accounts.destroy_all
+    with_lock do
+      unless reverting?
+        Rails.logger.warn("Import #{id} is #{status}, not reverting. Skipping revert.")
+        return
+      end
+
+      release_claimed_entries!
+      remove_created_accounts!
       entries.destroy_all
+      finish_revert!
     end
 
     family.sync_later
-
-    update! status: :pending
   rescue => error
-    update! status: :revert_failed, error: error.message
+    record_failure(:fail_revert, error)
+  end
+
+  def in_progress?
+    status.in?(IN_PROGRESS_STATES)
+  end
+
+  # Configuration, rows and mappings can change only while nothing is published.
+  def editable?
+    pending? || failed? || reverted?
+  end
+
+  def revertable?
+    may_start_revert?
+  end
+
+  # A published import must be reverted first, so deleting never drops its data
+  # without the revert bookkeeping. In-progress imports wait for their job (or the reaper).
+  def deletable?
+    !(importing? || reverting?) && !revertable?
+  end
+
+  # Records a pre-existing entry this import takes over, with the values it is about
+  # to overwrite. Call before changing the entry.
+  def claim_entry!(entry)
+    claimed_entries.find_or_create_by!(entry: entry) do |claim|
+      claim.previous_import_id = entry.import_id
+      claim.previous_category_id = entry.transaction&.category_id
+      claim.previous_tag_ids = entry.transaction&.tag_ids || []
+      claim.previous_notes = entry.notes
+      claim.previous_import_locked = entry.import_locked
+    end
   end
 
   def csv_rows
@@ -170,7 +296,7 @@ class Import < ApplicationRecord
     end
 
     rows.insert_all!(mapped_rows)
-    update_column(:rows_count, rows.count)
+    refresh_rows_count!
   end
 
   def sync_mappings
@@ -186,8 +312,21 @@ class Import < ApplicationRecord
         end
 
         updated_mappings.each { |m| m.save(validate: false) }
-        mapping_class.where.not(id: updated_mappings.map(&:id)).destroy_all
+        mappings.where(type: mapping_class.name).where.not(id: updated_mappings.map(&:id)).destroy_all
       end
+
+      # Mapping types that no longer apply (e.g. account mappings once an account is chosen)
+      mappings.where.not(type: mapping_steps.map(&:name)).destroy_all
+    end
+  end
+
+  # Drops rows and mappings generated from a previous file or account, so the
+  # import has to be configured again before it can be published.
+  def reset_configuration!
+    transaction do
+      rows.delete_all
+      mappings.delete_all
+      refresh_rows_count!
     end
   end
 
@@ -208,11 +347,7 @@ class Import < ApplicationRecord
   end
 
   def publishable?
-    cleaned? && mappings.all?(&:valid?)
-  end
-
-  def revertable?
-    complete? || revert_failed?
+    cleaned? && mappings_valid?
   end
 
   def has_unassigned_account?
@@ -255,6 +390,99 @@ class Import < ApplicationRecord
   end
 
   private
+    # Events write the state without validations: uploads are saved with
+    # validate: false, and a state change must never be blocked by configuration errors.
+    def aasm_save
+      save(validate: false)
+    end
+
+    def clear_error(*)
+      self.error = nil
+    end
+
+    def assign_error(message = nil, *)
+      self.error = message.to_s.truncate(1000).presence
+    end
+
+    def assign_stale_error(*)
+      self.error = "Timed out after #{STALE_AFTER.inspect} without finishing"
+    end
+
+    # Overridden by PdfImport: a new PDF import is pending until its AI processing starts.
+    def awaiting_processing?
+      false
+    end
+
+    # Overridden by imports whose data cannot be removed again.
+    def supports_revert?
+      true
+    end
+
+    def record_failure(event, error)
+      Rails.logger.error("Import #{id} #{event}: #{error.class.name} - #{error.message}")
+      aasm.fire!(event, error.message)
+    rescue AASM::InvalidTransition, ActiveRecord::RecordNotFound => transition_error
+      Rails.logger.error("Import #{id} could not record #{event}: #{transition_error.message}")
+    end
+
+    # Only mappings of the current steps count; stale types are removed by #sync_mappings.
+    def mappings_valid?
+      current_types = mapping_steps.map(&:name)
+      mappings.select { |mapping| mapping.type.in?(current_types) }.all?(&:valid?)
+    end
+
+    def refresh_rows_count!
+      update_column(:rows_count, rows.count)
+    end
+
+    # Restores entries this import took over as duplicates. An entry whose previous
+    # owner import has since been reverted or deleted goes with this import. A category
+    # or tag deleted since the claim cannot be restored and is left out.
+    def release_claimed_entries!
+      live_import_ids = Import.where(id: claimed_entries.select(:previous_import_id)).where.not(status: "reverted").ids.to_set
+      category_ids = Category.where(id: claimed_entries.select(:previous_category_id)).ids.to_set
+      tag_ids = Tag.where(id: claimed_entries.pluck(:previous_tag_ids).flatten.uniq).ids.to_set
+
+      claimed_entries.includes(entry: :entryable).find_each do |claim|
+        entry = claim.entry
+
+        next if claim.previous_import_id.present? && !live_import_ids.include?(claim.previous_import_id)
+
+        entry.update_columns(import_id: claim.previous_import_id, notes: claim.previous_notes, import_locked: claim.previous_import_locked)
+
+        if (txn = entry.transaction)
+          txn.update!(category_id: claim.previous_category_id.presence_in(category_ids))
+          txn.tag_ids = claim.previous_tag_ids.select { |tag_id| tag_ids.include?(tag_id) }
+        end
+      end
+
+      claimed_entries.delete_all
+    end
+
+    # Accounts this import created are removed, unless something else was added to them
+    # later; those are kept and only detached from the import.
+    def remove_created_accounts!
+      accounts.each do |account|
+        if account_has_other_data?(account)
+          account.update_columns(import_id: nil)
+        else
+          account.destroy!
+        end
+      end
+    end
+
+    # Entries not written by this import, ignoring the opening balance the import created.
+    def account_has_other_data?(account)
+      opening_anchor_ids = account.entries.where(entryable_type: "Valuation")
+                                  .joins("INNER JOIN valuations ON valuations.id = entries.entryable_id")
+                                  .where(valuations: { kind: "opening_anchor" })
+                                  .select(:id)
+
+      account.entries.where("entries.import_id IS DISTINCT FROM ?", id)
+             .where.not(id: opening_anchor_ids)
+             .exists?
+    end
+
     def row_count_exceeded?
       rows_count > max_row_count
     end

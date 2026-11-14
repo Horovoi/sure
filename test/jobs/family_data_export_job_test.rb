@@ -18,6 +18,15 @@ class FamilyDataExportJobTest < ActiveJob::TestCase
     assert @export.export_file.attached?
   end
 
+  test "a redelivered job finishes an export that was already started" do
+    @export.start!
+
+    FamilyDataExportJob.perform_now(@export)
+
+    assert_equal "completed", @export.reload.status
+    assert @export.export_file.attached?
+  end
+
   test "marks export as failed on error" do
     # Mock the exporter to raise an error
     Family::DataExporter.any_instance.stubs(:generate_export).raises(StandardError, "Export failed")

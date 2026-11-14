@@ -1,6 +1,7 @@
 <%# locals: (assistant_message:) %>
 
-<div id="<%= dom_id(assistant_message) %>">
+<%= tag.div id: dom_id(assistant_message),
+      data: { turn_status: assistant_message.status, turn_in_flight: assistant_message.live? } do %>
   <% if assistant_message.reasoning? %>
     <details class="group mb-1">
       <summary class="flex items-center gap-2">
@@ -15,10 +16,18 @@
       <%= render "assistant_messages/tool_calls", message: assistant_message %>
     <% end %>
 
-    <div class="flex items-start gap-3 mb-6">
-      <%= render "chats/ai_avatar" %>
+    <% if assistant_message.content.present? %>
+      <div class="flex items-start gap-3 mb-6">
+        <%= render "chats/ai_avatar" %>
 
-      <div class="prose prose--ai-chat"><%= markdown(assistant_message.content) %></div>
-    </div>
+        <div class="prose prose--ai-chat"><%= markdown(assistant_message.content) %></div>
+      </div>
+    <% elsif assistant_message.live? %>
+      <%= render "chats/thinking_indicator", chat: assistant_message.chat %>
+    <% end %>
+
+    <% if assistant_message.retryable? %>
+      <%= render "chats/error", chat: assistant_message.chat %>
+    <% end %>
   <% end %>
-</div>
+<% end %>

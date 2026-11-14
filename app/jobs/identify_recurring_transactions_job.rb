@@ -5,6 +5,11 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
   # only the last scheduled job will actually run
   DEBOUNCE_DELAY = 30.seconds
 
+  # How long the "latest scheduled" marker lives. It must outlive any queue
+  # latency, or every queued job would run once it expires. It only stores
+  # a timestamp, so a long TTL is harmless.
+  DEBOUNCE_KEY_TTL = 6.hours
+
   def perform(family_id, scheduled_at)
     family = Family.find_by(id: family_id)
     return unless family
@@ -17,13 +22,15 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
     # Check if there are still incomplete syncs - if so, skip and let the last sync trigger it
     return if family_has_incomplete_syncs?(family)
 
-    # Use advisory lock as final safety net against concurrent execution
-    with_advisory_lock(family_id) do
+    # Use advisory lock as final safety net against concurrent execution.
+    # The Identifier also runs subscription detection.
+    acquired = with_advisory_lock(cache_key(family_id)) do
       RecurringTransaction::Identifier.new(family).identify_recurring_patterns
-
-      # After identifying recurring patterns, detect subscriptions
-      RecurringTransaction::SubscriptionDetector.detect_for_family(family)
     end
+
+    # Another run holds the lock and may have read the data before the
+    # change that scheduled this one, so run again after it.
+    self.class.set(wait: DEBOUNCE_DELAY).perform_later(family_id, scheduled_at) unless acquired
   end
 
   def self.schedule_for(family)
@@ -33,13 +40,18 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
     cache_key = "recurring_transaction_identify:#{family.id}"
 
     # Store the latest scheduled time
-    Rails.cache.write(cache_key, scheduled_at, expires_in: DEBOUNCE_DELAY + 10.seconds)
+    Rails.cache.write(cache_key, scheduled_at, expires_in: DEBOUNCE_KEY_TTL)
 
     # Schedule the job with delay
     set(wait: DEBOUNCE_DELAY).perform_later(family.id, scheduled_at)
   end
 
   private
+
+    # The first argument is the family's id
+    def family_for_time_zone
+      Family.find_by(id: arguments.first)
+    end
 
     def cache_key(family_id)
       "recurring_transaction_identify:#{family_id}"
@@ -58,28 +70,5 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
       return true if family.accounts.joins(:syncs).merge(Sync.incomplete).exists?
 
       false
-    end
-
-    def with_advisory_lock(family_id)
-      lock_key = advisory_lock_key(family_id)
-      acquired = ActiveRecord::Base.connection.select_value(
-        ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_try_advisory_lock(?)", lock_key ])
-      )
-
-      return unless acquired
-
-      begin
-        yield
-      ensure
-        ActiveRecord::Base.connection.execute(
-          ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_unlock(?)", lock_key ])
-        )
-      end
-    end
-
-    def advisory_lock_key(family_id)
-      # Generate a stable integer key from the family ID for PostgreSQL advisory lock
-      # Advisory locks require a bigint key
-      Digest::MD5.hexdigest("recurring_transaction_identify:#{family_id}").to_i(16) % (2**31)
     end
 end

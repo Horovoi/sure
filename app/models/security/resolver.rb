@@ -9,7 +9,7 @@ class Security::Resolver
   # 1. Exact match in DB
   # 2. Search provider for an exact match
   # 3. Search provider for close match, ranked by relevance
-  # 4. Create offline security if no match is found in either DB or provider
+  # 4. Create a manual security if no match is found in either DB or provider
   def resolve
     return nil if symbol.blank?
 
@@ -27,20 +27,26 @@ class Security::Resolver
       symbol.strip.upcase
     end
 
+    # A security the provider does not know becomes "manual": we never fetch its prices.
+    # When we could not ask the provider (none configured, or the search failed), it
+    # stays fetchable and Security::HealthChecker decides once it can reach the provider.
+    # An existing security keeps its status: the health checker owns it.
     def offline_security
       security = Security.find_or_initialize_by(
         ticker: symbol,
         exchange_operating_mic: exchange_operating_mic,
       )
 
-      security.assign_attributes(
-        country_code: country_code,
-        offline: true # This tells us that we shouldn't try to fetch prices later
-      )
+      security.country_code = country_code
+      security.mark_manual if security.new_record? && provider_answered?
 
       security.save!
 
       security
+    end
+
+    def provider_answered?
+      !provider_search_result.nil?
     end
 
     def exact_match_from_db
@@ -58,7 +64,7 @@ class Security::Resolver
       # Without an exchange, we can never know if we have an exact match
       return nil unless exchange_operating_mic.present?
 
-      match = provider_search_result.find do |s|
+      match = provider_search_result.to_a.find do |s|
         ticker_matches = s.ticker.upcase.to_s == symbol.upcase.to_s
         exchange_matches = s.exchange_operating_mic.upcase.to_s == exchange_operating_mic.upcase.to_s
 
@@ -75,7 +81,7 @@ class Security::Resolver
     end
 
     def close_match_from_provider
-      filtered_candidates = provider_search_result
+      filtered_candidates = provider_search_result.to_a
 
       # If a country code is specified, we MUST find a match with the same code
       if country_code.present?
@@ -120,7 +126,10 @@ class Security::Resolver
         country_code: country_code
       }.compact_blank
 
-      @provider_search_result ||= Security.search_provider(symbol, **params)
+      return @provider_search_result if defined?(@provider_search_result)
+
+      # nil when the provider could not answer
+      @provider_search_result = Security.provider_search(symbol, **params)
     end
 
     # Non-exhaustive list of common country codes for help in choosing "close" matches

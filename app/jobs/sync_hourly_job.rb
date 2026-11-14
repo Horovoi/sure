@@ -1,6 +1,5 @@
 class SyncHourlyJob < ApplicationJob
   queue_as :scheduled
-  sidekiq_options lock: :until_executed, on_conflict: :log
 
   # Provider item classes that opt-in to hourly syncing
   HOURLY_SYNCABLES = [
@@ -8,6 +7,12 @@ class SyncHourlyJob < ApplicationJob
   ].freeze
 
   def perform
+    # Every hourly syncable is a bank or crypto connection provider
+    unless BankConnections.enabled?
+      Rails.logger.info("Skipping hourly sync: bank connections are disabled")
+      return
+    end
+
     Rails.logger.info("Starting hourly sync")
     HOURLY_SYNCABLES.each do |syncable_class|
       sync_items(syncable_class)

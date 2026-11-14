@@ -348,4 +348,45 @@ class UserTest < ActiveSupport::TestCase
     assert_equal :member, User.role_for_new_family_creator(fallback_role: :member)
     assert_equal "custom_role", User.role_for_new_family_creator(fallback_role: "custom_role")
   end
+
+  test "changing email, password or MFA revokes all sessions when there is no current session" do
+    user = users(:family_member)
+
+    user.sessions.create!
+    user.update!(password: "AnotherPass1!")
+    assert_equal 0, user.sessions.count
+
+    user.sessions.create!
+    user.update!(email: "changed@example.com")
+    assert_equal 0, user.sessions.count
+
+    user.sessions.create!
+    user.setup_mfa!
+    assert_equal 1, user.sessions.count, "starting MFA setup alone does not sign anyone out"
+    user.enable_mfa!
+    assert_equal 0, user.sessions.count
+  end
+
+  test "revoke_other_sessions keeps the current session of the same user" do
+    user = users(:family_member)
+    current = user.sessions.create!
+    other = user.sessions.create!
+
+    Current.session = current
+    user.update!(password: "AnotherPass1!")
+
+    assert Session.exists?(current.id)
+    assert_not Session.exists?(other.id)
+  ensure
+    Current.reset
+  end
+
+  test "unrelated profile changes keep sessions" do
+    user = users(:family_member)
+    user.sessions.create!
+
+    user.update!(first_name: "Renamed")
+
+    assert_equal 1, user.sessions.count
+  end
 end

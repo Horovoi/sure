@@ -1,7 +1,9 @@
 class ChatsController < ApplicationController
   include ActionView::RecordIdentifier
 
-  before_action :set_chat, only: [ :show, :edit, :update, :destroy ]
+  guard_feature only: [ :create, :retry ], unless: -> { Current.user.ai_enabled? }
+
+  before_action :set_chat, only: [ :show, :edit, :update, :destroy, :retry ]
 
   def index
     @chat = nil # override application_controller default behavior of setting @chat to last viewed chat
@@ -19,7 +21,7 @@ class ChatsController < ApplicationController
   def create
     @chat = Current.user.chats.start!(chat_params[:content], model: chat_params[:ai_model])
     set_last_viewed_chat(@chat)
-    redirect_to chat_path(@chat, thinking: true)
+    redirect_to chat_path(@chat)
   end
 
   def edit
@@ -42,8 +44,12 @@ class ChatsController < ApplicationController
   end
 
   def retry
-    @chat.retry_last_message!
-    redirect_to chat_path(@chat, thinking: true)
+    @chat.retry_last_turn!
+    redirect_to chat_path(@chat)
+  rescue Chat::TurnInProgressError
+    redirect_to chat_path(@chat), alert: t(".in_progress")
+  rescue Chat::NothingToRetryError
+    redirect_to chat_path(@chat)
   end
 
   private

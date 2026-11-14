@@ -52,8 +52,8 @@ class Api::V1::ImportsController < Api::V1::BaseController
     type = "TransactionImport" unless Import::TYPES.include?(type)
 
     # 2. Build the import object with permitted config attributes
-    @import = family.imports.build(import_config_params)
-    @import.type = type
+    # Passing type to build instantiates the subclass, whose mapping steps sync_mappings needs
+    @import = family.imports.build(import_config_params.merge(type: type))
     @import.account_id = params[:account_id] if params[:account_id].present?
 
     # 3. Attach the uploaded file if present (with validation)
@@ -92,7 +92,7 @@ class Api::V1::ImportsController < Api::V1::BaseController
       if @import.uploaded?
         begin
           @import.generate_rows_from_csv
-          @import.reload
+          @import.reload.sync_mappings
         rescue StandardError => e
           Rails.logger.error "Row generation failed for import #{@import.id}: #{e.message}"
         end
@@ -101,7 +101,8 @@ class Api::V1::ImportsController < Api::V1::BaseController
       # If the import is configured (has rows), we can try to auto-publish or just leave it as pending
       # For API simplicity, if enough info is provided, we might want to trigger processing
 
-      if @import.configured? && params[:publish] == "true"
+      # Publish only when nothing is left to map; otherwise the import stays pending
+      if params[:publish] == "true" && @import.publishable?
         @import.publish_later
       end
 

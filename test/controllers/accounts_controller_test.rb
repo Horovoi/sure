@@ -100,6 +100,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "syncing linked account triggers sync for all provider items" do
+    enable_bank_connections
     plaid_account = plaid_accounts(:one)
     plaid_item = plaid_account.plaid_item
     AccountProvider.create!(account: @account, provider: plaid_account)
@@ -212,18 +213,22 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     @account.reload
     assert @account.disabled?
 
-    patch toggle_active_account_url(@account)
+    assert_difference -> { @account.syncs.count }, 1 do
+      patch toggle_active_account_url(@account)
+    end
     assert_redirected_to accounts_path
     @account.reload
     assert @account.active?
   end
 
   test "select_provider shows available providers" do
+    enable_bank_connections
     get select_provider_account_url(@account)
     assert_response :success
   end
 
   test "select_provider redirects for already linked account" do
+    enable_bank_connections
     plaid_account = plaid_accounts(:one)
     AccountProvider.create!(account: @account, provider: plaid_account)
 
@@ -285,5 +290,62 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
       tab: "activity",
       q: { types: [ "expense" ] }
     )
+  end
+
+  test "index hides provider cards and lists linked accounts with the manual ones when bank connections are disabled" do
+    AccountProvider.create!(account: @account, provider: plaid_accounts(:one))
+
+    get accounts_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(plaid_items(:one))}", count: 0
+    assert_select "#manual-accounts", text: /#{Regexp.escape(@account.name)}/
+    assert_select "a[title=?]", I18n.t("accounts.account.link_provider"), count: 0
+    assert_select "a[href=?]", confirm_unlink_account_path(@account)
+  end
+
+  test "index shows provider cards when bank connections are enabled" do
+    enable_bank_connections
+    AccountProvider.create!(account: @account, provider: plaid_accounts(:one))
+
+    get accounts_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(plaid_items(:one))}"
+    assert_select "#manual-accounts", text: /#{Regexp.escape(@account.name)}/, count: 0
+    assert_select "a[title=?]", I18n.t("accounts.account.link_provider")
+  end
+
+  test "new account modal goes straight to the form when bank connections are disabled" do
+    get new_account_url
+
+    assert_response :success
+    assert_select "a[href=?]", new_depository_path
+    assert_select "a[href=?]", new_depository_path(step: "method_select"), count: 0
+  end
+
+  test "new account modal offers the method selector when bank connections are enabled" do
+    enable_bank_connections
+
+    get new_account_url
+
+    assert_response :success
+    assert_select "a[href=?]", new_depository_path(step: "method_select")
+  end
+
+  test "select_provider is not found when bank connections are disabled" do
+    get select_provider_account_url(@account)
+    assert_response :not_found
+  end
+
+  test "syncing linked account syncs the account itself when bank connections are disabled" do
+    AccountProvider.create!(account: @account, provider: plaid_accounts(:one))
+
+    Account.any_instance.expects(:syncing?).returns(false)
+    Account.any_instance.expects(:sync_later).once
+    PlaidItem.any_instance.expects(:sync_later).never
+
+    post sync_account_url(@account)
+    assert_redirected_to account_url(@account)
   end
 end

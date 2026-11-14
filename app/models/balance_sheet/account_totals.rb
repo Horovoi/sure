@@ -27,11 +27,12 @@ class BalanceSheet::AccountTotals
       @visible_accounts ||= family.accounts.visible.with_attached_logo
     end
 
+    # Draft accounts are listed but count as zero in every total and weight.
     def account_rows
       @account_rows ||= accounts_with_display_associations.map do |account_row|
         AccountRow.new(
           account: account_row,
-          converted_balance: account_row.converted_balance,
+          converted_balance: account_row.counted_in_totals? ? account_row.converted_balance : 0,
           is_syncing: sync_status_monitor.account_syncing?(account_row)
         )
       end
@@ -60,7 +61,7 @@ class BalanceSheet::AccountTotals
     end
 
     def query
-      @query ||= Rails.cache.fetch(cache_key) do
+      @query ||= Rails.cache.fetch(cache_key, expires_in: Family::AGGREGATE_CACHE_TTL) do
         visible_accounts
           .joins(ActiveRecord::Base.sanitize_sql_array([
             "LEFT JOIN exchange_rates ON exchange_rates.date = ? AND accounts.currency = exchange_rates.from_currency AND exchange_rates.to_currency = ?",

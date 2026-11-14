@@ -2,13 +2,20 @@ class ImpersonationSessionsController < ApplicationController
   before_action :require_super_admin!, only: [ :create, :join, :leave ]
   before_action :set_impersonation_session, only: [ :approve, :reject, :complete ]
 
+  rescue_from AASM::InvalidTransition do
+    redirect_to root_path, alert: t("impersonation_sessions.invalid_transition")
+  end
+
   def create
     Current.true_user.request_impersonation_for(session_params[:impersonated_id])
     redirect_to root_path, notice: t(".success")
   end
 
+  # Only an approved session that has not expired can be joined
   def join
-    @impersonation_session = Current.true_user.impersonator_support_sessions.find_by(id: params[:impersonation_session_id])
+    @impersonation_session = Current.true_user.impersonator_support_sessions.active.find_by(id: params[:impersonation_session_id])
+    raise_unauthorized! unless @impersonation_session
+
     Current.session.update!(active_impersonator_session: @impersonation_session)
     redirect_to root_path, notice: t(".success")
   end
@@ -46,6 +53,8 @@ class ImpersonationSessionsController < ApplicationController
       @impersonation_session =
         Current.true_user.impersonated_support_sessions.find_by(id: params[:id]) ||
         Current.true_user.impersonator_support_sessions.find_by(id: params[:id])
+
+      raise_unauthorized! unless @impersonation_session
     end
 
     def require_super_admin!

@@ -6,28 +6,51 @@ export default class extends Controller {
   static targets = ["auto"];
   static values = {
     triggerEvent: { type: String, default: "input" },
+    // Skip a submit when nothing in the form changed since the last one. Turn it off for a
+    // form whose submit also does something else (the inline chat title leaves edit mode).
+    dedupe: { type: Boolean, default: true },
   };
 
-  connect() {
-    // Track the last value and timeouts per element to compute context-aware debouncing
+  initialize() {
+    // Track the last value and timeouts per element to compute context-aware
+    // debouncing. Set up here because Stimulus runs autoTargetConnected
+    // before connect().
     this._lastValues = new WeakMap();
-    this._lastSubmitted = new WeakMap();
     this._timeouts = new WeakMap();
+  }
 
-    this.autoTargets.forEach((element) => {
-      const event = this.#getTriggerEvent(element);
-      this._lastValues.set(element, this.#currentValue(element));
-      element.addEventListener(event, this.handleInput);
-    });
+  connect() {
+    // The de-dupe compares the whole form, so a change to one field is never
+    // skipped because of another field's history (and a checkbox, whose
+    // value is the same whether checked or not, submits on every toggle)
+    this._lastSubmittedState = this.#formState();
+    document.addEventListener("turbo:morph", this.#rebaseline);
   }
 
   disconnect() {
-    this.autoTargets.forEach((element) => {
-      const event = this.#getTriggerEvent(element);
-      element.removeEventListener(event, this.handleInput);
-      const t = this._timeouts.get(element);
-      if (t) clearTimeout(t);
-    });
+    document.removeEventListener("turbo:morph", this.#rebaseline);
+  }
+
+  // A page morph puts the server's values back into the fields without reconnecting this
+  // controller, so what counts as "unchanged" starts again from them
+  #rebaseline = () => {
+    this._lastSubmittedState = this.#formState();
+  };
+
+  // Targets may be added after connect (e.g. a field rendered later), so
+  // listeners are attached per target rather than once in connect
+  autoTargetConnected(element) {
+    const event = this.#getTriggerEvent(element);
+    this._lastValues.set(element, this.#currentValue(element));
+    element.addEventListener(event, this.handleInput);
+  }
+
+  autoTargetDisconnected(element) {
+    const event = this.#getTriggerEvent(element);
+    element.removeEventListener(event, this.handleInput);
+    const t = this._timeouts.get(element);
+    if (t) clearTimeout(t);
+    this._timeouts.delete(element);
   }
 
   handleInput = (event) => {
@@ -65,15 +88,34 @@ export default class extends Controller {
     const existing = this._timeouts.get(el);
     if (existing) clearTimeout(existing);
 
-    const snapshot = this.#currentValue(el);
     const timeout = setTimeout(() => {
-      // Avoid duplicate submits for the same value
-      if (this._lastSubmitted.get(el) === snapshot) return;
-      this._lastSubmitted.set(el, snapshot);
+      this._timeouts.delete(el);
+
+      // Avoid duplicate submits of an unchanged form
+      const state = this.#formState();
+      if (this.dedupeValue && state === this._lastSubmittedState) return;
+      this._lastSubmittedState = state;
       this.element.requestSubmit();
     }, delay);
 
     this._timeouts.set(el, timeout);
+  }
+
+  #formState() {
+    if (!(this.element instanceof HTMLFormElement)) return null;
+
+    // The CSRF token changes when the page is morphed after a submit; it is
+    // not something the user changed
+    return Array.from(new FormData(this.element))
+      .filter(([name]) => name !== "authenticity_token")
+      .map(([name, value]) => {
+        const text =
+          value instanceof File
+            ? `${value.name}:${value.size}:${value.lastModified}`
+            : value;
+        return `${name}=${text}`;
+      })
+      .join("&");
   }
 
   #currentValue(element) {

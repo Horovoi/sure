@@ -6,40 +6,22 @@ class Api::V1::MessagesController < Api::V1::BaseController
   before_action :set_chat
 
   def create
-    @message = @chat.messages.build(
-      content: message_params[:content],
-      type: "UserMessage",
-      ai_model: message_params[:model].presence || Chat.default_model
-    )
-
-    if @message.save
-      # NOTE: Commenting out duplicate job enqueue to fix mobile app receiving duplicate AI responses
-      # UserMessage model already triggers AssistantResponseJob via after_create_commit callback
-      # in app/models/user_message.rb:10-12, so this manual enqueue causes the job to run twice,
-      # resulting in duplicate AI responses with different content and wasted tokens.
-      # See: https://github.com/dwvwdv/sure (mobile app integration issue)
-      # AssistantResponseJob.perform_later(@message)
-      render :show, status: :created
-    else
-      render json: { error: "Failed to create message", details: @message.errors.full_messages }, status: :unprocessable_entity
-    end
+    @message = @chat.ask!(message_params[:content], ai_model: message_params[:model]).prompt
+    render :show, status: :created
+  rescue Chat::TurnInProgressError
+    render json: { error: "response_in_progress", message: "Wait for the current response to finish" }, status: :conflict
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: "Failed to create message", details: e.record.errors.full_messages }, status: :unprocessable_entity
   end
 
+  # Retries the last turn when it failed, was lost, or never got a response
   def retry
-    last_message = @chat.messages.ordered.last
-
-    if last_message&.type == "AssistantMessage"
-      new_message = @chat.messages.create!(
-        type: "AssistantMessage",
-        content: "",
-        ai_model: last_message.ai_model
-      )
-
-      AssistantResponseJob.perform_later(new_message)
-      render json: { message: "Retry initiated", message_id: new_message.id }, status: :accepted
-    else
-      render json: { error: "No assistant message to retry" }, status: :unprocessable_entity
-    end
+    turn = @chat.retry_last_turn!
+    render json: { message: "Retry initiated", message_id: turn.id }, status: :accepted
+  rescue Chat::TurnInProgressError
+    render json: { error: "response_in_progress", message: "Wait for the current response to finish" }, status: :conflict
+  rescue Chat::NothingToRetryError
+    render json: { error: "Nothing to retry" }, status: :unprocessable_entity
   end
 
   private

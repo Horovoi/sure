@@ -1,7 +1,19 @@
 ---
 en:
   invitations:
+    accept_choice:
+      accept: Accept and join %{family}
+      decline: Not now
+      leave_current_household: You will leave your current household, %{family}, and lose access to its data.
+      signed_in_as: You are signed in as %{email}.
+      wrong_account: This invitation is for a different email address. Sign out, then sign in with the invited account to accept it.
+    confirm:
+      failure: Could not accept the invitation.
+      no_longer_pending: This invitation was already used or has expired.
+      success: You joined %{family}.
+      wrong_user: This invitation is for a different account.
     create:
+      existing_user: Invitation created. This person already has an account, so they must open the invitation link while signed in and accept it.
       failure: Could not send invitation
       success: Invitation sent successfully
     destroy:

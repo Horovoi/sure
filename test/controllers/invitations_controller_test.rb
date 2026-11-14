@@ -84,27 +84,95 @@ class InvitationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href='#{new_session_path(invitation: @invitation.token)}']"
   end
 
-  test "create invitation auto-accepts for an existing user" do
+  test "inviting an existing user leaves them in place until they accept" do
     invited_user = users(:empty)
+    original_family = invited_user.family
 
     assert_difference("Invitation.count") do
-      assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
-        post invitations_url, params: {
-          invitation: {
-            email: invited_user.email,
-            role: "member"
-          }
-        }
-      end
+      post invitations_url, params: { invitation: { email: invited_user.email, role: "member" } }
     end
 
     invitation = Invitation.order(created_at: :desc).first
 
     assert_redirected_to settings_profile_path
-    assert_equal "Existing user added to the household.", flash[:notice]
-    assert invitation.accepted_at.present?
+    assert_equal I18n.t("invitations.create.existing_user"), flash[:notice]
+    assert invitation.pending?
+    assert_equal original_family, invited_user.reload.family
+    assert_equal "admin", invited_user.role
+  end
+
+  test "a lapsed invitation does not block inviting the same email again" do
+    @invitation.update_columns(expires_at: 1.day.ago)
+
+    post invitations_url, params: { invitation: { email: @invitation.email, role: "member" } }
+
+    assert_redirected_to settings_profile_path
+    assert_equal I18n.t("invitations.create.success"), flash[:notice]
+    assert_equal 1, Invitation.where(email: @invitation.email, family: @admin.family).count
+    assert Invitation.find_by(email: @invitation.email, family: @admin.family).pending?
+  end
+
+  test "signed-in invitee sees an accept button and joins only after confirming" do
+    invited_user = users(:empty)
+    invitation = @admin.family.invitations.create!(email: invited_user.email, role: "member", inviter: @admin)
+
+    delete session_path(@admin.sessions.order(:created_at).last)
+    sign_in invited_user
+
+    get accept_invitation_url(invitation.token)
+    assert_response :success
+    assert_select "form[action='#{confirm_invitation_path(invitation.token)}']"
+    assert_equal users(:empty).family, invited_user.reload.family
+
+    post confirm_invitation_url(invitation.token)
+
+    assert_redirected_to root_path
     assert_equal @admin.family, invited_user.reload.family
     assert_equal "member", invited_user.role
+    assert invitation.reload.accepted_at.present?
+
+    # A second submit of the same form
+    post confirm_invitation_url(invitation.token)
+    assert_redirected_to root_path
+    assert_equal I18n.t("invitations.confirm.no_longer_pending"), flash[:alert]
+  end
+
+  test "accepting an invitation never changes a super admin's role" do
+    super_admin = users(:sure_support_staff)
+    invitation = @admin.family.invitations.create!(email: super_admin.email, role: "member", inviter: @admin)
+
+    delete session_path(@admin.sessions.order(:created_at).last)
+    sign_in super_admin
+    post confirm_invitation_url(invitation.token)
+
+    assert_equal @admin.family, super_admin.reload.family
+    assert_equal "super_admin", super_admin.role
+  end
+
+  test "another user cannot confirm someone else's invitation" do
+    other = users(:empty)
+    invitation = @admin.family.invitations.create!(email: "someone@example.com", role: "member", inviter: @admin)
+
+    delete session_path(@admin.sessions.order(:created_at).last)
+    sign_in other
+    post confirm_invitation_url(invitation.token)
+
+    assert_redirected_to root_path
+    assert invitation.reload.pending?
+    assert_equal users(:empty).family, other.reload.family
+  end
+
+  test "signing in from an invitation link sends the user to the accept page without moving them" do
+    invited_user = users(:empty)
+    invitation = @admin.family.invitations.create!(email: invited_user.email, role: "member", inviter: @admin)
+    delete session_path(@admin.sessions.order(:created_at).last)
+
+    get new_session_url(invitation: invitation.token)
+    post sessions_url, params: { email: invited_user.email, password: user_password_test }
+
+    assert_redirected_to accept_invitation_path(invitation.token)
+    assert invitation.reload.pending?
+    assert_equal users(:empty).family, invited_user.reload.family
   end
 
   test "should not accept invalid invitation token" do

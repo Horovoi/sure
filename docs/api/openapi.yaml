@@ -546,11 +546,15 @@ components:
           type: string
           enum:
           - pending
-          - complete
+          - processing
+          - processing_failed
+          - indexed
           - importing
-          - reverting
-          - revert_failed
+          - complete
           - failed
+          - reverting
+          - reverted
+          - revert_failed
         created_at:
           type: string
           format: date-time
@@ -592,11 +596,15 @@ components:
           type: string
           enum:
           - pending
-          - complete
+          - processing
+          - processing_failed
+          - indexed
           - importing
-          - reverting
-          - revert_failed
+          - complete
           - failed
+          - reverting
+          - reverted
+          - revert_failed
         created_at:
           type: string
           format: date-time
@@ -1002,11 +1010,15 @@ paths:
           type: string
           enum:
           - pending
-          - complete
+          - processing
+          - processing_failed
+          - indexed
           - importing
-          - reverting
-          - revert_failed
+          - complete
           - failed
+          - reverting
+          - reverted
+          - revert_failed
       - name: type
         in: query
         required: false

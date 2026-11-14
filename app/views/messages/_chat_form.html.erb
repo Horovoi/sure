@@ -2,6 +2,8 @@
 
 <div id="chat-form" class="space-y-2">
   <% model = chat && chat.persisted? ? [chat, Message.new] : Chat.new %>
+  <%# While a turn runs the composer cannot send; chat_controller.js keeps this in sync with the streamed messages %>
+  <% turn_in_flight = chat&.persisted? && chat.in_flight_turn&.live? %>
 
   <%= form_with model: model,
                 class: "flex lg:flex-col gap-2 bg-container px-2 py-1.5 rounded-full lg:rounded-lg shadow-border-xs",
@@ -23,9 +25,10 @@
         <% end %>
       </div>
 
-      <%= icon("arrow-up", as_button: true, type: "submit") %>
+      <%= icon("arrow-up", as_button: true, type: "submit", disabled: turn_in_flight, data: { chat_target: "submit" }) %>
     </div>
   <% end %>
 
+  <p class="text-xs text-secondary <%= "hidden" unless turn_in_flight %>" data-chat-target="pendingHint"><%= t("messages.chat_form.waiting") %></p>
   <p class="text-xs text-secondary">AI responses are informational only and are not financial advice.</p>
 </div>

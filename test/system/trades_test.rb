@@ -27,6 +27,7 @@ class TradesTest < ApplicationSystemTestCase
     fill_in "model[price]", with: 214.23
 
     click_button "Add transaction"
+    wait_for_trade_saved
 
     visit_trades
 
@@ -48,6 +49,7 @@ class TradesTest < ApplicationSystemTestCase
     fill_in "model[price]", with: 215.33
 
     click_button "Add transaction"
+    wait_for_trade_saved
 
     visit_trades
 
@@ -57,6 +59,11 @@ class TradesTest < ApplicationSystemTestCase
   end
 
   private
+    # Leaving the page before the create request finishes loses the trade
+    def wait_for_trade_saved
+      assert_text I18n.t("entries.create.success")
+    end
+
     def open_new_trade_modal
       click_on "New transaction"
     end

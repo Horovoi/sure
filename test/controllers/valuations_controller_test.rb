@@ -31,6 +31,27 @@ class ValuationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to account_url(created_entry.account)
   end
 
+  test "deleting an opening balance is refused" do
+    account = accounts(:depository)
+    anchor = account.entries.create!(date: 3.years.ago.to_date, name: "Opening", amount: 100, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+
+    assert_no_difference "Entry.count" do
+      delete valuation_url(anchor)
+    end
+
+    assert_redirected_to account_url(account)
+    assert_equal I18n.t("activerecord.errors.models.entry.attributes.base.anchor_not_deletable"), flash[:alert]
+  end
+
+  test "a new balance on the opening balance date is refused before confirming" do
+    account = accounts(:depository)
+    account.entries.create!(date: 3.years.ago.to_date, name: "Opening", amount: 100, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+
+    post confirm_create_valuations_url, params: { entry: { amount: 500, date: 3.years.ago.to_date, account_id: account.id } }
+
+    assert_response :unprocessable_entity
+  end
+
   test "updates entry with basic attributes" do
     assert_no_difference [ "Entry.count", "Valuation.count" ] do
       patch valuation_url(@entry), params: {

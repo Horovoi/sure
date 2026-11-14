@@ -8,3 +8,8 @@ en:
             base:
               invalid_sell_quantity: cannot sell %{sell_qty} shares of %{ticker} because
                 you only own %{current_qty} shares
+              anchor_not_deletable: The account's opening balance cannot be deleted. Edit its
+                amount or date instead.
+              anchor_on_reconciliation_date: This date holds the account's opening or current
+                balance. Edit that entry, or pick another date.
+              duplicate_anchor: This account already has an entry of this kind

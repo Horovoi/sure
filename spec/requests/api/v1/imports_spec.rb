@@ -73,7 +73,7 @@ RSpec.describe 'API V1 Imports', type: :request do
                 description: 'Items per page (default: 25, max: 100)'
       parameter name: :status, in: :query, required: false,
                 description: 'Filter by status',
-                schema: { type: :string, enum: %w[pending complete importing reverting revert_failed failed] }
+                schema: { type: :string, enum: %w[pending processing processing_failed indexed importing complete failed reverting reverted revert_failed] }
       parameter name: :type, in: :query, required: false,
                 description: 'Filter by import type',
                 schema: { type: :string, enum: %w[TransactionImport TradeImport AccountImport MintImport CategoryImport RuleImport] }

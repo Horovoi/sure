@@ -140,7 +140,88 @@ class ExchangeRate::ImporterTest < ActiveSupport::TestCase
     assert_equal 1, ExchangeRate.count
   end
 
+  test "a recent gap-filled rate is provisional and replaced once the provider publishes it" do
+    ExchangeRate.delete_all
+    start_date = 2.days.ago.to_date
+
+    # The provider has not published today's rate yet
+    @provider.expects(:fetch_exchange_rates)
+             .with(from: "USD", to: "EUR", start_date: get_provider_fetch_start_date(start_date), end_date: Date.current)
+             .returns(provider_success_response([
+               OpenStruct.new(from: "USD", to: "EUR", date: start_date, rate: 1.3),
+               OpenStruct.new(from: "USD", to: "EUR", date: 1.day.ago.to_date, rate: 1.4)
+             ]))
+
+    import_rates(start_date: start_date)
+
+    today = ExchangeRate.find_by!(from_currency: "USD", to_currency: "EUR", date: Date.current)
+    assert_equal 1.4, today.rate
+    assert today.provisional, "a gap-fill for a recent day is provisional"
+    refute ExchangeRate.find_by!(date: start_date).provisional
+
+    # Next import: today's rate is published, so the gap-fill is refetched and replaced
+    @provider.expects(:fetch_exchange_rates)
+             .with(from: "USD", to: "EUR", start_date: get_provider_fetch_start_date(Date.current), end_date: Date.current)
+             .returns(provider_success_response([
+               OpenStruct.new(from: "USD", to: "EUR", date: Date.current, rate: 1.5)
+             ]))
+
+    import_rates(start_date: start_date)
+
+    today.reload
+    assert_equal 1.5, today.rate
+    refute today.provisional
+  end
+
+  test "a gap-fill the provider still has no rate for keeps the latest rate, not the one at the start date" do
+    ExchangeRate.delete_all
+    start_date = 30.days.ago.to_date
+    (start_date..2.days.ago.to_date).each do |date|
+      ExchangeRate.create!(from_currency: "USD", to_currency: "EUR", date: date, rate: date == start_date ? 1.0 : 2.0)
+    end
+    ExchangeRate.create!(from_currency: "USD", to_currency: "EUR", date: 1.day.ago.to_date, rate: 2.0, provisional: true)
+
+    # Still nothing for yesterday; the fetch buffer returns the day before it
+    @provider.expects(:fetch_exchange_rates)
+             .with(from: "USD", to: "EUR", start_date: get_provider_fetch_start_date(1.day.ago.to_date), end_date: Date.current)
+             .returns(provider_success_response([
+               OpenStruct.new(from: "USD", to: "EUR", date: 2.days.ago.to_date, rate: 2.1)
+             ]))
+
+    import_rates(start_date: start_date)
+
+    assert_equal 2.1, ExchangeRate.find_by!(date: 1.day.ago.to_date).rate
+    assert_equal 2.1, ExchangeRate.find_by!(date: Date.current).rate
+    assert_equal 1.0, ExchangeRate.find_by!(date: start_date).rate
+  end
+
+  test "an old gap-filled rate is final" do
+    ExchangeRate.delete_all
+    start_date = 20.days.ago.to_date
+    end_date = start_date + 2.days
+
+    @provider.expects(:fetch_exchange_rates)
+             .with(from: "USD", to: "EUR", start_date: get_provider_fetch_start_date(start_date), end_date: end_date)
+             .returns(provider_success_response([
+               OpenStruct.new(from: "USD", to: "EUR", date: start_date, rate: 1.3)
+             ]))
+
+    import_rates(start_date: start_date, end_date: end_date)
+
+    assert ExchangeRate.where(from_currency: "USD", to_currency: "EUR").none?(&:provisional)
+  end
+
   private
+    def import_rates(start_date:, end_date: Date.current)
+      ExchangeRate::Importer.new(
+        exchange_rate_provider: @provider,
+        from: "USD",
+        to: "EUR",
+        start_date: start_date,
+        end_date: end_date
+      ).import_provider_rates
+    end
+
     def get_provider_fetch_start_date(start_date)
       # We fetch with a 5 day buffer to account for weekends and holidays
       start_date - 5.days

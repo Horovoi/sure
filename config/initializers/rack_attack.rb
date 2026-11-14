@@ -8,12 +8,25 @@ class Rack::Attack
     /masscan/i
   ].freeze
 
-  # Enable Rack::Attack
-  enabled = Rails.env.production? || Rails.env.staging?
+  # Throttle and block only in production and staging (the middleware stays installed)
+  self.enabled = Rails.env.production? || Rails.env.staging?
 
   # Throttle requests to the OAuth token endpoint
   throttle("oauth/token", limit: 10, period: 1.minute) do |request|
     request.ip if request.path == "/oauth/token"
+  end
+
+  # Throttle the MFA code step (and MFA disable, which also takes a code) to
+  # stop brute-forcing 6-digit codes. The app is reachable from the LAN.
+  MFA_CODE_PATHS = %w[/mfa/verify /mfa/disable].freeze
+  throttle("mfa/ip", limit: 5, period: 1.minute) do |request|
+    request.ip if MFA_CODE_PATHS.include?(request.path) && (request.post? || request.delete?)
+  end
+
+  # Throttle password logins and signups (web and API)
+  LOGIN_PATHS = %w[/sessions /registration /api/v1/auth/login /api/v1/auth/signup /oidc_account/create_link].freeze
+  throttle("login/ip", limit: 10, period: 1.minute) do |request|
+    request.ip if request.post? && LOGIN_PATHS.include?(request.path)
   end
 
   # Throttle admin endpoints to prevent brute-force attacks

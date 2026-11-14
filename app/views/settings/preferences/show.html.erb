@@ -13,17 +13,17 @@
         <%= family_form.select :locale,
             language_options,
             { label: t(".language") },
-            { data: { auto_submit_form_target: "auto" } } %>
+            { data: { auto_submit_form_target: "auto" }, disabled: !Current.user.admin? } %>
 
         <%= family_form.select :timezone,
             timezone_options,
             { label: t(".timezone") },
-            { data: { auto_submit_form_target: "auto" } } %>
+            { data: { auto_submit_form_target: "auto" }, disabled: !Current.user.admin? } %>
 
         <%= family_form.select :date_format,
             Family::DATE_FORMATS,
             { label: t(".date_format") },
-            { data: { auto_submit_form_target: "auto" } } %>
+            { data: { auto_submit_form_target: "auto" }, disabled: !Current.user.admin? } %>
 
       <%= form.select :default_period,
             Period.all.map { |period| [ period.label, period.key ] },
@@ -38,7 +38,7 @@
         <%= family_form.select :country,
             country_options,
             { label: t(".country") },
-            { data: { auto_submit_form_target: "auto" } } %>
+            { data: { auto_submit_form_target: "auto" }, disabled: !Current.user.admin? } %>
 
         <p class="text-xs italic pl-2 text-secondary">Please note, we are still working on translations for various languages.</p>
       <% end %>

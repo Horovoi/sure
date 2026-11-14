@@ -27,6 +27,45 @@ class Holding::MaterializerTest < ActiveSupport::TestCase
     end
   end
 
+  test "a manual cost basis is carried forward to rows created on later days" do
+    create_trade(@aapl, account: @account, qty: 1, date: 1.day.ago.to_date)
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    # The user set the cost basis yesterday, when yesterday's row was the newest one
+    @account.holdings.where(security: @aapl, date: Date.current).delete_all
+    yesterday = @account.holdings.find_by!(security: @aapl, date: 1.day.ago.to_date)
+    yesterday.set_manual_cost_basis!(BigDecimal("100"))
+
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    today = @account.holdings.find_by!(security: @aapl, date: Date.current)
+    assert_equal BigDecimal("100"), today.cost_basis
+    assert_equal "manual", today.cost_basis_source
+    assert today.cost_basis_locked?
+    assert_equal today, @account.current_holdings.find_by(security: @aapl)
+  end
+
+  test "setting a manual cost basis applies to the later rows of the position, unlocking clears it everywhere" do
+    create_trade(@aapl, account: @account, qty: 1, date: 1.day.ago.to_date)
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    yesterday = @account.holdings.find_by!(security: @aapl, date: 1.day.ago.to_date)
+    yesterday.set_manual_cost_basis!(BigDecimal("100"))
+
+    today = @account.holdings.find_by!(security: @aapl, date: Date.current)
+    assert today.cost_basis_locked?
+    assert_equal BigDecimal("100"), today.cost_basis
+
+    today.unlock_cost_basis!
+    assert_not yesterday.reload.cost_basis_locked?
+
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    today.reload
+    assert_equal "calculated", today.cost_basis_source
+    assert_equal BigDecimal("214"), today.cost_basis
+  end
+
   test "preserves provider cost_basis when trade-derived cost_basis is nil" do
     # Simulate a provider-imported holding with cost_basis (e.g., from a provider)
     # This is the realistic scenario: linked account with provider holdings but no trades

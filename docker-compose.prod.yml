@@ -70,6 +70,10 @@ services:
     image: sure:${BUILD_COMMIT_SHA:-latest}
     pull_policy: never
     command: bundle exec sidekiq
+    # Sidekiq needs up to 25 s (its default shutdown timeout) to hand running jobs
+    # back to Redis. Docker's default 10 s grace period killed them mid-run on every
+    # deploy, leaving syncs, imports and rule runs stuck.
+    stop_grace_period: 35s
     volumes:
       - app-storage:/rails/storage
       # Subscription icons cached by the app; kept across deploys

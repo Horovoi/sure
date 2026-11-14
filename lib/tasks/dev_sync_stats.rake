@@ -12,14 +12,17 @@ module DevSyncStatsHelpers
     end
 
     items.each do |item|
-      # Create or find a sync record
+      # Reuse the latest completed sync, or create one through the state machine.
+      # A sync still in flight is left alone (it belongs to a running job).
       sync = item.syncs.ordered.first
-      if sync.nil?
-        sync = item.syncs.create!(status: :completed, completed_at: Time.current)
+      unless sync&.completed?
+        sync = item.syncs.create!
+        sync.start!
+        sync.complete!
       end
 
       stats = generate_fake_stats(provider_name, include_issues: include_issues)
-      sync.update!(sync_stats: stats, status: :completed, completed_at: Time.current)
+      sync.update!(sync_stats: stats)
 
       item_name = item.respond_to?(:name) ? item.name : item.try(:institution_name) || item.id
       puts "  Generated stats for #{item_class.name} ##{item.id} (#{item_name})"

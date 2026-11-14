@@ -4,13 +4,13 @@ class GenerateSubscriptionTransactionsJob < ApplicationJob
   # Generates transactions for due subscriptions across all families
   # Only processes subscriptions where:
   # - next_expected_date <= today
-  # - default_account is set
-  # - default_account is NOT linked to a provider (manual accounts only)
+  # - RecurringTransaction#can_auto_generate? (an active account with no
+  #   provider connection)
   def perform
     stats = { families_processed: 0, subscriptions_processed: 0, transactions_created: 0 }
 
     Family.find_each do |family|
-      result = generate_for_family(family)
+      result = in_time_zone_of(family) { generate_for_family(family) }
       stats[:families_processed] += 1
       stats[:subscriptions_processed] += result[:subscriptions_processed]
       stats[:transactions_created] += result[:transactions_created]
@@ -32,6 +32,8 @@ class GenerateSubscriptionTransactionsJob < ApplicationJob
       result = { subscriptions_processed: 0, transactions_created: 0 }
 
       due_subscriptions(family).find_each do |subscription|
+        next unless subscription.can_auto_generate?
+
         begin
           entries = subscription.generate_overdue_transactions!
           result[:subscriptions_processed] += 1
@@ -55,14 +57,9 @@ class GenerateSubscriptionTransactionsJob < ApplicationJob
 
     def due_subscriptions(family)
       family.recurring_transactions
-        .subscriptions
-        .active
+        .active_subscriptions
         .where("next_expected_date <= ?", Date.current)
         .where.not(default_account_id: nil)
-        .joins(:default_account)
-        .left_joins(default_account: :account_providers)
-        .where(account_providers: { id: nil })
-        .where(accounts: { plaid_account_id: nil })
-        .distinct
+        .includes(:default_account)
     end
 end

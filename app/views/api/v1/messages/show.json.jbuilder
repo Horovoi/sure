@@ -9,8 +9,10 @@ json.model @message.ai_model if @message.type == "AssistantMessage"
 json.created_at @message.created_at.iso8601
 json.updated_at @message.updated_at.iso8601
 
-# Note: AI response will be processed asynchronously
+# The AI response is generated asynchronously; its status is pending, streaming, complete or failed
 if @message.type == "UserMessage"
-  json.ai_response_status "pending"
-  json.ai_response_message "AI response is being generated"
+  reply = @message.reply
+  json.ai_response_status reply&.status || "failed"
+  json.ai_response_message_id reply&.id
+  json.ai_response_message reply&.in_flight? ? "AI response is being generated" : nil
 end

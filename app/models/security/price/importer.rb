@@ -138,7 +138,7 @@ class Security::Price::Importer
 
     def has_refetchable_provisional_prices?
       Security::Price.where(security_id: security.id, date: start_date..end_date)
-                     .refetchable_provisional(lookback_days: PROVISIONAL_LOOKBACK_DAYS)
+                     .refetchable_provisional
                      .exists?
     end
 
@@ -152,7 +152,7 @@ class Security::Price::Importer
       return start_date if clear_cache
 
       refetchable_dates = Security::Price.where(security_id: security.id, date: start_date..end_date)
-                                         .refetchable_provisional(lookback_days: PROVISIONAL_LOOKBACK_DAYS)
+                                         .refetchable_provisional
                                          .pluck(:date)
                                          .to_set
 

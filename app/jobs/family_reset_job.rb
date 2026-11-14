@@ -5,8 +5,16 @@ class FamilyResetJob < ApplicationJob
     # Create a safety export before destroying any data
     create_pre_reset_export(family)
 
-    # Delete all family data except users
+    # Delete all family data except users. The family row lock makes a second
+    # concurrent reset wait for this one instead of interleaving with it.
     ActiveRecord::Base.transaction do
+      family.lock!
+
+      # Rules and recurring transactions point at the categories, merchants
+      # and accounts deleted below, so they go too
+      family.rules.destroy_all
+      family.recurring_transactions.destroy_all
+
       # Delete accounts and related data
       family.accounts.destroy_all
       family.categories.destroy_all
@@ -29,17 +37,11 @@ class FamilyResetJob < ApplicationJob
     def create_pre_reset_export(family)
       return if family.accounts.empty?
 
-      export = family.family_exports.create!(status: :processing)
-      zip_data = Family::DataExporter.new(family).generate_export
-      export.export_file.attach(
-        io: zip_data,
-        filename: "pre_reset_#{export.filename}",
-        content_type: "application/zip"
-      )
-      export.update!(status: :completed)
+      export = family.family_exports.create!
+      export.generate!(filename_prefix: "pre_reset_")
       Rails.logger.info "[FamilyResetJob] Pre-reset export created: #{export.id}"
     rescue => e
-      Rails.logger.error "[FamilyResetJob] Pre-reset export failed: #{e.message}"
       # Don't re-raise — reset should still proceed
+      Rails.logger.error "[FamilyResetJob] Pre-reset export failed: #{e.message}"
     end
 end

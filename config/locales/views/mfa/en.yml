@@ -13,6 +13,7 @@ en:
     create:
       invalid_code: Invalid verification code. Please try again.
     disable:
+      invalid_code: Invalid authentication code. Two-factor authentication is still enabled.
       success: Two-factor authentication has been disabled
     new:
       code_label: Verification Code

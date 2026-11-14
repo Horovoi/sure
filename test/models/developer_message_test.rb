@@ -21,7 +21,7 @@ class DeveloperMessageTest < ActiveSupport::TestCase
       assert_equal 2, streams.size
       assert_equal "append", streams.first["action"]
       assert_equal "messages", streams.first["target"]
-      assert_equal "update", streams.last["action"]
+      assert_equal "replace", streams.last["action"]
       assert_equal "developer_message_#{message.id}", streams.last["target"]
     end
   end

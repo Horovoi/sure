@@ -190,6 +190,18 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_equal Money.new(200, "USD"), totals.income_money  # $200
   end
 
+  test "totals leave out excluded transactions, like the income statement" do
+    create_transaction(account: @checking_account, amount: 100, kind: "standard")
+    create_transaction(account: @checking_account, amount: 40, kind: "standard", excluded: true)
+    create_transaction(account: @checking_account, amount: -70, kind: "standard", excluded: true)
+
+    totals = Transaction::Search.new(@family).totals
+
+    assert_equal 3, totals.count
+    assert_equal Money.new(100, "USD"), totals.expense_money
+    assert_equal Money.new(0, "USD"), totals.income_money
+  end
+
   test "totals handles multi-currency transactions with exchange rates" do
     # Create EUR transaction
     eur_entry = create_transaction(

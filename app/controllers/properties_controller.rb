@@ -9,14 +9,15 @@ class PropertiesController < ApplicationController
 
   def create
     @account = Current.family.accounts.create!(
-      property_params.merge(currency: Current.family.currency, balance: 0, status: "draft")
+      property_params.merge(accountable_type: "Property", currency: Current.family.currency, balance: 0, status: "draft")
     )
 
     redirect_to balances_property_path(@account)
   end
 
   def update
-    if @account.update(property_params)
+    if @account.update(property_params.except(:accountable_type))
+      @account.lock_saved_attributes!
       @success_message = "Property details updated successfully."
 
       if @account.active?
@@ -48,7 +49,7 @@ class PropertiesController < ApplicationController
         redirect_to address_property_path(@account)
       end
     else
-      @error_message = result.error_message
+      @error_message = result.error
       render :balances, status: :unprocessable_entity
     end
   end
@@ -59,9 +60,17 @@ class PropertiesController < ApplicationController
   end
 
   def update_address
+    # A draft is activated by this, the last step, so the balance step must be done first.
+    if @account.draft? && !balance_step_complete?
+      redirect_to balances_property_path(@account), alert: t(".balance_required")
+      return
+    end
+
     if @account.property.update(address_params)
       if @account.draft?
         @account.activate!
+        # A draft gets no sync while it is set up, and totals skip it until now.
+        @account.sync_later
 
         respond_to do |format|
           format.html { redirect_to account_path(@account) }
@@ -99,8 +108,20 @@ class PropertiesController < ApplicationController
             )
     end
 
+    # Only properties: other account types have no `property`, and the property forms
+    # would write property attributes onto them.
     def set_property
-      @account = Current.family.accounts.find(params[:id])
+      @account = Current.family.accounts.where(accountable_type: "Property").find(params[:id])
       @property = @account.property
+    end
+
+    # AccountableResource's lookup for show, edit and update.
+    def set_account
+      set_property
+    end
+
+    # The balance step stores the value as a valuation entry.
+    def balance_step_complete?
+      @account.entries.valuations.exists?
     end
 end

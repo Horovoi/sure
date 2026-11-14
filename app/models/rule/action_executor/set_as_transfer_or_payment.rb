@@ -12,24 +12,19 @@ class Rule::ActionExecutor::SetAsTransferOrPayment < Rule::ActionExecutor
     return 0 unless target_account
 
     count_modified_resources(transaction_scope.with_entry) do |transaction|
-      next false if transaction.transfer?
+      # Check the Transfer row, not the kind: an investment contribution leg is a transfer
+      # even though Transaction#transfer? is false for it.
+      next false if transaction.transfer.present?
+      next false if target_account.id == transaction.entry.account_id
 
       transfer = build_transfer(target_account, transaction.entry)
 
-      Transfer.transaction do
-        transfer.save!
-
-        destination_account = transfer.inflow_transaction.entry.account
-        outflow_kind = Transfer.kind_for_account(destination_account)
-        outflow_attrs = { kind: outflow_kind }
-
-        if outflow_kind == "investment_contribution"
-          category = destination_account.family.investment_contributions_category
-          outflow_attrs[:category] = category if category.present? && transfer.outflow_transaction.category_id.blank?
-        end
-
-        transfer.outflow_transaction.update!(outflow_attrs)
-        transfer.inflow_transaction.update!(kind: "funds_movement")
+      # The legs' kinds (and the Investment Contributions category) are set by Transfer's after_create.
+      begin
+        Transfer.transaction(requires_new: true) { transfer.save! }
+      rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
+        Rails.logger.info("Rule could not make transaction #{transaction.id} a transfer: #{e.message}")
+        next false
       end
 
       transfer.sync_account_later

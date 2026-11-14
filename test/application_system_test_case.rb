@@ -2,7 +2,9 @@ require "test_helper"
 
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   setup do
-    Capybara.default_max_wait_time = 5
+    # The dashboard after a login, or a save that syncs, can take longer than 5s on a busy
+    # machine; a short wait made a different test fail in almost every full run
+    Capybara.default_max_wait_time = 10
   end
 
   driven_by :selenium, using: ENV["CI"].present? ? :headless_chrome : ENV.fetch("E2E_BROWSER", :chrome).to_sym, screen_size: [ 1400, 1400 ]

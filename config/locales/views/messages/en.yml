@@ -1,0 +1,7 @@
+---
+en:
+  messages:
+    chat_form:
+      waiting: "Waiting for the response to finish..."
+    create:
+      in_progress: "Wait for the current response to finish before sending another message."

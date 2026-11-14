@@ -67,7 +67,7 @@ class SubscriptionsController < ApplicationController
 
   def new
     @subscription = Current.family.recurring_transactions.new(
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "monthly",
       status: "active",
       expected_day_of_month: Date.current.day,
@@ -84,7 +84,7 @@ class SubscriptionsController < ApplicationController
 
   def create
     @subscription = Current.family.recurring_transactions.new(subscription_params)
-    @subscription.is_subscription = true
+    @subscription.subscription_state = "subscription"
     @subscription.last_occurrence_date ||= Date.current
     @subscription.next_expected_date = calculate_next_expected_date(@subscription)
 
@@ -116,8 +116,6 @@ class SubscriptionsController < ApplicationController
     billing_day_changed = subscription_params[:expected_day_of_month].present? &&
                           subscription_params[:expected_day_of_month].to_i != @subscription.expected_day_of_month
     user_set_next_date = subscription_params[:next_expected_date].present?
-
-    @subscription.allow_past_next_expected_date = true if user_set_next_date
 
     if @subscription.update(subscription_params)
       if billing_day_changed && !user_set_next_date
@@ -160,6 +158,11 @@ class SubscriptionsController < ApplicationController
       return
     end
 
+    unless @subscription.actionable?
+      redirect_to subscriptions_path, alert: t(".not_due")
+      return
+    end
+
     entry = @subscription.generate_transaction!
     if entry
       redirect_to subscriptions_path, notice: t(".success")
@@ -169,9 +172,11 @@ class SubscriptionsController < ApplicationController
   end
 
   def skip_occurrence
-    # Skip by advancing to next expected date without creating a transaction
+    # Skip by advancing one period from the current expected date, without
+    # creating a transaction. (Computing from last_occurrence_date could land
+    # on the date it already has.)
     @subscription.update!(
-      next_expected_date: @subscription.calculate_next_expected_date
+      next_expected_date: @subscription.calculate_next_expected_date(@subscription.next_expected_date)
     )
     redirect_to subscriptions_path, notice: t(".success")
   end
@@ -229,7 +234,7 @@ class SubscriptionsController < ApplicationController
 
   def restore_suggestion
     @suggestion = @dismissed_suggestion
-    @suggestion.update!(suggestion_status: "suggested", dismissed_at: nil)
+    @suggestion.restore_suggestion!
 
     @remaining_dismissed_count = Current.family.recurring_transactions.dismissed.count
 

@@ -1,6 +1,7 @@
 ---
 en:
   invite_codes:
+    not_authorized: Only a super admin can manage invite codes.
     index:
       invite_code_description: Generate a new code to see it displayed here. Generated
         codes that have been used will no longer be shown.

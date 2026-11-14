@@ -6,6 +6,10 @@ class Provider::TwelveData < Provider
   Error = Class.new(Provider::Error)
   InvalidExchangeRateError = Class.new(Error)
   InvalidSecurityPriceError = Class.new(Error)
+  SecurityNotFoundError = Class.new(InvalidSecurityPriceError) { include SecurityConcept::SecurityNotFound }
+
+  # Twelve Data answers an unknown symbol, or one without data, with code 400 or 404
+  SECURITY_NOT_FOUND_CODES = [ 400, 404 ].freeze
 
   def initialize(api_key)
     @api_key = api_key
@@ -167,7 +171,8 @@ class Provider::TwelveData < Provider
     with_provider_response do
       historical_data = fetch_security_prices(symbol:, exchange_operating_mic:, start_date: date, end_date: date)
 
-      raise ProviderError, "No prices found for security #{symbol} on date #{date}" if historical_data.data.empty?
+      raise historical_data.error unless historical_data.success?
+      raise InvalidSecurityPriceError, "No prices found for security #{symbol} on date #{date}" if historical_data.data.empty?
 
       historical_data.data.first
     end
@@ -189,7 +194,8 @@ class Provider::TwelveData < Provider
       if values.nil?
         error_message = parsed.dig("message") || "No data returned"
         error_code = parsed.dig("code") || "unknown"
-        raise InvalidSecurityPriceError, "API error (code: #{error_code}): #{error_message}"
+        error_class = SECURITY_NOT_FOUND_CODES.include?(error_code.to_i) ? SecurityNotFoundError : InvalidSecurityPriceError
+        raise error_class, "API error (code: #{error_code}): #{error_message}"
       end
 
       values.map do |resp|
@@ -208,6 +214,8 @@ class Provider::TwelveData < Provider
           exchange_operating_mic: exchange_operating_mic
         )
       end.compact
+    rescue Faraday::BadRequestError, Faraday::ResourceNotFound => e
+      raise SecurityNotFoundError.new(e.message, details: e.response&.dig(:body))
     end
   end
 

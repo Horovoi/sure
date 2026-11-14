@@ -15,7 +15,9 @@ class BalanceSheet::SyncStatusMonitor
     attr_reader :family
 
     def syncing_account_ids
-      Rails.cache.fetch(cache_key) do
+      # The key changes on every sync commit; the short expiry covers the case where nothing
+      # commits (a sync whose job was lost) so the UI stops showing it as syncing.
+      Rails.cache.fetch(cache_key, expires_in: 1.minute) do
         Sync.visible
             .where(syncable_type: "Account", syncable_id: family.accounts.visible.pluck(:id))
             .pluck(:syncable_id)

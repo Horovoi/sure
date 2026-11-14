@@ -158,25 +158,52 @@ class Family < ApplicationRecord
     next_start - 1.day
   end
 
+  # Every aggregate cache (balance sheet, net worth, income statement, search and
+  # investment totals) expires after this, as a safety net for any write path that
+  # changes data without changing a key below.
+  AGGREGATE_CACHE_TTL = 12.hours
+
   # Used for invalidating family / balance sheet related aggregation queries
   def build_cache_key(key, invalidate_on_data_updates: false)
-    # Our data sync process updates this timestamp whenever any family account successfully completes a data update.
+    # Our data sync process updates this timestamp whenever any family account finishes a data update.
     # By including it in the cache key, we can expire caches every time family account data changes.
-    data_invalidation_key = invalidate_on_data_updates ? latest_sync_completed_at : nil
+    data_invalidation_key = invalidate_on_data_updates ? latest_sync_completed_at&.to_f : nil
 
     [
       id,
       key,
       data_invalidation_key,
-      accounts.maximum(:updated_at)
+      accounts.maximum(:updated_at)&.to_f,
+      currency,
+      # Balances are converted at today's rate: a new day means a new rate
+      Date.current.iso8601
     ].compact.join("_")
   end
 
-  # Used for invalidating entry related aggregation queries
+  # Used for invalidating entry related aggregation queries. Changes on any entry
+  # create/update/delete (the count catches deletes, which leave max(updated_at) as is),
+  # account change (status, currency), category change or delete, and family currency.
+  # Sub-second precision so two writes in one second still produce different keys.
   def entries_cache_version
     @entries_cache_version ||= begin
-      ts = entries.maximum(:updated_at)
-      ts.present? ? ts.to_i : 0
+      # One round trip: this runs on every report and transactions page
+      row = self.class.connection.select_one(self.class.sanitize_sql_array([ <<~SQL.squish, { id: id } ]))
+        SELECT
+          (SELECT EXTRACT(EPOCH FROM MAX(e.updated_at)) FROM entries e JOIN accounts a ON a.id = e.account_id WHERE a.family_id = :id) AS entries_max,
+          (SELECT COUNT(*) FROM entries e JOIN accounts a ON a.id = e.account_id WHERE a.family_id = :id) AS entries_count,
+          (SELECT EXTRACT(EPOCH FROM MAX(updated_at)) FROM accounts WHERE family_id = :id) AS accounts_max,
+          (SELECT EXTRACT(EPOCH FROM MAX(updated_at)) FROM categories WHERE family_id = :id) AS categories_max,
+          (SELECT COUNT(*) FROM categories WHERE family_id = :id) AS categories_count
+      SQL
+
+      [
+        row["entries_max"].to_f,
+        row["entries_count"],
+        row["accounts_max"]&.to_f,
+        row["categories_max"]&.to_f,
+        row["categories_count"],
+        currency
+      ].join(":")
     end
   end
 

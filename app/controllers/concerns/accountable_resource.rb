@@ -37,7 +37,7 @@ module AccountableResource
     @account = Current.family.accounts.create_and_sync(account_params.except(:return_to))
     @account.lock_saved_attributes!
 
-    redirect_to account_params[:return_to].presence || @account, notice: t("accounts.create.success", type: accountable_type.name.underscore.humanize)
+    redirect_to sanitize_return_to(account_params[:return_to]) || @account, notice: t("accounts.create.success", type: accountable_type.name.underscore.humanize)
   end
 
   def update
@@ -45,7 +45,7 @@ module AccountableResource
     if account_params[:balance].present? && account_params[:balance].to_d != @account.balance
       result = @account.set_current_balance(account_params[:balance].to_d)
       unless result.success?
-        @error_message = result.error_message
+        @error_message = result.error
         render :edit, status: :unprocessable_entity
         return
       end
@@ -65,6 +65,8 @@ module AccountableResource
 
   private
     def set_link_options
+      return @provider_configs = [] unless BankConnections.enabled?
+
       account_type_name = accountable_type.name
 
       # Get all available provider configs dynamically for this account type

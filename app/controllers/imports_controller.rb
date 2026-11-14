@@ -1,7 +1,9 @@
 class ImportsController < ApplicationController
   include SettingsHelper
+  include ImportEditable
 
-  before_action :set_import, only: %i[show update publish destroy revert apply_template]
+  before_action :set_import, only: %i[show update publish destroy revert apply_template retry_processing]
+  before_action :ensure_import_editable, only: %i[update apply_template]
 
   def update
     account_id = params.dig(:pdf_import, :account_id) || params.dig(:import, :account_id)
@@ -14,6 +16,8 @@ class ImportsController < ApplicationController
       end
 
       @import.update!(account: account)
+      # The account decides which mapping steps apply (e.g. no account mapping once one is chosen)
+      @import.sync_mappings if @import.configured?
     end
 
     redirect_to import_path(@import), notice: "Account saved."
@@ -25,6 +29,8 @@ class ImportsController < ApplicationController
     redirect_to import_path(@import), notice: "Your import has started in the background."
   rescue Import::MaxRowCountExceededError
     redirect_back_or_to import_path(@import), alert: "Your import exceeds the maximum row count of #{@import.max_row_count}."
+  rescue Import::NotPublishableError, AASM::InvalidTransition
+    redirect_to import_path(@import), alert: t(".not_publishable")
   end
 
   def index
@@ -92,10 +98,13 @@ class ImportsController < ApplicationController
   end
 
   def show
-    return unless @import.requires_csv_workflow?
+    # Only an import that can still be edited is sent back through the wizard
+    return unless @import.requires_csv_workflow? && @import.editable?
 
     if !@import.uploaded?
       redirect_to import_upload_path(@import), alert: "Please finalize your file upload."
+    elsif !@import.cleaned?
+      redirect_to import_clean_path(@import), alert: "You have invalid data, please edit until all errors are resolved"
     elsif !@import.publishable?
       redirect_to import_confirm_path(@import), alert: "Please finalize your mappings before proceeding."
     end
@@ -104,6 +113,20 @@ class ImportsController < ApplicationController
   def revert
     @import.revert_later
     redirect_to imports_path, notice: "Import is reverting in the background."
+  rescue Import::NotRevertableError, AASM::InvalidTransition
+    redirect_back_or_to imports_path, alert: t(".not_revertable")
+  end
+
+  def retry_processing
+    unless @import.is_a?(PdfImport)
+      redirect_to import_path(@import), alert: t(".not_retryable")
+      return
+    end
+
+    @import.process_with_ai_later
+    redirect_to import_path(@import), notice: t(".started")
+  rescue AASM::InvalidTransition
+    redirect_to import_path(@import), alert: t(".not_retryable")
   end
 
   def apply_template
@@ -116,7 +139,14 @@ class ImportsController < ApplicationController
   end
 
   def destroy
-    @import.destroy
+    unless @import.deletable?
+      redirect_back_or_to imports_path, alert: t(".not_deletable")
+      return
+    end
+
+    removes_ledger_data = @import.entries.exists? || @import.accounts.exists?
+    @import.destroy!
+    Current.family.sync_later if removes_ledger_data
 
     redirect_to imports_path, notice: "Your import has been deleted."
   end

@@ -21,6 +21,18 @@ export default class extends Controller {
     ) {
       this.#showAmountTypeValueTargets(this.amountTypeColumnKeyValue);
     }
+
+    // A real submit (e.g. "Apply") must win over a pending refresh, or the
+    // refresh fires afterwards and Turbo cancels the real submission.
+    this.cancelPendingRefresh = (event) => {
+      if (!event.defaultPrevented && !this.refreshing) this.#clearRefresh();
+    };
+    this.element.addEventListener("submit", this.cancelPendingRefresh);
+  }
+
+  disconnect() {
+    this.element.removeEventListener("submit", this.cancelPendingRefresh);
+    this.#clearRefresh();
   }
 
   handleAmountTypeStrategyChange(event) {
@@ -46,22 +58,37 @@ export default class extends Controller {
   }
 
   refreshForm(event) {
-    clearTimeout(this.refreshTimeout);
+    this.#clearRefresh();
 
     const form = event.target.closest("form");
 
     this.refreshTimeout = setTimeout(() => {
+      this.refreshTimeout = null;
+
       const input = document.createElement("input");
       input.type = "hidden";
       input.name = "refresh_only";
       input.value = "true";
       form.appendChild(input);
 
-      // Temporarily disable validation for refresh-only submission
+      // Temporarily disable validation for refresh-only submission. Turbo
+      // reads the form data during requestSubmit, so the flag can go right
+      // after: a later real submit must not be sent as refresh-only.
       form.setAttribute("novalidate", "");
-      form.requestSubmit();
-      form.removeAttribute("novalidate");
+      this.refreshing = true;
+      try {
+        form.requestSubmit();
+      } finally {
+        this.refreshing = false;
+        form.removeAttribute("novalidate");
+        input.remove();
+      }
     }, 500);
+  }
+
+  #clearRefresh() {
+    clearTimeout(this.refreshTimeout);
+    this.refreshTimeout = null;
   }
 
   #showAmountTypeValueTargets(amountTypeColumnKey) {

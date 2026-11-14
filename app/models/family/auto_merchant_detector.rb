@@ -7,7 +7,7 @@ class Family::AutoMerchantDetector
   end
 
   def auto_detect
-    raise "No LLM provider for auto-detecting merchants" unless llm_provider
+    raise Error, "No LLM provider for auto-detecting merchants" unless llm_provider
 
     if scope.none?
       Rails.logger.info("No transactions to auto-detect merchants for family #{family.id}")
@@ -22,9 +22,10 @@ class Family::AutoMerchantDetector
       family: family
     )
 
+    # Raise so the rule run is reported as failed rather than "success, 0 modified".
     unless result.success?
       Rails.logger.error("Failed to auto-detect merchants for family #{family.id}: #{result.error.message}")
-      return 0
+      raise Error, "Merchant detection failed: #{result.error.message}"
     end
 
     modified_count = 0
@@ -41,14 +42,14 @@ class Family::AutoMerchantDetector
 
         if merchant_id.present?
           was_modified = transaction.enrich_attribute(:merchant_id, merchant_id, source: "ai")
-          transaction.lock_attr!(:merchant_id)
+          transaction.lock_attr!(:merchant_id, source: "ai")
           modified_count += 1 if was_modified
         end
 
       elsif existing_merchant.is_a?(ProviderMerchant) && existing_merchant.source != "ai"
         # Case 2: Has provider merchant (non-AI) - enhance it with AI data
         if enhance_provider_merchant(existing_merchant, auto_detection)
-          transaction.lock_attr!(:merchant_id)
+          transaction.lock_attr!(:merchant_id, source: "ai")
           modified_count += 1
         end
       end

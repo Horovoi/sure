@@ -1,19 +1,22 @@
 class AccountsController < ApplicationController
+  require_bank_connections only: :select_provider
   before_action :set_account, only: %i[sync sparkline toggle_active show destroy unlink confirm_unlink select_provider clear_filter]
   include Periodable
 
   def index
+    # With bank connections off there are no provider cards, so accounts that
+    # are still linked are listed with the manual ones, where they can be unlinked.
     @manual_accounts = family.accounts
-          .listable_manual
+          .then { |accounts| BankConnections.enabled? ? accounts.listable_manual : accounts.listable }
           .order(:name)
           .preload(:accountable, :account_providers)
           .with_attached_logo
     Account.preload_syncing(@manual_accounts)
-    @plaid_items = family.plaid_items.ordered.includes(:syncs, :plaid_accounts)
-    @lunchflow_items = family.lunchflow_items.ordered.includes(:syncs, :lunchflow_accounts)
-    @enable_banking_items = family.enable_banking_items.ordered.includes(:syncs)
-    @coinstats_items = family.coinstats_items.ordered.includes(:coinstats_accounts, :accounts, :syncs)
-    @coinbase_items = family.coinbase_items.ordered.includes(:coinbase_accounts, :accounts, :syncs)
+    @plaid_items = provider_items(family.plaid_items).includes(:syncs, :plaid_accounts)
+    @lunchflow_items = provider_items(family.lunchflow_items).includes(:syncs, :lunchflow_accounts)
+    @enable_banking_items = provider_items(family.enable_banking_items).includes(:syncs)
+    @coinstats_items = provider_items(family.coinstats_items).includes(:coinstats_accounts, :accounts, :syncs)
+    @coinbase_items = provider_items(family.coinbase_items).includes(:coinbase_accounts, :accounts, :syncs)
 
     # Build sync stats maps for all providers
     build_sync_stats_maps
@@ -25,8 +28,12 @@ class AccountsController < ApplicationController
 
   def new
     # Get all registered providers with any credentials configured
-    @provider_configs = Provider::Factory.registered_adapters.flat_map do |adapter_class|
-      adapter_class.connection_configs(family: family)
+    @provider_configs = if BankConnections.enabled?
+      Provider::Factory.registered_adapters.flat_map do |adapter_class|
+        adapter_class.connection_configs(family: family)
+      end
+    else
+      []
     end
   end
 
@@ -48,7 +55,7 @@ class AccountsController < ApplicationController
 
   def sync
     unless @account.syncing?
-      if @account.linked?
+      if @account.linked? && BankConnections.enabled?
         # Sync all provider items for this account
         # Each provider item will trigger an account sync when complete
         @account.account_providers.each do |account_provider|
@@ -80,6 +87,8 @@ class AccountsController < ApplicationController
       @account.disable!
     elsif @account.disabled?
       @account.enable!
+      # Family syncs skip disabled accounts, so its balances and holdings may be out of date
+      @account.sync_later
     end
     redirect_to accounts_path
   end
@@ -183,6 +192,10 @@ class AccountsController < ApplicationController
   private
     def family
       Current.family
+    end
+
+    def provider_items(items)
+      BankConnections.enabled? ? items.ordered : items.none
     end
 
     def set_account

@@ -26,17 +26,18 @@
           </div>
         <% end %>
 
-        <% if params[:thinking].present? %>
-          <%= render "chats/thinking_indicator", chat: @chat %>
-        <% end %>
-
-        <% if @chat.error.present? && @chat.needs_assistant_response? %>
+        <%# A prompt with no assistant turn after it (left by an older version when its job was lost) %>
+        <% if @chat.unanswered_prompt? %>
           <%= render "chats/error", chat: @chat %>
         <% end %>
       </div>
 
       <%# DESKTOP - Chat form %>
       <div class="px-4 pt-4 lg:pt-0 lg:mt-auto sticky lg:static left-0 bottom-0 w-full bg-surface">
+        <% if flash[:alert].present? %>
+          <p class="text-xs text-red-500 pb-2"><%= flash[:alert] %></p>
+        <% end %>
+
         <%= render "messages/chat_form", chat: @chat %>
       </div>
     </div>

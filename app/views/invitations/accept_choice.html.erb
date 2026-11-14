@@ -8,14 +8,36 @@
   </p>
 </div>
 
-<div class="space-y-4">
-  <%= link_to new_registration_path(invitation: @invitation.token),
-      class: "block w-full rounded-md border border-secondary bg-container px-4 py-3 text-center text-sm font-medium text-primary hover:bg-secondary transition" do %>
-    Create a new account
+<% if @signed_in_user && @invitation.email.casecmp?(@signed_in_user.email) %>
+  <div class="space-y-4">
+    <p class="text-sm text-secondary text-center"><%= t(".signed_in_as", email: @signed_in_user.email) %></p>
+
+    <% if @signed_in_user.family_id != @invitation.family_id %>
+      <p class="text-sm text-secondary text-center"><%= t(".leave_current_household", family: @signed_in_user.family.name) %></p>
+    <% end %>
+
+    <%= button_to t(".accept", family: @invitation.family.name),
+        confirm_invitation_path(@invitation.token),
+        method: :post,
+        class: "block w-full rounded-md bg-inverse fg-inverse px-4 py-3 text-center text-sm font-medium hover:bg-inverse-hover transition" %>
+
+    <%= link_to t(".decline"), root_path,
+        class: "block w-full rounded-md border border-secondary bg-container px-4 py-3 text-center text-sm font-medium text-primary hover:bg-secondary transition" %>
+  </div>
+<% else %>
+  <% if @signed_in_user %>
+    <p class="text-sm text-secondary text-center mb-4"><%= t(".wrong_account") %></p>
   <% end %>
 
-  <%= link_to new_session_path(invitation: @invitation.token),
-      class: "block w-full rounded-md border border-secondary bg-container px-4 py-3 text-center text-sm font-medium text-primary hover:bg-secondary transition" do %>
-    Sign in with an existing account
-  <% end %>
-</div>
+  <div class="space-y-4">
+    <%= link_to new_registration_path(invitation: @invitation.token),
+        class: "block w-full rounded-md border border-secondary bg-container px-4 py-3 text-center text-sm font-medium text-primary hover:bg-secondary transition" do %>
+      Create a new account
+    <% end %>
+
+    <%= link_to new_session_path(invitation: @invitation.token),
+        class: "block w-full rounded-md border border-secondary bg-container px-4 py-3 text-center text-sm font-medium text-primary hover:bg-secondary transition" do %>
+      Sign in with an existing account
+    <% end %>
+  </div>
+<% end %>

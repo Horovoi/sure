@@ -8,6 +8,9 @@ class Account::Syncer
   def perform_sync(sync)
     Rails.logger.info("Processing balances (#{account.linked? ? 'reverse' : 'forward'})")
     import_market_data
+    # Manual balances run forward from the opening anchor; keep it before every entry.
+    # Linked accounts run backward from the provider's current balance instead.
+    account.move_opening_anchor_before_oldest_entry! if account.manual?
     materialize_balances
   end
 

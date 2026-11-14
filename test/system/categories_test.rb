@@ -11,7 +11,8 @@ class CategoriesTest < ApplicationSystemTestCase
     fill_in "Name", with: "My Shiny New Category"
     click_button "Create Category"
 
-    visit categories_url
+    # The create redirects back to the list. Visiting it again here raced the request
+    # and could leave before the category was saved.
     assert_text "My Shiny New Category"
   end
 

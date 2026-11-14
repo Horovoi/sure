@@ -16,15 +16,15 @@ class Rule::ActionExecutor::SetInvestmentActivityLabel < Rule::ActionExecutor
 
     scope = transaction_scope
 
-    unless ignore_attribute_locks
-      scope = scope.enrichable(:investment_activity_label)
-    end
+    # A forced run (ignore_attribute_locks) may replace AI locks, never user locks
+    scope = scope.enrichable(:investment_activity_label, force: ignore_attribute_locks)
 
     count_modified_resources(scope) do |txn|
       txn.enrich_attribute(
         :investment_activity_label,
         value,
-        source: "rule"
+        source: "rule",
+        force: ignore_attribute_locks
       )
     end
   end

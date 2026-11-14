@@ -47,6 +47,10 @@ export default class extends Controller {
 
     const label = event.currentTarget.dataset.label
 
+    // One save at a time: a second pick while the first is in flight could
+    // land on the server first and leave the label out of step
+    if (this.saving) return
+
     // Don't update if it's the same label
     if (label === this.currentLabelValue) {
       this.close()
@@ -69,6 +73,8 @@ export default class extends Controller {
       console.error("CSRF token not found")
       return
     }
+
+    this.#setSaving(true)
 
     try {
       const response = await fetch(this.urlValue, {
@@ -103,6 +109,14 @@ export default class extends Controller {
       }
     } catch (error) {
       console.error("Error updating activity label:", error)
+    } finally {
+      this.#setSaving(false)
     }
+  }
+
+  #setSaving(saving) {
+    this.saving = saving
+    // aria-busy takes "true"/"false"; an empty attribute is not a value
+    this.element.setAttribute("aria-busy", String(saving))
   }
 }

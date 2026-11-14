@@ -33,7 +33,6 @@ gem "hotwire_combobox"
 # Background Jobs
 gem "sidekiq"
 gem "sidekiq-cron"
-gem "sidekiq-unique-jobs"
 
 # Monitoring
 # gem "vernier"  # Temporarily disabled - C++ compilation issues on macOS

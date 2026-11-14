@@ -120,6 +120,41 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_nil Session.find_by(id: session_record.id)
   end
 
+  test "signing out resets the cookie session" do
+    sign_in @user
+    get settings_profile_path(return_to: "/accounts")
+    assert_equal "/accounts", session[:return_to]
+
+    delete session_url(@user.sessions.order(:created_at).last)
+
+    assert_nil session[:return_to]
+    get root_url
+    assert_redirected_to new_session_url
+  end
+
+  test "an impersonating admin can sign out" do
+    admin = users(:sure_support_staff)
+    impersonation = ImpersonationSession.create!(impersonator: admin, impersonated: users(:family_member), status: :in_progress)
+    sign_in admin
+    admin_session = admin.sessions.order(:created_at).last
+    admin_session.update!(active_impersonator_session: impersonation)
+
+    delete session_url(admin_session)
+
+    assert_redirected_to new_session_path
+    assert_not Session.exists?(admin_session.id)
+  end
+
+  test "deactivated users cannot sign in with a password" do
+    @user.update_column(:active, false)
+
+    assert_no_difference "Session.count" do
+      post sessions_url, params: { email: @user.email, password: user_password_test }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "redirects to MFA verification when MFA enabled" do
     @user.setup_mfa!
     @user.enable_mfa!

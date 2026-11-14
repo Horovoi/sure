@@ -12,6 +12,24 @@ class Settings::ApiKeysControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "an impersonator cannot read the impersonated user's API key" do
+    member = users(:family_member)
+    ApiKey.create!(user: member, name: "Member key", display_key: "member_secret_key", scopes: [ "read" ])
+    admin = users(:sure_support_staff)
+    impersonation = ImpersonationSession.create!(impersonator: admin, impersonated: member, status: :in_progress)
+    sign_in admin
+    admin.sessions.order(:created_at).last.update!(active_impersonator_session: impersonation)
+
+    get settings_api_key_path
+
+    assert_redirected_to root_path
+    assert_not_includes response.body, "member_secret_key"
+
+    # Coming "back" from the page itself must not loop
+    get settings_api_key_path, headers: { "HTTP_REFERER" => settings_api_key_url }
+    assert_redirected_to root_path
+  end
+
   test "should show current API key when user has active key" do
     @api_key = ApiKey.create!(
       user: @user,
@@ -187,5 +205,24 @@ end
     assert api_key.present?
     assert_equal "Random Key Test", api_key.name
     assert_includes api_key.scopes, "read"
+  end
+
+  test "a failed create keeps the existing key active" do
+    existing = ApiKey.create!(user: @user, name: "Existing", display_key: "keep_#{SecureRandom.hex(8)}", scopes: [ "read" ])
+
+    post settings_api_key_path, params: { api_key: { name: "", scopes: "read_write" } }
+
+    assert_response :unprocessable_entity
+    assert existing.reload.active?
+  end
+
+  test "creating a web key leaves the mobile key active" do
+    mobile = ApiKey.create!(user: @user, name: "Mobile", display_key: "mob_#{SecureRandom.hex(8)}", scopes: [ "read" ], source: "mobile")
+
+    post settings_api_key_path, params: { api_key: { name: "Web", scopes: "read_write" } }
+
+    assert_redirected_to settings_api_key_path
+    assert mobile.reload.active?
+    assert_equal 1, @user.api_keys.active.where(source: "web").count
   end
 end

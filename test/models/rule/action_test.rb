@@ -19,6 +19,26 @@ class Rule::ActionTest < ActiveSupport::TestCase
     @rule_scope = @account.transactions
   end
 
+  test "forced set_transaction_category replaces AI-set categories but keeps user edits" do
+    other_category = @family.categories.create!(name: "Other")
+    @txn1.update!(category: other_category)
+    @txn1.lock_attr!(:category_id, source: "ai")
+    @txn2.update!(category: other_category)
+    @txn2.lock_attr!(:category_id)
+
+    action = Rule::Action.new(
+      rule: @transaction_rule,
+      action_type: "set_transaction_category",
+      value: @grocery_category.id
+    )
+
+    action.apply(@rule_scope, ignore_attribute_locks: true)
+
+    assert_equal @grocery_category.id, @txn1.reload.category_id
+    assert_not @txn1.locked?(:category_id)
+    assert_equal other_category.id, @txn2.reload.category_id
+  end
+
   test "set_transaction_category" do
     # Does not modify transactions that are locked (user edited them)
     @txn1.lock_attr!(:category_id)
@@ -176,5 +196,38 @@ class Rule::ActionTest < ActiveSupport::TestCase
 
     assert_equal 0, result
     assert_nil @txn1.reload.investment_activity_label
+  end
+
+  test "set_as_transfer_or_payment skips a leg that is already in a transfer, even an investment contribution" do
+    investment = accounts(:investment)
+    outflow = create_transaction(date: Date.current, account: @account, amount: 300, name: "Rule test contribution")
+    inflow = create_transaction(date: Date.current, account: investment, amount: -300)
+    Transfer.create!(inflow_transaction: inflow.transaction, outflow_transaction: outflow.transaction, status: "confirmed")
+    assert_equal "investment_contribution", outflow.transaction.reload.kind
+
+    action = Rule::Action.new(
+      rule: @transaction_rule,
+      action_type: "set_as_transfer_or_payment",
+      value: accounts(:credit_card).id
+    )
+
+    assert_no_difference -> { Transfer.count } do
+      action.apply(Transaction.where(id: outflow.transaction.id))
+    end
+  end
+
+  test "set_as_transfer_or_payment sets the payment kind from the target account" do
+    action = Rule::Action.new(
+      rule: @transaction_rule,
+      action_type: "set_as_transfer_or_payment",
+      value: accounts(:loan).id
+    )
+
+    assert_difference -> { Transfer.count } => 1 do
+      action.apply(Transaction.where(id: @txn1.id))
+    end
+
+    assert_equal "loan_payment", @txn1.reload.kind
+    assert_equal "funds_movement", @txn1.transfer.inflow_transaction.kind
   end
 end

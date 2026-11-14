@@ -407,4 +407,110 @@ class Api::V1::AuthControllerTest < ActionDispatch::IntegrationTest
     response_data = JSON.parse(response.body)
     assert_equal "Refresh token is required", response_data["error"]
   end
+
+  test "signup is rejected when onboarding is closed" do
+    Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
+    Setting.stubs(:onboarding_state).returns("closed")
+
+    assert_no_difference("User.count") do
+      post "/api/v1/auth/signup", params: {
+        user: { email: "newuser@example.com", password: "SecurePass123!", first_name: "New", last_name: "User" },
+        device: @device_info
+      }
+    end
+
+    assert_response :forbidden
+    assert_equal "Signup is closed", JSON.parse(response.body)["error"]
+  end
+
+  test "signup requires an invite code when onboarding is invite only" do
+    Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
+    Setting.stubs(:onboarding_state).returns("invite_only")
+
+    assert_no_difference("User.count") do
+      post "/api/v1/auth/signup", params: {
+        user: { email: "newuser@example.com", password: "SecurePass123!" },
+        device: @device_info
+      }
+    end
+
+    assert_response :forbidden
+  end
+
+  test "a signup that fails on save keeps the invite code" do
+    invite_code = InviteCode.create!
+    Api::V1::AuthController.any_instance.stubs(:invite_code_required?).returns(true)
+
+    assert_no_difference([ "User.count", "InviteCode.count" ]) do
+      post "/api/v1/auth/signup", params: {
+        user: { email: users(:family_admin).email, password: "SecurePass123!" },
+        device: @device_info,
+        invite_code: invite_code.token
+      }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "login is rejected when local login is disabled" do
+    AuthConfig.stubs(:local_login_enabled?).returns(false)
+    AuthConfig.stubs(:local_admin_override_enabled?).returns(false)
+
+    assert_no_difference("Doorkeeper::AccessToken.count") do
+      post "/api/v1/auth/login", params: {
+        email: users(:family_admin).email,
+        password: user_password_test,
+        device: @device_info
+      }
+    end
+
+    assert_response :forbidden
+  end
+
+  test "refresh without device info still returns the new token" do
+    user = users(:family_admin)
+    device = user.mobile_devices.create!(@device_info)
+    token = Doorkeeper::AccessToken.create!(
+      application: device.create_oauth_application!, resource_owner_id: user.id,
+      expires_in: 30.days.to_i, scopes: "read_write", use_refresh_token: true
+    )
+
+    post "/api/v1/auth/refresh", params: { refresh_token: token.refresh_token }
+
+    assert_response :success
+    assert JSON.parse(response.body)["access_token"].present?
+    assert token.reload.revoked?
+  end
+
+  test "a refresh token can be used only once" do
+    user = users(:family_admin)
+    device = user.mobile_devices.create!(@device_info)
+    token = Doorkeeper::AccessToken.create!(
+      application: device.create_oauth_application!, resource_owner_id: user.id,
+      expires_in: 30.days.to_i, scopes: "read_write", use_refresh_token: true
+    )
+
+    post "/api/v1/auth/refresh", params: { refresh_token: token.refresh_token, device: @device_info }
+    assert_response :success
+
+    assert_no_difference("Doorkeeper::AccessToken.count") do
+      post "/api/v1/auth/refresh", params: { refresh_token: token.refresh_token, device: @device_info }
+    end
+    assert_response :unauthorized
+  end
+
+  test "refresh is rejected for a deactivated user" do
+    user = users(:family_member)
+    device = user.mobile_devices.create!(@device_info)
+    token = Doorkeeper::AccessToken.create!(
+      application: device.create_oauth_application!, resource_owner_id: user.id,
+      expires_in: 30.days.to_i, scopes: "read_write", use_refresh_token: true
+    )
+    user.update_column(:active, false)
+
+    assert_no_difference("Doorkeeper::AccessToken.count") do
+      post "/api/v1/auth/refresh", params: { refresh_token: token.refresh_token, device: @device_info }
+    end
+    assert_response :unauthorized
+  end
 end

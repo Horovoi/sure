@@ -420,10 +420,16 @@ export default class extends Controller {
     return this.currencySymbolValue + formatted;
   }
 
+  // Stimulus Object values are parsed from JSON on every read, so two reads
+  // are never the same object; compare their contents instead
+  #sameData(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
   // Public: switch dataset according to toggle
   setSubcategoryMode(show) {
     const desired = show ? this.withSubcategoriesValue : this.withoutSubcategoriesValue;
-    if (desired && desired !== this.dataValue) {
+    if (desired && !this.#sameData(desired, this.dataValue)) {
       this.dataValue = desired;
       this.#draw();
     }
@@ -433,11 +439,11 @@ export default class extends Controller {
   setDatasets({ withSubcategories, withoutSubcategories, showSubcategories, currencySymbol }) {
     let updated = false;
 
-    if (withSubcategories && withSubcategories !== this.withSubcategoriesValue) {
+    if (withSubcategories && !this.#sameData(withSubcategories, this.withSubcategoriesValue)) {
       this.withSubcategoriesValue = withSubcategories;
       updated = true;
     }
-    if (withoutSubcategories && withoutSubcategories !== this.withoutSubcategoriesValue) {
+    if (withoutSubcategories && !this.#sameData(withoutSubcategories, this.withoutSubcategoriesValue)) {
       this.withoutSubcategoriesValue = withoutSubcategories;
       updated = true;
     }

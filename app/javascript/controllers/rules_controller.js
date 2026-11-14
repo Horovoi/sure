@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import { nextNestedAttributeKey } from "services/nested_attribute_key";
 
 // Connects to data-controller="rules"
 export default class extends Controller {
@@ -43,14 +44,10 @@ export default class extends Controller {
   #appendTemplate(templateEl, listEl) {
     const html = templateEl.innerHTML.replaceAll(
       "IDX_PLACEHOLDER",
-      this.#uniqueKey(),
+      nextNestedAttributeKey(),
     );
 
     listEl.insertAdjacentHTML("beforeend", html);
-  }
-
-  #uniqueKey() {
-    return Date.now();
   }
 
   // Updates the prefix visibility of all conditions and condition groups

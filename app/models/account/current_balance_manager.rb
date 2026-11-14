@@ -37,8 +37,9 @@ class Account::CurrentBalanceManager
       result = set_current_balance_for_manual_account(balance)
     end
 
-    # Update cache field so changes appear immediately to the user
-    account.update!(balance: balance)
+    # Update the cached balance so the change shows at once, but only when it was applied:
+    # on failure no sync is queued, so a written cache would stay wrong until the next sync.
+    account.update!(balance: balance) if result.success?
 
     result
   rescue => e
@@ -69,15 +70,38 @@ class Account::CurrentBalanceManager
     def set_current_balance_for_manual_account(balance)
       # If we're dealing with a cash account that has no reconciliations, use "Transaction adjustment" strategy (update opening balance to "back in" to the desired current balance)
       if account.balance_type == :cash && account.valuations.reconciliation.empty?
-        adjust_opening_balance_with_delta(new_balance: balance, old_balance: account.balance)
+        adjust_opening_balance_with_delta(new_balance: balance, old_balance: derived_current_balance)
       else
-        existing_reconciliation = account.entries.valuations.find_by(date: Date.current)
+        valuation_today = account.entries.valuations.find_by(date: Date.current)
+
+        # The opening balance is dated today, so today's balance is the opening balance: change it
+        # there rather than turning the opening anchor into a reconciliation
+        if valuation_today&.entryable&.opening_anchor?
+          return adjust_opening_balance_with_delta(new_balance: balance, old_balance: account.opening_anchor_balance)
+        end
+
+        # Any other anchor on today's date is refused by the reconciliation manager
+        existing_reconciliation = valuation_today if valuation_today&.entryable&.reconciliation?
 
         result = reconciliation_manager.reconcile_balance(balance: balance, date: Date.current, existing_valuation_entry: existing_reconciliation)
 
         # Normalize to expected result format
         Result.new(success?: result.success?, changes_made?: true, error: result.error_message)
       end
+    end
+
+    # Today's balance as the forward calculation derives it for a cash account with no
+    # reconciliations: the opening balance plus the flows of every entry after the opening date,
+    # up to today. Unlike the cached accounts.balance, it does not depend on a sync having run
+    # since the last edit.
+    def derived_current_balance
+      entry_flows = account.entries
+        .where.not(entryable_type: "Valuation")
+        .where("date > ? AND date <= ?", account.opening_anchor_date, Date.current)
+        .sum { |entry| entry.amount_money.exchange_to(account.currency, date: entry.date, fallback_rate: 1).amount }
+
+      signed_flows = account.asset? ? -entry_flows : entry_flows
+      account.opening_anchor_balance + signed_flows
     end
 
     def adjust_opening_balance_with_delta(new_balance:, old_balance:)
@@ -103,7 +127,7 @@ class Account::CurrentBalanceManager
     end
 
     def current_anchor_valuation
-      @current_anchor_valuation ||= account.valuations.current_anchor.includes(:entry).first
+      @current_anchor_valuation ||= account.valuations.current_anchor.includes(:entry).order("entries.date DESC, entries.created_at DESC").first
     end
 
     def create_current_anchor(balance)

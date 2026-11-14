@@ -168,6 +168,7 @@ Rails.application.routes.draw do
       post :publish
       put :revert
       put :apply_template
+      post :retry_processing
     end
 
     resource :upload, only: %i[show update], module: :import
@@ -324,6 +325,7 @@ Rails.application.routes.draw do
 
   resources :invitations, only: [ :new, :create, :destroy ] do
     get :accept, on: :member
+    post :confirm, on: :member
   end
 
   # API routes

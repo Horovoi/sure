@@ -42,7 +42,7 @@ class Setting < RailsSettings::Base
 
   # Scheduled jobs settings
   field :scheduled_jobs_start_time, type: :string, default: "03:00"
-  field :scheduled_jobs_timezone, type: :string # nil = use family timezone
+  field :scheduled_jobs_timezone, type: :string # nil = UTC
 
   # Per-job time overrides (nil = use auto-stagger from start_time)
   field :data_cleaner_time, type: :string

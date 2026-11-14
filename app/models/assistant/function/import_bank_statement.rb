@@ -45,6 +45,14 @@ class Assistant::Function::ImportBankStatement < Assistant::Function
       }
     end
 
+    unless pdf_import.editable?
+      return {
+        success: false,
+        error: "not_editable",
+        message: "This import is #{pdf_import.status.humanize(capitalize: false)} and can no longer be changed."
+      }
+    end
+
     unless pdf_import.statement_with_transactions?
       return {
         success: false,

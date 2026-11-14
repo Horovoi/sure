@@ -5,11 +5,25 @@ class Family::SyncerTest < ActiveSupport::TestCase
     @family = families(:dylan_family)
   end
 
+  test "syncs only visible manual accounts while bank connections are off" do
+    family_sync = syncs(:family)
+    @family.accounts.manual.first.update_columns(status: "pending_deletion")
+
+    Account.any_instance
+           .expects(:sync_later)
+           .with(parent_sync: family_sync, window_start_date: nil, window_end_date: nil)
+           .times(@family.accounts.visible.manual.count)
+    PlaidItem.any_instance.expects(:sync_later).never
+
+    Family::Syncer.new(@family).perform_sync(family_sync)
+  end
+
   test "syncs plaid items and manual accounts" do
+    BankConnections.stubs(:enabled?).returns(true)
     family_sync = syncs(:family)
 
-    manual_accounts_count = @family.accounts.manual.count
-    items_count = @family.plaid_items.count
+    manual_accounts_count = @family.accounts.visible.manual.count
+    items_count = @family.plaid_items.active.count
 
     syncer = Family::Syncer.new(@family)
 
@@ -51,7 +65,7 @@ class Family::SyncerTest < ActiveSupport::TestCase
     @family.rules.stubs(:where).with(active: true).returns([ active_rule ])
 
     # Expect apply_later to be called only for the active rule
-    active_rule.expects(:apply_later).once
+    active_rule.expects(:apply_later).with(execution_type: "scheduled").once
     disabled_rule.expects(:apply_later).never
 
     # Mock the account and plaid item syncs to avoid side effects

@@ -1,4 +1,9 @@
 class LunchflowItemsController < ApplicationController
+  require_bank_connections
+  include FamilyAdminRequired
+
+  # Connections are managed from the admin-only Sync Providers settings
+  require_family_admin except: :sync
   before_action :set_lunchflow_item, only: [ :show, :edit, :update, :destroy, :sync, :setup_accounts, :complete_account_setup ]
 
   def index
@@ -135,6 +140,11 @@ class LunchflowItemsController < ApplicationController
 
     if selected_account_ids.empty?
       redirect_to new_account_path, alert: t(".no_accounts_selected")
+      return
+    end
+
+    unless Accountable::TYPES.include?(accountable_type)
+      redirect_to new_account_path, alert: t(".invalid_account_type")
       return
     end
 
@@ -746,28 +756,8 @@ class LunchflowItemsController < ApplicationController
       params.require(:lunchflow_item).permit(:name, :sync_start_date, :api_key, :base_url)
     end
 
-    # Sanitize return_to parameter to prevent XSS attacks
-    # Only allow internal paths, reject external URLs and javascript: URIs
+    # Only internal paths; see StoreLocation#sanitize_return_to
     def safe_return_to_path
-      return nil if params[:return_to].blank?
-
-      return_to = params[:return_to].to_s
-
-      # Parse the URL to check if it's external
-      begin
-        uri = URI.parse(return_to)
-
-        # Reject absolute URLs with schemes (http:, https:, javascript:, etc.)
-        # Only allow relative paths
-        return nil if uri.scheme.present?
-
-        # Ensure the path starts with / (is a relative path)
-        return nil unless return_to.start_with?("/")
-
-        return_to
-      rescue URI::InvalidURIError
-        # If the URI is invalid, reject it
-        nil
-      end
+      sanitize_return_to(params[:return_to])
     end
 end

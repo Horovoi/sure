@@ -8,7 +8,7 @@ class Api::V1::HoldingsController < Api::V1::BaseController
 
   def index
     family = current_resource_owner.family
-    holdings_query = family.holdings.joins(:account).where(accounts: { status: [ "draft", "active" ] })
+    holdings_query = family.holdings.joins(:account).merge(Account.visible)
 
     holdings_query = apply_filters(holdings_query)
     holdings_query = holdings_query.includes(:account, :security).chronological
@@ -36,7 +36,7 @@ class Api::V1::HoldingsController < Api::V1::BaseController
   private
     def set_holding
       family = current_resource_owner.family
-      @holding = family.holdings.joins(:account).where(accounts: { status: %w[draft active] }).find(params[:id])
+      @holding = family.holdings.joins(:account).merge(Account.visible).find(params[:id])
     rescue ActiveRecord::RecordNotFound
       render json: { error: "not_found", message: "Holding not found" }, status: :not_found
     end

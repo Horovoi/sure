@@ -2,11 +2,13 @@ class InviteCode < ApplicationRecord
   before_validation :generate_token, on: :create
 
   class << self
+    # Atomically consumes the code: a single DELETE, so of two concurrent
+    # claims only one deletes the row. Call it inside the transaction that
+    # creates the user, so a failed signup rolls the claim back.
     def claim!(token)
-      if invite_code = find_by(token: token&.downcase)
-        invite_code.destroy!
-        true
-      end
+      return false if token.blank?
+
+      where(token: token.to_s.strip.downcase).delete_all == 1
     end
 
     def generate!

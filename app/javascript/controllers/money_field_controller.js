@@ -12,14 +12,15 @@ export default class extends Controller {
   }
 
   updateAmount(currency) {
-    new CurrenciesService().get(currency).then((currency) => {
-      this.amountTarget.step = currency.step;
+    // Currency lookups can finish out of order; only the latest one applies
+    const requestId = (this.currencyRequestId = (this.currencyRequestId || 0) + 1);
 
-      if (Number.isFinite(this.amountTarget.value)) {
-        this.amountTarget.value = Number.parseFloat(
-          this.amountTarget.value,
-        ).toFixed(currency.default_precision);
-      }
+    new CurrenciesService().get(currency).then((currency) => {
+      if (requestId !== this.currencyRequestId) return;
+
+      // A field that takes any precision (a trade price) keeps doing so. The amount the
+      // user typed is never rewritten: rounding it here would change what gets saved.
+      if (this.amountTarget.step !== "any") this.amountTarget.step = currency.step;
 
       this.symbolTarget.innerText = currency.symbol;
     });

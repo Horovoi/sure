@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import { nextNestedAttributeKey } from "services/nested_attribute_key";
 
 // Connects to data-controller="rule--conditions"
 export default class extends Controller {
@@ -19,7 +20,7 @@ export default class extends Controller {
   addSubCondition() {
     const html = this.subConditionTemplateTarget.innerHTML.replaceAll(
       "IDX_CHILD_PLACEHOLDER",
-      this.#uniqueKey(),
+      nextNestedAttributeKey(),
     );
 
     this.subConditionsListTarget.insertAdjacentHTML("beforeend", html);
@@ -117,10 +118,6 @@ export default class extends Controller {
     newFormField.name = priorName;
 
     return newFormField;
-  }
-
-  #uniqueKey() {
-    return Date.now();
   }
 
   #toggleValueFieldVisibility() {

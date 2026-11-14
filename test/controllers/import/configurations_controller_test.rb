@@ -43,4 +43,14 @@ class Import::ConfigurationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Account", @import.account_col_label
     assert_equal "1.234,56", @import.number_format
   end
+
+  test "a running import cannot be reconfigured" do
+    @import.update_column(:status, "importing")
+    TransactionImport.any_instance.expects(:generate_rows_from_csv).never
+
+    patch import_configuration_url(@import), params: { import: { date_col_label: "Date" } }
+
+    assert_redirected_to import_path(@import)
+    assert_equal "This import can no longer be changed.", flash[:alert]
+  end
 end

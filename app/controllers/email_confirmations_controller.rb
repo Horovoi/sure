@@ -6,7 +6,7 @@ class EmailConfirmationsController < ApplicationController
     # Returns nil if the token is invalid OR expired
     @user = User.find_by_token_for(:email_confirmation, params[:token])
 
-    if @user&.unconfirmed_email && @user&.update(
+    if @user&.active? && @user.unconfirmed_email && @user.update(
       email: @user.unconfirmed_email,
       unconfirmed_email: nil
     )

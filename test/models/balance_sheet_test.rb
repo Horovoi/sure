@@ -46,6 +46,19 @@ class BalanceSheetTest < ActiveSupport::TestCase
     assert_equal 1000, BalanceSheet.new(@family).liabilities.total
   end
 
+  test "draft accounts are listed but not counted in totals" do
+    create_account(balance: 10000, accountable: Depository.new)
+    draft = create_account(balance: 250000, accountable: Property.new, status: "draft")
+
+    balance_sheet = BalanceSheet.new(@family)
+
+    assert_equal 10000, balance_sheet.assets.total
+    assert_equal 10000, balance_sheet.net_worth
+    property_group = balance_sheet.assets.account_groups.find { |group| group.key == "property" }
+    assert_equal [ draft.id ], property_group.accounts.map(&:id)
+    assert_equal 0, property_group.total
+  end
+
   test "calculates asset group totals" do
     create_account(balance: 1000, accountable: Depository.new)
     create_account(balance: 2000, accountable: Depository.new)

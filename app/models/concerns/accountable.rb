@@ -61,17 +61,6 @@ module Accountable
     def display_name
       self.name.pluralize.titleize
     end
-
-    def balance_money(family)
-      family.accounts
-            .active
-            .joins(sanitize_sql_array([
-              "LEFT JOIN exchange_rates ON exchange_rates.date = :current_date AND accounts.currency = exchange_rates.from_currency AND exchange_rates.to_currency = :family_currency",
-              { current_date: Date.current.to_s, family_currency: family.currency }
-            ]))
-            .where(accountable_type: self.name)
-            .sum("accounts.balance * COALESCE(exchange_rates.rate, 1)")
-    end
   end
 
   def display_name
