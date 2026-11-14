@@ -380,12 +380,18 @@ module LanguagesHelper
       .sort_by { |label, locale| label }
   end
 
-  def timezone_options
-    ActiveSupport::TimeZone.all
+  # stored: the zone saved now. Zones get renamed (Europe/Kiev became Europe/Kyiv), and a
+  # saved name that is no longer offered is added as it is: otherwise the select would show
+  # its first option and the next save would silently change the family's time zone.
+  def timezone_options(stored = nil)
+    options = ActiveSupport::TimeZone.all
       .sort_by { |tz| [ tz.utc_offset, tz.name ] }
       .map do |tz|
         name = tz.name.split(" - ").first.gsub(" (US & Canada)", "")
         [ "(#{tz.formatted_offset}) #{name}", tz.tzinfo.identifier ]
       end
+
+    options << [ stored, stored ] if stored.present? && options.none? { |_, identifier| identifier == stored }
+    options
   end
 end
