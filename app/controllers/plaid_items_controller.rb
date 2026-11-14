@@ -1,4 +1,8 @@
 class PlaidItemsController < ApplicationController
+  include FamilyAdminRequired
+
+  # Connections are managed from the admin-only Sync Providers settings
+  require_family_admin except: :sync
   before_action :set_plaid_item, only: %i[edit destroy sync]
 
   def new

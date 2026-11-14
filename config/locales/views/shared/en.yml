@@ -8,6 +8,8 @@ en:
       title: Are you sure?
     money_field:
       label: Amount
+    require_family_admin:
+      not_authorized: Only a family admin can do that.
     syncing_notice:
       syncing: Syncing accounts data...
     trend_change:

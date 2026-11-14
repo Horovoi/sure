@@ -1,4 +1,8 @@
 class CoinstatsItemsController < ApplicationController
+  include FamilyAdminRequired
+
+  # Connections are managed from the admin-only Sync Providers settings
+  require_family_admin except: :sync
   before_action :set_coinstats_item, only: [ :show, :edit, :update, :destroy, :sync ]
 
   def index

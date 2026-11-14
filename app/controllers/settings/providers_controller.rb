@@ -3,7 +3,9 @@ class Settings::ProvidersController < ApplicationController
 
   guard_feature unless: -> { self_hosted? }
 
-  before_action :ensure_admin, only: [ :show, :update ]
+  include FamilyAdminRequired
+
+  require_family_admin only: [ :show, :update ]
 
   def show
     @breadcrumbs = [
@@ -89,10 +91,6 @@ class Settings::ProvidersController < ApplicationController
       end
 
       params.require(:setting).permit(*permitted_fields)
-    end
-
-    def ensure_admin
-      redirect_to settings_providers_path, alert: "Not authorized" unless Current.user.admin?
     end
 
     # Reload provider configurations after settings update

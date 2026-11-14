@@ -305,11 +305,23 @@ class Settings::ProvidersControllerTest < ActionDispatch::IntegrationTest
         setting: { plaid_client_id: "test" }
       }
 
-      assert_redirected_to settings_providers_path
-      assert_equal "Not authorized", flash[:alert]
+      assert_redirected_to settings_profile_path
+      assert_equal I18n.t("shared.require_family_admin.not_authorized"), flash[:alert]
 
       # Value should not have changed
       assert_nil Setting["plaid_client_id"]
+    end
+  end
+
+  test "non-admin users are redirected away from the providers page without a loop" do
+    with_self_hosting do
+      sign_in users(:family_member)
+
+      get settings_providers_url
+      assert_redirected_to settings_profile_path
+
+      follow_redirect!
+      assert_response :success
     end
   end
 
