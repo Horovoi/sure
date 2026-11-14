@@ -51,3 +51,22 @@
 /docs/temp/
 /.claude/settings.local.json
 /.ruby-lsp/
+
+# Ignore everything the running app does not need. Smaller image, and edits to
+# these files no longer force a rebuild of the application layers.
+/test/
+/spec/
+/mobile/
+/docs/hosting/
+/script/
+/bin/deploy
+/bin/staging
+/docker-compose*.yml
+/Procfile.dev
+/*.md
+/.cursor/
+/.junie/
+/.gemini/
+/.claude/
+/coverage/
+**/.DS_Store

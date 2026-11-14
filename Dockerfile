@@ -13,13 +13,11 @@ RUN apt-get update -qq \
     && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Set production environment
-ARG BUILD_COMMIT_SHA
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development" \
-    BUILD_COMMIT_SHA=${BUILD_COMMIT_SHA}
-    
+    BUNDLE_WITHOUT="development"
+
 # Throw-away build stage to reduce size of final image
 FROM base AS build
 
@@ -60,7 +58,11 @@ USER 1000:1000
 COPY --chown=rails:rails --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --chown=rails:rails --from=build /rails /rails
 
-# Entrypoint prepares the database.
+# The commit this image was built from, shown in the app. Declared last on purpose:
+# it changes on every build, and every layer after a changed value is rebuilt.
+ARG BUILD_COMMIT_SHA
+ENV BUILD_COMMIT_SHA=${BUILD_COMMIT_SHA}
+
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 
 # Start the server by default, this can be overwritten at runtime
