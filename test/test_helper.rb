@@ -18,6 +18,12 @@ ENV["PLAID_SECRET"] ||= "test_secret"
 ENV["PGGSSENCMODE"] = "disable"
 
 require "rails/test_help"
+
+# Turbo installs its broadcast assertions (assert_no_turbo_stream_broadcasts and friends)
+# only once Action Cable is loaded, and Rails 8 loads it on first use. Without this, a test
+# that asserts "nothing was broadcast" fails whenever it runs before anything broadcasts.
+ActionCable.server
+
 require "minitest/mock"
 require "minitest/autorun"
 require "mocha/minitest"

@@ -69,6 +69,9 @@ Rails.application.configure do
   # want to log everything, set the level to "debug".
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
 
+  # Docker polls /up every 30 seconds; keep those requests out of the log
+  config.silence_healthcheck_path = "/up"
+
   if ENV["REDIS_URL"].present?
     config.cache_store = :redis_cache_store, { url: ENV["REDIS_URL"] }
   end
