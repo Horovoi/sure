@@ -1,6 +1,6 @@
 # Moves work whose job was lost (a crash, a deploy, the Mac asleep) from an in-progress
 # state to a final one, so nothing waits forever and the UI offers retry or delete.
-# Scheduled every 15 minutes (config/schedule.yml).
+# Scheduled hourly (config/schedule.yml).
 #
 # Each model owns its own definition of "stale" (a scope) and its terminal transition;
 # this job only drives them. Syncs are handled first because they also finalize parents.

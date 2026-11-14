@@ -8,7 +8,7 @@ import_market_data:
     clear_cache: false
   
 reap_stale_work:
-  cron: "*/15 * * * *" # every 15 minutes
+  cron: "15 * * * *" # hourly, off the sync_hourly minute
   class: "StaleWorkReaperJob"
   queue: "scheduled"
   description: "Moves syncs, imports, rule runs and other work stuck in progress to a final state"

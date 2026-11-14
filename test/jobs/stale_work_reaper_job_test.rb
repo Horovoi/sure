@@ -56,8 +56,9 @@ class StaleWorkReaperJobTest < ActiveJob::TestCase
     assert_equal 1, result["ImpersonationSession"]
   end
 
-  test "is scheduled every 15 minutes" do
+  test "is scheduled hourly" do
     schedule = YAML.load_file(Rails.root.join("config/schedule.yml"))
     assert_equal "StaleWorkReaperJob", schedule.dig("reap_stale_work", "class")
+    assert_equal "15 * * * *", schedule.dig("reap_stale_work", "cron")
   end
 end
