@@ -1,6 +1,13 @@
 # frozen_string_literal: true
 
 class Rack::Attack
+  SUSPICIOUS_USER_AGENTS = [
+    /sqlmap/i,
+    /nmap/i,
+    /nikto/i,
+    /masscan/i
+  ].freeze
+
   # Enable Rack::Attack
   enabled = Rails.env.production? || Rails.env.staging?
 
@@ -41,15 +48,8 @@ class Rack::Attack
   # Block requests that appear to be malicious
   blocklist("block malicious requests") do |request|
     # Block requests with suspicious user agents
-    suspicious_user_agents = [
-      /sqlmap/i,
-      /nmap/i,
-      /nikto/i,
-      /masscan/i
-    ]
-
     user_agent = request.user_agent
-    suspicious_user_agents.any? { |pattern| user_agent =~ pattern } if user_agent
+    SUSPICIOUS_USER_AGENTS.any? { |pattern| user_agent =~ pattern } if user_agent
   end
 
   # Configure response for throttled requests

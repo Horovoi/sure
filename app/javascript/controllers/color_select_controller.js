@@ -48,8 +48,10 @@ export default class extends Controller {
   }
 }
 
+const LEADING_HASH = /^#/;
+
 function hexToRGBA(hex, alpha = 1) {
-  let hexCode = hex.replace(/^#/, "");
+  let hexCode = hex.replace(LEADING_HASH, "");
   let calculatedAlpha = alpha;
 
   if (hexCode.length === 8) {

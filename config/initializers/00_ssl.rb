@@ -10,6 +10,7 @@ module SslInitializerHelper
 
   PEM_CERT_BEGIN = "-----BEGIN CERTIFICATE-----"
   PEM_CERT_END = "-----END CERTIFICATE-----"
+  PEM_CERT_PATTERN = /#{PEM_CERT_BEGIN}[\s\S]+?#{PEM_CERT_END}/
 
   def validate_ca_certificate_file(path)
     result = { path: nil, valid: false, error: nil }
@@ -28,7 +29,7 @@ module SslInitializerHelper
     end
 
     begin
-      pem_blocks = content.scan(/#{PEM_CERT_BEGIN}[\s\S]+?#{PEM_CERT_END}/)
+      pem_blocks = content.scan(PEM_CERT_PATTERN)
       raise OpenSSL::X509::CertificateError, "No certificates found in PEM file" if pem_blocks.empty?
 
       pem_blocks.each { |pem| OpenSSL::X509::Certificate.new(pem) }

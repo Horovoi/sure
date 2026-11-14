@@ -1,5 +1,10 @@
 import { Controller } from "@hotwired/stimulus";
 
+const UPPERCASE_LETTER = /[A-Z]/;
+const LOWERCASE_LETTER = /[a-z]/;
+const DIGIT = /\d/;
+const SPECIAL_CHARACTER = /[!@#$%^&*(),.?":{}|<>]/;
+
 // Connects to data-controller="password-validator"
 export default class extends Controller {
   static targets = ["input", "requirementType", "blockLine"];
@@ -14,9 +19,10 @@ export default class extends Controller {
 
     // Check each requirement and count how many are met
     const lengthValid = password.length >= 8;
-    const caseValid = /[A-Z]/.test(password) && /[a-z]/.test(password);
-    const numberValid = /\d/.test(password);
-    const specialValid = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const caseValid =
+      UPPERCASE_LETTER.test(password) && LOWERCASE_LETTER.test(password);
+    const numberValid = DIGIT.test(password);
+    const specialValid = SPECIAL_CHARACTER.test(password);
 
     // Update individual requirement text
     this.validateRequirementText("length", lengthValid);

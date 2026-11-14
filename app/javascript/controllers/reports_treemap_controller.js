@@ -1,6 +1,8 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
 
+const WORD_SEPARATORS = /[\s&,/]+/;
+
 // Draws a treemap for category breakdown (income or expense)
 // Connects to data-controller="reports-treemap"
 export default class extends Controller {
@@ -146,7 +148,7 @@ export default class extends Controller {
     const abbreviate = (name, maxLen) => {
       const str = String(name).trim();
       if (str.length <= maxLen) return str;
-      const words = str.split(/[\s&,/]+/).filter(Boolean);
+      const words = str.split(WORD_SEPARATORS).filter(Boolean);
       if (maxLen >= 2 && words.length >= 2) {
         return (words[0][0] + words[1][0]).toUpperCase();
       }
