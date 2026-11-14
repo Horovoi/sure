@@ -10,8 +10,9 @@ class FamilyMerchant < Merchant
   validates :name, uniqueness: { scope: :family }
 
   private
+    # Only fill a missing colour; a colour the user picked must survive saves.
     def set_default_color
-      self.color = COLORS.sample
+      self.color = COLORS.sample if color.blank?
     end
 
     def should_generate_logo?
