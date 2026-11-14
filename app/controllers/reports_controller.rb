@@ -1130,7 +1130,7 @@ class ReportsController < ApplicationController
 
       @api_key = ApiKey.find_by_value(api_key_value)
 
-      unless @api_key && @api_key.active?
+      unless @api_key && @api_key.active? && @api_key.user.active?
         render plain: "Invalid or expired API key", status: :unauthorized
         return false
       end
@@ -1158,14 +1158,12 @@ class ReportsController < ApplicationController
         return false
       end
 
-      # Find or create a session for this API request
-      # We need to find or create a persisted session so that Current.user delegation works properly
-      session = @current_user.sessions.first_or_create!(
+      # A temporary, unsaved session for this request. Never reuse a browser
+      # session: it may be impersonating someone, which would change Current.user.
+      Current.session = @current_user.sessions.build(
         user_agent: request.user_agent,
         ip_address: request.ip
       )
-
-      Current.session = session
 
       # Verify the delegation chain works
       unless Current.user

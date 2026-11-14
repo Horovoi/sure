@@ -174,4 +174,38 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_not User.find(@admin.id).active?
     assert_enqueued_with(job: UserPurgeJob, args: [ @admin ])
   end
+
+  test "deactivating revokes every session, API key and OAuth token of the user" do
+    member = users(:family_member)
+    other_session = member.sessions.create!
+    api_key = ApiKey.create!(user: member, name: "Key", display_key: "deact_#{SecureRandom.hex(8)}", scopes: [ "read" ])
+    app = Doorkeeper::Application.create!(name: "App", redirect_uri: "https://example.com/cb", scopes: "read")
+    token = Doorkeeper::AccessToken.create!(application: app, resource_owner_id: member.id, scopes: "read")
+    member.update!(unconfirmed_email: "pending@example.com")
+
+    sign_in member
+    delete user_url(member)
+    assert_redirected_to root_url
+
+    member.reload
+    assert_not member.active?
+    assert_nil member.unconfirmed_email
+    assert_not Session.exists?(other_session.id)
+    assert_equal 0, member.sessions.count
+    assert api_key.reload.revoked?
+    assert token.reload.revoked?
+
+    # The browser that deactivated is signed out
+    get root_url
+    assert_redirected_to new_session_url
+  end
+
+  test "a session cookie of a deactivated user no longer authenticates" do
+    member = users(:family_member)
+    sign_in member
+    member.update_column(:active, false)
+
+    get root_url
+    assert_redirected_to new_session_url
+  end
 end

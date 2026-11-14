@@ -137,8 +137,23 @@ class User < ApplicationRecord
   validate :can_deactivate, if: -> { active_changed? && !active }
   after_update_commit :purge_later, if: -> { saved_change_to_active?(from: true, to: false) }
 
+  # Deactivating revokes every credential at once: until the purge job runs
+  # (or if it fails) nothing may still authenticate as this user.
   def deactivate
-    update active: false, email: deactivated_email
+    transaction do
+      next false unless update(active: false, email: deactivated_email, unconfirmed_email: nil)
+
+      revoke_all_credentials!
+      true
+    end
+  end
+
+  def revoke_all_credentials!
+    now = Time.current
+    Session.where(user_id: id).delete_all
+    api_keys.where(revoked_at: nil).update_all(revoked_at: now)
+    Doorkeeper::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+    Doorkeeper::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
   end
 
   def can_deactivate
@@ -151,11 +166,15 @@ class User < ApplicationRecord
     UserPurgeJob.perform_later(self)
   end
 
+  # Locks the family so two purges in one family cannot both see another
+  # member and leave the family with no users.
   def purge
-    if last_user_in_family?
-      family.destroy
-    else
-      destroy
+    family.with_lock do
+      if last_user_in_family?
+        family.destroy
+      else
+        destroy
+      end
     end
   end
 

@@ -104,6 +104,43 @@ class Api::V1::BaseControllerTest < ActionDispatch::IntegrationTest
     assert_equal "unauthorized", response_body["error"]
   end
 
+  test "should reject a revoked OAuth access token" do
+    access_token = Doorkeeper::AccessToken.create!(
+      application: @oauth_app,
+      resource_owner_id: @user.id,
+      scopes: "read"
+    )
+    access_token.revoke
+
+    get "/api/v1/test", params: {}, headers: { "Authorization" => "Bearer #{access_token.token}" }
+
+    assert_response :unauthorized
+  end
+
+  test "should reject OAuth tokens and API keys of a deactivated user" do
+    access_token = Doorkeeper::AccessToken.create!(application: @oauth_app, resource_owner_id: @user.id, scopes: "read")
+    @user.update_column(:active, false)
+
+    get "/api/v1/test", params: {}, headers: { "Authorization" => "Bearer #{access_token.token}" }
+    assert_response :unauthorized
+
+    get "/api/v1/test", params: {}, headers: { "X-Api-Key" => @plain_api_key }
+    assert_response :unauthorized
+  end
+
+  test "API requests never act through an impersonating browser session" do
+    victim = users(:family_member)
+    impersonation = ImpersonationSession.create!(impersonator: users(:sure_support_staff), impersonated: victim, status: :in_progress)
+    admin = users(:sure_support_staff)
+    admin.sessions.create!(active_impersonator_session: impersonation)
+    access_token = Doorkeeper::AccessToken.create!(application: @oauth_app, resource_owner_id: admin.id, scopes: "read")
+
+    get "/api/v1/test", params: {}, headers: { "Authorization" => "Bearer #{access_token.token}" }
+
+    assert_response :success
+    assert_equal admin.email, JSON.parse(response.body)["current_user"]
+  end
+
   test "should reject revoked API key" do
     @api_key.revoke!
 

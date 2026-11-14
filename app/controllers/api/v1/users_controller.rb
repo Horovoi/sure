@@ -11,8 +11,8 @@ class Api::V1::UsersController < Api::V1::BaseController
   def destroy
     user = current_resource_owner
 
+    # deactivate revokes every session, API key and OAuth token of the user
     if user.deactivate
-      Current.session&.destroy
       render json: { message: "Account has been deleted" }
     else
       render json: { error: "Failed to delete account", details: user.errors.full_messages }, status: :unprocessable_entity

@@ -56,6 +56,8 @@ class SessionsController < ApplicationController
       end
     end
 
+    user = nil unless user&.active?
+
     if user
       if user.otp_required?
         log_super_admin_override_login(user)
@@ -122,7 +124,10 @@ class SessionsController < ApplicationController
     # Security fix: Look up by provider + uid, not just email
     oidc_identity = OidcIdentity.find_by(provider: auth.provider, uid: auth.uid)
 
-    if oidc_identity
+    if oidc_identity && !oidc_identity.user.active?
+      redirect_to new_session_path, alert: t("sessions.openid_connect.failed")
+      nil
+    elsif oidc_identity
       # Existing OIDC identity found - authenticate the user
       user = oidc_identity.user
       oidc_identity.record_authentication!

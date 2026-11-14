@@ -57,8 +57,10 @@ class UsersController < ApplicationController
   end
 
   def destroy
+    # deactivate revokes every session, API key and OAuth token of the user
     if @user.deactivate
-      Current.session.destroy
+      cookies.delete(:session_token)
+      reset_session
       redirect_to root_path, notice: t(".success")
     else
       redirect_to settings_profile_path, alert: @user.errors.full_messages.to_sentence
