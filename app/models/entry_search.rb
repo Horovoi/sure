@@ -136,15 +136,13 @@ class EntrySearch
       conditions = []
 
       entry_type_classes = entry_types.map { |type| ENTRYABLE_TYPE_MAP[type] }.compact
-      if entry_type_classes.any?
-        conditions << "entries.entryable_type IN (#{entry_type_classes.map { |c| ActiveRecord::Base.connection.quote(c) }.join(', ')})"
-      end
+      conditions << Entry.arel_table[:entryable_type].in(entry_type_classes) if entry_type_classes.any?
 
       txn_condition = build_transaction_type_condition(txn_types)
       conditions << txn_condition if txn_condition
 
       return query if conditions.empty?
-      query.where(conditions.join(" OR "))
+      query.where(conditions.reduce(:or))
     end
 
     def apply_category_conditions(query, categories)
@@ -197,39 +195,42 @@ class EntrySearch
     def build_transaction_type_condition(txn_types)
       return if txn_types.blank?
 
-      transfer_condition = transaction_exists_condition(Transaction::TRANSFER_KINDS)
-      investment_contribution_condition = transaction_exists_condition([ "investment_contribution" ])
-      expense_condition = "(entries.amount >= 0 OR #{investment_contribution_condition})"
-      income_condition = "(entries.amount <= 0 AND NOT #{investment_contribution_condition})"
+      entries = Entry.arel_table
+      is_transaction = entries[:entryable_type].eq("Transaction")
+      transfer, expense, income = Transaction.type_conditions(
+        transfer: transaction_kind_condition(Transaction::TRANSFER_KINDS),
+        investment_contribution: transaction_kind_condition([ "investment_contribution" ])
+      ).values_at(:transfer, :expense, :income)
 
       case txn_types.sort
       when %w[expense income transfer]
-        "entries.entryable_type = 'Transaction'"
+        is_transaction
       when [ "transfer" ]
-        transfer_condition
+        transfer
       when [ "expense" ]
-        "entries.entryable_type = 'Transaction' AND #{expense_condition} AND NOT (#{transfer_condition})"
+        is_transaction.and(expense).and(transfer.not)
       when [ "income" ]
-        "entries.entryable_type = 'Transaction' AND #{income_condition} AND NOT (#{transfer_condition})"
+        is_transaction.and(income).and(transfer.not)
       when %w[expense transfer]
-        "entries.entryable_type = 'Transaction' AND ((#{expense_condition} AND NOT (#{transfer_condition})) OR #{transfer_condition})"
+        is_transaction.and(expense.or(transfer))
       when %w[income transfer]
-        "entries.entryable_type = 'Transaction' AND ((#{income_condition} AND NOT (#{transfer_condition})) OR #{transfer_condition})"
+        is_transaction.and(income.or(transfer))
       when %w[expense income]
-        "entries.entryable_type = 'Transaction' AND NOT (#{transfer_condition})"
+        is_transaction.and(transfer.not)
       end
     end
 
-    def transaction_exists_condition(kinds)
-      quoted_kinds = kinds.map { |kind| ActiveRecord::Base.connection.quote(kind) }.join(", ")
+    # The entry is a transaction of one of the kinds. A subquery, because this search does
+    # not always join transactions.
+    def transaction_kind_condition(kinds)
+      entries = Entry.arel_table
 
-      <<~SQL.squish
-        EXISTS (
-          SELECT 1 FROM transactions t
-          WHERE t.id = entries.entryable_id
-          AND entries.entryable_type = 'Transaction'
-          AND t.kind IN (#{quoted_kinds})
-        )
-      SQL
+      Transaction
+        .where(kind: kinds)
+        .where(Transaction.arel_table[:id].eq(entries[:entryable_id]))
+        .where(entries[:entryable_type].eq("Transaction"))
+        .select(1)
+        .arel
+        .exists
     end
 end

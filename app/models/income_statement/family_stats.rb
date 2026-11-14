@@ -50,7 +50,7 @@ class IncomeStatement::FamilyStats
             er.to_currency = :target_currency
           )
           WHERE a.family_id = :family_id
-            AND a.status IN ('draft', 'active')
+            AND #{Account.visible_status_sql("a")}
             AND t.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
             AND ae.excluded = false
             AND (

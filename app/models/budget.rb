@@ -62,9 +62,7 @@ class Budget < ApplicationRecord
       Budget.transaction do
         budget = family.budgets.find_by(start_date: period_start, end_date: period_end) ||
           adopt_budget_from_other_fiscal_start_day(family, period_start, period_end) ||
-          Budget.find_or_create_by!(family: family, start_date: period_start, end_date: period_end) do |b|
-            b.currency = family.currency
-          end
+          family.budgets.create!(start_date: period_start, end_date: period_end, currency: family.currency)
 
         budget.sync_budget_categories
 

@@ -83,14 +83,19 @@ class InvestmentStatement
       .order(amount: :desc)
   end
 
+  # current_holdings loaded once per statement: one page computes several figures from them
+  def loaded_current_holdings
+    @loaded_current_holdings ||= current_holdings.to_a
+  end
+
   # Top holdings by value in the family currency. Loaded up front: callers check `any?` and then iterate.
   def top_holdings(limit: 5)
-    current_holdings.to_a.sort_by { |holding| -to_family_money(holding.amount_money).amount }.first(limit)
+    loaded_current_holdings.sort_by { |holding| -to_family_money(holding.amount_money).amount }.first(limit)
   end
 
   # Portfolio allocation by security type/sector (simplified for now)
   def allocation
-    holdings = current_holdings.to_a
+    holdings = loaded_current_holdings
     total = holdings.sum { |holding| to_family_money(holding.amount_money).amount }
 
     return [] if total.zero?
@@ -109,7 +114,7 @@ class InvestmentStatement
 
   # Unrealized gains across all holdings, in the family currency
   def unrealized_gains
-    current_holdings.sum do |holding|
+    loaded_current_holdings.sum do |holding|
       trend = holding.trend
       trend ? to_family_money(trend.value).amount : 0
     end
@@ -131,7 +136,7 @@ class InvestmentStatement
   end
 
   def unrealized_gains_trend
-    holdings = current_holdings.to_a
+    holdings = loaded_current_holdings
     return nil if holdings.empty?
 
     # Only include holdings with known cost basis in the calculation
@@ -146,7 +151,7 @@ class InvestmentStatement
 
   # Day change across portfolio
   def day_change
-    holdings = current_holdings.to_a
+    holdings = loaded_current_holdings
     changes = holdings.map(&:day_change).compact
 
     return nil if changes.empty?

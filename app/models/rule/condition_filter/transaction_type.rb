@@ -20,17 +20,16 @@ class Rule::ConditionFilter::TransactionType < Rule::ConditionFilter
   end
 
   def apply(scope, operator, value)
-    transfer_kinds = Transaction::TRANSFER_KINDS.map { |kind| ActiveRecord::Base.connection.quote(kind) }.join(", ")
-    transfer_condition = "transactions.kind IN (#{transfer_kinds})"
-    investment_contribution_condition = "transactions.kind = 'investment_contribution'"
+    transfer, expense, investment_contribution = Transaction.type_conditions.values_at(:transfer, :expense, :investment_contribution)
 
     case value
     when "income"
-      scope.where("entries.amount < 0 AND NOT (#{transfer_condition})")
+      # An investment contribution is an expense whatever its sign, so it is never income
+      scope.where(Entry.arel_table[:amount].lt(0).and(investment_contribution.not).and(transfer.not))
     when "expense"
-      scope.where("(entries.amount >= 0 OR #{investment_contribution_condition}) AND NOT (#{transfer_condition})")
+      scope.where(expense.and(transfer.not))
     when "transfer"
-      scope.where(Arel.sql(transfer_condition))
+      scope.where(transfer)
     else
       scope
     end

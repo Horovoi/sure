@@ -476,7 +476,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: Account::VISIBLE_STATUSES })
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: :parent)
@@ -488,7 +488,7 @@ class ReportsController < ApplicationController
       trades = Trade
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: Account::VISIBLE_STATUSES })
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Trade", excluded: false, date: @period.date_range })
         .includes(entry: :account, category: :parent)
 
@@ -613,10 +613,10 @@ class ReportsController < ApplicationController
 
     def build_gains_by_tax_treatment(investment_statement)
       currency = Current.family.currency
-      # Eager-load account and accountable to avoid N+1 when accessing tax_treatment
-      current_holdings = investment_statement.current_holdings
-        .includes(account: :accountable)
-        .to_a
+      # The statement already loaded these for the figures above; add the accountables
+      # (tax_treatment reads them) in one query
+      current_holdings = investment_statement.loaded_current_holdings
+      ActiveRecord::Associations::Preloader.new(records: current_holdings.map(&:account).uniq, associations: :accountable).call
 
       # Group holdings by tax treatment (from account)
       holdings_by_treatment = current_holdings.group_by { |h| h.account.tax_treatment || :taxable }
@@ -760,7 +760,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: Account::VISIBLE_STATUSES })
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -807,7 +807,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: family.id, status: Account::VISIBLE_STATUSES })
+        .where(accounts: { family_id: family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -1161,14 +1161,7 @@ class ReportsController < ApplicationController
         return false
       end
 
-      # A temporary, unsaved session for this request (Session.new, not sessions.build, so
-      # saving the user never persists it). Never reuse a browser session: it may be
-      # impersonating someone, which would change Current.user.
-      Current.session = Session.new(
-        user: @current_user,
-        user_agent: request.user_agent,
-        ip_address: request.ip
-      )
+      Current.session = Session.ephemeral_for(@current_user, request)
 
       # Verify the delegation chain works
       unless Current.user

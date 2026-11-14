@@ -84,7 +84,7 @@ class Transaction::Search
 
     def apply_active_accounts_filter(query, active_accounts_only_filter)
       if active_accounts_only_filter
-        query.where(accounts: { status: Account::VISIBLE_STATUSES })
+        query.merge(Account.visible)
       else
         query
       end
@@ -127,26 +127,21 @@ class Transaction::Search
       return query unless types.present?
       return query if types.sort == [ "expense", "income", "transfer" ]
 
-      transfer_condition = "transactions.kind IN (#{Transaction::TRANSFER_KINDS.map { |kind| ActiveRecord::Base.connection.quote(kind) }.join(', ')})"
-      # investment_contribution is always an expense regardless of amount sign
-      # (handles both manual outflows and provider-imported inflows like 401k contributions)
-      investment_contribution_condition = "transactions.kind = 'investment_contribution'"
-      expense_condition = "(entries.amount >= 0 OR #{investment_contribution_condition})"
-      income_condition = "(entries.amount <= 0 AND NOT #{investment_contribution_condition})"
+      transfer, expense, income = Transaction.type_conditions.values_at(:transfer, :expense, :income)
 
       condition = case types.sort
       when [ "transfer" ]
-        transfer_condition
+        transfer
       when [ "expense" ]
-        Arel.sql("#{expense_condition} AND NOT (#{transfer_condition})")
+        expense.and(transfer.not)
       when [ "income" ]
-        Arel.sql("#{income_condition} AND NOT (#{transfer_condition})")
+        income.and(transfer.not)
       when [ "expense", "transfer" ]
-        Arel.sql("#{expense_condition} OR #{transfer_condition}")
+        expense.or(transfer)
       when [ "income", "transfer" ]
-        Arel.sql("#{income_condition} OR #{transfer_condition}")
+        income.or(transfer)
       when [ "expense", "income" ]
-        Arel.sql("NOT (#{transfer_condition})")
+        transfer.not
       end
 
       query.where(condition)

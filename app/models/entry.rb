@@ -21,7 +21,7 @@ class Entry < ApplicationRecord
   before_destroy :ensure_anchor_destroyable, prepend: true
 
   scope :visible, -> {
-    joins(:account).where(accounts: { status: Account::VISIBLE_STATUSES })
+    joins(:account).merge(Account.visible)
   }
 
   scope :chronological, -> {
