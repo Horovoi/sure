@@ -161,17 +161,8 @@ class RecurringTransaction
         matching_amounts = matching_entries.map(&:amount)
         last_entry = matching_entries.max_by(&:date)
 
-        # Recalculate variance from all occurrences (including identical amounts).
-        # next_expected_date only moves forward: moving it back would make an
-        # already-handled period overdue again.
-        recurring.update!(
-          expected_amount_min: matching_amounts.min,
-          expected_amount_max: matching_amounts.max,
-          expected_amount_avg: matching_amounts.sum / matching_amounts.size,
-          occurrence_count: matching_amounts.size,
-          last_occurrence_date: [ recurring.last_occurrence_date, last_entry.date ].compact.max,
-          next_expected_date: forward_only(recurring.next_expected_date, calculate_next_expected_date(last_entry.date, recurring.expected_day_of_month))
-        )
+        # Recalculate variance from all occurrences (including identical amounts)
+        update_manual_recurring(recurring, matching_amounts, last_occurrence_date: [ recurring.last_occurrence_date, last_entry.date ].compact.max)
       end
     end
 
@@ -191,16 +182,7 @@ class RecurringTransaction
 
         # Update if we have any matching transactions
         if matching_entries.any?
-          matching_amounts = matching_entries.map(&:amount)
-
-          recurring_transaction.update!(
-            expected_amount_min: matching_amounts.min,
-            expected_amount_max: matching_amounts.max,
-            expected_amount_avg: matching_amounts.sum / matching_amounts.size,
-            occurrence_count: matching_amounts.size,
-            last_occurrence_date: pattern[:last_occurrence_date],
-            next_expected_date: forward_only(recurring_transaction.next_expected_date, calculate_next_expected_date(pattern[:last_occurrence_date], recurring_transaction.expected_day_of_month))
-          )
+          update_manual_recurring(recurring_transaction, matching_entries.map(&:amount), last_occurrence_date: pattern[:last_occurrence_date])
         end
       end
     end
@@ -214,6 +196,23 @@ class RecurringTransaction
         # Manual rows track a range of observed amounts
         recurring.has_amount_variance? &&
           amount.between?(recurring.expected_amount_min - tolerance, recurring.expected_amount_max + tolerance)
+      end
+
+      # next_expected_date only moves forward: moving it back would make an
+      # already-handled period overdue again. A subscription may stay overdue
+      # (the generation job handles it); any other manual row only projects
+      # the next date, so it is rolled past today.
+      def update_manual_recurring(recurring, amounts, last_occurrence_date:)
+        recurring.assign_attributes(
+          expected_amount_min: amounts.min,
+          expected_amount_max: amounts.max,
+          expected_amount_avg: amounts.sum / amounts.size,
+          occurrence_count: amounts.size,
+          last_occurrence_date: last_occurrence_date,
+          next_expected_date: forward_only(recurring.next_expected_date, calculate_next_expected_date(last_occurrence_date, recurring.expected_day_of_month))
+        )
+        recurring.roll_next_expected_date_forward unless recurring.subscription?
+        recurring.save!
       end
 
       def forward_only(current, candidate)
@@ -258,10 +257,7 @@ class RecurringTransaction
           refresh_detected(recurring, pattern)
         end
 
-        if reactivatable?(recurring)
-          recurring.status = "active"
-          recurring.inactive_reason = nil
-        end
+        recurring.reactivate if reactivatable?(recurring)
 
         recurring.save!
       end

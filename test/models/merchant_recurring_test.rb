@@ -39,6 +39,16 @@ class MerchantRecurringTest < ActiveSupport::TestCase
     assert_equal subscription.id, entry.transaction.reload.recurring_transaction_id
   end
 
+  test "merging into a merchant whose recurring row has a name does not collide" do
+    named_subscription = create_recurring(merchant: @amazon, subscription_state: "subscription", name: "Prime")
+    pattern = create_recurring(merchant: @netflix, subscription_state: "pattern")
+
+    Merchant::Merger.new(family: @family, target_merchant: @amazon, source_merchants: [ @netflix ]).merge!
+
+    refute RecurringTransaction.exists?(pattern.id)
+    assert_equal @amazon.id, named_subscription.reload.merchant_id
+  end
+
   test "deleting a merchant turns its subscriptions into name-based ones" do
     subscription = create_recurring(merchant: @netflix, subscription_state: "subscription")
 

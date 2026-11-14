@@ -171,6 +171,39 @@ class RecurringTransaction::LifecycleTest < ActiveSupport::TestCase
     refute RecurringTransaction.exists?(pattern.id)
   end
 
+  test "a yearly subscription is not stale between two yearly charges" do
+    yearly = create_recurring(subscription_state: "subscription", billing_cycle: "yearly", expected_month: 7.months.ago.month,
+                              last_occurrence_date: 7.months.ago.to_date, next_expected_date: 5.months.from_now.to_date)
+    monthly = create_recurring(subscription_state: "subscription", name: "Old gym", merchant: nil, last_occurrence_date: 7.months.ago.to_date)
+
+    RecurringTransaction::Cleaner.new(@family).cleanup_stale_transactions
+
+    assert yearly.reload.active?
+    assert monthly.reload.inactive?
+    assert yearly.tap { |row| row.last_occurrence_date = 15.months.ago.to_date }.should_be_inactive?
+  end
+
+  test "a pattern the user paused is not deleted, so it cannot come back as active" do
+    paused = create_recurring(subscription_state: "pattern", status: "inactive", inactive_reason: "user")
+    stale = create_recurring(subscription_state: "pattern", name: "Old gym", merchant: nil, status: "inactive", inactive_reason: "stale")
+    RecurringTransaction.where(id: [ paused.id, stale.id ]).update_all(updated_at: 7.months.ago)
+
+    RecurringTransaction::Cleaner.new(@family).remove_old_inactive_transactions
+
+    assert RecurringTransaction.exists?(paused.id)
+    refute RecurringTransaction.exists?(stale.id)
+  end
+
+  test "a manual row whose latest charge fell outside the match window still projects a future date" do
+    create_charge(date: 2.months.ago.to_date, amount: 900, merchant: nil, name: "Rent")
+    manual = create_recurring(manual: true, merchant: nil, name: "Rent", amount: 900, expected_day_of_month: 2.months.ago.day,
+                              last_occurrence_date: 2.months.ago.to_date, next_expected_date: 1.month.ago.to_date)
+
+    identify
+
+    assert manual.reload.next_expected_date > Date.current
+  end
+
   test "cleaner marks stale rows with the stale reason" do
     pattern = create_recurring(subscription_state: "pattern", last_occurrence_date: 3.months.ago.to_date)
 

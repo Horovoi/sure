@@ -129,9 +129,11 @@ class RecurringTransaction < ApplicationRecord
   def self.reassign_merchant!(scope, to_merchant: nil, fallback_name: nil)
     scope.find_each do |row|
       target = to_merchant ? { merchant_id: to_merchant.id, name: nil } : { merchant_id: nil, name: row.name.presence || fallback_name }
+      # A merchant row is unique per merchant whatever its name, so the lookup must ignore the name too
+      identity = to_merchant ? target.slice(:merchant_id) : target
 
       duplicate = where(family_id: row.family_id, currency: row.currency, amount: row.amount)
-        .where(target)
+        .where(identity)
         .where.not(id: row.id)
         .first
 
@@ -319,12 +321,20 @@ class RecurringTransaction < ApplicationRecord
     expected_amount_min.present? && expected_amount_max.present?
   end
 
+  # How long a row may go without an occurrence before it counts as stale.
+  # Rows the user created or curated get longer than detected patterns, and
+  # a yearly cycle must outlast the gap between two charges.
+  def stale_after
+    return 2.months unless user_managed?
+
+    billing_cycle_yearly? ? 14.months : 6.months
+  end
+
   # Check if this recurring transaction should be marked inactive
   def should_be_inactive?
     return false if last_occurrence_date.nil?
-    # Rows the user created or curated have a longer threshold
-    threshold = user_managed? ? 6.months.ago : 2.months.ago
-    last_occurrence_date < threshold
+
+    last_occurrence_date < stale_after.ago.to_date
   end
 
   # Mark as inactive. reason is "user" (paused by the user) or "stale"
@@ -336,10 +346,15 @@ class RecurringTransaction < ApplicationRecord
   # Mark as active. A resumed row starts again from its next future date
   # instead of back-filling the periods it was inactive for.
   def mark_active!
-    self.status = "active"
-    self.inactive_reason = nil
+    reactivate
     roll_next_expected_date_forward
     save!
+  end
+
+  # Back to active, forgetting why it was inactive. Does not save.
+  def reactivate
+    self.status = "active"
+    self.inactive_reason = nil
   end
 
   # Approve a subscription suggestion
@@ -398,8 +413,7 @@ class RecurringTransaction < ApplicationRecord
     end
 
     self.occurrence_count += 1
-    self.status = "active"
-    self.inactive_reason = nil
+    reactivate
     save!
   end
 

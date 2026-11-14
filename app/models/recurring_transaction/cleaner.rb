@@ -6,9 +6,8 @@ class RecurringTransaction
       @family = family
     end
 
-    # Mark recurring transactions as inactive if they haven't occurred recently.
-    # Uses 2 months for detected patterns and 6 months for rows the user
-    # created or curated (manual rows and subscriptions).
+    # Mark recurring transactions as inactive if they haven't occurred for
+    # longer than RecurringTransaction#stale_after.
     # Rows marked here get inactive_reason "stale", so the Identifier can
     # reactivate them when the pattern resumes.
     def cleanup_stale_transactions
@@ -17,7 +16,7 @@ class RecurringTransaction
       family.recurring_transactions.active.find_each do |recurring_transaction|
         next unless recurring_transaction.should_be_inactive?
 
-        threshold = recurring_transaction.user_managed? ? 6.months.ago.to_date : 2.months.ago.to_date
+        threshold = recurring_transaction.stale_after.ago.to_date
 
         # Double-check if there are any recent matching transactions
         recent_matches = recurring_transaction.matching_transactions.select { |entry| entry.date >= threshold }
@@ -32,9 +31,10 @@ class RecurringTransaction
     end
 
     # Remove detected patterns that have been inactive for 6+ months.
-    # Rows the user created or curated (manual rows, subscriptions) and
-    # dismissed suggestions (which keep a dismissal from coming back) are
-    # never deleted automatically.
+    # Rows the user created or curated (manual rows, subscriptions),
+    # dismissed suggestions (which keep a dismissal from coming back) and
+    # patterns the user paused (the Identifier would detect them again as
+    # active) are never deleted automatically.
     def remove_old_inactive_transactions
       six_months_ago = 6.months.ago
 
@@ -42,6 +42,7 @@ class RecurringTransaction
         .inactive
         .pattern
         .where(manual: false)
+        .where(inactive_reason: [ nil, "stale" ])
         .where("updated_at < ?", six_months_ago)
         .destroy_all
     end
