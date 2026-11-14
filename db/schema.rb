@@ -1275,8 +1275,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["inflow_transaction_id", "outflow_transaction_id"], name: "idx_on_inflow_transaction_id_outflow_transaction_id_8cd07a28bd", unique: true
-    t.index ["inflow_transaction_id"], name: "index_transfers_on_inflow_transaction_id"
-    t.index ["outflow_transaction_id"], name: "index_transfers_on_outflow_transaction_id"
+    t.index ["inflow_transaction_id"], name: "index_transfers_on_inflow_transaction_id", unique: true
+    t.index ["outflow_transaction_id"], name: "index_transfers_on_outflow_transaction_id", unique: true
     t.index ["status"], name: "index_transfers_on_status"
   end
 
@@ -1392,8 +1392,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
   add_foreign_key "recurring_transactions", "families"
   add_foreign_key "recurring_transactions", "merchants"
   add_foreign_key "recurring_transactions", "subscription_services"
-  add_foreign_key "rejected_transfers", "transactions", column: "inflow_transaction_id"
-  add_foreign_key "rejected_transfers", "transactions", column: "outflow_transaction_id"
+  add_foreign_key "rejected_transfers", "transactions", column: "inflow_transaction_id", on_delete: :cascade
+  add_foreign_key "rejected_transfers", "transactions", column: "outflow_transaction_id", on_delete: :cascade
   add_foreign_key "rule_actions", "rules"
   add_foreign_key "rule_conditions", "rule_conditions", column: "parent_id"
   add_foreign_key "rule_conditions", "rules"
