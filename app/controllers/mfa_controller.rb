@@ -3,6 +3,7 @@ class MfaController < ApplicationController
 
   layout :determine_layout
   skip_authentication only: [ :verify, :verify_code ]
+  disallow_while_impersonating only: %i[new create disable]
 
   def new
     redirect_to root_path if Current.user.otp_required?
@@ -49,11 +50,9 @@ class MfaController < ApplicationController
   end
 
   # Turning MFA off needs a valid code from the authenticator app (or a
-  # backup code), so a hijacked or impersonated session cannot strip it.
+  # backup code), so a hijacked session cannot strip it.
   def disable
-    if Current.user != Current.true_user
-      redirect_to settings_security_path, alert: t(".not_while_impersonating")
-    elsif Current.user.verify_otp?(params[:code])
+    if Current.user.verify_otp?(params[:code])
       Current.user.disable_mfa!
       redirect_to settings_security_path, notice: t(".success")
     else

@@ -3,6 +3,8 @@
 class Settings::SsoIdentitiesController < ApplicationController
   layout "settings"
 
+  disallow_while_impersonating
+
   def destroy
     @identity = Current.user.oidc_identities.find(params[:id])
 

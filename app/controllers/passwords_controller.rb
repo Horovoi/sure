@@ -1,4 +1,5 @@
 class PasswordsController < ApplicationController
+  disallow_while_impersonating
   def edit
   end
 

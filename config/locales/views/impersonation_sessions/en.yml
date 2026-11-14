@@ -1,6 +1,8 @@
 ---
 en:
   impersonation_sessions:
+    invalid_transition: This session can no longer be changed.
+    not_allowed_while_impersonating: This change is not allowed while impersonating a user.
     approve:
       success: Request approved
     complete:

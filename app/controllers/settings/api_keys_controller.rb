@@ -3,6 +3,7 @@
 class Settings::ApiKeysController < ApplicationController
   layout "settings"
 
+  disallow_while_impersonating only: %i[new create destroy]
   before_action :set_api_key, only: [ :show, :destroy ]
 
   def show

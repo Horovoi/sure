@@ -1,6 +1,8 @@
 class UsersController < ApplicationController
   before_action :set_user
   before_action :ensure_admin, only: %i[reset reset_with_sample_data]
+  disallow_while_impersonating only: :destroy
+  before_action :reject_email_change_while_impersonating, only: :update
 
   def resend_confirmation_email
     if @user.resend_confirmation_email
@@ -133,6 +135,12 @@ class UsersController < ApplicationController
 
     def set_user
       @user = Current.user
+    end
+
+    def reject_email_change_while_impersonating
+      return unless params.dig(:user, :email).present? && email_changed?
+
+      reject_while_impersonating!
     end
 
     def ensure_admin
