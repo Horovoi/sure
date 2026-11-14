@@ -20,6 +20,16 @@ account.balance_series
 AccountSeries.new(account).call
 ```
 
+Read form parameters with `params.expect`, which answers a malformed request with 400:
+
+```ruby
+params.expect(tag: [ :name, :color ])
+params.expect(rule: [ :name, conditions_attributes: [ [ :id, :value ] ] ])  # [[...]] = a list of hashes
+```
+
+Keep `params.require(...).permit(...)` where the root key may legitimately hold none of
+the permitted fields (`expect` treats that as a bad request).
+
 ## 3. Database vs ActiveRecord Validations
 
 | Type | Where |
