@@ -6,6 +6,10 @@
 #
 # Priority hierarchy: manual > calculated > provider > unknown
 #
+# A locked manual value is never replaced. Unlocking is the user opting back into the
+# calculation, so an unlocked manual value is replaced by "calculated" (see
+# Holding#cost_basis_replaceable_by?).
+#
 class Holding::CostBasisReconciler
   # Determines the appropriate cost_basis value and source for a holding update
   #

@@ -114,18 +114,35 @@ class Holding < ApplicationRecord
     new_priority > cost_basis_source_priority
   end
 
-  # Set cost_basis from user input (locks the value)
+  # Set cost_basis from user input (locks the value).
+  #
+  # Holdings are stored one row per day, but a manual cost basis belongs to the position: it
+  # applies to this row and every later row of the same security. The materializer carries it
+  # forward to rows it creates later.
   def set_manual_cost_basis!(value)
-    update!(
-      cost_basis: value,
-      cost_basis_source: "manual",
-      cost_basis_locked: true
-    )
+    transaction do
+      update!(
+        cost_basis: value,
+        cost_basis_source: "manual",
+        cost_basis_locked: true
+      )
+
+      later_rows_of_position.update_all(
+        cost_basis: value,
+        cost_basis_source: "manual",
+        cost_basis_locked: true,
+        updated_at: Time.current
+      )
+    end
   end
 
-  # Unlock cost_basis to allow provider/calculated updates
+  # Unlock cost_basis to allow provider/calculated updates, for the whole position
+  # (otherwise an older locked row would be carried forward again).
   def unlock_cost_basis!
-    update!(cost_basis_locked: false)
+    transaction do
+      update!(cost_basis_locked: false)
+      account.holdings.where(security_id: security_id, cost_basis_locked: true).update_all(cost_basis_locked: false, updated_at: Time.current)
+    end
   end
 
   # Check if cost_basis is known (has a source and positive value)
@@ -141,6 +158,10 @@ class Holding < ApplicationRecord
   end
 
   private
+    def later_rows_of_position
+      account.holdings.where(security_id: security_id, currency: currency).where("date > ?", date)
+    end
+
     def calculate_trend
       return nil unless amount_money
       return nil if avg_cost.nil? # Can't calculate trend without cost basis (0 is valid for airdrops)
