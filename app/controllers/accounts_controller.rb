@@ -6,6 +6,9 @@ class AccountsController < ApplicationController
     @manual_accounts = family.accounts
           .listable_manual
           .order(:name)
+          .preload(:accountable, :account_providers)
+          .with_attached_logo
+    Account.preload_syncing(@manual_accounts)
     @plaid_items = family.plaid_items.ordered.includes(:syncs, :plaid_accounts)
     @lunchflow_items = family.lunchflow_items.ordered.includes(:syncs, :lunchflow_accounts)
     @enable_banking_items = family.enable_banking_items.ordered.includes(:syncs)

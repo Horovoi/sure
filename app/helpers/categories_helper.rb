@@ -25,7 +25,6 @@ module CategoriesHelper
 
   def grouped_family_categories
     Current.family.categories
-           .includes(:subcategories)
            .roots
            .alphabetically
            .yield_self { |scope| Category::Group.for(scope) }

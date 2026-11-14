@@ -14,11 +14,7 @@ class TransactionsController < ApplicationController
 
     base_scope = @search.transactions_scope
                        .reverse_chronological
-                       .includes(
-                         { entry: :account },
-                         :category, :merchant, :tags,
-                         :transfer_as_inflow, :transfer_as_outflow
-                       )
+                       .includes({ entry: :account }, *Transaction::ROW_ASSOCIATIONS)
 
     @pagy, @transactions = pagy(base_scope, limit: safe_per_page)
 

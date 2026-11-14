@@ -5,7 +5,28 @@ module Syncable
     has_many :syncs, as: :syncable, dependent: :destroy
   end
 
+  class_methods do
+    # Answers `syncing?` for a whole list of records with one query. Use on pages
+    # that show many syncables, where each row would otherwise run its own lookup.
+    def preload_syncing(records)
+      records = records.to_a
+      return records if records.empty?
+
+      syncing_ids = Sync.visible
+                        .where(syncable_type: polymorphic_name, syncable_id: records.map(&:id))
+                        .distinct
+                        .pluck(:syncable_id)
+                        .to_set
+
+      records.each { |record| record.preloaded_syncing = syncing_ids.include?(record.id) }
+    end
+  end
+
+  attr_writer :preloaded_syncing
+
   def syncing?
+    return @preloaded_syncing unless @preloaded_syncing.nil?
+
     syncs.visible.any?
   end
 

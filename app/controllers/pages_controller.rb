@@ -141,6 +141,7 @@ class PagesController < ApplicationController
                                     .order(:next_expected_date)
                                     .limit(5)
                                     .includes(:merchant, :subscription_service)
+                                    .with_attached_logo
 
     @subscriptions_monthly_total = calculate_subscriptions_monthly_total
     @subscription_suggestion_count = Current.family.recurring_transactions.suggested.count

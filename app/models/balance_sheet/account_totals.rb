@@ -28,13 +28,28 @@ class BalanceSheet::AccountTotals
     end
 
     def account_rows
-      @account_rows ||= query.map do |account_row|
+      @account_rows ||= accounts_with_display_associations.map do |account_row|
         AccountRow.new(
           account: account_row,
           converted_balance: account_row.converted_balance,
           is_syncing: sync_status_monitor.account_syncing?(account_row)
         )
       end
+    end
+
+    # The sidebar and balance sheet read each account's subtype (from its accountable)
+    # and its provider links. Load them for all accounts at once, instead of one
+    # lookup per account while rendering. Done after the cache read, so these
+    # records are always fresh and never stored in the cache.
+    def accounts_with_display_associations
+      accounts = query
+
+      ActiveRecord::Associations::Preloader.new(
+        records: accounts,
+        associations: [ :accountable, { account_providers: :provider } ]
+      ).call
+
+      accounts
     end
 
     def cache_key

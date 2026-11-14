@@ -26,11 +26,11 @@
   <% if @categories.any? %>
     <div class="space-y-4">
       <% if @categories.incomes.any? %>
-        <%= render "categories/category_list_group", title: t(".categories_incomes"), categories: @categories.incomes %>
+        <%= render "categories/category_list_group", title: t(".categories_incomes"), categories: @categories.incomes, used_category_ids: @used_category_ids %>
       <% end %>
 
       <% if @categories.expenses.any? %>
-        <%= render "categories/category_list_group", title: t(".categories_expenses"), categories: @categories.expenses %>
+        <%= render "categories/category_list_group", title: t(".categories_expenses"), categories: @categories.expenses, used_category_ids: @used_category_ids %>
       <% end %>
     </div>
   <% else %>

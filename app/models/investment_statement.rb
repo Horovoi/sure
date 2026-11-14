@@ -84,9 +84,10 @@ class InvestmentStatement
       .order(amount: :desc)
   end
 
-  # Top holdings by value
+  # Top holdings by value. Loaded up front: callers check `any?` and then iterate,
+  # which would otherwise run this query twice (once as EXISTS, once for the rows).
   def top_holdings(limit: 5)
-    current_holdings.limit(limit)
+    current_holdings.limit(limit).load
   end
 
   # Portfolio allocation by security type/sector (simplified for now)

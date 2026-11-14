@@ -603,7 +603,8 @@ class ReportsController < ApplicationController
         period_contributions: period_totals.contributions,
         period_withdrawals: period_totals.withdrawals,
         top_holdings: investment_statement.top_holdings(limit: 5),
-        accounts: investment_accounts.to_a,
+        # The account cards read each account's logo, provider links and subtype
+        accounts: investment_accounts.preload(:accountable, account_providers: :provider).with_attached_logo.to_a,
         gains_by_tax_treatment: build_gains_by_tax_treatment(investment_statement)
       }
     end

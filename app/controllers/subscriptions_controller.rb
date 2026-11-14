@@ -6,7 +6,8 @@ class SubscriptionsController < ApplicationController
   def index
     @subscriptions = Current.family.recurring_transactions
                           .subscriptions
-                          .includes(:merchant, :category, :subscription_service)
+                          .includes(:merchant, :category, :subscription_service, :default_account)
+                          .with_attached_logo
                           .order(status: :asc, next_expected_date: :asc, name: :asc)
 
     # Apply filters
@@ -46,7 +47,8 @@ class SubscriptionsController < ApplicationController
     @month = params[:month].present? ? Date.parse(params[:month]) : Date.current.beginning_of_month
     @subscriptions = Current.family.recurring_transactions
                           .active_subscriptions
-                          .includes(:merchant, :category, :subscription_service)
+                          .includes(:merchant, :category, :subscription_service, :default_account)
+                          .with_attached_logo
 
     @calendar_data = build_calendar_data(@subscriptions, @month)
     @monthly_total = calculate_monthly_total(@subscriptions)
@@ -348,9 +350,11 @@ class SubscriptionsController < ApplicationController
       end
     end
 
+    # Totals are computed from the subscriptions already loaded for the page,
+    # rather than querying the same rows again for each total.
     def calculate_monthly_total(subscriptions)
       family_currency = Current.family.currency
-      subscriptions.active.sum(Money.new(0, family_currency)) do |sub|
+      subscriptions.select(&:active?).sum(Money.new(0, family_currency)) do |sub|
         amount = sub.billing_cycle_yearly? ? sub.amount_money / 12 : sub.amount_money
         sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
       end
@@ -358,7 +362,7 @@ class SubscriptionsController < ApplicationController
 
     def calculate_yearly_total(subscriptions)
       family_currency = Current.family.currency
-      subscriptions.active.sum(Money.new(0, family_currency)) do |sub|
+      subscriptions.select(&:active?).sum(Money.new(0, family_currency)) do |sub|
         amount = sub.billing_cycle_monthly? ? sub.amount_money * 12 : sub.amount_money
         sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
       end

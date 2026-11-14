@@ -6,6 +6,9 @@ class CategoriesController < ApplicationController
   def index
     @categories = Current.family.categories.alphabetically
 
+    # Which categories have transactions (decides each row's delete flow), in one query
+    @used_category_ids = Transaction.where(category_id: @categories.select(:id)).distinct.pluck(:category_id).to_set
+
     render layout: "settings"
   end
 

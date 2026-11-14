@@ -9,6 +9,8 @@ class Account::ActivityFeedData
   def initialize(account, entries)
     @account = account
     @entries = entries.to_a
+
+    preload_row_associations
   end
 
   def entries_by_date
@@ -25,6 +27,20 @@ class Account::ActivityFeedData
   end
 
   private
+    # Every feed row renders its entryable, and transaction rows also read their
+    # category, merchant, tags and transfer. Load these for the whole page of
+    # entries at once, instead of several lookups per row.
+    def preload_row_associations
+      ActiveRecord::Associations::Preloader.new(records: entries, associations: :entryable).call
+
+      transactions = entries.select(&:transaction?).filter_map(&:entryable)
+
+      ActiveRecord::Associations::Preloader.new(
+        records: transactions,
+        associations: Transaction::ROW_ASSOCIATIONS
+      ).call
+    end
+
     def balance_for_date(date)
       balances_by_date[date]
     end

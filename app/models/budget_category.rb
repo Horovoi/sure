@@ -213,11 +213,11 @@ class BudgetCategory < ApplicationRecord
     [ parent_budget - siblings_budget, 0 ].max
   end
 
+  # Read from the budget's loaded categories (like `siblings` and `parent_budget_category`),
+  # so a page of budget categories does not run one query per parent category.
   def subcategories
-    return BudgetCategory.none unless category.parent_id.nil?
+    return [] unless category.parent_id.nil?
 
-    budget.budget_categories
-      .joins(:category)
-      .where(categories: { parent_id: category.id })
+    budget.budget_categories.select { |bc| bc.category.parent_id == category.id }
   end
 end

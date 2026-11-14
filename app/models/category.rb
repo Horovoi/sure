@@ -46,12 +46,19 @@ class Category < ApplicationRecord
     delegate :name, :color, :id, to: :category
 
     def self.for(categories)
-      categories
+      roots = categories
         .select { |category| category.parent_id.nil? }
         .sort_by { |category| category.name.downcase }
-        .map do |category|
-          new(category, category.subcategories.alphabetically)
-        end
+
+      # One ordered query for every group's subcategories, instead of one per group
+      root_ids = roots.filter_map(&:id)
+      subcategories_by_parent = if root_ids.any?
+        Category.where(parent_id: root_ids).alphabetically.group_by(&:parent_id)
+      else
+        {}
+      end
+
+      roots.map { |category| new(category, subcategories_by_parent.fetch(category.id, [])) }
     end
 
     def initialize(category, subcategories = nil)

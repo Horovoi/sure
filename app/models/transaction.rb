@@ -10,6 +10,17 @@ class Transaction < ApplicationRecord
 
   accepts_nested_attributes_for :taggings, allow_destroy: true
 
+  # What a transaction row reads besides the transaction itself (see transactions/_transaction):
+  # category, merchant, tags, and for transfers the account the money went to.
+  # Preload these when rendering a list, so rows do not look them up one by one.
+  ROW_ASSOCIATIONS = [
+    :category, :merchant, :tags,
+    {
+      transfer_as_inflow: { inflow_transaction: { entry: :account } },
+      transfer_as_outflow: { inflow_transaction: { entry: :account } }
+    }
+  ].freeze
+
   after_save :clear_merchant_unlinked_association, if: :merchant_id_previously_changed?
 
   enum :kind, {

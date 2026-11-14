@@ -1,5 +1,6 @@
-<%# locals: (title:, categories:) %>
+<%# locals: (title:, categories:, used_category_ids:) %>
 
+<% groups = Category::Group.for(categories) -%>
 <div class="rounded-xl bg-container-inset space-y-1 p-1">
   <div class="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-secondary uppercase">
     <p><%= title %></p>
@@ -9,14 +10,20 @@
 
   <div class="shadow-border-xs rounded-lg bg-container">
     <div class="overflow-hidden rounded-lg">
-      <% Category::Group.for(categories).each_with_index do |group, idx| %>
-        <%= render group.category %>
+      <% groups.each_with_index do |group, idx| %>
+        <%= render "categories/category",
+                   category: group.category,
+                   has_subcategories: group.subcategories.any?,
+                   in_use: used_category_ids.include?(group.category.id) %>
 
         <% group.subcategories.each do |subcategory| %>
-          <%= render subcategory %>
+          <%= render "categories/category",
+                     category: subcategory,
+                     has_subcategories: false,
+                     in_use: used_category_ids.include?(subcategory.id) %>
         <% end %>
 
-        <% unless idx == Category::Group.for(categories).count - 1 %>
+        <% unless idx == groups.size - 1 %>
           <%= render "shared/ruler" %>
         <% end %>
       <% end %>
