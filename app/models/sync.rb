@@ -67,6 +67,10 @@ class Sync < ApplicationRecord
         next unless sync.mark_stale_if_incomplete!
         count += 1
         sync.finalize_if_all_children_finalized
+      rescue => e
+        # One sync that cannot be finalized must not stop the rest of the sweep
+        Rails.logger.error("Could not clean stale sync #{sync.id}: #{e.class}: #{e.message}")
+        Sentry.capture_exception(e)
       end
       count
     end
@@ -225,11 +229,11 @@ class Sync < ApplicationRecord
     end
 
     def perform_post_sync
-      Rails.logger.info("Performing post-sync for #{syncable_type} (#{syncable.id})")
+      Rails.logger.info("Performing post-sync for #{syncable_type} (#{syncable_id})")
       syncable.perform_post_sync
       syncable.broadcast_sync_complete
     rescue => e
-      Rails.logger.error("Error performing post-sync for #{syncable_type} (#{syncable.id}): #{e.message}")
+      Rails.logger.error("Error performing post-sync for #{syncable_type} (#{syncable_id}): #{e.message}")
       report_error(e)
     end
 

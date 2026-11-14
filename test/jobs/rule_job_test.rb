@@ -89,7 +89,7 @@ class RuleJobTest < ActiveJob::TestCase
 
   test "requeues instead of running when the same rule is already being applied" do
     rule = build_rule(actions: [ category_action ])
-    RuleJob.any_instance.stubs(:with_rule_lock).returns(false)
+    RuleJob.any_instance.stubs(:with_advisory_lock).returns(false)
 
     assert_enqueued_with(job: RuleJob, args: [ rule, { ignore_attribute_locks: false, execution_type: "manual" } ]) do
       RuleJob.perform_now(rule)

@@ -26,6 +26,26 @@ class FamilyExport < ApplicationRecord
   end
 
   scope :ordered, -> { order(created_at: :desc) }
+  scope :stale, -> { where(status: %w[pending processing]).where(updated_at: ...STALE_AFTER.ago) }
+
+  # Builds the archive and attaches it. A redelivered job finds the export already processing
+  # and carries on; one that already ended is left alone. A failure ends the export as failed
+  # and is raised again for the caller to report.
+  def generate!(filename_prefix: nil)
+    return unless pending? || processing?
+
+    start! if pending?
+    export_file.attach(
+      io: Family::DataExporter.new(family).generate_export,
+      filename: "#{filename_prefix}#{filename}",
+      content_type: "application/zip"
+    )
+    complete!
+  rescue
+    reload
+    fail! if may_fail?
+    raise
+  end
 
   def filename
     "sure_export_#{created_at.strftime('%Y%m%d_%H%M%S')}.zip"

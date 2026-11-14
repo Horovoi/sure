@@ -65,11 +65,12 @@ Sidekiq.configure_server do |config|
   # the gem loads), so a lost or stale Redis copy can never silently stop them.
   config.on(:startup) do
     Rails.application.executor.wrap do
-      AutoSyncScheduler.sync!
-      ScheduledJobsManager.sync!
-    rescue => e
-      Rails.logger.error("[Sidekiq startup] Could not reconcile scheduled jobs: #{e.class}: #{e.message}")
-      Sentry.capture_exception(e)
+      [ AutoSyncScheduler, ScheduledJobsManager ].each do |scheduler|
+        scheduler.sync!
+      rescue => e
+        Rails.logger.error("[Sidekiq startup] #{scheduler.name} could not reconcile its scheduled jobs: #{e.class}: #{e.message}")
+        Sentry.capture_exception(e)
+      end
     end
   end
 end
@@ -81,6 +82,7 @@ end
 Sidekiq::Cron.configure do |config|
   # Catch-up window for a tick missed while the worker was down: a deploy, or the Mac
   # asleep overnight (Docker pauses with it). The most recent missed run of each job is
-  # enqueued once when the worker is back; a daily job never runs twice for one day.
+  # enqueued once when the worker is back. A job whose time was just moved later in
+  # Settings can also run once more that day, which is harmless: these jobs are idempotent.
   config.reschedule_grace_period = 23.hours.to_i
 end

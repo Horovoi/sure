@@ -6,6 +6,9 @@ class Eval::Run < ApplicationRecord
   belongs_to :dataset, class_name: "Eval::Dataset", foreign_key: :eval_dataset_id
   has_many :results, class_name: "Eval::Result", foreign_key: :eval_run_id, dependent: :destroy
 
+  # A run with no progress for this long lost its process; the stale work reaper fails it
+  STALE_AFTER = 24.hours
+
   validates :provider, :model, :status, presence: true
   validates :status, inclusion: { in: %w[pending running completed failed] }
 
@@ -32,6 +35,7 @@ class Eval::Run < ApplicationRecord
     end
   end
 
+  scope :stale, -> { where(status: "running").where(updated_at: ...STALE_AFTER.ago) }
   scope :for_model, ->(model) { where(model: model) }
   scope :for_provider, ->(provider) { where(provider: provider) }
 

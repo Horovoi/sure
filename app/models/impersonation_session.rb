@@ -42,18 +42,6 @@ class ImpersonationSession < ApplicationRecord
   validate :impersonated_is_not_super_admin, on: :create
   validate :impersonator_different_from_impersonated
 
-  def self.complete_expired!
-    expired.find_each do |impersonation_session|
-      impersonation_session.complete! if impersonation_session.may_complete?
-    rescue AASM::InvalidTransition
-      next # completed concurrently
-    end
-  end
-
-  def expired?
-    in_progress? && updated_at < IN_PROGRESS_TTL.ago
-  end
-
   private
     def impersonator_still_super_admin?
       impersonator.super_admin?

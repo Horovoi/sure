@@ -14,6 +14,19 @@ class StaleWorkReaperJobTest < ActiveJob::TestCase
     assert_equal 1, result["FamilyExport"]
   end
 
+  test "restores accounts whose deletion never ran" do
+    stuck = accounts(:depository)
+    stuck.update_columns(status: "pending_deletion", updated_at: 2.hours.ago)
+    queued = accounts(:investment)
+    queued.update_columns(status: "pending_deletion", updated_at: 1.minute.ago)
+
+    result = StaleWorkReaperJob.perform_now
+
+    assert_equal "disabled", stuck.reload.status
+    assert_equal "pending_deletion", queued.reload.status
+    assert_equal 1, result["Account"]
+  end
+
   test "fails imports stuck importing" do
     import = imports(:transaction)
     import.update_columns(status: "importing", updated_at: 1.hour.ago)

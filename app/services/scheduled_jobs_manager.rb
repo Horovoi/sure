@@ -57,12 +57,8 @@ class ScheduledJobsManager
         )
       end
 
-      def parse_time(time_str)
-        CronJobWriter.parse_time(time_str)
-      end
-
       def add_minutes(time_str, minutes)
-        hour, minute = parse_time(time_str)
+        hour, minute = CronJobWriter.parse_time(time_str)
         total_minutes = hour * 60 + minute + minutes
 
         new_hour = (total_minutes / 60) % 24

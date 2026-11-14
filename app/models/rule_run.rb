@@ -41,6 +41,25 @@ class RuleRun < ApplicationRecord
     end
   end
 
+  # Runs one async job of a rule run and reports its outcome on the run. The block returns
+  # how many records it modified. A failure is recorded on the run instead of raised: a
+  # retry would call the LLM again for a run that is already reported. Without a run the
+  # block just runs, and an error is raised so Sidekiq retries as usual.
+  def self.report_job(rule_run_id, job_name)
+    rule_run = find_by(id: rule_run_id) if rule_run_id.present?
+    return yield unless rule_run
+
+    begin
+      modified_count = yield
+    rescue => e
+      Rails.logger.error("#{job_name} failed for rule run #{rule_run.id}: #{e.class}: #{e.message}")
+      rule_run.fail_job!(e)
+      return
+    end
+
+    rule_run.complete_job!(modified_count: modified_count)
+  end
+
   # Reserve a slot before an async job is queued, so a job that finishes
   # quickly can never take the count to zero while others are still queued.
   def register_job!

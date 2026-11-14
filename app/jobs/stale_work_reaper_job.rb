@@ -25,15 +25,19 @@ class StaleWorkReaperJob < ApplicationJob
       reap: ->(document) { document.mark_error!("The upload did not finish") if document.may_mark_error? }
     },
     "FamilyExport" => {
-      stale: -> { FamilyExport.where(status: %w[pending processing]).where(updated_at: ...FamilyExport::STALE_AFTER.ago) },
+      stale: -> { FamilyExport.stale },
       reap: ->(export) { export.fail! if export.may_fail? }
     },
     "ImpersonationSession" => {
       stale: -> { ImpersonationSession.expired },
       reap: ->(impersonation) { impersonation.complete! if impersonation.may_complete? }
     },
+    "Account" => {
+      stale: -> { Account.stale_deletion },
+      reap: ->(account) { account.restore! if account.may_restore? }
+    },
     "Eval::Run" => {
-      stale: -> { Eval::Run.where(status: "running").where(updated_at: ...24.hours.ago) },
+      stale: -> { Eval::Run.stale },
       reap: ->(run) { run.fail! if run.may_fail? }
     }
   }.freeze
@@ -55,9 +59,13 @@ class StaleWorkReaperJob < ApplicationJob
       count = 0
 
       rule[:stale].call.find_each do |record|
-        before = record.status
-        rule[:reap].call(record)
-        count += 1 if record.reload.status != before
+        # The row lock reloads the record, so work that finished since the query is left alone
+        reaped = record.with_lock do
+          before = record.status
+          rule[:reap].call(record)
+          record.status != before
+        end
+        count += 1 if reaped
       rescue AASM::InvalidTransition
         # Its job finished between the query and the transition: nothing to do
       rescue => e

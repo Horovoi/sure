@@ -9,8 +9,9 @@ class CleanUpRecurringTransactionsJob < ApplicationJob
       next if family.recurring_transactions_disabled?
 
       cleaner = RecurringTransaction::Cleaner.new(family)
-      stale = cleaner.cleanup_stale_transactions
-      removed = cleaner.remove_old_inactive_transactions.size
+      stale, removed = in_time_zone_of(family) do
+        [ cleaner.cleanup_stale_transactions, cleaner.remove_old_inactive_transactions.size ]
+      end
 
       if stale.positive? || removed.positive?
         Rails.logger.info("CleanUpRecurringTransactionsJob: family #{family.id}: #{stale} marked stale, #{removed} removed")

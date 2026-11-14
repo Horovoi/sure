@@ -1,9 +1,6 @@
 class AssistantResponseJob < ApplicationJob
   queue_as :high_priority
 
-  # The chat (and its messages) was deleted while the job waited
-  discard_on ActiveJob::DeserializationError
-
   # Never raises for a failed turn: the turn records its own failure, and a Sidekiq retry would run it again.
   def perform(message)
     turn = case message
@@ -14,4 +11,12 @@ class AssistantResponseJob < ApplicationJob
 
     turn&.generate_response
   end
+
+  private
+    # The assistant's "today" and its default date ranges follow the user's family
+    def family_for_time_zone
+      arguments.first.chat.user.family
+    rescue StandardError
+      nil
+    end
 end

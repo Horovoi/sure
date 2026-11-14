@@ -2,6 +2,10 @@ class DestroyJob < ApplicationJob
   queue_as :low_priority
 
   def perform(model)
+    # The stale work reaper restored the account because this job did not run in time;
+    # deleting it now would surprise whoever sees it back in their list
+    return if model.respond_to?(:pending_deletion?) && !model.pending_deletion?
+
     model.destroy || raise(ActiveRecord::RecordNotDestroyed.new("destroy was halted by a callback", model))
   rescue => e
     Rails.logger.error("DestroyJob: could not destroy #{model.class.name} #{model.id}: #{e.class}: #{e.message}")

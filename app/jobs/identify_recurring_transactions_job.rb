@@ -24,7 +24,7 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
 
     # Use advisory lock as final safety net against concurrent execution.
     # The Identifier also runs subscription detection.
-    acquired = with_advisory_lock(family_id) do
+    acquired = with_advisory_lock(cache_key(family_id)) do
       RecurringTransaction::Identifier.new(family).identify_recurring_patterns
     end
 
@@ -48,6 +48,11 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
 
   private
 
+    # The first argument is the family's id
+    def family_for_time_zone
+      Family.find_by(id: arguments.first)
+    end
+
     def cache_key(family_id)
       "recurring_transaction_identify:#{family_id}"
     end
@@ -65,30 +70,5 @@ class IdentifyRecurringTransactionsJob < ApplicationJob
       return true if family.accounts.joins(:syncs).merge(Sync.incomplete).exists?
 
       false
-    end
-
-    def with_advisory_lock(family_id)
-      lock_key = advisory_lock_key(family_id)
-      acquired = ActiveRecord::Base.connection.select_value(
-        ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_try_advisory_lock(?)", lock_key ])
-      )
-
-      return false unless acquired
-
-      begin
-        yield
-      ensure
-        ActiveRecord::Base.connection.execute(
-          ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_unlock(?)", lock_key ])
-        )
-      end
-
-      true
-    end
-
-    def advisory_lock_key(family_id)
-      # Generate a stable integer key from the family ID for PostgreSQL advisory lock
-      # Advisory locks require a bigint key
-      Digest::MD5.hexdigest("recurring_transaction_identify:#{family_id}").to_i(16) % (2**31)
     end
 end

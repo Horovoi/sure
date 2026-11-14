@@ -8,7 +8,8 @@ class RuleJob < ApplicationJob
   # The job records its outcome on a RuleRun and does not re-raise. A Sidekiq
   # retry would create a second RuleRun and queue the AI jobs a second time.
   def perform(rule, ignore_attribute_locks: false, execution_type: "manual")
-    acquired = with_rule_lock(rule) do
+    # The same rule never applies twice at once
+    acquired = with_advisory_lock("rule_job:#{rule.id}") do
       run_rule(rule, ignore_attribute_locks: ignore_attribute_locks, execution_type: execution_type)
     end
 
@@ -55,22 +56,5 @@ class RuleJob < ApplicationJob
       end
 
       rule_run
-    end
-
-    # Session-level advisory lock so the same rule never applies twice at once.
-    # Returns false when another job holds the lock.
-    def with_rule_lock(rule)
-      connection = ActiveRecord::Base.connection
-      key = Digest::MD5.hexdigest("rule_job:#{rule.id}").to_i(16) % (2**31)
-      acquired = connection.select_value(ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_try_advisory_lock(?)", key ]))
-      return false unless acquired
-
-      begin
-        yield
-      ensure
-        connection.execute(ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_unlock(?)", key ]))
-      end
-
-      true
     end
 end

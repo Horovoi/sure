@@ -10,7 +10,7 @@ class GenerateSubscriptionTransactionsJob < ApplicationJob
     stats = { families_processed: 0, subscriptions_processed: 0, transactions_created: 0 }
 
     Family.find_each do |family|
-      result = generate_for_family(family)
+      result = in_time_zone_of(family) { generate_for_family(family) }
       stats[:families_processed] += 1
       stats[:subscriptions_processed] += result[:subscriptions_processed]
       stats[:transactions_created] += result[:transactions_created]
