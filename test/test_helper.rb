@@ -48,8 +48,19 @@ OmniAuth.config.allowed_request_methods = [ :get, :post ]
 
 module ActiveSupport
   class TestCase
-    # Run tests in parallel with specified workers
+    # Run tests in parallel with specified workers. This is a setting of the whole suite:
+    # calling parallelize again in one test class changes it for every test.
     parallelize(workers: :number_of_processors) unless ENV["DISABLE_PARALLELIZATION"] == "true"
+
+    # Each worker gets its own Redis database, as it gets its own Postgres database.
+    # Cron jobs and rate-limit counters live in Redis under fixed names, so tests in
+    # two workers would otherwise overwrite each other's.
+    parallelize_setup do |worker|
+      url = URI(ENV.fetch("REDIS_URL", "redis://localhost:6379/0"))
+      url.path = "/#{worker % 15 + 1}"
+      ENV["REDIS_URL"] = url.to_s
+      Sidekiq.configure_client { |config| config.redis = { url: url.to_s } }
+    end
 
     # https://github.com/simplecov-ruby/simplecov/issues/718#issuecomment-538201587
     if ENV["COVERAGE"] == "true"
