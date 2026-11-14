@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Builds the current commit and runs it as production on this machine.
+#
+#   bin/deploy                    build, rehearse on a copy of production, then deploy
+#   bin/deploy --skip-rehearsal   deploy without the rehearsal
+#   bin/deploy --rollback <ref>   switch back to an image built by an earlier deploy
+#   bin/deploy --allow-row-loss   continue even if a migration removes rows from a table
+#
+# What a deploy does:
+#   1. Builds the image sure:<commit> from the working tree.
+#   2. Rehearsal: copies production into staging, runs the new image's migrations
+#      there, and checks that the app starts. Production is not touched if this fails.
+#   3. Backs up the production database to backups/pre-deploy.
+#   4. If there are migrations: stops the app, migrates, and checks that no table lost rows.
+#   5. Starts the new version and waits until it is healthy.
+#
+# A rollback does not undo migrations. To go back past a migration, restore the
+# pre-deploy backup.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+source script/deploy/lib.sh
+
+rehearse=1
+allow_row_loss=0
+rollback=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skip-rehearsal) rehearse=0 ;;
+    --allow-row-loss) allow_row_loss=1 ;;
+    --rollback) rollback="${2:-}"; [ -n "$rollback" ] || die "--rollback needs a commit"; shift ;;
+    -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) die "unknown option: $1 (see bin/deploy --help)" ;;
+  esac
+  shift
+done
+
+port=$(env_value PORT)
+port="${port:-3333}"
+previous=$(deployed_tag)
+
+# Records the tag as the deployed one and starts it
+start_version() {
+  local tmp
+  tmp=$(mktemp)
+  if grep -q '^BUILD_COMMIT_SHA=' "$ENV_FILE"; then
+    sed "s/^BUILD_COMMIT_SHA=.*/BUILD_COMMIT_SHA=$TAG/" "$ENV_FILE" > "$tmp"
+  else
+    { cat "$ENV_FILE"; echo "BUILD_COMMIT_SHA=$TAG"; } > "$tmp"
+  fi
+  cat "$tmp" > "$ENV_FILE"
+  rm -f "$tmp"
+
+  quiet prod up -d --wait web worker backup
+  wait_for_http "http://localhost:$port/up"
+}
+
+if [ -n "$rollback" ]; then
+  TAG=$(tag_for "$rollback")
+  image_exists "$TAG" || die "no local image sure:$TAG. Available: $(docker images sure --format '{{.Tag}}' | tr '\n' ' ')"
+  step "Rolling back to sure:$TAG (migrations are not undone)"
+  start_version
+  echo "✓ Running sure:$TAG at http://localhost:$port"
+  exit 0
+fi
+
+SECONDS=0
+TAG=$(tag_for HEAD)
+export BUILD_FULL_SHA
+BUILD_FULL_SHA=$(git rev-parse HEAD)
+
+step "Building sure:$TAG"
+changed=$(git status --porcelain --untracked-files=no)
+[ -z "$changed" ] || echo "  note: the build includes uncommitted changes: $(echo "$changed" | awk '{print $2}' | tr '\n' ' ')"
+quiet prod build web
+echo "  built in ${SECONDS}s"
+
+if [ "$rehearse" = 1 ]; then
+  refresh_staging
+  step "Rehearsing sure:$TAG on the copy"
+  if ! migrate_checked staging && [ "$allow_row_loss" != 1 ]; then
+    die "Rehearsal failed. Production was not touched. Re-run with --allow-row-loss if the loss is intended."
+  fi
+  start_staging
+  echo "  the new version starts and serves pages on the copy"
+  stop_staging_app
+fi
+
+step "Backing up production"
+quiet prod up -d --wait db redis
+backup_dir=$(env_value BACKUP_DIR)
+backup_dir="${backup_dir:-backups}/pre-deploy"
+mkdir -p "$backup_dir"
+backup="$backup_dir/sure_pre_deploy_$(date +%Y%m%d_%H%M%S)_$TAG.sql.gz"
+prod exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "$backup"
+gunzip -t "$backup" && [ -s "$backup" ] || die "backup failed; production was not touched"
+echo "  $backup ($(du -h "$backup" | cut -f1 | tr -d ' '))"
+ls -t "$backup_dir"/sure_pre_deploy_*.sql.gz 2>/dev/null | tail -n +11 | while read -r old; do rm -f "$old"; done
+
+step "Migrating production"
+if [ -n "$(pending_migrations prod "$TAG")" ]; then
+  quiet prod stop web worker
+  if ! migrate_checked prod && [ "$allow_row_loss" != 1 ]; then
+    die "Stopped before starting the new version. The app is down. The backup from before the migration is $backup. To continue anyway: bin/deploy --allow-row-loss"
+  fi
+else
+  echo "  no pending migrations"
+fi
+
+step "Starting sure:$TAG"
+start_version
+
+# Keep the five newest images for rollbacks
+docker images sure --format '{{.Tag}}' | grep -v -e "^$TAG\$" -e "^${previous:-none}\$" | tail -n +4 |
+  while read -r old; do docker image rm "sure:$old" >/dev/null 2>&1 || true; done
+
+echo
+echo "✓ Deployed sure:$TAG in ${SECONDS}s: http://localhost:$port"
+[ -z "$previous" ] || [ "$previous" = "$TAG" ] || echo "  previous version: bin/deploy --rollback $previous"

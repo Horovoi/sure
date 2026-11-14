@@ -1,0 +1,58 @@
+# Staging: a private copy of production on this machine. Layered on top of
+# docker-compose.prod.yml by bin/staging, under the project name "sure-staging",
+# so it has its own containers and its own data volumes.
+#
+# The app containers here have no route to the internet. The copy holds real
+# provider credentials and real email addresses; nothing run in it can reach a
+# bank, a market data provider or a mail server. The proxy is the only way in.
+
+x-staging-env: &staging_env
+  STAGING_CLONE: "1"
+  SMTP_ADDRESS: ""
+  SMTP_USERNAME: ""
+  SMTP_PASSWORD: ""
+
+services:
+  web:
+    ports: !reset []
+    restart: "no"
+    environment:
+      <<: *staging_env
+
+  # Background jobs. Off unless asked for: `bin/staging up --worker`
+  worker:
+    profiles: [worker]
+    restart: "no"
+    environment:
+      <<: *staging_env
+
+  db:
+    restart: "no"
+    # Reachable from the host for `bin/staging dev` and for inspecting the copy
+    ports: ["127.0.0.1:${STAGING_DB_PORT:-5433}:5432"]
+    networks: [sure_net, edge]
+
+  redis:
+    restart: "no"
+    ports: ["127.0.0.1:${STAGING_REDIS_PORT:-6380}:6379"]
+    networks: [sure_net, edge]
+
+  # No scheduled backups of a copy
+  backup:
+    profiles: [never]
+
+  # Publishes the app on the host. The app itself stays on the closed network.
+  proxy:
+    image: alpine/socat:1.8.0.3
+    command: tcp-listen:8080,fork,reuseaddr tcp-connect:web:${CONTAINER_PORT:-3333}
+    ports: ["127.0.0.1:${STAGING_PORT:-3334}:8080"]
+    restart: "no"
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [sure_net, edge]
+
+networks:
+  sure_net:
+    internal: true
+  edge: {}

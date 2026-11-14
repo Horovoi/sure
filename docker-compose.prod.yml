@@ -1,5 +1,10 @@
-# Production Docker Compose Configuration
-# Based on compose.example.yml but modified for local production deployment
+# Production on this machine. Started by bin/deploy; see `bin/deploy --help`.
+#
+# The same file also runs the staging copy (bin/staging), under a different
+# project name and with docker-compose.staging.yml layered on top.
+
+# Fixed project name: the data volumes are named after it (sure_postgres-data, ...).
+name: sure
 
 x-db-env: &db_env
   POSTGRES_USER: ${POSTGRES_USER:-sure_user}
@@ -17,22 +22,26 @@ x-rails-env: &rails_env
   REDIS_URL: redis://redis:6379/1
   PORT: ${CONTAINER_PORT:-3333}
   TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY}
-  OPENAI_ACCESS_TOKEN: ${OPENAI_ACCESS_TOKEN}
+  OPENAI_ACCESS_TOKEN: ${OPENAI_ACCESS_TOKEN:-}
   # SMTP Configuration
   SMTP_ADDRESS: ${SMTP_ADDRESS}
   SMTP_PORT: ${SMTP_PORT}
   SMTP_USERNAME: ${SMTP_USERNAME}
   SMTP_PASSWORD: ${SMTP_PASSWORD}
-  SMTP_TLS_ENABLED: ${SMTP_TLS_ENABLED}
-  EMAIL_SENDER: ${EMAIL_SENDER}
+  SMTP_TLS_ENABLED: ${SMTP_TLS_ENABLED:-}
+  EMAIL_SENDER: ${EMAIL_SENDER:-}
   # Brand Fetch (for logos/icons)
   BRAND_FETCH_CLIENT_ID: ${BRAND_FETCH_CLIENT_ID}
   BRAND_FETCH_HIGH_RES_LOGOS: ${BRAND_FETCH_HIGH_RES_LOGOS:-false}
 
 services:
   web:
-    # Use pre-built image instead of building
-    image: ghcr.io/horovoi/sure:${BUILD_COMMIT_SHA:-latest}
+    # Built locally by bin/deploy and tagged with the commit it was built from
+    image: sure:${BUILD_COMMIT_SHA:-latest}
+    build:
+      context: .
+      args:
+        BUILD_COMMIT_SHA: ${BUILD_FULL_SHA:-}
     volumes:
       - app-storage:/rails/storage
     ports:
@@ -55,8 +64,9 @@ services:
       start_period: 30s
 
   worker:
-    # Use same pre-built image
-    image: ghcr.io/horovoi/sure:${BUILD_COMMIT_SHA:-latest}
+    # Same image as web; never pulled from a registry
+    image: sure:${BUILD_COMMIT_SHA:-latest}
+    pull_policy: never
     command: bundle exec sidekiq
     volumes:
       - app-storage:/rails/storage

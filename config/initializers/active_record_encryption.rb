@@ -10,7 +10,10 @@ if Rails.application.config.app_mode.self_hosted? && !Rails.application.credenti
   if primary_key.blank? || deterministic_key.blank? || key_derivation_salt.blank?
     # Use SECRET_KEY_BASE as the seed for deterministic key generation
     # This ensures keys are consistent across container restarts
-    secret_base = Rails.application.secret_key_base
+    #
+    # `bin/staging dev` runs development against a copy of production. Development has
+    # its own secret, so it is given production's here to read the copy's encrypted columns.
+    secret_base = ENV["STAGING_SECRET_KEY_BASE"].presence || Rails.application.secret_key_base
 
     # Generate deterministic keys from the secret base
     primary_key = Digest::SHA256.hexdigest("#{secret_base}:primary_key")[0..63]

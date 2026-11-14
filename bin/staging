@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Staging: a private copy of production on this machine, for testing against real data.
+#
+#   bin/staging refresh             replace the copy with fresh production data
+#   bin/staging up [<ref>]          run a version on the copy at http://localhost:3334
+#   bin/staging up --build          build the working tree and run that
+#   bin/staging up ... --worker     also run background jobs
+#   bin/staging down [--wipe]       stop staging (--wipe also deletes the copy)
+#   bin/staging dev                 run bin/dev (hot reload) on the copy
+#   bin/staging run <command...>    run a command against the copy, e.g. bin/rails console
+#   bin/staging bench <old> <new>   compare page speed of two versions on the copy
+#
+# <ref> is any git commit, branch or tag. Without one, `up` runs the version that
+# production runs. An image is built from a clean checkout of the commit if there
+# is none yet.
+#
+# The copy has its own database, files and Redis. Provider credentials in it are
+# replaced with placeholders, and the app containers have no internet access, so
+# nothing done here can reach a real bank, provider or mailbox.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+source script/deploy/lib.sh
+
+TAG=$(deployed_tag)
+
+ensure_copy() {
+  quiet staging up -d --wait db redis
+  staging_has_data || refresh_staging
+}
+
+# Environment for running the app from the working tree against the copy
+copy_env() {
+  local secret
+  secret=$(env_value SECRET_KEY_BASE)
+  export DB_HOST=127.0.0.1 DB_PORT="$STAGING_DB_PORT"
+  export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
+  POSTGRES_USER=$(env_value POSTGRES_USER); POSTGRES_USER="${POSTGRES_USER:-sure_user}"
+  POSTGRES_PASSWORD=$(env_value POSTGRES_PASSWORD)
+  POSTGRES_DB=$(env_value POSTGRES_DB); POSTGRES_DB="${POSTGRES_DB:-sure_production}"
+  export REDIS_URL="redis://127.0.0.1:$STAGING_REDIS_PORT/1"
+  export SELF_HOSTED=true
+  # Encrypted columns in the copy were written with keys derived from production's
+  # secret. Development has its own secret, so hand it production's for that purpose.
+  export STAGING_SECRET_KEY_BASE="$secret"
+  # Production turns on extra column encryption only when these are set; mirror it exactly.
+  local key value
+  for key in ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT; do
+    value=$(env_value "$key")
+    [ -z "$value" ] || export "$key=$value"
+  done
+}
+
+command="${1:-help}"
+[ $# -eq 0 ] || shift
+
+case "$command" in
+  refresh)
+    image_exists "$TAG" || die "no local image sure:$TAG; run bin/deploy first"
+    refresh_staging
+    echo "✓ Staging holds a fresh copy of production"
+    ;;
+
+  up)
+    worker="" build=0 ref=""
+    for arg in "$@"; do
+      case "$arg" in
+        --worker) worker="--profile worker" ;;
+        --build) build=1 ;;
+        -*) die "unknown option: $arg" ;;
+        *) ref="$arg" ;;
+      esac
+    done
+
+    if [ "$build" = 1 ]; then
+      TAG="$(tag_for HEAD)-wip"
+      step "Building sure:$TAG from the working tree"
+      BUILD_FULL_SHA=$(git rev-parse HEAD) quiet staging build web
+    elif [ -n "$ref" ]; then
+      TAG=$(ensure_image "$ref")
+    fi
+    image_exists "$TAG" || die "no local image sure:$TAG; run bin/deploy first, or pass a commit"
+
+    ensure_copy
+    step "Starting sure:$TAG on the copy"
+    migrate_checked staging || echo "  (continuing: this is the copy)"
+    # shellcheck disable=SC2086
+    start_staging $worker
+    echo "✓ sure:$TAG is running on the copy: http://localhost:$STAGING_PORT"
+    [ -n "$worker" ] || echo "  background jobs are off (add --worker to run them)"
+    ;;
+
+  down)
+    if [ "${1:-}" = "--wipe" ]; then
+      quiet staging --profile worker --profile bench down --volumes
+      echo "✓ Staging stopped and its copy of the data deleted"
+    else
+      quiet staging --profile worker --profile bench down
+      echo "✓ Staging stopped (the copy is kept)"
+    fi
+    ;;
+
+  dev)
+    ensure_copy
+    copy_env
+    echo "▸ bin/dev on the staging copy (database on port $STAGING_DB_PORT, Redis on $STAGING_REDIS_PORT)"
+    exec bin/dev "$@"
+    ;;
+
+  run)
+    [ $# -gt 0 ] || die "usage: bin/staging run <command...>"
+    ensure_copy
+    copy_env
+    exec "$@"
+    ;;
+
+  bench)
+    [ $# -ge 2 ] || die "usage: bin/staging bench <old-ref> <new-ref> [rounds]"
+    export BENCH_OLD BENCH_NEW
+    BENCH_OLD=$(ensure_image "$1")
+    BENCH_NEW=$(ensure_image "$2")
+    export BENCH_DIR="$PWD/script/bench" BENCH_OUT="$PWD/tmp/bench"
+    mkdir -p "$BENCH_OUT"
+    TAG="$BENCH_NEW"
+
+    refresh_staging
+    step "Preparing the benchmark"
+    migrate_checked staging || echo "  (continuing: this is the copy)"
+    staging run --rm --no-deps web-new bin/rails runner /bench/prepare.rb | tail -1 | sed 's/^/  /'
+
+    step "Measuring sure:$BENCH_OLD (twice, as a noise control) against sure:$BENCH_NEW"
+    quiet staging --profile bench up -d --wait web-old-a web-old-b web-new driver
+    staging exec -T -e ROUNDS="${3:-100}" driver ruby /bench/http_bench.rb
+    staging exec -T driver ruby /bench/analyze.rb /out/http.json
+    stop_staging_app
+    echo
+    echo "Raw timings: tmp/bench/http.json"
+    ;;
+
+  help|-h|--help)
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+
+  *)
+    die "unknown command: $command (see bin/staging help)"
+    ;;
+esac
