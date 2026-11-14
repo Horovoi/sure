@@ -8,7 +8,11 @@ Rails application for personal finance management with Plaid integration, multi-
 bin/dev              # Start development (Rails + Sidekiq + Tailwind)
 bin/rails console    # Rails console
 bin/rails test       # Run tests
+bin/deploy           # Build the current commit and run it as production on this machine
+bin/staging up       # Run a version on a private copy of production (http://localhost:3334)
 ```
+
+Production runs locally in Docker at http://localhost:3333. Read [Deploy and Staging](.claude/deploy.md) before deploying or touching Docker.
 
 ## Critical Rules
 
@@ -21,6 +25,13 @@ bin/rails test       # Run tests
 - `rails credentials:edit`
 - `rails db:migrate` (ask first)
 - `touch tmp/restart.txt`
+- `docker compose down -v` on the `sure` project, or anything else that deletes the `sure_*` volumes (production data)
+- `docker push`, or any build that pushes an image to a registry
+
+**Deploy:**
+- Deploy only when asked, with `bin/deploy` (never by hand with `docker compose`)
+- Migrations in production are run by `bin/deploy` only
+- To test against real data, use `bin/staging`, never production
 
 ## Before Opening a PR
 
@@ -34,6 +45,7 @@ Run all checks: `bin/rails test && bin/rubocop -a && bundle exec erb_lint ./app/
 ## Documentation
 
 - [Commands Reference](.claude/commands.md) - All development commands
+- [Deploy and Staging](.claude/deploy.md) - How production runs, deploying, the staging copy, benchmarks
 - [Architecture](.claude/architecture.md) - Domain model, APIs, sync system
 - [Frontend Guidelines](.claude/frontend.md) - Hotwire, components, Tailwind, i18n
 - [Testing](.claude/testing.md) - Testing philosophy and examples

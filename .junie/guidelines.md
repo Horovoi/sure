@@ -54,7 +54,7 @@ This is a personal finance application built in Ruby on Rails.  The primary doma
 The codebase runs in two distinct "modes", dictated by `Rails.application.config.app_mode`, which can be `managed` or `self_hosted`.
 
 - "Managed" - in managed mode, a team operates and manages servers for users
-- "Self Hosted" - in self hosted mode, users host the codebase on their own infrastructure, typically through Docker Compose.  We have an example [docker-compose.example.yml](docker-compose.example.yml) file that runs [Dockerfile](Dockerfile) for this mode.
+- "Self Hosted" - in self hosted mode, users host the codebase on their own infrastructure, typically through Docker Compose.  This copy runs that way on one machine: [docker-compose.prod.yml](docker-compose.prod.yml) runs [Dockerfile](Dockerfile), deployed with `bin/deploy` (see [.claude/deploy.md](.claude/deploy.md)).
 
 ## Families and Users
 

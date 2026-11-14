@@ -6,6 +6,8 @@ The app runs in two modes:
 - **Managed**: Team operates servers for users (`Rails.application.config.app_mode = "managed"`)
 - **Self Hosted**: Users run on their own infrastructure via Docker Compose (`app_mode = "self_hosted"`)
 
+This copy runs self hosted on one machine. See [deploy.md](deploy.md) for how it is deployed.
+
 ## Core Domain Model
 
 ```
