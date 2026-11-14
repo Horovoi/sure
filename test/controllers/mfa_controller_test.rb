@@ -6,6 +6,12 @@ class MfaControllerTest < ActionDispatch::IntegrationTest
     sign_in @user
   end
 
+  # MFA changes outside a request would sign out every session; run them as
+  # if made from the signed-in browser.
+  def as_signed_in_session(&block)
+    Current.set(session: @user.sessions.order(:created_at).last, &block)
+  end
+
   def sign_out
     @user.sessions.each do |session|
       delete session_path(session)
@@ -13,8 +19,10 @@ class MfaControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "redirects to root if MFA already enabled" do
-    @user.setup_mfa!
-    @user.enable_mfa!
+    as_signed_in_session do
+      @user.setup_mfa!
+      @user.enable_mfa!
+    end
 
     get new_mfa_path
     assert_redirected_to root_path
@@ -106,8 +114,10 @@ class MfaControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "disable removes MFA" do
-    @user.setup_mfa!
-    @user.enable_mfa!
+    as_signed_in_session do
+      @user.setup_mfa!
+      @user.enable_mfa!
+    end
 
     delete disable_mfa_path
 

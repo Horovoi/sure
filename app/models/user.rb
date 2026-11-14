@@ -25,6 +25,7 @@ class User < ApplicationRecord
   # SSO JIT users have password_digest = nil and authenticate via OIDC only.
   validates :password, presence: true, on: :create, unless: :skip_password_validation?
   validates :password, length: { minimum: 8 }, allow_nil: true
+  validates :password, confirmation: true, allow_nil: true # only checked when a confirmation is sent
   normalizes :email, with: ->(email) { email.strip.downcase }
   normalizes :unconfirmed_email, with: ->(email) { email&.strip&.downcase }
 
@@ -154,6 +155,18 @@ class User < ApplicationRecord
     api_keys.where(revoked_at: nil).update_all(revoked_at: now)
     Doorkeeper::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
     Doorkeeper::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+  end
+
+  # A password, email or MFA change signs out every other browser: a stolen
+  # session cookie must not outlive the credential change. The session that
+  # made the change stays signed in (unless it belongs to someone else, e.g.
+  # an impersonating admin, or there is none, e.g. a password reset link).
+  after_update_commit :revoke_other_sessions, if: :credentials_changed_on_save?
+
+  def revoke_other_sessions(keep: Current.session)
+    others = Session.where(user_id: id)
+    others = others.where.not(id: keep.id) if keep&.persisted? && keep.user_id == id && keep.active_impersonator_session_id.nil?
+    others.delete_all
   end
 
   def can_deactivate
@@ -306,6 +319,12 @@ class User < ApplicationRecord
   end
 
   private
+    def credentials_changed_on_save?
+      return false if saved_change_to_active? # deactivation revokes everything itself
+
+      saved_change_to_password_digest? || saved_change_to_email? || saved_change_to_otp_required?
+    end
+
     def skip_password_validation?
       skip_password_validation == true
     end
