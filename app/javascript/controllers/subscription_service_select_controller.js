@@ -60,16 +60,30 @@ export default class extends Controller {
   filter() {
     const query = this.inputTarget.value.toLowerCase().trim()
 
-    if (query === "") {
-      this.filteredServices = this.servicesValue
-    } else {
-      this.filteredServices = this.servicesValue.filter(service =>
+    const matches = query === ""
+      ? this.servicesValue
+      : this.servicesValue.filter(service =>
         service.name.toLowerCase().includes(query) ||
         service.domain.toLowerCase().includes(query)
       )
-    }
+
+    // Keep filteredServices in display order (grouped by sorted category), so
+    // the highlighted row and the one Enter picks share the same index.
+    this.filteredServices = this.groupByCategory(matches).flatMap(([, services]) => services)
+    // The old index pointed into the previous list
+    this.selectedIndex = -1
 
     this.render()
+  }
+
+  groupByCategory(services) {
+    const grouped = {}
+    services.forEach(service => {
+      const cat = service.category || "other"
+      if (!grouped[cat]) grouped[cat] = []
+      grouped[cat].push(service)
+    })
+    return Object.keys(grouped).sort().map(category => [category, grouped[category]])
   }
 
   render() {
@@ -82,21 +96,13 @@ export default class extends Controller {
       return
     }
 
-    // Group by category
-    const grouped = {}
-    this.filteredServices.forEach(service => {
-      const cat = service.category || "other"
-      if (!grouped[cat]) grouped[cat] = []
-      grouped[cat].push(service)
-    })
-
     let html = ""
     let index = 0
 
-    Object.keys(grouped).sort().forEach(category => {
+    this.groupByCategory(this.filteredServices).forEach(([category, services]) => {
       html += `<div class="px-3 py-1 text-xs font-medium text-subdued uppercase tracking-wider bg-surface-inset">${category}</div>`
 
-      grouped[category].forEach(service => {
+      services.forEach(service => {
         const isSelected = index === this.selectedIndex
         html += `
           <button type="button"
