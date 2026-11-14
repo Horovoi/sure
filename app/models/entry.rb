@@ -13,6 +13,12 @@ class Entry < ApplicationRecord
   validates :date, uniqueness: { scope: [ :account_id, :entryable_type ] }, if: -> { valuation? }
   validates :date, comparison: { greater_than: -> { min_supported_date } }
   validates :external_id, uniqueness: { scope: [ :account_id, :source ] }, if: -> { external_id.present? && source.present? }
+  validate :one_anchor_per_kind, if: :valuation?
+
+  # The opening anchor is where the balance history starts (and a linked account's current
+  # anchor is where it ends). Deleting one on its own silently changes every balance, so it is
+  # only removed together with its account (or import).
+  before_destroy :ensure_anchor_destroyable, prepend: true
 
   scope :visible, -> {
     joins(:account).where(accounts: { status: [ "draft", "active" ] })
@@ -147,4 +153,30 @@ class Entry < ApplicationRecord
       all.size
     end
   end
+
+  private
+    def protected_anchor?
+      return false unless valuation? && entryable
+
+      entryable.opening_anchor? || (entryable.current_anchor? && account&.linked?)
+    end
+
+    def ensure_anchor_destroyable
+      return if destroyed_by_association
+      return unless protected_anchor?
+
+      errors.add(:base, :anchor_not_deletable)
+      throw :abort
+    end
+
+    def one_anchor_per_kind
+      return unless entryable && (entryable.opening_anchor? || entryable.current_anchor?)
+      return unless new_record? || entryable.kind_changed?
+
+      others = Entry.where(account_id: account_id, entryable_type: "Valuation")
+        .where(entryable_id: Valuation.where(kind: entryable.kind).select(:id))
+      others = others.where.not(id: id) if persisted?
+
+      errors.add(:base, :duplicate_anchor) if others.exists?
+    end
 end

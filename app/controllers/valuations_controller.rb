@@ -11,7 +11,12 @@ class ValuationsController < ApplicationController
       dry_run: true
     )
 
-    render :confirm_create
+    if @reconciliation_dry_run.success?
+      render :confirm_create
+    else
+      @error_message = @reconciliation_dry_run.error_message
+      render :new, status: :unprocessable_entity
+    end
   end
 
   def confirm_update
@@ -26,7 +31,12 @@ class ValuationsController < ApplicationController
       dry_run: true
     )
 
-    render :confirm_update
+    if @reconciliation_dry_run.success?
+      render :confirm_update
+    else
+      @error_message = @reconciliation_dry_run.error_message
+      render :show, status: :unprocessable_entity
+    end
   end
 
   def create

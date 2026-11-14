@@ -47,7 +47,7 @@ class Account::OpeningBalanceManager
     attr_reader :account
 
     def opening_anchor_valuation
-      @opening_anchor_valuation ||= account.valuations.opening_anchor.includes(:entry).first
+      @opening_anchor_valuation ||= account.valuations.opening_anchor.includes(:entry).order("entries.date ASC, entries.created_at ASC").first
     end
 
     def oldest_entry_date

@@ -30,7 +30,13 @@ module EntryableResource
 
   def destroy
     account = @entry.account
-    @entry.destroy!
+
+    # An opening balance refuses to be deleted on its own (Entry#ensure_anchor_destroyable)
+    unless @entry.destroy
+      redirect_back_or_to account_path(account), alert: @entry.errors.full_messages.to_sentence
+      return
+    end
+
     @entry.sync_account_later
 
     redirect_back_or_to account_path(account), notice: t("account.entries.destroy.success")
