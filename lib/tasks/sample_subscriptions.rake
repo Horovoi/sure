@@ -88,7 +88,7 @@ namespace :sample_data do
         name: data[:name],
         amount: data[:amount],
         currency: "USD",
-        is_subscription: true,
+        subscription_state: "subscription",
         billing_cycle: data[:billing_cycle],
         expected_day_of_month: day,
         status: data[:status] || "active",

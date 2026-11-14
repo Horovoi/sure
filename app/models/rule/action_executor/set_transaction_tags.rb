@@ -13,9 +13,8 @@ class Rule::ActionExecutor::SetTransactionTags < Rule::ActionExecutor
 
     scope = transaction_scope
 
-    unless ignore_attribute_locks
-      scope = scope.enrichable(:tag_ids)
-    end
+    # A forced run (ignore_attribute_locks) may replace AI locks, never user locks
+    scope = scope.enrichable(:tag_ids, force: ignore_attribute_locks)
 
     count_modified_resources(scope) do |txn|
       # Merge the new tag with existing tags instead of replacing them
@@ -26,7 +25,8 @@ class Rule::ActionExecutor::SetTransactionTags < Rule::ActionExecutor
       txn.enrich_attribute(
         :tag_ids,
         merged_tag_ids,
-        source: "rule"
+        source: "rule",
+        force: ignore_attribute_locks
       )
     end
   end

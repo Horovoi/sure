@@ -9,15 +9,8 @@ class ApplyAllRulesJobTest < ActiveJob::TestCase
     @groceries_category = @family.categories.create!(name: "Groceries")
   end
 
-  test "applies all rules for a family" do
-    # Create a rule
-    rule = Rule.create!(
-      family: @family,
-      resource_type: "transaction",
-      effective_date: 1.day.ago.to_date,
-      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "Whole Foods") ],
-      actions: [ Rule::Action.new(action_type: "set_transaction_category", value: @groceries_category.id) ]
-    )
+  test "applies all active rules for a family" do
+    rule = create_rule(name: "Whole Foods")
 
     # Mock RuleJob to verify it gets called for each rule
     RuleJob.expects(:perform_now).with(rule, ignore_attribute_locks: true, execution_type: "manual").once
@@ -26,16 +19,40 @@ class ApplyAllRulesJobTest < ActiveJob::TestCase
   end
 
   test "applies all rules with custom execution type" do
-    rule = Rule.create!(
-      family: @family,
-      resource_type: "transaction",
-      effective_date: 1.day.ago.to_date,
-      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "Test") ],
-      actions: [ Rule::Action.new(action_type: "set_transaction_category", value: @groceries_category.id) ]
-    )
+    rule = create_rule(name: "Test")
 
     RuleJob.expects(:perform_now).with(rule, ignore_attribute_locks: true, execution_type: "scheduled").once
 
     ApplyAllRulesJob.perform_now(@family, execution_type: "scheduled")
   end
+
+  test "skips inactive rules" do
+    create_rule(name: "Draft", active: false)
+
+    RuleJob.expects(:perform_now).never
+
+    ApplyAllRulesJob.perform_now(@family)
+  end
+
+  test "a failing rule does not stop the others" do
+    first = create_rule(name: "First")
+    second = create_rule(name: "Second")
+
+    RuleJob.expects(:perform_now).with(first, ignore_attribute_locks: true, execution_type: "manual").raises(StandardError, "boom")
+    RuleJob.expects(:perform_now).with(second, ignore_attribute_locks: true, execution_type: "manual").once
+
+    assert_nothing_raised { ApplyAllRulesJob.perform_now(@family) }
+  end
+
+  private
+    def create_rule(name:, active: true)
+      Rule.create!(
+        family: @family,
+        resource_type: "transaction",
+        active: active,
+        effective_date: 1.day.ago.to_date,
+        conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: name) ],
+        actions: [ Rule::Action.new(action_type: "set_transaction_category", value: @groceries_category.id) ]
+      )
+    end
 end

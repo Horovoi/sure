@@ -1,5 +1,6 @@
 class TransactionsController < ApplicationController
   include EntryableResource
+  include CategoryRulePrompt
 
   USER_SETTABLE_KINDS = %w[standard one_time].freeze
 
@@ -340,11 +341,11 @@ class TransactionsController < ApplicationController
       )
 
       # Mark as subscription with detected billing cycle
-      recurring_transaction.update!(
-        is_subscription: true,
+      recurring_transaction.assign_attributes(
         billing_cycle: billing_cycle,
         category_id: find_subscriptions_category&.id
       )
+      recurring_transaction.approve!
 
       respond_to do |format|
         format.html do
@@ -377,18 +378,6 @@ class TransactionsController < ApplicationController
   end
 
   private
-    def needs_rule_notification?(transaction)
-      return false if Current.user.rule_prompts_disabled
-
-      if Current.user.rule_prompt_dismissed_at.present?
-        time_since_last_rule_prompt = Time.current - Current.user.rule_prompt_dismissed_at
-        return false if time_since_last_rule_prompt < 1.day
-      end
-
-      transaction.saved_change_to_category_id? && transaction.category_id.present? &&
-      transaction.eligible_for_category_rule?
-    end
-
     def entry_params
       entry_params = params.require(:entry).permit(
         :name, :date, :amount, :currency, :excluded, :notes, :nature, :entryable_type,

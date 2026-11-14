@@ -42,6 +42,7 @@ class Rule::ActionExecutor::AutoCategorize < Rule::ActionExecutor
 
     enrichable_transactions.in_batches(of: batch_size).each_with_index do |transactions, idx|
       Rails.logger.info("Scheduling auto-categorization for batch #{idx + 1} of #{enrichable_transactions.count}")
+      rule_run&.register_job!
       rule.family.auto_categorize_transactions_later(transactions, rule_run_id: rule_run&.id)
       jobs_count += 1
     end

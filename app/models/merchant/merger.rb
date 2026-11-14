@@ -42,6 +42,12 @@ class Merchant::Merger
         # Reassign family's transactions to target
         family.transactions.where(merchant_id: source.id).update_all(merchant_id: target_merchant.id)
 
+        # Move the family's recurring rows and subscriptions along with them
+        RecurringTransaction.reassign_merchant!(
+          family.recurring_transactions.where(merchant_id: source.id),
+          to_merchant: target_merchant
+        )
+
         # Delete FamilyMerchant, keep ProviderMerchant (it may be used by other families)
         source.destroy! if source.is_a?(FamilyMerchant)
 

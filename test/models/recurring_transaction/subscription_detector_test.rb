@@ -115,7 +115,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false
+      subscription_state: "pattern"
     )
 
     RecurringTransaction::SubscriptionDetector.detect_for_family(@family)
@@ -133,7 +133,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false
+      subscription_state: "pattern"
     )
 
     RecurringTransaction::SubscriptionDetector.detect_for_family(@family)
@@ -152,7 +152,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     # Create non-subscription with same merchant but different amount
@@ -164,7 +164,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false
+      subscription_state: "pattern"
     )
 
     RecurringTransaction::SubscriptionDetector.detect_for_family(@family)
@@ -183,7 +183,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     # Create non-subscription with similar name "iCloud" (without plus)
@@ -195,7 +195,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false
+      subscription_state: "pattern"
     )
 
     RecurringTransaction::SubscriptionDetector.detect_for_family(@family)
@@ -214,7 +214,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     # Create non-subscription with same name but different currency (e.g., local currency)
@@ -226,7 +226,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false
+      subscription_state: "pattern"
     )
 
     RecurringTransaction::SubscriptionDetector.detect_for_family(@family)
@@ -247,8 +247,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false,
-      suggestion_status: "dismissed",
+      subscription_state: "dismissed",
       dismissed_at: 1.day.ago
     )
 
@@ -269,8 +268,7 @@ class RecurringTransaction::SubscriptionDetectorTest < ActiveSupport::TestCase
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: false,
-      suggestion_status: "dismissed",
+      subscription_state: "dismissed",
       dismissed_at: 1.day.ago
     )
 

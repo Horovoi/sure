@@ -29,9 +29,10 @@ class Family::AutoCategorizer
       family: family
     )
 
+    # Raise so the rule run is reported as failed rather than "success, 0 modified".
     unless result.success?
       Rails.logger.error("Failed to auto-categorize transactions for family #{family.id}: #{result.error.message}")
-      return 0
+      raise Error, "Auto-categorization failed: #{result.error.message}"
     end
 
     modified_count = 0
@@ -46,7 +47,7 @@ class Family::AutoCategorizer
           category_id,
           source: "ai"
         )
-        transaction.lock_attr!(:category_id)
+        transaction.lock_attr!(:category_id, source: "ai")
         # enrich_attribute returns true if the transaction was actually modified
         modified_count += 1 if was_modified
       end

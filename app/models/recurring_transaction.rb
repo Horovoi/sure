@@ -1,5 +1,6 @@
 class RecurringTransaction < ApplicationRecord
   include Monetizable
+  include AASM
 
   belongs_to :family
   belongs_to :merchant, optional: true
@@ -20,17 +21,49 @@ class RecurringTransaction < ApplicationRecord
   enum :status, { active: "active", inactive: "inactive" }
   enum :billing_cycle, { monthly: "monthly", yearly: "yearly" }, prefix: true
 
+  # Why an inactive row is inactive. Only stale rows come back on their own.
+  INACTIVE_REASONS = %w[user stale].freeze
+
+  # Lifecycle of a recurring row as a subscription:
+  #   pattern      - detected recurring pattern, not a subscription
+  #   suggested    - suggested to the user as a subscription
+  #   dismissed    - suggestion the user dismissed; it stays dismissed
+  #   subscription - confirmed subscription (approved or created by the user)
+  # is_subscription and suggestion_status are legacy mirrors of this state,
+  # written on save for the previous app version; nothing reads them.
+  aasm :subscription_state, column: :subscription_state, whiny_persistence: true do
+    state :pattern, initial: true
+    state :suggested
+    state :dismissed
+    state :subscription
+
+    event :suggest do
+      transitions from: :pattern, to: :suggested
+    end
+
+    event :approve do
+      transitions from: %i[pattern suggested dismissed], to: :subscription
+    end
+
+    event :dismiss, before: -> { self.dismissed_at = Time.current } do
+      transitions from: :suggested, to: :dismissed
+    end
+
+    event :restore, before: -> { self.dismissed_at = nil } do
+      transitions from: :dismissed, to: :suggested
+    end
+  end
+
   validates :amount, presence: true
   validates :currency, presence: true
   validates :expected_day_of_month, presence: true, numericality: { greater_than: 0, less_than_or_equal_to: 31 }
   validates :expected_month, presence: true, if: -> { is_subscription? && billing_cycle_yearly? }
   validates :expected_month, numericality: { in: 1..12 }, allow_nil: true
+  validates :inactive_reason, inclusion: { in: INACTIVE_REASONS }, allow_nil: true
   validate :merchant_or_name_present
   validate :amount_variance_consistency
 
-  attr_accessor :allow_past_next_expected_date
-
-  before_save :ensure_next_expected_date_in_future
+  before_save :write_legacy_subscription_columns
 
   def merchant_or_name_present
     if merchant_id.blank? && name.blank?
@@ -50,11 +83,26 @@ class RecurringTransaction < ApplicationRecord
 
   scope :for_family, ->(family) { where(family: family) }
   scope :expected_soon, -> { active.where("next_expected_date <= ?", 1.month.from_now) }
-  scope :subscriptions, -> { where(is_subscription: true) }
+  scope :subscriptions, -> { where(subscription_state: "subscription") }
   scope :active_subscriptions, -> { subscriptions.active }
-  scope :suggested, -> { where(suggestion_status: "suggested") }
-  scope :dismissed, -> { where(suggestion_status: "dismissed") }
-  scope :confirmed, -> { where(suggestion_status: nil) }
+
+  # Rows with the same identity as the given merchant or name and currency.
+  # Amount is not part of the identity: it drifts with FX rates and prices.
+  scope :with_identity, ->(merchant_id:, name:, currency:) {
+    base = where(currency: currency)
+    merchant_id.present? ? base.where(merchant_id: merchant_id) : base.where(merchant_id: nil, name: name)
+  }
+
+  def is_subscription?
+    subscription?
+  end
+  alias_method :is_subscription, :is_subscription?
+
+  # Rows the user created or curated. They use the longer stale threshold
+  # and are never deleted automatically.
+  def user_managed?
+    manual? || subscription?
+  end
 
   # Class methods for identification and cleanup
   # Schedules pattern identification with debounce to run after all syncs complete
@@ -70,6 +118,39 @@ class RecurringTransaction < ApplicationRecord
 
   def self.cleanup_stale_for(family)
     Cleaner.new(family).cleanup_stale_transactions
+  end
+
+  # Moves recurring rows off a merchant that is being merged, converted,
+  # unlinked or deleted, so subscriptions survive with their settings.
+  # With to_merchant the rows point at it; without, they become name-based
+  # (keeping their name, or taking fallback_name). When the move collides
+  # with a row that already has the target identity and amount, the more
+  # informative row is kept and the other one's transactions move to it.
+  def self.reassign_merchant!(scope, to_merchant: nil, fallback_name: nil)
+    scope.find_each do |row|
+      target = to_merchant ? { merchant_id: to_merchant.id, name: nil } : { merchant_id: nil, name: row.name.presence || fallback_name }
+
+      duplicate = where(family_id: row.family_id, currency: row.currency, amount: row.amount)
+        .where(target)
+        .where.not(id: row.id)
+        .first
+
+      if duplicate
+        keeper, loser = [ row, duplicate ].sort_by(&:merge_rank)
+        Transaction.where(recurring_transaction_id: loser.id).update_all(recurring_transaction_id: keeper.id)
+        loser.destroy!
+        keeper.update!(target) if keeper == row
+      else
+        row.update!(target)
+      end
+    end
+  end
+
+  # Lower ranks are more informative: rows the user manages, then dismissed
+  # and suggested rows, then the most recent occurrence.
+  def merge_rank
+    state_rank = { "dismissed" => 0, "suggested" => 1 }.fetch(subscription_state, 2)
+    [ user_managed? ? 0 : 1, state_rank, -(last_occurrence_date&.jd || 0) ]
   end
 
   # Create a manual recurring transaction from an existing transaction
@@ -241,19 +322,24 @@ class RecurringTransaction < ApplicationRecord
   # Check if this recurring transaction should be marked inactive
   def should_be_inactive?
     return false if last_occurrence_date.nil?
-    # Manual recurring transactions have a longer threshold
-    threshold = manual? ? 6.months.ago : 2.months.ago
+    # Rows the user created or curated have a longer threshold
+    threshold = user_managed? ? 6.months.ago : 2.months.ago
     last_occurrence_date < threshold
   end
 
-  # Mark as inactive
-  def mark_inactive!
-    update!(status: "inactive")
+  # Mark as inactive. reason is "user" (paused by the user) or "stale"
+  # (no recent occurrence, set by the Cleaner).
+  def mark_inactive!(reason: "user")
+    update!(status: "inactive", inactive_reason: reason)
   end
 
-  # Mark as active
+  # Mark as active. A resumed row starts again from its next future date
+  # instead of back-filling the periods it was inactive for.
   def mark_active!
-    update!(status: "active")
+    self.status = "active"
+    self.inactive_reason = nil
+    roll_next_expected_date_forward
+    save!
   end
 
   # Approve a subscription suggestion
@@ -261,29 +347,44 @@ class RecurringTransaction < ApplicationRecord
     # Set category to "Subscriptions" if available
     subscriptions_category = family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")
 
-    updates = {
-      suggestion_status: nil,
-      is_subscription: true,
-      category_id: subscriptions_category&.id || category_id
-    }
+    self.category_id = subscriptions_category&.id || category_id
 
     # Auto-set default_account from inferred_account if not already set
     if default_account_id.blank? && inferred_account_id.present?
-      updates[:default_account_id] = inferred_account_id
+      self.default_account_id = inferred_account_id
     end
 
     # Use detected base currency if requested
     if use_base_currency && detected_base_currency.present? && detected_base_amount.present?
-      updates[:currency] = detected_base_currency
-      updates[:amount] = detected_base_amount
+      self.currency = detected_base_currency
+      self.amount = detected_base_amount
     end
 
-    update!(updates)
+    # The suggestion may have waited past its date. Start from the next one,
+    # rather than generating a transaction for a period nobody confirmed.
+    roll_next_expected_date_forward
+
+    approve!
   end
 
   # Dismiss a subscription suggestion
   def dismiss_suggestion!
-    update!(suggestion_status: "dismissed", dismissed_at: Time.current)
+    dismiss!
+  end
+
+  # Restore a dismissed suggestion
+  def restore_suggestion!
+    restore!
+  end
+
+  # Move next_expected_date to the first billing date after today.
+  # Callers decide when this is right (a pattern being refreshed, a
+  # subscription resumed or approved); an overdue subscription is otherwise
+  # left overdue so GenerateSubscriptionTransactionsJob can generate it.
+  def roll_next_expected_date_forward
+    return if next_expected_date.present? && next_expected_date > Date.current
+
+    self.next_expected_date = billing_cycle_yearly? ? calculate_future_yearly_date : calculate_future_monthly_date
   end
 
   # Update based on a new transaction occurrence
@@ -298,6 +399,7 @@ class RecurringTransaction < ApplicationRecord
 
     self.occurrence_count += 1
     self.status = "active"
+    self.inactive_reason = nil
     save!
   end
 
@@ -433,8 +535,9 @@ class RecurringTransaction < ApplicationRecord
 
   # Check if this subscription can auto-generate transactions
   # Only for accounts without active provider connections
+  # The single rule GenerateSubscriptionTransactionsJob uses.
   def can_auto_generate?
-    default_account.present? && default_account.unlinked?
+    default_account.present? && default_account.active? && default_account.unlinked?
   end
 
   # Get the amount to use for generating transactions
@@ -444,13 +547,18 @@ class RecurringTransaction < ApplicationRecord
   end
 
   # Generate a transaction for the current due date
-  # Returns the created Entry or nil if already exists
+  # Returns the created Entry, or nil if one already exists for the period
+  # or the date is still in the future.
+  # The row lock makes the period check and the insert atomic, so a double
+  # click and an overlapping cron run cannot both create the transaction.
   def generate_transaction!(for_date: next_expected_date)
     return nil unless default_account.present?
-    return nil if transaction_exists_for_period?(for_date)
+    return nil if for_date.nil? || for_date > Date.current
 
     entry = nil
-    ActiveRecord::Base.transaction do
+    with_lock do
+      next if transaction_exists_for_period?(for_date)
+
       transaction_amount = amount_for_transaction
 
       sub_money = Money.new(transaction_amount, currency)
@@ -521,18 +629,9 @@ class RecurringTransaction < ApplicationRecord
       currency
     end
 
-    # Ensure next_expected_date is always in the future
-    def ensure_next_expected_date_in_future
-      return unless next_expected_date.present?
-      return if allow_past_next_expected_date
-      return if next_expected_date > Date.current
-
-      # Recalculate based on billing cycle
-      if billing_cycle_yearly?
-        self.next_expected_date = calculate_future_yearly_date
-      else
-        self.next_expected_date = calculate_future_monthly_date
-      end
+    def write_legacy_subscription_columns
+      self.is_subscription = subscription?
+      self.suggestion_status = suggested? ? "suggested" : (dismissed? ? "dismissed" : nil)
     end
 
     def calculate_future_yearly_date

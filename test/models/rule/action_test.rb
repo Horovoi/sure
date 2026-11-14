@@ -19,6 +19,26 @@ class Rule::ActionTest < ActiveSupport::TestCase
     @rule_scope = @account.transactions
   end
 
+  test "forced set_transaction_category replaces AI-set categories but keeps user edits" do
+    other_category = @family.categories.create!(name: "Other")
+    @txn1.update!(category: other_category)
+    @txn1.lock_attr!(:category_id, source: "ai")
+    @txn2.update!(category: other_category)
+    @txn2.lock_attr!(:category_id)
+
+    action = Rule::Action.new(
+      rule: @transaction_rule,
+      action_type: "set_transaction_category",
+      value: @grocery_category.id
+    )
+
+    action.apply(@rule_scope, ignore_attribute_locks: true)
+
+    assert_equal @grocery_category.id, @txn1.reload.category_id
+    assert_not @txn1.locked?(:category_id)
+    assert_equal other_category.id, @txn2.reload.category_id
+  end
+
   test "set_transaction_category" do
     # Does not modify transactions that are locked (user edited them)
     @txn1.lock_attr!(:category_id)

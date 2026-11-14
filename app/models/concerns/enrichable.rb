@@ -9,22 +9,47 @@
 # If a Rule tells us to set the category to "Groceries", but the user later overrides
 # a transaction with a category of "Food", we should not override the category again.
 #
+# Lock format: locked_attributes is { attr => { "source" => ..., "locked_at" => ... } }.
+# The source says who locked it: "user" (an edit by the user) or "ai" (an AI
+# enrichment). Older rows store a bare timestamp; those count as "user".
+# A forced enrichment (a rule the user applies by hand) may replace a lock
+# that is not a user lock, and never a user lock.
+#
 module Enrichable
   extend ActiveSupport::Concern
 
   InvalidAttributeError = Class.new(StandardError)
 
+  USER_LOCK_SOURCE = "user".freeze
+
   included do
-    scope :enrichable, ->(attrs) {
-      attrs = Array(attrs).map(&:to_s)
-      json_condition = attrs.each_with_object({}) { |attr, hash| hash[attr] = true }
-      where.not(Arel.sql("#{table_name}.locked_attributes ?| array[:keys]"), keys: attrs)
+    scope :enrichable, ->(attrs, force: false) {
+      where(Enrichable.unlocked_condition(table_name, attrs, force: force))
     }
   end
 
+  # SQL condition: none of attrs is locked in table's locked_attributes.
+  # With force, only user locks (including legacy timestamp locks) count.
+  def self.unlocked_condition(table, attrs, force: false)
+    connection = ActiveRecord::Base.connection
+    column = "#{connection.quote_table_name(table)}.locked_attributes"
+    user = connection.quote(USER_LOCK_SOURCE)
+
+    conditions = Array(attrs).map do |attr|
+      key = connection.quote(attr.to_s)
+      if force
+        "NOT (#{column} ? #{key} AND COALESCE(#{column} -> #{key} ->> 'source', #{user}) = #{user})"
+      else
+        "NOT (#{column} ? #{key})"
+      end
+    end
+
+    Arel.sql(conditions.join(" AND "))
+  end
+
   # Convenience method for a single attribute
-  def enrich_attribute(attr, value, source:, metadata: {})
-    enrich_attributes({ attr => value }, source:, metadata:)
+  def enrich_attribute(attr, value, source:, metadata: {}, force: false)
+    enrich_attributes({ attr => value }, source:, metadata:, force:)
   end
 
   # Enriches and logs all attributes that:
@@ -32,11 +57,15 @@ module Enrichable
   # - Are not ignored
   # - Have changed value from the last saved value
   # Returns true if any attributes were actually changed, false otherwise
-  def enrich_attributes(attrs, source:, metadata: {})
+  # With force, attributes locked by a non-user source are enriched too, and
+  # their lock is released (the new value no longer comes from that source).
+  def enrich_attributes(attrs, source:, metadata: {}, force: false)
     # Track current values before modification for virtual attributes (like tag_ids)
     current_values = {}
     enrichable_attrs = Array(attrs).reject do |attr_key, attr_value|
-      if locked?(attr_key) || ignored_enrichable_attributes.include?(attr_key)
+      blocked_by_lock = locked?(attr_key) && !(force && !user_locked?(attr_key))
+
+      if blocked_by_lock || ignored_enrichable_attributes.include?(attr_key)
         true
       else
         # For virtual attributes (like tag_ids), use the getter method
@@ -64,6 +93,10 @@ module Enrichable
     # A savepoint, so a failed save also undoes the enrichment log rows and the join
     # rows that virtual attributes (like tag_ids) write on assignment.
     ActiveRecord::Base.transaction(requires_new: true) do
+      # Attributes this enrichment may overwrite release their (non-user) locks
+      released = enrichable_attrs.map { |attr, _| attr.to_s }.select { |attr| locked?(attr) }
+      self.locked_attributes = locked_attributes.except(*released) if released.any?
+
       enrichable_attrs.each do |attr, value|
         self.send("#{attr}=", value)
 
@@ -118,8 +151,20 @@ module Enrichable
     !locked?(attr)
   end
 
-  def lock_attr!(attr)
-    update!(locked_attributes: locked_attributes.merge(attr.to_s => Time.current))
+  # Who locked attr: "user", "ai", ... or nil when it is not locked.
+  def lock_source(attr)
+    value = locked_attributes[attr.to_s]
+    return nil if value.blank?
+
+    value.is_a?(Hash) ? (value["source"].presence || USER_LOCK_SOURCE) : USER_LOCK_SOURCE
+  end
+
+  def user_locked?(attr)
+    lock_source(attr) == USER_LOCK_SOURCE
+  end
+
+  def lock_attr!(attr, source: USER_LOCK_SOURCE)
+    update!(locked_attributes: locked_attributes.merge(attr.to_s => { "source" => source.to_s, "locked_at" => Time.current.iso8601 }))
   end
 
   def unlock_attr!(attr)
@@ -133,16 +178,24 @@ module Enrichable
   end
 
   private
+    # Upsert against the unique (enrichable, source, attribute) index, so a
+    # rule and an AI job writing the same record at once cannot collide.
     def log_enrichment(attribute_name:, attribute_value:, source:, metadata: {})
-      de = DataEnrichment.find_or_create_by(
-        enrichable: self,
-        attribute_name: attribute_name,
-        source: source,
+      now = Time.current
+      DataEnrichment.upsert(
+        {
+          enrichable_type: self.class.polymorphic_name,
+          enrichable_id: id,
+          attribute_name: attribute_name.to_s,
+          source: source.to_s,
+          value: attribute_value,
+          metadata: metadata,
+          created_at: now,
+          updated_at: now
+        },
+        unique_by: %i[enrichable_id enrichable_type source attribute_name],
+        update_only: %i[value metadata]
       )
-
-      de.value = attribute_value
-      de.metadata = metadata
-      de.save
     end
 
     def ignored_enrichable_attributes

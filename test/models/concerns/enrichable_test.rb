@@ -96,4 +96,51 @@ class EnrichableTest < ActiveSupport::TestCase
     assert account.new_record?
     assert_equal "Filled in", account.name
   end
+
+  test "locks record their source, and legacy timestamp locks count as user locks" do
+    @enrichable.lock_attr!(:name, source: "ai")
+    assert_equal "ai", @enrichable.lock_source(:name)
+    refute @enrichable.user_locked?(:name)
+
+    @enrichable.update!(locked_attributes: { "name" => Time.current.iso8601 })
+    assert_equal "user", @enrichable.lock_source(:name)
+    assert @enrichable.user_locked?(:name)
+  end
+
+  test "forced enrichment replaces an AI lock and releases it" do
+    @enrichable.lock_attr!(:name, source: "ai")
+
+    refute @enrichable.enrich_attribute(:name, "Not forced", source: "rule")
+    assert @enrichable.enrich_attribute(:name, "Forced", source: "rule", force: true)
+
+    @enrichable.reload
+    assert_equal "Forced", @enrichable.name
+    refute @enrichable.locked?(:name)
+  end
+
+  test "forced enrichment never replaces a user lock" do
+    @enrichable.lock_attr!(:name)
+
+    refute @enrichable.enrich_attribute(:name, "Forced", source: "rule", force: true)
+    assert_not_equal "Forced", @enrichable.reload.name
+  end
+
+  test "forced enrichable scope excludes only user locks" do
+    @enrichable.lock_attr!(:name, source: "ai")
+    refute_includes Account.enrichable(:name), @enrichable
+    assert_includes Account.enrichable(:name, force: true), @enrichable
+
+    @enrichable.update!(locked_attributes: { "name" => Time.current.iso8601 })
+    refute_includes Account.enrichable(:name, force: true), @enrichable
+  end
+
+  test "enrichment log is upserted per source and attribute" do
+    @enrichable.enrich_attribute(:name, "First", source: "rule")
+
+    assert_no_difference "DataEnrichment.count" do
+      @enrichable.enrich_attribute(:name, "Second", source: "rule")
+    end
+
+    assert_equal "Second", DataEnrichment.find_by(enrichable: @enrichable, attribute_name: "name", source: "rule").value
+  end
 end

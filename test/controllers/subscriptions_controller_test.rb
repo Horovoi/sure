@@ -14,7 +14,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "monthly"
     )
   end
@@ -35,7 +35,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "inactive",
-      is_subscription: true,
+      subscription_state: "subscription",
       billing_cycle: "monthly"
     )
 
@@ -148,6 +148,45 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
     assert @subscription.reload.inactive?
   end
 
+  test "create marks a hand-made subscription as a subscription" do
+    post subscriptions_url, params: {
+      recurring_transaction: {
+        name: "Gym", amount: 30, currency: "USD", billing_cycle: "monthly", expected_day_of_month: 3
+      }
+    }
+
+    created = @family.recurring_transactions.find_by!(name: "Gym")
+    assert created.subscription?
+    assert created.user_managed?
+  end
+
+  test "skip_occurrence advances one period from the current expected date" do
+    @subscription.update!(next_expected_date: 2.days.ago.to_date, last_occurrence_date: 2.months.ago.to_date)
+
+    post skip_occurrence_subscription_url(@subscription)
+
+    assert_equal 2.days.ago.to_date.next_month.change(day: 5), @subscription.reload.next_expected_date
+  end
+
+  test "toggle_status pause is not undone by the identifier" do
+    post toggle_status_subscription_url(@subscription)
+
+    @subscription.reload
+    assert @subscription.inactive?
+    assert_equal "user", @subscription.inactive_reason
+  end
+
+  test "record_transaction refuses a subscription that is not due" do
+    @subscription.update!(default_account: accounts(:depository), next_expected_date: 5.days.from_now.to_date)
+
+    assert_no_difference "Entry.count" do
+      post record_transaction_subscription_url(@subscription)
+    end
+
+    assert_redirected_to subscriptions_path
+    assert_equal I18n.t("subscriptions.record_transaction.not_due"), flash[:alert]
+  end
+
   test "cannot access other family subscriptions" do
     other_family = families(:empty)
     other_subscription = other_family.recurring_transactions.create!(
@@ -158,7 +197,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
       status: "active",
-      is_subscription: true
+      subscription_state: "subscription"
     )
 
     get edit_subscription_url(other_subscription)
@@ -174,7 +213,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 15,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "suggested"
+      subscription_state: "suggested"
     )
     suggestion2 = @family.recurring_transactions.create!(
       name: "Netflix",
@@ -183,7 +222,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 20,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "suggested"
+      subscription_state: "suggested"
     )
 
     assert_equal 2, @family.recurring_transactions.suggested.count
@@ -205,7 +244,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 15,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "suggested"
+      subscription_state: "suggested"
     )
 
     # Create dismissed subscription
@@ -216,7 +255,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 20,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "dismissed",
+      subscription_state: "dismissed",
       dismissed_at: 1.day.ago
     )
 
@@ -234,7 +273,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 15,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "dismissed",
+      subscription_state: "dismissed",
       dismissed_at: 1.day.ago
     )
 
@@ -259,7 +298,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 15,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "dismissed",
+      subscription_state: "dismissed",
       dismissed_at: 1.day.ago
     )
 
@@ -278,7 +317,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 1,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "dismissed",
+      subscription_state: "dismissed",
       dismissed_at: 1.day.ago
     )
 
@@ -295,7 +334,7 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
       expected_day_of_month: 15,
       last_occurrence_date: Date.current,
       next_expected_date: 1.month.from_now,
-      suggestion_status: "dismissed",
+      subscription_state: "dismissed",
       dismissed_at: 1.day.ago
     )
 
