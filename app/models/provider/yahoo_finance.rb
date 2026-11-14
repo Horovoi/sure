@@ -40,8 +40,10 @@ class Provider::YahooFinance < Provider
 
   def healthy?
     begin
-      # Test with a known stable ticker (Apple)
-      response = client.get("#{base_url}/v8/finance/chart/AAPL") do |req|
+      # Test with a known stable ticker (Apple). One attempt only: this runs while the
+      # hosting settings page renders, and the usual five retries with backoff would
+      # hold that page for half a minute whenever Yahoo cannot be reached.
+      response = client(retries: 0).get("#{base_url}/v8/finance/chart/AAPL") do |req|
         req.params["interval"] = "1d"
         req.params["range"] = "1d"
       end
@@ -494,10 +496,11 @@ class Provider::YahooFinance < Provider
       end
     end
 
-    def client
-      @client ||= Faraday.new(url: base_url, ssl: self.class.faraday_ssl_options) do |faraday|
+    def client(retries: max_retries)
+      @clients ||= {}
+      @clients[retries] ||= Faraday.new(url: base_url, ssl: self.class.faraday_ssl_options) do |faraday|
         faraday.request(:retry, {
-          max: max_retries,
+          max: retries,
           interval: retry_interval,
           interval_randomness: 0.5,
           backoff_factor: 2,

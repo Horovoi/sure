@@ -28,6 +28,13 @@ class Provider::YahooFinanceTest < ActiveSupport::TestCase
     assert_not @provider.healthy?
   end
 
+  test "healthy? asks once and does not retry when Yahoo cannot be reached" do
+    request = stub_request(:get, %r{/v8/finance/chart/AAPL}).to_timeout
+
+    assert_not @provider.healthy?
+    assert_requested request, times: 1
+  end
+
   # ================================
   #      Exchange Rate Tests
   # ================================
