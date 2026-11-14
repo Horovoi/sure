@@ -201,6 +201,13 @@ class TransactionsController < ApplicationController
       return
     end
 
+    # Deleting a transfer leg would turn the other leg into ordinary income or spending
+    if @transaction.transfer.present?
+      flash[:alert] = t("transactions.convert_to_trade.errors.transfer_leg")
+      redirect_back_or_to transactions_path
+      return
+    end
+
     # Resolve security before transaction
     security = resolve_security_for_conversion
     return if performed? # Early exit if redirect already happened
@@ -238,9 +245,12 @@ class TransactionsController < ApplicationController
         )
       )
 
-      # Mark original transaction as excluded (soft delete)
-      @entry.update!(excluded: true)
+      # The trade replaces the transaction. Balances count every entry (excluded ones too), so
+      # keeping the original would move the cash twice.
+      @entry.destroy!
     end
+
+    @entry.account.sync_later(window_start_date: @entry.date)
 
     flash[:notice] = t("transactions.convert_to_trade.success")
     redirect_to account_path(@entry.account), status: :see_other
