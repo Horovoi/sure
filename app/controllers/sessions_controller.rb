@@ -3,6 +3,8 @@ class SessionsController < ApplicationController
 
   before_action :set_session, only: :destroy
   skip_authentication only: %i[index new create openid_connect failure post_logout]
+  # A user who has not finished onboarding must still be able to sign out
+  skip_before_action :require_onboarding_and_upgrade, only: :destroy
 
   layout "auth"
 

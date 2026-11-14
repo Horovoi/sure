@@ -18,4 +18,14 @@ class OnboardableTest < ActionDispatch::IntegrationTest
     get root_path
     assert_response :success
   end
+
+  test "a user who has not finished onboarding can sign out" do
+    @user.update!(onboarded_at: nil)
+
+    delete session_path(@user.sessions.order(:created_at).last)
+
+    assert_redirected_to new_session_path
+    get root_path
+    assert_redirected_to new_session_path
+  end
 end

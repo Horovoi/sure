@@ -10,6 +10,40 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_url
   end
 
+  test "client cannot set or clear onboarding timestamps directly" do
+    onboarded_at = @user.onboarded_at
+    assert_not_nil onboarded_at
+
+    patch user_url(@user), params: { user: { onboarded_at: "", set_onboarding_goals_at: "", set_onboarding_preferences_at: 1.year.ago } }
+
+    @user.reload
+    assert_equal onboarded_at.to_i, @user.onboarded_at.to_i
+  end
+
+  test "server stamps the onboarding step the user finished" do
+    @user.update!(onboarded_at: nil, set_onboarding_preferences_at: nil, set_onboarding_goals_at: nil)
+
+    patch user_url(@user), params: { user: { onboarding_step: "preferences", redirect_to: "goals" } }
+    assert_redirected_to goals_onboarding_url
+    assert_not_nil @user.reload.set_onboarding_preferences_at
+    assert_nil @user.onboarded_at
+
+    patch user_url(@user), params: { user: { onboarding_step: "goals", redirect_to: "home" } }
+    assert_redirected_to root_url
+    @user.reload
+    assert_not_nil @user.set_onboarding_goals_at
+    assert_not_nil @user.onboarded_at
+  end
+
+  test "goals step finishes onboarding in managed mode without a missing trial route" do
+    Rails.configuration.stubs(:app_mode).returns("managed".inquiry)
+    @user.update!(onboarded_at: nil)
+
+    get goals_onboarding_url
+    assert_response :success
+    assert_select "input[name='user[redirect_to]'][value='home']"
+  end
+
   test "can update user profile" do
     patch user_url(@user), params: {
       user: {

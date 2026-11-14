@@ -26,7 +26,8 @@ class UsersController < ApplicationController
       end
     else
       was_ai_enabled = @user.ai_enabled
-      @user.update!(user_params.except(:redirect_to, :delete_profile_image))
+      @user.assign_attributes(onboarding_step_timestamps)
+      @user.update!(user_params.except(:redirect_to, :delete_profile_image, :onboarding_step))
       @user.profile_image.purge if should_purge_profile_image?
 
       # Add a special notice if AI was just enabled or disabled
@@ -82,12 +83,27 @@ class UsersController < ApplicationController
         redirect_to settings_preferences_path, notice: notice
       when "goals"
         redirect_to goals_onboarding_path
-      when "trial"
-        redirect_to trial_onboarding_path
       when "ai_prompts"
         redirect_to settings_ai_prompts_path, notice: notice
       else
         redirect_to settings_profile_path, notice: notice
+      end
+    end
+
+    # The server stamps onboarding progress; the client only names the step
+    # it just finished.
+    def onboarding_step_timestamps
+      now = Time.current
+
+      case user_params[:onboarding_step]
+      when "preferences"
+        { set_onboarding_preferences_at: now }
+      when "goals"
+        { set_onboarding_goals_at: now, onboarded_at: now }
+      when "invitation"
+        { onboarded_at: now }
+      else
+        {}
       end
     end
 
@@ -106,8 +122,8 @@ class UsersController < ApplicationController
 
     def user_params
       params.require(:user).permit(
-        :first_name, :last_name, :email, :profile_image, :redirect_to, :delete_profile_image, :onboarded_at,
-        :show_sidebar, :default_period, :default_account_order, :show_ai_sidebar, :ai_enabled, :theme, :set_onboarding_preferences_at, :set_onboarding_goals_at,
+        :first_name, :last_name, :email, :profile_image, :redirect_to, :delete_profile_image, :onboarding_step,
+        :show_sidebar, :default_period, :default_account_order, :show_ai_sidebar, :ai_enabled, :theme,
         family_attributes: [ :name, :currency, :country, :locale, :date_format, :timezone, :use_fiscal_months, :fiscal_month_start_day, :id ],
         goals: []
       )
