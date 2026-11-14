@@ -28,11 +28,11 @@ class Balance::Materializer
     end
 
     def update_account_info
-      # Query fresh balance from DB to get generated column values
-      current_balance = account.balances
-        .where(currency: account.currency)
-        .order(date: :desc)
-        .first
+      # Query fresh balance from DB to get generated column values. The header shows today's
+      # balance: future-dated entries extend the history past today but must not count yet.
+      account_balances = account.balances.where(currency: account.currency)
+      current_balance = account_balances.where("date <= ?", Date.current).order(date: :desc).first ||
+                        account_balances.order(date: :asc).first
 
       if current_balance
         calculated_balance = current_balance.end_balance
@@ -72,6 +72,13 @@ class Balance::Materializer
     end
 
     def purge_stale_balances
+      # Nothing was calculated, so every stored row is stale (a `date < NULL` purge would keep them all)
+      if @balances.empty?
+        deleted_count = account.balances.delete_all
+        Rails.logger.info("Purged #{deleted_count} stale balances") if deleted_count > 0
+        return
+      end
+
       sorted_balances = @balances.sort_by(&:date)
       oldest_calculated_balance_date = sorted_balances.first&.date
       newest_calculated_balance_date = sorted_balances.last&.date

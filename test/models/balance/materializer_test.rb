@@ -134,6 +134,29 @@ class Balance::MaterializerTest < ActiveSupport::TestCase
     assert_balance_fields_persisted(expected_balances)
   end
 
+  test "account balance is today's balance, not a future-dated one" do
+    account = families(:empty).accounts.create!(name: "Cash", balance: 0, cash_balance: 0, currency: "USD", accountable: Depository.new)
+    account.entries.create!(date: 1.month.ago.to_date, name: "Opening", amount: 1000, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+    create_transaction(account: account, date: 5.days.from_now.to_date, amount: 100)
+
+    Balance::Materializer.new(account, strategy: :forward).materialize_balances
+
+    assert_equal 1000, account.reload.balance
+    assert_equal 900, account.balances.order(date: :desc).first.end_balance
+  end
+
+  test "purges every stored balance when nothing is calculated" do
+    stale = create_balance(account: @account, date: 5.days.ago.to_date, balance: 5000)
+
+    Balance::ForwardCalculator.any_instance.expects(:calculate).returns([])
+    Holding::Materializer.any_instance.expects(:materialize_holdings).returns([]).once
+
+    Balance::Materializer.new(@account, strategy: :forward).materialize_balances
+
+    assert_nil @account.balances.find_by(id: stale.id)
+    assert_equal 0, @account.reload.balance
+  end
+
   private
 
     def assert_balance_fields_persisted(expected_balances)
