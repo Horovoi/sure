@@ -3,6 +3,7 @@
 class Settings::ApiKeysController < ApplicationController
   layout "settings"
 
+  disallow_while_impersonating only: %i[new create destroy]
   before_action :set_api_key, only: [ :show, :destroy ]
 
   def show
@@ -16,25 +17,31 @@ class Settings::ApiKeysController < ApplicationController
   def new
     # Allow regeneration by not redirecting if user explicitly wants to create a new key
     # Only redirect if user stumbles onto new page without explicit intent
-    redirect_to settings_api_key_path if Current.user.api_keys.active.exists? && !params[:regenerate]
+    redirect_to settings_api_key_path if web_api_keys.active.exists? && !params[:regenerate]
     @api_key = ApiKey.new
   end
 
   def create
     @plain_key = ApiKey.generate_secure_key
-    @api_key = Current.user.api_keys.build(api_key_params)
+    @api_key = Current.user.api_keys.build(api_key_params.merge(source: "web"))
     @api_key.key = @plain_key
 
-    # Temporarily revoke existing keys for validation to pass
-    existing_keys = Current.user.api_keys.active
-    existing_keys.each { |key| key.update_column(:revoked_at, Time.current) }
+    # Replace the web key in one transaction, under a lock on the user, so a
+    # failed save keeps the old key and two concurrent creates cannot leave
+    # zero or two active keys. Mobile keys are left alone.
+    created = false
+    ApiKey.transaction do
+      Current.user.lock!
+      web_api_keys.where(revoked_at: nil).update_all(revoked_at: Time.current)
+      raise ActiveRecord::Rollback unless @api_key.save
 
-    if @api_key.save
+      created = true
+    end
+
+    if created
       flash[:notice] = "Your API key has been created successfully"
       redirect_to settings_api_key_path
     else
-      # Restore existing keys if new key creation failed
-      existing_keys.each { |key| key.update_column(:revoked_at, nil) }
       render :new, status: :unprocessable_entity
     end
   end
@@ -51,7 +58,11 @@ class Settings::ApiKeysController < ApplicationController
   private
 
     def set_api_key
-      @api_key = Current.user.api_keys.active.first
+      @api_key = web_api_keys.active.first
+    end
+
+    def web_api_keys
+      Current.user.api_keys.where(source: "web")
     end
 
     def api_key_params

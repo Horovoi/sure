@@ -1,0 +1,10 @@
+---
+en:
+  activerecord:
+    errors:
+      models:
+        invitation:
+          attributes:
+            base:
+              leaves_family_without_admin: You are the only admin of your current
+                household. Make another member an admin before joining a new one.

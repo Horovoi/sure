@@ -10,6 +10,40 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_url
   end
 
+  test "client cannot set or clear onboarding timestamps directly" do
+    onboarded_at = @user.onboarded_at
+    assert_not_nil onboarded_at
+
+    patch user_url(@user), params: { user: { onboarded_at: "", set_onboarding_goals_at: "", set_onboarding_preferences_at: 1.year.ago } }
+
+    @user.reload
+    assert_equal onboarded_at.to_i, @user.onboarded_at.to_i
+  end
+
+  test "server stamps the onboarding step the user finished" do
+    @user.update!(onboarded_at: nil, set_onboarding_preferences_at: nil, set_onboarding_goals_at: nil)
+
+    patch user_url(@user), params: { user: { onboarding_step: "preferences", redirect_to: "goals" } }
+    assert_redirected_to goals_onboarding_url
+    assert_not_nil @user.reload.set_onboarding_preferences_at
+    assert_nil @user.onboarded_at
+
+    patch user_url(@user), params: { user: { onboarding_step: "goals", redirect_to: "home" } }
+    assert_redirected_to root_url
+    @user.reload
+    assert_not_nil @user.set_onboarding_goals_at
+    assert_not_nil @user.onboarded_at
+  end
+
+  test "goals step finishes onboarding in managed mode without a missing trial route" do
+    Rails.configuration.stubs(:app_mode).returns("managed".inquiry)
+    @user.update!(onboarded_at: nil)
+
+    get goals_onboarding_url
+    assert_response :success
+    assert_select "input[name='user[redirect_to]'][value='home']"
+  end
+
   test "can update user profile" do
     patch user_url(@user), params: {
       user: {
@@ -139,5 +173,63 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_url
     assert_not User.find(@admin.id).active?
     assert_enqueued_with(job: UserPurgeJob, args: [ @admin ])
+  end
+
+  test "deactivating revokes every session, API key and OAuth token of the user" do
+    member = users(:family_member)
+    other_session = member.sessions.create!
+    api_key = ApiKey.create!(user: member, name: "Key", display_key: "deact_#{SecureRandom.hex(8)}", scopes: [ "read" ])
+    app = Doorkeeper::Application.create!(name: "App", redirect_uri: "https://example.com/cb", scopes: "read")
+    token = Doorkeeper::AccessToken.create!(application: app, resource_owner_id: member.id, scopes: "read")
+    member.update!(unconfirmed_email: "pending@example.com")
+
+    sign_in member
+    delete user_url(member)
+    assert_redirected_to root_url
+
+    member.reload
+    assert_not member.active?
+    assert_nil member.unconfirmed_email
+    assert_not Session.exists?(other_session.id)
+    assert_equal 0, member.sessions.count
+    assert api_key.reload.revoked?
+    assert token.reload.revoked?
+
+    # The browser that deactivated is signed out
+    get root_url
+    assert_redirected_to new_session_url
+  end
+
+  test "a session cookie of a deactivated user no longer authenticates" do
+    member = users(:family_member)
+    sign_in member
+    member.update_column(:active, false)
+
+    get root_url
+    assert_redirected_to new_session_url
+  end
+
+  test "a family member cannot change household settings" do
+    member = users(:family_member)
+    family = member.family
+    sign_in member
+
+    patch user_url(member), params: { user: {
+      first_name: "Jake",
+      family_attributes: { currency: "EUR", use_fiscal_months: "1", fiscal_month_start_day: 15, name: "Renamed" }
+    } }
+
+    assert_redirected_to settings_profile_url
+    assert_equal I18n.t("users.update.family_settings_admin_only"), flash[:notice]
+    assert_equal "Jake", member.reload.first_name
+    family.reload
+    assert_not_equal "EUR", family.currency
+    assert_not_equal "Renamed", family.name
+  end
+
+  test "a family admin can change household settings" do
+    patch user_url(@user), params: { user: { family_attributes: { name: "New Name" } } }
+
+    assert_equal "New Name", @user.family.reload.name
   end
 end

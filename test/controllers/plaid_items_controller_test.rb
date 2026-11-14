@@ -88,4 +88,16 @@ class PlaidItemsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to accounts_path
     assert_equal "Account successfully linked to Plaid", flash[:notice]
   end
+
+  test "family members cannot delete a provider connection" do
+    sign_in users(:family_member)
+    plaid_item = plaid_items(:one)
+
+    assert_no_difference -> { PlaidItem.where(scheduled_for_deletion: true).count } do
+      delete plaid_item_url(plaid_item)
+    end
+
+    assert_redirected_to settings_profile_path
+    assert_not plaid_item.reload.scheduled_for_deletion?
+  end
 end

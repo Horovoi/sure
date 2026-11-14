@@ -17,10 +17,10 @@
         <%= button_to "Terminate", complete_impersonation_session_path(Current.session.active_impersonator_session), method: :put, class: "items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
       </div>
     <% else %>
-      <% if Current.true_user.impersonator_support_sessions.in_progress.any? %>
+      <% if Current.true_user.impersonator_support_sessions.active.any? %>
         <%= form_with url: join_impersonation_sessions_path, class: "flex items-center space-x-2 mr-4" do |f| %>
           <%= f.select :impersonation_session_id,
-            Current.true_user.impersonator_support_sessions.in_progress.map { |session|
+            Current.true_user.impersonator_support_sessions.active.map { |session|
               ["#{session.impersonated.email} (#{session.status})", session.id]
             },
             { prompt: "Join a session" },

@@ -5,8 +5,16 @@ class FamilyResetJob < ApplicationJob
     # Create a safety export before destroying any data
     create_pre_reset_export(family)
 
-    # Delete all family data except users
+    # Delete all family data except users. The family row lock makes a second
+    # concurrent reset wait for this one instead of interleaving with it.
     ActiveRecord::Base.transaction do
+      family.lock!
+
+      # Rules and recurring transactions point at the categories, merchants
+      # and accounts deleted below, so they go too
+      family.rules.destroy_all
+      family.recurring_transactions.destroy_all
+
       # Delete accounts and related data
       family.accounts.destroy_all
       family.categories.destroy_all

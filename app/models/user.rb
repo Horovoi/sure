@@ -25,6 +25,7 @@ class User < ApplicationRecord
   # SSO JIT users have password_digest = nil and authenticate via OIDC only.
   validates :password, presence: true, on: :create, unless: :skip_password_validation?
   validates :password, length: { minimum: 8 }, allow_nil: true
+  validates :password, confirmation: true, allow_nil: true # only checked when a confirmation is sent
   normalizes :email, with: ->(email) { email.strip.downcase }
   normalizes :unconfirmed_email, with: ->(email) { email&.strip&.downcase }
 
@@ -137,8 +138,35 @@ class User < ApplicationRecord
   validate :can_deactivate, if: -> { active_changed? && !active }
   after_update_commit :purge_later, if: -> { saved_change_to_active?(from: true, to: false) }
 
+  # Deactivating revokes every credential at once: until the purge job runs
+  # (or if it fails) nothing may still authenticate as this user.
   def deactivate
-    update active: false, email: deactivated_email
+    transaction do
+      next false unless update(active: false, email: deactivated_email, unconfirmed_email: nil)
+
+      revoke_all_credentials!
+      true
+    end
+  end
+
+  def revoke_all_credentials!
+    now = Time.current
+    Session.where(user_id: id).delete_all
+    api_keys.where(revoked_at: nil).update_all(revoked_at: now)
+    Doorkeeper::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+    Doorkeeper::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+  end
+
+  # A password, email or MFA change signs out every other browser: a stolen
+  # session cookie must not outlive the credential change. The session that
+  # made the change stays signed in (unless it belongs to someone else, e.g.
+  # an impersonating admin, or there is none, e.g. a password reset link).
+  after_update_commit :revoke_other_sessions, if: :credentials_changed_on_save?
+
+  def revoke_other_sessions(keep: Current.session)
+    others = Session.where(user_id: id)
+    others = others.where.not(id: keep.id) if keep&.persisted? && keep.user_id == id && keep.active_impersonator_session_id.nil?
+    others.delete_all
   end
 
   def can_deactivate
@@ -151,11 +179,15 @@ class User < ApplicationRecord
     UserPurgeJob.perform_later(self)
   end
 
+  # Locks the family so two purges in one family cannot both see another
+  # member and leave the family with no users.
   def purge
-    if last_user_in_family?
-      family.destroy
-    else
-      destroy
+    family.with_lock do
+      if last_user_in_family?
+        family.destroy
+      else
+        destroy
+      end
     end
   end
 
@@ -184,9 +216,9 @@ class User < ApplicationRecord
   end
 
   def verify_otp?(code)
-    return false if otp_secret.blank?
+    return false if otp_secret.blank? || code.blank?
     return true if verify_backup_code?(code)
-    totp.verify(code, drift_behind: 15)
+    totp.verify(code.to_s.strip, drift_behind: 15).present?
   end
 
   def provisioning_uri
@@ -287,6 +319,12 @@ class User < ApplicationRecord
   end
 
   private
+    def credentials_changed_on_save?
+      return false if saved_change_to_active? # deactivation revokes everything itself
+
+      saved_change_to_password_digest? || saved_change_to_email? || saved_change_to_otp_required?
+    end
+
     def skip_password_validation?
       skip_password_validation == true
     end
@@ -325,18 +363,18 @@ class User < ApplicationRecord
       ROTP::TOTP.new(otp_secret, issuer: "Sure Finances")
     end
 
+    # Consumes the code with one conditional UPDATE, so the same backup code
+    # cannot be used twice by concurrent requests.
     def verify_backup_code?(code)
-      return false if otp_backup_codes.blank?
+      return false if code.blank? || otp_backup_codes.blank?
 
-      # Find and remove the used backup code
-      if (index = otp_backup_codes.index(code))
-        remaining_codes = otp_backup_codes.dup
-        remaining_codes.delete_at(index)
-        update_column(:otp_backup_codes, remaining_codes)
-        true
-      else
-        false
-      end
+      code = code.to_s.strip
+      consumed = self.class.where(id: id)
+        .where("? = ANY(otp_backup_codes)", code)
+        .update_all([ "otp_backup_codes = array_remove(otp_backup_codes, ?)", code ]) == 1
+      self.otp_backup_codes = otp_backup_codes - [ code ] if consumed
+      clear_attribute_change(:otp_backup_codes) if consumed
+      consumed
     end
 
     def generate_backup_codes

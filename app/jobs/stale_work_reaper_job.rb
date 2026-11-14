@@ -28,6 +28,10 @@ class StaleWorkReaperJob < ApplicationJob
       stale: -> { FamilyExport.where(status: %w[pending processing]).where(updated_at: ...FamilyExport::STALE_AFTER.ago) },
       reap: ->(export) { export.fail! if export.may_fail? }
     },
+    "ImpersonationSession" => {
+      stale: -> { ImpersonationSession.expired },
+      reap: ->(impersonation) { impersonation.complete! if impersonation.may_complete? }
+    },
     "Eval::Run" => {
       stale: -> { Eval::Run.where(status: "running").where(updated_at: ...24.hours.ago) },
       reap: ->(run) { run.fail! if run.may_fail? }

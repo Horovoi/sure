@@ -1,7 +1,9 @@
 class Session < ApplicationRecord
   belongs_to :user
+  # Only an approved session within its TTL counts; a completed, rejected or
+  # expired one is ignored even if the link was not cleared yet.
   belongs_to :active_impersonator_session,
-    -> { where(status: :in_progress) },
+    -> { active },
     class_name: "ImpersonationSession",
     optional: true
 

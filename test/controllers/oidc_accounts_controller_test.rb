@@ -12,7 +12,8 @@ class OidcAccountsControllerTest < ActionController::TestCase
       "email" => @user.email,
       "name" => "Bob Dylan",
       "first_name" => "Bob",
-      "last_name" => "Dylan"
+      "last_name" => "Dylan",
+      "started_at" => Time.current.to_i
     }
   end
 
@@ -94,7 +95,8 @@ class OidcAccountsControllerTest < ActionController::TestCase
       "email" => "newuser@example.com",
       "name" => "New User",
       "first_name" => "New",
-      "last_name" => "User"
+      "last_name" => "User",
+      "started_at" => Time.current.to_i
     }
   end
 
@@ -256,5 +258,61 @@ class OidcAccountsControllerTest < ActionController::TestCase
       email: new_user.email,
       password: "anypassword"
     ), "SSO-only user should not authenticate with password"
+  end
+
+  test "create_user is blocked when onboarding is closed" do
+    session[:pending_oidc_auth] = new_user_auth
+    AuthConfig.stubs(:jit_link_only?).returns(false)
+    AuthConfig.stubs(:allowed_oidc_domain?).returns(true)
+    Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
+    Setting.stubs(:onboarding_state).returns("closed")
+
+    assert_no_difference [ "User.count", "Family.count" ] do
+      post :create_user
+    end
+
+    assert_redirected_to new_session_path
+  end
+
+  test "create_user needs an invitation for this email when onboarding is invite only" do
+    session[:pending_oidc_auth] = new_user_auth
+    AuthConfig.stubs(:jit_link_only?).returns(false)
+    AuthConfig.stubs(:allowed_oidc_domain?).returns(true)
+    Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
+    Setting.stubs(:onboarding_state).returns("invite_only")
+
+    assert_no_difference "User.count" do
+      post :create_user
+    end
+    assert_redirected_to new_session_path
+
+    invitation = @user.family.invitations.create!(email: new_user_auth["email"], role: "member", inviter: @user)
+    session[:pending_invitation_token] = invitation.token
+
+    assert_difference "User.count", 1 do
+      post :create_user
+    end
+    # The new user still accepts the invitation explicitly
+    assert_redirected_to accept_invitation_path(invitation.token)
+  end
+
+  test "create_link is refused when local login is disabled" do
+    session[:pending_oidc_auth] = pending_auth
+    AuthConfig.stubs(:local_login_enabled?).returns(false)
+    AuthConfig.stubs(:local_admin_override_enabled?).returns(false)
+
+    assert_no_difference "OidcIdentity.count" do
+      post :create_link, params: { email: @user.email, password: user_password_test }
+    end
+    assert_response :unprocessable_entity
+  end
+
+  test "a pending SSO login expires" do
+    session[:pending_oidc_auth] = pending_auth.merge("started_at" => 16.minutes.ago.to_i)
+
+    get :link
+
+    assert_redirected_to new_session_path
+    assert_nil session[:pending_oidc_auth]
   end
 end

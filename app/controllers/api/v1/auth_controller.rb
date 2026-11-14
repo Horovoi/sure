@@ -8,20 +8,19 @@ module Api
       skip_before_action :log_api_access
 
       def signup
+        if signup_closed?
+          render json: { error: "Signup is closed" }, status: :forbidden
+          return
+        end
+
         # Check if invite code is required
         if invite_code_required? && params[:invite_code].blank?
           render json: { error: "Invite code is required" }, status: :forbidden
           return
         end
 
-        # Validate invite code if provided
-        if params[:invite_code].present? && !InviteCode.exists?(token: params[:invite_code]&.downcase)
-          render json: { error: "Invalid invite code" }, status: :forbidden
-          return
-        end
-
         # Validate password
-        password_errors = validate_password(params[:user][:password])
+        password_errors = validate_password(user_signup_params[:password])
         if password_errors.any?
           render json: { errors: password_errors }, status: :unprocessable_entity
           return
@@ -41,10 +40,24 @@ module Api
         user.family = family
         user.role = User.role_for_new_family_creator
 
-        if user.save
-          # Claim invite code if provided
-          InviteCode.claim!(params[:invite_code]) if params[:invite_code].present?
+        # The invite code is claimed in the same transaction as the user, so
+        # a failed signup keeps the code and two signups cannot share one.
+        invalid_invite_code = false
+        created = false
+        User.transaction do
+          if params[:invite_code].present? && !InviteCode.claim!(params[:invite_code])
+            invalid_invite_code = true
+            raise ActiveRecord::Rollback
+          end
 
+          raise ActiveRecord::Rollback unless user.save
+
+          created = true
+        end
+
+        if invalid_invite_code
+          render json: { error: "Invalid invite code" }, status: :forbidden
+        elsif created
           # Create device and OAuth token
           device = create_or_update_device(user)
           token_response = create_oauth_token_for_device(user, device)
@@ -65,7 +78,14 @@ module Api
       def login
         user = User.find_by(email: params[:email])
 
-        if user&.authenticate(params[:password])
+        # Same rule as the web login form: when local login is turned off,
+        # only a super admin may use the emergency override.
+        unless AuthConfig.local_login_allowed_for?(user)
+          render json: { error: "Local login is disabled" }, status: :forbidden
+          return
+        end
+
+        if user&.active? && user.authenticate(params[:password])
           # Check MFA if enabled
           if user.otp_required?
             unless params[:otp_code].present? && user.verify_otp?(params[:otp_code])
@@ -112,27 +132,31 @@ module Api
         # Find the access token associated with this refresh token
         access_token = Doorkeeper::AccessToken.by_refresh_token(refresh_token)
 
-        if access_token.nil? || access_token.revoked?
+        # Rotate under a row lock: of two concurrent refreshes with the same
+        # token, only the first mints a new token; the second sees it revoked.
+        new_token = access_token&.with_lock do
+          user = User.find_by(id: access_token.resource_owner_id)
+          next nil if access_token.revoked? || !user&.active?
+
+          access_token.revoke
+          Doorkeeper::AccessToken.create!(
+            application: access_token.application,
+            resource_owner_id: access_token.resource_owner_id,
+            expires_in: 30.days.to_i,
+            scopes: access_token.scopes,
+            use_refresh_token: true
+          )
+        end
+
+        unless new_token
           render json: { error: "Invalid refresh token" }, status: :unauthorized
           return
         end
 
-        # Create new access token
-        new_token = Doorkeeper::AccessToken.create!(
-          application: access_token.application,
-          resource_owner_id: access_token.resource_owner_id,
-          expires_in: 30.days.to_i,
-          scopes: access_token.scopes,
-          use_refresh_token: true
-        )
-
-        # Revoke old access token
-        access_token.revoke
-
-        # Update device last seen
-        user = User.find(access_token.resource_owner_id)
-        device = user.mobile_devices.find_by(device_id: params[:device][:device_id])
-        device&.update_last_seen!
+        # Update device last seen (the device param is optional here)
+        if (device_id = params.dig(:device, :device_id)).present?
+          User.find(access_token.resource_owner_id).mobile_devices.find_by(device_id: device_id)&.update_last_seen!
+        end
 
         render json: {
           access_token: new_token.plaintext_token,

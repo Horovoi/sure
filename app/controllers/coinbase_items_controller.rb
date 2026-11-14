@@ -1,6 +1,9 @@
 class CoinbaseItemsController < ApplicationController
   require_bank_connections
+  include FamilyAdminRequired
 
+  # Connections are managed from the admin-only Sync Providers settings
+  require_family_admin except: :sync
   before_action :set_coinbase_item, only: [ :show, :edit, :update, :destroy, :sync, :setup_accounts, :complete_account_setup ]
 
   def index

@@ -56,7 +56,8 @@ class Api::V1::BaseController < ApplicationController
       # Check token validity and scope (read_write includes read access)
       has_sufficient_scope = access_token&.scopes&.include?("read") || access_token&.scopes&.include?("read_write")
 
-      unless access_token && !access_token.expired? && has_sufficient_scope
+      # accessible? = neither expired nor revoked
+      unless access_token&.accessible? && has_sufficient_scope
         render_json({ error: "unauthorized", message: "Access token is invalid, expired, or missing required scope" }, status: :unauthorized)
         return false
       end
@@ -67,8 +68,8 @@ class Api::V1::BaseController < ApplicationController
       if doorkeeper_token&.resource_owner_id
         @current_user = User.find_by(id: doorkeeper_token.resource_owner_id)
 
-        # If user doesn't exist, the token is invalid (user was deleted)
-        unless @current_user
+        # If user doesn't exist or was deactivated, the token is invalid
+        unless @current_user&.active?
           Rails.logger.warn "API OAuth Token Invalid: Access token resource_owner_id #{doorkeeper_token.resource_owner_id} does not exist"
           render_json({ error: "unauthorized", message: "Access token is invalid - user not found" }, status: :unauthorized)
           return false
@@ -93,7 +94,7 @@ class Api::V1::BaseController < ApplicationController
       return false unless api_key_value
 
       @api_key = ApiKey.find_by_value(api_key_value)
-      return false unless @api_key && @api_key.active?
+      return false unless @api_key && @api_key.active? && @api_key.user.active?
 
       @current_user = @api_key.user
       @api_key.update_last_used!
@@ -249,25 +250,17 @@ class Api::V1::BaseController < ApplicationController
       @_doorkeeper_token
     end
 
-    # Set up Current context for API requests since we don't use session-based auth
+    # Set up Current context for API requests since we don't use session-based auth.
+    # Always a temporary, unsaved session: reusing one of the user's browser
+    # sessions could pick one that is impersonating someone, which would make
+    # Current.user the impersonated user.
     def setup_current_context_for_api
-      # For API requests, we need to create a minimal session-like object
-      # or find/create an actual session for this user to make Current.user work
-      if @current_user
-        # Try to find an existing session for this user, or create a temporary one
-        session = @current_user.sessions.first
-        if session
-          Current.session = session
-        else
-          # Create a temporary session for this API request
-          # This won't be persisted but will allow Current.user to work
-          session = @current_user.sessions.build(
-            user_agent: request.user_agent,
-            ip_address: request.ip
-          )
-          Current.session = session
-        end
-      end
+      return unless @current_user
+
+      Current.session = @current_user.sessions.build(
+        user_agent: request.user_agent,
+        ip_address: request.ip
+      )
     end
 
     # Check if AI features are enabled for the current user

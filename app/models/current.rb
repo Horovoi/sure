@@ -9,8 +9,12 @@ class Current < ActiveSupport::CurrentAttributes
     impersonated_user || session&.user
   end
 
+  # Re-checked on every request: a super admin who was demoted stops
+  # impersonating at once.
   def impersonated_user
-    session&.active_impersonator_session&.impersonated
+    return nil unless session&.user&.super_admin?
+
+    session.active_impersonator_session&.impersonated
   end
 
   def true_user

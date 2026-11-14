@@ -18,18 +18,27 @@ class ApplicationController < ActionController::Base
   helper_method :demo_config, :demo_host_match?, :show_demo_warning?
 
   private
-    def accept_pending_invitation_for(user)
-      return false if user.blank?
+    # Where to go after signing in. A pending invitation found in the session
+    # is never accepted silently: the user is sent to the invitation page and
+    # accepts it there with an explicit click.
+    def after_sign_in_path_for(user)
+      token = session[:pending_invitation_token].to_s
+      return root_path if token.blank? || user.blank?
 
-      token = session[:pending_invitation_token]
-      return false if token.blank?
+      invitation = Invitation.pending.find_by(token: token)
+      if invitation&.email.to_s.casecmp?(user.email.to_s)
+        accept_invitation_path(invitation.token)
+      else
+        session.delete(:pending_invitation_token)
+        root_path
+      end
+    end
 
-      invitation = Invitation.pending.find_by(token: token.to_s)
-      return false unless invitation
-      return false unless invitation.accept_for(user)
-
-      session.delete(:pending_invitation_token)
-      true
+    # Password (or SSO) step done; the MFA step must follow within
+    # MfaController::MFA_STEP_TTL.
+    def start_mfa_step_for(user)
+      session[:mfa_user_id] = user.id
+      session[:mfa_started_at] = Time.current.to_i
     end
 
     def store_pending_invitation_if_valid

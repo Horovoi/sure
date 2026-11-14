@@ -1,6 +1,9 @@
 class EnableBankingItemsController < ApplicationController
   require_bank_connections
+  include FamilyAdminRequired
 
+  # Connections are managed from the admin-only Sync Providers settings
+  require_family_admin except: :sync
   include EnableBankingItems::MapsHelper
   before_action :set_enable_banking_item, only: [ :update, :destroy, :sync, :select_bank, :authorize, :reauthorize, :setup_accounts, :complete_account_setup, :new_connection ]
   skip_before_action :verify_authenticity_token, only: [ :callback ]

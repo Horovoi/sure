@@ -22,4 +22,17 @@ class InviteCodeTest < ActiveSupport::TestCase
       assert_equal InviteCode.generate!, InviteCode.last.token
     end
   end
+
+  test "claim! succeeds only once for the same code" do
+    code = InviteCode.generate!
+
+    assert InviteCode.claim!(code)
+    assert_not InviteCode.claim!(code)
+  end
+
+  test "claim! is case-insensitive and rejects blank tokens" do
+    assert InviteCode.claim!(InviteCode.generate!.upcase)
+    assert_not InviteCode.claim!(nil)
+    assert_not InviteCode.claim!("")
+  end
 end

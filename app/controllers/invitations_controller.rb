@@ -4,6 +4,8 @@ class InvitationsController < ApplicationController
     @invitation = Invitation.new
   end
 
+  # Creating an invitation never moves anyone. An existing user joins only
+  # after opening the invitation link and accepting it from their own session.
   def create
     unless Current.user.admin?
       flash[:alert] = t(".failure")
@@ -11,20 +13,18 @@ class InvitationsController < ApplicationController
       return
     end
 
+    Invitation.clear_lapsed_for!(family: Current.family, email: invitation_params[:email])
+
     @invitation = Current.family.invitations.build(invitation_params)
     @invitation.inviter = Current.user
 
     if @invitation.save
-      normalized_email = @invitation.email.to_s.strip.downcase
-      existing_user = User.find_by(email: normalized_email)
+      InvitationMailer.invite_email(@invitation).deliver_later unless self_hosted?
 
-      if existing_user && @invitation.accept_for(existing_user)
-        flash[:notice] = "Existing user added to the household."
-      elsif existing_user
-        flash[:alert] = t(".failure")
+      flash[:notice] = if User.exists?(email: @invitation.email)
+        t(".existing_user")
       else
-        InvitationMailer.invite_email(@invitation).deliver_later unless self_hosted?
-        flash[:notice] = t(".success")
+        t(".success")
       end
     else
       flash[:alert] = t(".failure")
@@ -35,11 +35,31 @@ class InvitationsController < ApplicationController
 
   def accept
     @invitation = Invitation.find_by!(token: params[:id])
+    raise ActiveRecord::RecordNotFound unless @invitation.pending?
 
-    if @invitation.pending?
-      render :accept_choice, layout: "auth"
+    # Authentication is skipped here so that signed-out people can choose to
+    # sign in or sign up. A signed-in user may accept directly.
+    @signed_in_user = find_session_by_cookie&.user
+    @signed_in_user = nil unless @signed_in_user&.active?
+
+    render :accept_choice, layout: "auth"
+  end
+
+  def confirm
+    invitation = Invitation.pending.find_by!(token: params[:id])
+
+    # Only the invited user, in their own (not an impersonated) session
+    if Current.user != Current.true_user || !invitation.email.casecmp?(Current.true_user.email)
+      redirect_to root_path, alert: t(".wrong_user")
+      return
+    end
+
+    if invitation.accept_for(Current.true_user)
+      session.delete(:pending_invitation_token)
+      redirect_to root_path, notice: t(".success", family: invitation.family.name)
     else
-      raise ActiveRecord::RecordNotFound
+      redirect_to accept_invitation_path(invitation.token),
+        alert: invitation.errors.full_messages.to_sentence.presence || t(".failure")
     end
   end
 

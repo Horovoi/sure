@@ -3,10 +3,9 @@ class RegistrationsController < ApplicationController
 
   layout "auth"
 
-  before_action :ensure_signup_open, if: :self_hosted?
+  before_action :ensure_signup_open
   before_action :set_user, only: :create
   before_action :set_invitation
-  before_action :claim_invite_code, only: :create, if: :invite_code_required?
   before_action :validate_password_requirements, only: :create
 
   def new
@@ -24,10 +23,34 @@ class RegistrationsController < ApplicationController
       @user.role = User.role_for_new_family_creator
     end
 
-    if @user.save
-      @invitation&.update!(accepted_at: Time.current)
+    # Claim the invite code, create the user and accept the invitation in one
+    # transaction: a failed save keeps the code, and two signups cannot
+    # share one code or one invitation.
+    outcome = nil
+    User.transaction do
+      if invite_code_required? && !InviteCode.claim!(user_params[:invite_code])
+        outcome = :invalid_invite_code
+        raise ActiveRecord::Rollback
+      end
+
+      if @invitation && !@invitation.claim_for_signup!
+        outcome = :invitation_used
+        raise ActiveRecord::Rollback
+      end
+
+      raise ActiveRecord::Rollback unless @user.save
+
+      outcome = :created
+    end
+
+    case outcome
+    when :created
       @session = create_session_for(@user)
       redirect_to root_path, notice: t(".success")
+    when :invalid_invite_code
+      redirect_to new_registration_path, alert: t("registrations.create.invalid_invite_code")
+    when :invitation_used
+      redirect_to new_registration_path, alert: t("registrations.create.invitation_used")
     else
       render :new, status: :unprocessable_entity, alert: t(".failure")
     end
@@ -48,12 +71,6 @@ class RegistrationsController < ApplicationController
     def user_params(specific_param = nil)
       params = self.params.require(:user).permit(:name, :email, :password, :password_confirmation, :invite_code, :invitation)
       specific_param ? params[specific_param] : params
-    end
-
-    def claim_invite_code
-      unless InviteCode.claim! params[:user][:invite_code]
-        redirect_to new_registration_path, alert: t("registrations.create.invalid_invite_code")
-      end
     end
 
     def validate_password_requirements
@@ -82,7 +99,7 @@ class RegistrationsController < ApplicationController
     end
 
     def ensure_signup_open
-      return unless Setting.onboarding_state == "closed"
+      return unless signup_closed?
 
       redirect_to new_session_path, alert: t("registrations.closed")
     end
