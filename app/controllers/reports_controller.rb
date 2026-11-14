@@ -393,14 +393,16 @@ class ReportsController < ApplicationController
       ((current_value - previous_value) / previous_value * 100).round(1)
     end
 
+    # Share of the current budget spent, as the budget page shows it: the budget for the
+    # fiscal period that contains today, spending over the budgeted amount.
     def calculate_budget_performance
-      # Only calculate if we're looking at current month
-      return nil unless @period_type == :monthly && @start_date.beginning_of_month.to_date == Date.current.beginning_of_month.to_date
+      # Only calculate if we're looking at the current month
+      return nil unless @period_type == :monthly && (@start_date.to_date..@end_date.to_date).cover?(Date.current)
 
-      budget = Budget.find_or_bootstrap(Current.family, start_date: @start_date.beginning_of_month.to_date)
-      return 0 if budget.nil? || budget.allocated_spending.zero?
+      budget = Budget.find_or_bootstrap(Current.family, start_date: Date.current)
+      return 0 if budget.nil? || !budget.initialized?
 
-      (budget.actual_spending / budget.allocated_spending * 100).round(1)
+      budget.percent_of_budget_spent.round(1)
     rescue StandardError
       nil
     end
@@ -474,7 +476,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id, status: Account::VISIBLE_STATUSES })
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: :parent)
@@ -486,7 +488,7 @@ class ReportsController < ApplicationController
       trades = Trade
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id, status: Account::VISIBLE_STATUSES })
         .where(entries: { entryable_type: "Trade", excluded: false, date: @period.date_range })
         .includes(entry: :account, category: :parent)
 
@@ -757,7 +759,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: Current.family.id, status: Account::VISIBLE_STATUSES })
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -804,7 +806,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: family.id, status: [ "draft", "active" ] })
+        .where(accounts: { family_id: family.id, status: Account::VISIBLE_STATUSES })
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -1158,9 +1160,10 @@ class ReportsController < ApplicationController
         return false
       end
 
-      # Find or create a session for this API request
-      # We need to find or create a persisted session so that Current.user delegation works properly
-      session = @current_user.sessions.first_or_create!(
+      # An unsaved session: reusing the user's first browser session would also pick up
+      # an impersonation running in it, and creating one would leave a row per request.
+      session = Session.new(
+        user: @current_user,
         user_agent: request.user_agent,
         ip_address: request.ip
       )
