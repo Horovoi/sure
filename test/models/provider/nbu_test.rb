@@ -148,23 +148,72 @@ class Provider::NbuTest < ActiveSupport::TestCase
   test "fetch_exchange_rates returns rates for date range" do
     start_date = Date.parse("2026-01-23")
     end_date = Date.parse("2026-01-25")
-    nbu_rate = 43.1759
 
     mock_response = mock
-    mock_response.stubs(:body).returns("[{\"r030\":840,\"txt\":\"Долар США\",\"rate\":#{nbu_rate},\"cc\":\"USD\",\"exchangedate\":\"25.01.2026\"}]")
+    mock_response.stubs(:body).returns(nbu_range_body("USD", { "23.01.2026" => 43.1, "24.01.2026" => 43.2, "25.01.2026" => 43.3 }))
 
+    # The whole range comes from a single request, not one request per day
     mock_client = mock
-    mock_client.stubs(:get).returns(mock_response)
+    mock_client.expects(:get).once.returns(mock_response)
     @provider.stubs(:client).returns(mock_client)
 
     response = @provider.fetch_exchange_rates(from: "USD", to: "UAH", start_date: start_date, end_date: end_date)
 
     assert response.success?
     rates = response.data
-    assert_equal 3, rates.length
+    assert_equal [ start_date, start_date + 1.day, end_date ], rates.map(&:date)
+    assert_equal [ 43.1, 43.2, 43.3 ], rates.map { |r| r.rate.to_f }
     assert rates.all? { |r| r.from == "USD" }
     assert rates.all? { |r| r.to == "UAH" }
-    assert_equal rates, rates.sort_by(&:date)
+  end
+
+  test "fetch_exchange_rates inverts rates when converting from UAH" do
+    date = Date.parse("2026-01-23")
+
+    mock_response = mock
+    mock_response.stubs(:body).returns(nbu_range_body("USD", { "23.01.2026" => 40.0 }))
+
+    mock_client = mock
+    mock_client.stubs(:get).returns(mock_response)
+    @provider.stubs(:client).returns(mock_client)
+
+    response = @provider.fetch_exchange_rates(from: "UAH", to: "USD", start_date: date, end_date: date)
+
+    assert response.success?
+    assert_equal 0.025, response.data.first.rate.to_f
+  end
+
+  test "fetch_exchange_rates uses the per-unit rate for currencies quoted in multiples" do
+    date = Date.parse("2026-01-23")
+
+    # NBU quotes JPY per 10 units: 2.7 UAH per 10 JPY is 0.27 UAH per 1 JPY
+    mock_response = mock
+    mock_response.stubs(:body).returns(nbu_range_body("JPY", { "23.01.2026" => 2.7 }, units: 10))
+
+    mock_client = mock
+    mock_client.stubs(:get).returns(mock_response)
+    @provider.stubs(:client).returns(mock_client)
+
+    response = @provider.fetch_exchange_rates(from: "JPY", to: "UAH", start_date: date, end_date: date)
+
+    assert response.success?
+    assert_equal 0.27, response.data.first.rate.to_f
+  end
+
+  test "fetch_exchange_rates fails when the range has no rates" do
+    date = Date.parse("2026-01-23")
+
+    mock_response = mock
+    mock_response.stubs(:body).returns("[]")
+
+    mock_client = mock
+    mock_client.stubs(:get).returns(mock_response)
+    @provider.stubs(:client).returns(mock_client)
+
+    response = @provider.fetch_exchange_rates(from: "USD", to: "UAH", start_date: date, end_date: date)
+
+    assert_not response.success?
+    assert_instance_of Provider::Nbu::InvalidExchangeRateError, response.error
   end
 
   test "fetch_exchange_rates returns 1.0 for UAH to UAH range" do
@@ -272,4 +321,12 @@ class Provider::NbuTest < ActiveSupport::TestCase
   test "involves_uah? returns false for non-UAH pairs" do
     assert_not @provider.send(:involves_uah?, "USD", "EUR")
   end
+
+  private
+    # Body in the shape of NBU's range endpoint: one row per day, `rate` quoted per `units`
+    def nbu_range_body(currency, rates_by_date, units: 1)
+      rates_by_date.map do |date, rate|
+        { "exchangedate" => date, "cc" => currency, "rate" => rate, "units" => units, "rate_per_unit" => (rate / units).round(6) }
+      end.to_json
+    end
 end

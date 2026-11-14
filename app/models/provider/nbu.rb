@@ -63,18 +63,8 @@ class Provider::Nbu < Provider
       raise InvalidExchangeRateError, "No exchange rate data returned for #{foreign_currency} on #{date}" if data.empty?
 
       rate_data = data.first
-      nbu_rate = rate_data["rate"].to_d
 
-      # NBU returns rate as "X UAH per 1 unit of foreign currency"
-      # If from is UAH, we need to invert (UAH -> foreign = 1/rate)
-      # If to is UAH, we use the rate directly (foreign -> UAH = rate)
-      final_rate = if from == BASE_CURRENCY
-        (1.0 / nbu_rate).round(8)
-      else
-        nbu_rate
-      end
-
-      Rate.new(date: date, from: from, to: to, rate: final_rate)
+      Rate.new(date: date, from: from, to: to, rate: rate_for(from, rate_data["rate"].to_d))
     end
   end
 
@@ -94,18 +84,28 @@ class Provider::Nbu < Provider
         end
       end
 
-      # NBU API only returns data for a single date per request
-      # We need to iterate through each date in the range
-      rates = []
-      (start_date..end_date).each do |date|
-        rate_response = fetch_exchange_rate(from: from, to: to, date: date)
+      foreign_currency = from == BASE_CURRENCY ? to : from
 
-        if rate_response.success?
-          rates << rate_response.data
-        else
-          # Log but continue - some dates may not have rates (weekends, holidays)
-          Rails.logger.warn("#{self.class.name}: No rate for #{from}/#{to} on #{date}")
-        end
+      # One request for the whole range. NBU's range endpoint returns a row for
+      # every calendar day (weekends and holidays included), with the same rate
+      # the single-date endpoint gives for that day.
+      response = client.get(range_url) do |req|
+        req.params["json"] = ""
+        req.params["valcode"] = foreign_currency.downcase
+        req.params["start"] = format_date(start_date)
+        req.params["end"] = format_date(end_date)
+        req.params["sort"] = "exchangedate"
+        req.params["order"] = "asc"
+      end
+
+      rates = JSON.parse(response.body).filter_map do |rate_data|
+        date = Date.strptime(rate_data["exchangedate"], "%d.%m.%Y")
+        # `rate` here is quoted per `units` of the currency (e.g. 10 JPY); `rate_per_unit` is per 1
+        nbu_rate = rate_data["rate_per_unit"].to_d
+
+        next unless (start_date..end_date).cover?(date) && nbu_rate.positive?
+
+        Rate.new(date: date, from: from, to: to, rate: rate_for(from, nbu_rate))
       end
 
       raise InvalidExchangeRateError, "No exchange rates found for #{from}/#{to} between #{start_date} and #{end_date}" if rates.empty?
@@ -118,6 +118,17 @@ class Provider::Nbu < Provider
 
     def base_url
       ENV["NBU_URL"] || "https://bank.gov.ua/NBUStatService/v1/statdirectory"
+    end
+
+    # Rates for a currency over a date range, one row per day
+    def range_url
+      ENV["NBU_RANGE_URL"] || "https://bank.gov.ua/NBU_Exchange/exchange_site"
+    end
+
+    # NBU quotes "X UAH per 1 unit of foreign currency".
+    # Foreign -> UAH uses the rate directly; UAH -> foreign is its inverse.
+    def rate_for(from, nbu_rate)
+      from == BASE_CURRENCY ? (1.0 / nbu_rate).round(8) : nbu_rate
     end
 
     def client
