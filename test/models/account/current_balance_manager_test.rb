@@ -134,6 +134,35 @@ class Account::CurrentBalanceManagerTest < ActiveSupport::TestCase
     assert_equal 1000, account.balance
   end
 
+  test "the opening balance delta does not depend on a stale cached balance" do
+    account = @family.accounts.create!(
+      name: "Test",
+      balance: 1000, # stale: the 100 expense below has not been synced yet
+      cash_balance: 1000,
+      currency: "USD",
+      accountable: Depository.new
+    )
+    account.entries.create!(date: 1.year.ago.to_date, name: "Opening", amount: 1000, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+    account.entries.create!(date: 10.days.ago.to_date, name: "Expense", amount: 100, currency: "USD", entryable: Transaction.new)
+
+    Account::CurrentBalanceManager.new(account).set_current_balance(1000)
+
+    assert_equal 1100, account.valuations.opening_anchor.first.entry.amount
+  end
+
+  test "setting the balance on the opening date changes the opening balance and keeps it an anchor" do
+    account = @family.accounts.create!(name: "Brokerage", balance: 500, cash_balance: 500, currency: "USD", accountable: Investment.new)
+    account.entries.create!(date: Date.current, name: "Opening", amount: 500, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+
+    result = Account::CurrentBalanceManager.new(account).set_current_balance(800)
+
+    assert result.success?
+    assert_equal 1, account.valuations.count
+    anchor = account.valuations.reload.first
+    assert anchor.opening_anchor?
+    assert_equal 800, anchor.entry.amount
+  end
+
   # (SEE ABOVE TEST FOR MORE DETAILED EXPLANATION)
   # Same assertions as the test above, but Credit Card accounts are liabilities, which means expenses increase balance; not decrease
   test "when no reconciliations exist on credit card accounts, adjust opening balance with delta until it gets us to the desired balance" do

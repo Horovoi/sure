@@ -1,6 +1,8 @@
 class TransactionsController < ApplicationController
   include EntryableResource
 
+  USER_SETTABLE_KINDS = %w[standard one_time].freeze
+
   before_action :store_params!, only: :index
   before_action :load_category_groups, only: %i[new create]
 
@@ -199,6 +201,13 @@ class TransactionsController < ApplicationController
       return
     end
 
+    # Deleting a transfer leg would turn the other leg into ordinary income or spending
+    if @transaction.transfer.present?
+      flash[:alert] = t("transactions.convert_to_trade.errors.transfer_leg")
+      redirect_back_or_to transactions_path
+      return
+    end
+
     # Resolve security before transaction
     security = resolve_security_for_conversion
     return if performed? # Early exit if redirect already happened
@@ -236,9 +245,12 @@ class TransactionsController < ApplicationController
         )
       )
 
-      # Mark original transaction as excluded (soft delete)
-      @entry.update!(excluded: true)
+      # The trade replaces the transaction. Balances count every entry (excluded ones too), so
+      # keeping the original would move the cash twice.
+      @entry.destroy!
     end
+
+    @entry.account.sync_later(window_start_date: @entry.date)
 
     flash[:notice] = t("transactions.convert_to_trade.success")
     redirect_to account_path(@entry.account), status: :see_other
@@ -384,6 +396,15 @@ class TransactionsController < ApplicationController
       )
 
       nature = entry_params.delete(:nature)
+
+      # A user can only toggle "one-time". Transfer kinds are written by Transfer alone, so a
+      # transfer leg keeps its kind.
+      if entry_params[:entryable_attributes]&.key?(:kind)
+        kind = entry_params[:entryable_attributes][:kind]
+        transfer_leg = @entry&.transaction? && @entry.transaction.transfer.present?
+
+        entry_params[:entryable_attributes].delete(:kind) if transfer_leg || !kind.in?(USER_SETTABLE_KINDS)
+      end
 
       if nature.present? && entry_params[:amount].present?
         signed_amount = nature == "inflow" ? -entry_params[:amount].to_d : entry_params[:amount].to_d

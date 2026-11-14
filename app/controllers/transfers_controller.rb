@@ -44,8 +44,10 @@ class TransfersController < ApplicationController
     end
   end
 
+  # "Remove transfer" means "these two are not a transfer": record a rejection so the next
+  # sync's auto-match does not pair them again.
   def destroy
-    @transfer.destroy!
+    @transfer.reject!
     redirect_back_or_to transactions_url, notice: t(".success")
   end
 
@@ -55,7 +57,7 @@ class TransfersController < ApplicationController
       @transfer = Transfer
                     .where(id: params[:id])
                     .where(inflow_transaction_id: Current.family.transactions.select(:id))
-                    .first
+                    .first!
     end
 
     def transfer_params
@@ -70,7 +72,7 @@ class TransfersController < ApplicationController
       if transfer_update_params[:status] == "rejected"
         @transfer.reject!
       elsif transfer_update_params[:status] == "confirmed"
-        @transfer.confirm!
+        @transfer.confirm! if @transfer.may_confirm?
       end
     end
 

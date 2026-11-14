@@ -8,10 +8,13 @@ class TransferMatchesController < ApplicationController
 
   def create
     @transfer = build_transfer
-    Transfer.transaction do
+
+    # A new transfer sets the legs' kinds itself (Transfer after_create). Matching an
+    # existing auto-matched pair confirms it.
+    if @transfer.persisted?
+      @transfer.confirm! if @transfer.may_confirm?
+    else
       @transfer.save!
-      @transfer.outflow_transaction.update!(kind: Transfer.kind_for_account(@transfer.outflow_transaction.entry.account))
-      @transfer.inflow_transaction.update!(kind: "funds_movement")
     end
 
     @transfer.sync_account_later
@@ -45,7 +48,7 @@ class TransferMatchesController < ApplicationController
           inflow_transaction: @entry.amount.positive? ? missing_transaction : @entry.transaction,
           outflow_transaction: @entry.amount.positive? ? @entry.transaction : missing_transaction
         )
-        transfer.status = "confirmed"
+        transfer.status = "confirmed" if transfer.new_record?
         transfer
       else
         target_transaction = Current.family.entries.find(transfer_match_params[:matched_entry_id])
@@ -54,7 +57,7 @@ class TransferMatchesController < ApplicationController
           inflow_transaction: @entry.amount.negative? ? @entry.transaction : target_transaction.transaction,
           outflow_transaction: @entry.amount.negative? ? target_transaction.transaction : @entry.transaction
         )
-        transfer.status = "confirmed"
+        transfer.status = "confirmed" if transfer.new_record?
         transfer
       end
     end

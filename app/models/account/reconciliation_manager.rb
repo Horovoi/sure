@@ -42,8 +42,17 @@ class Account::ReconciliationManager
     )
 
     def prepare_reconciliation(balance, date, existing_valuation)
+      # In case of conflict, where existing valuation is not passed as arg, but one exists.
+      # Only a reconciliation is reused: an opening or current anchor on that date is the
+      # account's starting or current balance and must not be overwritten by a reconciliation.
+      valuation_on_date = existing_valuation.nil? && account.entries.valuations.find_by(date: date)
+
+      if valuation_on_date && !valuation_on_date.entryable.reconciliation?
+        raise ArgumentError, I18n.t("activerecord.errors.models.entry.attributes.base.anchor_on_reconciliation_date")
+      end
+
       valuation_record = existing_valuation ||
-                         account.entries.valuations.find_by(date: date) || # In case of conflict, where existing valuation is not passed as arg, but one exists
+                         valuation_on_date ||
                          account.entries.build(
                                   name: Valuation.build_reconciliation_name(account.accountable_type),
                                   entryable: Valuation.new(kind: "reconciliation")

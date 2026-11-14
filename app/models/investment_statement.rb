@@ -35,18 +35,18 @@ class InvestmentStatement
     t.contributions - t.withdrawals
   end
 
-  # Total portfolio value across all investment accounts
+  # Total portfolio value across all investment accounts, in the family currency
   def portfolio_value
-    investment_accounts.sum(&:balance)
+    investment_accounts.sum { |account| to_family_money(account.balance_money).amount }
   end
 
   def portfolio_value_money
     Money.new(portfolio_value, family.currency)
   end
 
-  # Total cash in investment accounts
+  # Total cash in investment accounts, in the family currency
   def cash_balance
-    investment_accounts.sum(&:cash_balance)
+    investment_accounts.sum { |account| to_family_money(account.cash_balance_money).amount }
   end
 
   def cash_balance_money
@@ -62,7 +62,8 @@ class InvestmentStatement
     Money.new(holdings_value, family.currency)
   end
 
-  # All current holdings across investment accounts
+  # All current holdings across investment accounts, in their own (price) currency.
+  # Sums over them go through to_family_money.
   def current_holdings
     return Holding.none unless investment_accounts.any?
 
@@ -71,12 +72,10 @@ class InvestmentStatement
     # Get the latest holding for each security per account
     Holding
       .where(account_id: account_ids)
-      .where(currency: family.currency)
       .where.not(qty: 0)
       .where(
         id: Holding
           .where(account_id: account_ids)
-          .where(currency: family.currency)
           .select("DISTINCT ON (holdings.account_id, holdings.security_id) holdings.id")
           .order(Arel.sql("holdings.account_id, holdings.security_id, holdings.date DESC"))
       )
@@ -84,34 +83,35 @@ class InvestmentStatement
       .order(amount: :desc)
   end
 
-  # Top holdings by value. Loaded up front: callers check `any?` and then iterate,
-  # which would otherwise run this query twice (once as EXISTS, once for the rows).
+  # Top holdings by value in the family currency. Loaded up front: callers check `any?` and then iterate.
   def top_holdings(limit: 5)
-    current_holdings.limit(limit).load
+    current_holdings.to_a.sort_by { |holding| -to_family_money(holding.amount_money).amount }.first(limit)
   end
 
   # Portfolio allocation by security type/sector (simplified for now)
   def allocation
     holdings = current_holdings.to_a
-    total = holdings.sum(&:amount)
+    total = holdings.sum { |holding| to_family_money(holding.amount_money).amount }
 
     return [] if total.zero?
 
     holdings.map do |holding|
+      amount = to_family_money(holding.amount_money)
+
       HoldingAllocation.new(
         security: holding.security,
-        amount: holding.amount_money,
-        weight: (holding.amount / total * 100).round(2),
+        amount: amount,
+        weight: (amount.amount / total * 100).round(2),
         trend: holding.trend
       )
     end
   end
 
-  # Unrealized gains across all holdings
+  # Unrealized gains across all holdings, in the family currency
   def unrealized_gains
     current_holdings.sum do |holding|
       trend = holding.trend
-      trend ? trend.value : 0
+      trend ? to_family_money(trend.value).amount : 0
     end
   end
 
@@ -138,8 +138,8 @@ class InvestmentStatement
     holdings_with_cost_basis = holdings.select(&:avg_cost)
     return nil if holdings_with_cost_basis.empty?
 
-    current = holdings_with_cost_basis.sum(&:amount)
-    previous = holdings_with_cost_basis.sum { |h| h.qty * h.avg_cost.amount }
+    current = holdings_with_cost_basis.sum { |h| to_family_money(h.amount_money).amount }
+    previous = holdings_with_cost_basis.sum { |h| to_family_money(h.avg_cost * h.qty).amount }
 
     Trend.new(current: current, previous: previous)
   end
@@ -151,13 +151,21 @@ class InvestmentStatement
 
     return nil if changes.empty?
 
-    current = changes.sum { |t| t.current.is_a?(Money) ? t.current.amount : t.current }
-    previous = changes.sum { |t| t.previous.is_a?(Money) ? t.previous.amount : t.previous }
+    current = changes.sum { |t| to_family_money(t.current).amount }
+    previous = changes.sum { |t| to_family_money(t.previous).amount }
 
     Trend.new(
       current: Money.new(current, family.currency),
       previous: Money.new(previous, family.currency)
     )
+  end
+
+  # Converts money in any currency to the family currency with the latest known rate on or
+  # before today (1 when there is none), without calling a rate provider.
+  def to_family_money(money)
+    return money if money.currency.iso_code == family.currency
+
+    Money.new(money.amount * rate_to_family_currency(money.currency.iso_code), family.currency)
   end
 
   # Investment accounts
@@ -166,6 +174,15 @@ class InvestmentStatement
   end
 
   private
+    def rate_to_family_currency(currency)
+      @rates_to_family_currency ||= {}
+      @rates_to_family_currency[currency] ||= ExchangeRate
+        .where(from_currency: currency, to_currency: family.currency)
+        .where("date <= ?", Date.current)
+        .order(date: :desc)
+        .pick(:rate) || 1
+    end
+
     def all_time_totals
       @all_time_totals ||= totals(period: Period.all_time)
     end

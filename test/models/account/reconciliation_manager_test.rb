@@ -20,6 +20,17 @@ class Account::ReconciliationManagerTest < ActiveSupport::TestCase
     assert_equal true, result.success?
   end
 
+  test "a reconciliation never overwrites an anchor on the same date" do
+    anchor = @account.entries.create!(name: "Opening", amount: 1000, date: 3.days.ago.to_date, entryable: Valuation.new(kind: "opening_anchor"), currency: @account.currency)
+
+    result = @manager.reconcile_balance(balance: 1200, date: 3.days.ago.to_date)
+
+    assert_not result.success?
+    assert_equal I18n.t("activerecord.errors.models.entry.attributes.base.anchor_on_reconciliation_date"), result.error_message
+    assert_equal 1000, anchor.reload.amount
+    assert anchor.entryable.opening_anchor?
+  end
+
   test "updates existing reconciliation without date change" do
     create_balance(account: @account, date: Date.current, balance: 1000, cash_balance: 500)
 

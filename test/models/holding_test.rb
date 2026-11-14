@@ -12,6 +12,16 @@ class HoldingTest < ActiveSupport::TestCase
     @amzn, @nvda = load_holdings
   end
 
+  test "gap-filled rows keep the previous day's cost basis" do
+    security = securities(:aapl)
+    first = Holding.new(account: @account, security: security, date: 2.days.ago.to_date, qty: 1, price: 10, amount: 10, currency: "USD", cost_basis: 7)
+
+    filled = Holding.gapfill([ first ])
+
+    assert_equal 3, filled.size
+    assert filled.all? { |h| h.cost_basis == 7 }
+  end
+
   test "calculates portfolio weight" do
     expected_amzn_weight = 3240.0 / @account.balance * 100
     expected_nvda_weight = 3720.0 / @account.balance * 100

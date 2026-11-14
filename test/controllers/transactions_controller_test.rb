@@ -35,6 +35,53 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_enqueued_with(job: SyncJob)
   end
 
+  test "user can toggle one-time but cannot set a transfer kind" do
+    patch transaction_url(@entry), params: { entry: { entryable_attributes: { id: @entry.entryable_id, kind: "one_time" } } }
+    assert_equal "one_time", @entry.transaction.reload.kind
+
+    patch transaction_url(@entry), params: { entry: { entryable_attributes: { id: @entry.entryable_id, kind: "funds_movement" } } }
+    assert_equal "one_time", @entry.transaction.reload.kind
+  end
+
+  test "a transfer leg keeps its kind when the one-time toggle is sent" do
+    transfer_leg = entries(:transfer_out)
+
+    patch transaction_url(transfer_leg), params: { entry: { entryable_attributes: { id: transfer_leg.entryable_id, kind: "one_time" } } }
+
+    assert_equal "cc_payment", transfer_leg.transaction.reload.kind
+  end
+
+  test "converting a transaction to a trade replaces the transaction so cash moves once" do
+    investment = accounts(:investment)
+    entry = create_transaction(account: investment, amount: 500, name: "Buy AAPL")
+
+    assert_difference -> { investment.entries.where(entryable_type: "Trade").count } => 1,
+                      -> { Transaction.where(id: entry.entryable_id).count } => -1 do
+      post create_trade_from_transaction_transaction_url(entry.transaction), params: {
+        security_id: securities(:aapl).id, qty: 5, investment_activity_label: "Buy"
+      }
+    end
+
+    trade_entry = investment.entries.where(entryable_type: "Trade").order(:created_at).last
+    assert_equal 500, trade_entry.amount
+    assert_enqueued_with(job: SyncJob)
+  end
+
+  test "a transfer leg cannot be converted to a trade" do
+    investment = accounts(:investment)
+    inflow = create_transaction(account: investment, amount: -500)
+    outflow = create_transaction(account: accounts(:depository), amount: 500)
+    Transfer.create!(inflow_transaction: inflow.transaction, outflow_transaction: outflow.transaction, status: "confirmed")
+
+    assert_no_difference -> { Entry.count } do
+      post create_trade_from_transaction_transaction_url(inflow.transaction), params: {
+        security_id: securities(:aapl).id, qty: 5
+      }
+    end
+
+    assert_equal I18n.t("transactions.convert_to_trade.errors.transfer_leg"), flash[:alert]
+  end
+
   test "updates with transaction details" do
     assert_no_difference [ "Entry.count", "Transaction.count" ] do
       patch transaction_url(@entry), params: {

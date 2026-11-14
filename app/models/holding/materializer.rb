@@ -45,6 +45,7 @@ class Holding::Materializer
       # Separate holdings into categories based on cost_basis reconciliation
       holdings_to_upsert_with_cost = []
       holdings_to_upsert_without_cost = []
+      holdings_to_upsert_with_manual_cost = []
 
       @holdings.each do |holding|
         # Skip securities that have provider-sourced holdings - don't overwrite provider data
@@ -73,9 +74,19 @@ class Holding::Materializer
           .slice("date", "currency", "qty", "price", "amount", "security_id")
           .merge("account_id" => account.id, "updated_at" => current_time)
 
+        manual = manual_cost_basis_for(holding)
+
         if existing&.cost_basis_locked?
           # For locked holdings, preserve ALL cost_basis fields
           holdings_to_upsert_without_cost << base_attrs
+        elsif manual
+          # A manual cost basis belongs to the position, not to the day it was entered:
+          # carry it forward to the later rows the calculator builds (one per day).
+          holdings_to_upsert_with_manual_cost << base_attrs.merge(
+            "cost_basis" => manual.cost_basis,
+            "cost_basis_source" => "manual",
+            "cost_basis_locked" => true
+          )
         elsif reconciled[:should_update] && reconciled[:cost_basis].present?
           # Update with new cost_basis and source
           holdings_to_upsert_with_cost << base_attrs.merge(
@@ -96,6 +107,13 @@ class Holding::Materializer
         )
       end
 
+      if holdings_to_upsert_with_manual_cost.any?
+        account.holdings.upsert_all(
+          holdings_to_upsert_with_manual_cost,
+          unique_by: %i[account_id security_id date currency]
+        )
+      end
+
       # Upsert without cost_basis (preserves existing)
       if holdings_to_upsert_without_cost.any?
         account.holdings.upsert_all(
@@ -103,6 +121,20 @@ class Holding::Materializer
           unique_by: %i[account_id security_id date currency]
         )
       end
+    end
+
+    # The latest locked manual cost basis on or before the holding's date, for the same
+    # security and currency.
+    def manual_cost_basis_for(holding)
+      manual_cost_bases[[ holding.security_id, holding.currency ]]&.reverse_each&.find { |locked| locked.date <= holding.date }
+    end
+
+    def manual_cost_bases
+      @manual_cost_bases ||= account.holdings
+        .where(cost_basis_locked: true, cost_basis_source: "manual")
+        .where.not(cost_basis: nil)
+        .order(:date)
+        .group_by { |h| [ h.security_id, h.currency ] }
     end
 
     def load_existing_holdings_map

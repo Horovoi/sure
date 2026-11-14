@@ -53,15 +53,10 @@ module EntriesTestHelper
   end
 
   def create_transfer(from_account:, to_account:, amount:, date: Date.current, currency: "USD")
-    outflow_transaction = Transaction.create!(kind: "funds_movement")
-    inflow_transaction = Transaction.create!(kind: "funds_movement")
+    outflow_transaction = Transaction.new
+    inflow_transaction = Transaction.new
 
-    transfer = Transfer.create!(
-      outflow_transaction: outflow_transaction,
-      inflow_transaction: inflow_transaction
-    )
-
-    # Create entries for both accounts
+    # Create entries for both accounts (the transfer sets the legs' kinds from them)
     from_account.entries.create!(
       name: "Transfer to #{to_account.name}",
       date: date,
@@ -78,6 +73,9 @@ module EntriesTestHelper
       entryable: inflow_transaction
     )
 
-    transfer
+    Transfer.create!(
+      outflow_transaction: outflow_transaction,
+      inflow_transaction: inflow_transaction
+    )
   end
 end
