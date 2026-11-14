@@ -16,7 +16,7 @@ class Entry < ApplicationRecord
   validates :external_id, uniqueness: { scope: [ :account_id, :source ] }, if: -> { external_id.present? && source.present? }
 
   scope :visible, -> {
-    joins(:account).where(accounts: { status: [ "draft", "active" ] })
+    joins(:account).where(accounts: { status: Account::VISIBLE_STATUSES })
   }
 
   scope :chronological, -> {

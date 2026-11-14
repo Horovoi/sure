@@ -155,4 +155,9 @@ class AccountTest < ActiveSupport::TestCase
     assert @account.taxable?
     assert_not @account.tax_advantaged?
   end
+
+  test "visible_status_sql matches the visible scope" do
+    assert_equal %q("a".status IN ('draft','active')), Account.visible_status_sql("a")
+    assert_equal Account.visible.pluck(:id).sort, Account.where(Account.visible_status_sql).pluck(:id).sort
+  end
 end

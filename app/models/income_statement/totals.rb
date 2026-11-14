@@ -72,7 +72,7 @@ class IncomeStatement::Totals
         WHERE at.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
           AND ae.excluded = false
                     AND a.family_id = :family_id
-          AND a.status IN ('draft', 'active')
+          AND #{Account.visible_status_sql("a")}
         GROUP BY c.id, c.parent_id, CASE WHEN at.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END;
       SQL
     end
@@ -102,7 +102,7 @@ class IncomeStatement::Totals
           )
           AND ae.excluded = false
                     AND a.family_id = :family_id
-          AND a.status IN ('draft', 'active')
+          AND #{Account.visible_status_sql("a")}
         GROUP BY c.id, c.parent_id, CASE WHEN at.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
       SQL
     end
