@@ -37,8 +37,9 @@ class Account::CurrentBalanceManager
       result = set_current_balance_for_manual_account(balance)
     end
 
-    # Update cache field so changes appear immediately to the user
-    account.update!(balance: balance)
+    # Update the cached balance so the change shows at once, but only when it was applied:
+    # on failure no sync is queued, so a written cache would stay wrong until the next sync.
+    account.update!(balance: balance) if result.success?
 
     result
   rescue => e

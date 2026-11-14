@@ -60,7 +60,7 @@ class BalanceSheet::AccountTotals
     end
 
     def query
-      @query ||= Rails.cache.fetch(cache_key) do
+      @query ||= Rails.cache.fetch(cache_key, expires_in: Family::AGGREGATE_CACHE_TTL) do
         visible_accounts
           .joins(ActiveRecord::Base.sanitize_sql_array([
             "LEFT JOIN exchange_rates ON exchange_rates.date = ? AND accounts.currency = exchange_rates.from_currency AND exchange_rates.to_currency = ?",

@@ -45,7 +45,7 @@ module AccountableResource
     if account_params[:balance].present? && account_params[:balance].to_d != @account.balance
       result = @account.set_current_balance(account_params[:balance].to_d)
       unless result.success?
-        @error_message = result.error_message
+        @error_message = result.error
         render :edit, status: :unprocessable_entity
         return
       end

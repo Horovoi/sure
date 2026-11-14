@@ -30,19 +30,27 @@ module Syncable
     syncs.visible.any?
   end
 
-  # Schedules a sync for syncable.  If there is an existing sync pending/syncing for this syncable,
-  # we do not create a new sync, and attempt to expand the sync window if needed.
-  #
-  # NOTE: Uses `visible` scope (syncs < 5 min old) instead of `incomplete` to prevent
-  # getting stuck on stale syncs after server/Sidekiq restarts. If a sync is older than
-  # 5 minutes, we assume its job was lost and create a new sync.
+  # Schedules a sync for syncable. At most one sync per record is in flight:
+  # - a pending sync absorbs the request (its window widens if needed);
+  # - a running sync is flagged to run once more when it finishes, so a change made
+  #   during a sync (an edited transaction) is never dropped;
+  # - a sync older than Sync::VISIBLE_FOR has lost its job; a new one is created and the
+  #   reaper finalizes the old one.
   def sync_later(parent_sync: nil, window_start_date: nil, window_end_date: nil)
     Sync.transaction do
       with_lock do
         sync = self.syncs.visible.first
+        # Lock it so its own finalization can't slip between this check and the rerun flag:
+        # either it sees the flag, or we see it already finished and start a new sync.
+        sync&.lock!
+        sync = nil if sync && (sync.finalized_at.present? || !(sync.pending? || sync.syncing?))
 
-        if sync
-          Rails.logger.info("There is an existing recent sync, expanding window if needed (#{sync.id})")
+        if sync&.syncing?
+          Rails.logger.info("Sync #{sync.id} is running; requesting a rerun when it finishes")
+          sync.request_rerun!
+          sync.update!(parent: parent_sync) if parent_sync && !sync.parent_id
+        elsif sync
+          Rails.logger.info("There is an existing pending sync, expanding window if needed (#{sync.id})")
           sync.expand_window_if_needed(window_start_date, window_end_date)
 
           # Update parent relationship if one is provided and sync doesn't already have a parent

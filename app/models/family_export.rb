@@ -1,14 +1,29 @@
 class FamilyExport < ApplicationRecord
+  include AASM
+
+  # How long an export may stay pending/processing before StaleWorkReaperJob fails it
+  STALE_AFTER = 1.hour
+
   belongs_to :family
 
   has_one_attached :export_file, dependent: :purge_later
 
-  enum :status, {
-    pending: "pending",
-    processing: "processing",
-    completed: "completed",
-    failed: "failed"
-  }, default: :pending, validate: true
+  aasm column: :status, requires_lock: true do
+    state :pending, initial: true
+    state :processing, :completed, :failed
+
+    event :start do
+      transitions from: :pending, to: :processing
+    end
+
+    event :complete do
+      transitions from: :processing, to: :completed
+    end
+
+    event :fail do
+      transitions from: %i[pending processing], to: :failed
+    end
+  end
 
   scope :ordered, -> { order(created_at: :desc) }
 

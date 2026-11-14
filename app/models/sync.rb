@@ -1,10 +1,12 @@
 class Sync < ApplicationRecord
-  # We run a cron that marks any syncs that have not been resolved in 24 hours as "stale"
-  # Syncs often become stale when new code is deployed and the worker restarts
-  STALE_AFTER = 24.hours
+  # StaleWorkReaperJob marks syncs that have not finished within this time as "stale" and
+  # finalizes their parents. Syncs take about a second; one this old has lost its job.
+  STALE_AFTER = 30.minutes
 
-  # The max time that a sync will show in the UI (after 5 minutes)
-  VISIBLE_FOR = 5.minutes
+  # A sync younger than this counts as in flight: it shows as syncing in the UI and new
+  # requests for the same record join it instead of starting a second, concurrent sync.
+  # Kept equal to STALE_AFTER so "in flight" means the same thing everywhere.
+  VISIBLE_FOR = STALE_AFTER
 
   include AASM
 
@@ -20,13 +22,16 @@ class Sync < ApplicationRecord
   scope :visible, -> { incomplete.where("syncs.created_at > ?", VISIBLE_FOR.ago) }
 
   after_commit :update_family_sync_timestamp
+  after_destroy_commit :finalize_parent_after_destroy
 
   serialize :sync_stats, coder: JSON
 
   validate :window_valid
 
   # Sync state machine
-  aasm column: :status, timestamps: true do
+  # requires_lock: every transition reloads the row under FOR UPDATE, so two workers (a
+  # redelivered job, the reaper, a child finalizing its parent) can never both move it.
+  aasm column: :status, timestamps: true, requires_lock: true, whiny_transitions: true do
     state :pending, initial: true
     state :syncing
     state :completed
@@ -43,7 +48,7 @@ class Sync < ApplicationRecord
       transitions from: :syncing, to: :completed
     end
 
-    event :fail do
+    event :fail, after_commit: :handle_completion_transition do
       transitions from: :syncing, to: :failed
     end
 
@@ -54,73 +59,86 @@ class Sync < ApplicationRecord
   end
 
   class << self
+    # Marks syncs whose job was lost as stale, then finalizes them so their parents finish
+    # and post-sync work (transfer matching, rules) still runs. Returns the number reaped.
     def clean
-      incomplete.where("syncs.created_at < ?", STALE_AFTER.ago).find_each(&:mark_stale!)
+      count = 0
+      incomplete.where("syncs.created_at < ?", STALE_AFTER.ago).find_each do |sync|
+        next unless sync.mark_stale_if_incomplete!
+        count += 1
+        sync.finalize_if_all_children_finalized
+      end
+      count
+    end
+  end
+
+  def mark_stale_if_incomplete!
+    with_lock do
+      return false unless may_mark_stale?
+      mark_stale!
+      true
     end
   end
 
   def perform
     Rails.logger.tagged("Sync", id, syncable_type, syncable_id) do
-      # This can happen on server restarts or if Sidekiq enqueues a duplicate job
-      unless may_start?
-        Rails.logger.warn("Sync #{id} is not in a valid state (#{aasm.from_state}) to start.  Skipping sync.")
+      # A redelivered job, or one for a sync another worker already claimed, does nothing
+      unless claim!
+        Rails.logger.warn("Sync #{id} is not pending (#{status}).  Skipping sync.")
         return
       end
-
-      # Guard: syncable may have been deleted while job was queued
-      unless syncable.present?
-        Rails.logger.warn("Sync #{id} - syncable #{syncable_type}##{syncable_id} no longer exists. Marking as failed.")
-        start! if may_start?
-        fail!
-        update(error: "Syncable record was deleted")
-        return
-      end
-
-      # Guard: syncable may be scheduled for deletion
-      if syncable.respond_to?(:scheduled_for_deletion?) && syncable.scheduled_for_deletion?
-        Rails.logger.warn("Sync #{id} - syncable #{syncable_type}##{syncable_id} is scheduled for deletion. Skipping sync.")
-        start! if may_start?
-        fail!
-        update(error: "Syncable record is scheduled for deletion")
-        return
-      end
-
-      start!
 
       begin
-        syncable.perform_sync(self)
+        Time.use_zone(family_time_zone) do
+          if syncable.nil?
+            fail_with!("Syncable record was deleted")
+          elsif syncable.respond_to?(:scheduled_for_deletion?) && syncable.scheduled_for_deletion?
+            fail_with!("Syncable record is scheduled for deletion")
+          else
+            syncable.perform_sync(self)
+          end
+        end
       rescue => e
-        fail!
-        update(error: e.message)
+        fail_with!(e.message)
         report_error(e)
       ensure
+        # Every exit path finalizes, so a parent never waits on a child that returned early
         finalize_if_all_children_finalized
       end
     end
   end
 
-  # Finalizes the current sync AND parent (if it exists)
+  # Finalizes this sync (and then its parent) once all of its children have finished.
+  # Status moves to completed/failed if still syncing; post-sync work runs exactly once,
+  # after the transaction commits, whatever the final status.
   def finalize_if_all_children_finalized
-    Sync.transaction do
+    finalized_now = Sync.transaction do
       lock!
 
-      # If this is the "parent" and there are still children running, don't finalize.
-      return unless all_children_finalized?
+      next false if finalized_at.present? || pending?
+      next false unless all_children_finalized?
 
       if syncing?
-        if has_failed_children?
-          fail!
-        else
-          complete!
-        end
+        has_failed_children? ? fail! : complete!
       end
 
-      # If we make it here, the sync is finalized.  Run post-sync, regardless of failure/success.
-      perform_post_sync
+      update_column(:finalized_at, Time.current)
+      true
+    end
+
+    if finalized_now
+      Time.use_zone(family_time_zone) { perform_post_sync }
+      rerun_if_requested
     end
 
     # If this sync has a parent, try to finalize it so the child status propagates up the chain.
     parent&.finalize_if_all_children_finalized
+  end
+
+  # Called when a sync is requested for a record that is already syncing: instead of
+  # dropping the request (and the edit that caused it), run once more when this one ends.
+  def request_rerun!
+    update_column(:rerun_requested, true) unless rerun_requested?
   end
 
   # If a sync is pending, we can adjust the window if new syncs are created with a wider window.
@@ -147,16 +165,59 @@ class Sync < ApplicationRecord
   end
 
   private
+    # pending -> syncing as one atomic compare-and-set: of two workers holding the same
+    # sync (a redelivered job), exactly one wins. No reload, so the loaded syncable stays.
+    def claim!
+      now = Time.current
+      claimed = Sync.where(id: id, status: "pending").update_all(status: "syncing", syncing_at: now, updated_at: now) == 1
+      return false unless claimed
+
+      self.status = "syncing"
+      self.syncing_at = now
+      self.updated_at = now
+      clear_attribute_changes(%w[status syncing_at updated_at])
+      Rails.logger.info("changing from pending to syncing (event: start)")
+      report_warnings
+      true
+    end
+
+    def fail_with!(message)
+      with_lock { fail! if may_fail? }
+      update_column(:error, message)
+    end
+
+    def rerun_if_requested
+      return unless rerun_requested? && syncable.present?
+      Rails.logger.info("Sync #{id} finished with a rerun requested; scheduling a follow-up sync")
+      syncable.sync_later
+    end
+
+    def finalize_parent_after_destroy
+      return unless parent_id
+      Sync.find_by(id: parent_id)&.finalize_if_all_children_finalized
+    rescue => e
+      report_error(e)
+    end
+
+    def family_time_zone
+      family&.timezone.presence || "UTC"
+    rescue
+      "UTC"
+    end
+
     def log_status_change
       Rails.logger.info("changing from #{aasm.from_state} to #{aasm.to_state} (event: #{aasm.current_event})")
     end
 
+    # A stale child lost its job part-way, so its work is incomplete: that is a failure
     def has_failed_children?
-      children.failed.any?
+      children.where(status: %w[failed stale]).exists?
     end
 
+    # A child counts as done only when its whole subtree is: finalized_at is set once its
+    # own children have finished and its post-sync has run.
     def all_children_finalized?
-      children.incomplete.empty?
+      !children.where(finalized_at: nil).exists?
     end
 
     def perform_post_sync
@@ -193,8 +254,10 @@ class Sync < ApplicationRecord
       log_status_change
     end
 
+    # Bumped on failure too: a failed sync may still have written data, and this
+    # timestamp is part of the balance sheet cache key.
     def handle_completion_transition
-      family.touch(:latest_sync_completed_at)
+      family&.touch(:latest_sync_completed_at)
     end
 
     def window_valid
@@ -204,14 +267,14 @@ class Sync < ApplicationRecord
     end
 
     def update_family_sync_timestamp
-      family.touch(:latest_sync_activity_at)
+      family&.touch(:latest_sync_activity_at)
     end
 
     def family
       if syncable.is_a?(Family)
         syncable
       else
-        syncable.family
+        syncable&.family
       end
     end
 end

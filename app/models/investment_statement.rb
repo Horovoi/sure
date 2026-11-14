@@ -187,7 +187,7 @@ class InvestmentStatement
 
       Rails.cache.fetch([
         "investment_statement", "totals_query", family.id, sql_hash, family.entries_cache_version
-      ]) { Totals.new(family, trades_scope: trades_scope).call }
+       ], expires_in: Family::AGGREGATE_CACHE_TTL) { Totals.new(family, trades_scope: trades_scope).call }
     end
 
     def monetizable_currency

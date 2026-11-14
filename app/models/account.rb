@@ -50,7 +50,7 @@ class Account < ApplicationRecord
   accepts_nested_attributes_for :accountable, update_only: true
 
   # Account state machine
-  aasm column: :status, timestamps: true do
+  aasm column: :status do
     state :active, initial: true
     state :draft
     state :disabled
@@ -70,6 +70,12 @@ class Account < ApplicationRecord
 
     event :mark_for_deletion do
       transitions from: [ :draft, :active, :disabled ], to: :pending_deletion
+    end
+
+    # A deletion that failed leaves the account disabled (hidden from totals but listed,
+    # with its data intact) so the user can look at it or delete it again.
+    event :restore do
+      transitions from: :pending_deletion, to: :disabled
     end
   end
 
@@ -168,19 +174,24 @@ class Account < ApplicationRecord
     provider&.logo_url
   end
 
+  # Idempotent: a second click while the deletion is queued does nothing
   def destroy_later
-    mark_for_deletion!
+    with_lock do
+      return unless may_mark_for_deletion?
+      mark_for_deletion!
+    end
     DestroyJob.perform_later(self)
   end
 
-  # Override destroy to handle error recovery for accounts
-  def destroy
-    super
-  rescue => e
-    # If destruction fails, transition back to disabled state
-    # This provides a cleaner recovery path than the generic scheduled_for_deletion flag
-    disable! if may_disable?
-    raise e
+  # Syncs skip records that are being deleted (Sync#perform checks this)
+  def scheduled_for_deletion?
+    pending_deletion?
+  end
+
+  # Called by DestroyJob when the destroy raised or was halted
+  def recover_from_failed_destroy!
+    reload
+    restore! if may_restore?
   end
 
   def current_holdings

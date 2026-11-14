@@ -2,8 +2,24 @@ class DestroyJob < ApplicationJob
   queue_as :low_priority
 
   def perform(model)
-    model.destroy
+    model.destroy || raise(ActiveRecord::RecordNotDestroyed.new("destroy was halted by a callback", model))
   rescue => e
-    model.update!(scheduled_for_deletion: false) # Let's the user try again by resetting the state
+    Rails.logger.error("DestroyJob: could not destroy #{model.class.name} #{model.id}: #{e.class}: #{e.message}")
+    Sentry.capture_exception(e)
+    recover(model)
   end
+
+  private
+    # Puts the record back in a state the user can act on, so a failed deletion is never
+    # stuck "in progress". Accounts restore themselves (AASM); provider items clear the flag.
+    def recover(model)
+      if model.respond_to?(:recover_from_failed_destroy!)
+        model.recover_from_failed_destroy!
+      elsif model.has_attribute?(:scheduled_for_deletion)
+        model.reload.update_column(:scheduled_for_deletion, false)
+      end
+    rescue => e
+      Rails.logger.error("DestroyJob: could not recover #{model.class.name} #{model.id}: #{e.message}")
+      Sentry.capture_exception(e)
+    end
 end

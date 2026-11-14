@@ -123,7 +123,7 @@ class IncomeStatement
       cache_key = [ interval, fiscal_key, exclude_current_period ]
       @family_stats[cache_key] ||= Rails.cache.fetch([
         "income_statement", "family_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
-      ]) { FamilyStats.new(family, interval:, exclude_current_period:).call }
+       ], expires_in: Family::AGGREGATE_CACHE_TTL) { FamilyStats.new(family, interval:, exclude_current_period:).call }
     end
 
     def category_stats(interval: "month", exclude_current_period: false)
@@ -132,7 +132,7 @@ class IncomeStatement
       cache_key = [ interval, fiscal_key, exclude_current_period ]
       @category_stats[cache_key] ||= Rails.cache.fetch([
         "income_statement", "category_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
-      ]) { CategoryStats.new(family, interval:, exclude_current_period:).call }
+       ], expires_in: Family::AGGREGATE_CACHE_TTL) { CategoryStats.new(family, interval:, exclude_current_period:).call }
     end
 
     def totals_query(transactions_scope:, date_range:)
@@ -140,7 +140,7 @@ class IncomeStatement
 
       Rails.cache.fetch([
         "income_statement", "totals_query", "v2", family.id, sql_hash, family.entries_cache_version
-      ]) { Totals.new(family, transactions_scope: transactions_scope, date_range: date_range).call }
+       ], expires_in: Family::AGGREGATE_CACHE_TTL) { Totals.new(family, transactions_scope: transactions_scope, date_range: date_range).call }
     end
 
     def monetizable_currency

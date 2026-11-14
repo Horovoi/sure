@@ -48,7 +48,7 @@ class PropertiesController < ApplicationController
         redirect_to address_property_path(@account)
       end
     else
-      @error_message = result.error_message
+      @error_message = result.error
       render :balances, status: :unprocessable_entity
     end
   end

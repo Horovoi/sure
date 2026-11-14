@@ -29,17 +29,20 @@ class FamilyResetJob < ApplicationJob
     def create_pre_reset_export(family)
       return if family.accounts.empty?
 
-      export = family.family_exports.create!(status: :processing)
+      export = family.family_exports.create!
+      export.start!
       zip_data = Family::DataExporter.new(family).generate_export
       export.export_file.attach(
         io: zip_data,
         filename: "pre_reset_#{export.filename}",
         content_type: "application/zip"
       )
-      export.update!(status: :completed)
+      export.complete!
       Rails.logger.info "[FamilyResetJob] Pre-reset export created: #{export.id}"
     rescue => e
       Rails.logger.error "[FamilyResetJob] Pre-reset export failed: #{e.message}"
+      # Never leave the export "processing" forever
+      export&.reload&.fail! if export&.persisted? && export.reload.may_fail?
       # Don't re-raise — reset should still proceed
     end
 end
