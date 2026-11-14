@@ -15,6 +15,11 @@ module Account::Anchorable
     result
   end
 
+  # Called by the account sync before balances are calculated (see Account::Syncer)
+  def move_opening_anchor_before_oldest_entry!
+    opening_balance_manager.move_before_oldest_entry!
+  end
+
   def opening_anchor_date
     opening_balance_manager.opening_date
   end

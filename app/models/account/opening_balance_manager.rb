@@ -43,6 +43,26 @@ class Account::OpeningBalanceManager
     end
   end
 
+  # Balances are calculated forward from the opening anchor, so an entry dated on or
+  # before it would never count. Move the anchor to the day before the oldest entry,
+  # keeping its amount: every entry then counts, and today's balance includes it.
+  # Returns true when the anchor moved.
+  def move_before_oldest_entry!
+    return false unless opening_anchor_valuation
+
+    anchor_entry = opening_anchor_valuation.entry
+    oldest = account.entries.where.not(id: anchor_entry.id).minimum(:date)
+    return false unless oldest && oldest <= anchor_entry.date
+
+    anchor_entry.update!(date: oldest - 1.day)
+    @oldest_entry_date = nil
+    true
+  rescue ActiveRecord::RecordInvalid => e
+    # Only when the oldest entry sits at the earliest supported date
+    Rails.logger.warn("Opening anchor for account #{account.id} not moved: #{e.message}")
+    false
+  end
+
   private
     attr_reader :account
 
