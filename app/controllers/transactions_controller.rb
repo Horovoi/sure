@@ -1,5 +1,6 @@
 class TransactionsController < ApplicationController
   include EntryableResource
+  include CategoryRulePrompt
 
   before_action :store_params!, only: :index
   before_action :load_category_groups, only: %i[new create]
@@ -365,18 +366,6 @@ class TransactionsController < ApplicationController
   end
 
   private
-    def needs_rule_notification?(transaction)
-      return false if Current.user.rule_prompts_disabled
-
-      if Current.user.rule_prompt_dismissed_at.present?
-        time_since_last_rule_prompt = Time.current - Current.user.rule_prompt_dismissed_at
-        return false if time_since_last_rule_prompt < 1.day
-      end
-
-      transaction.saved_change_to_category_id? && transaction.category_id.present? &&
-      transaction.eligible_for_category_rule?
-    end
-
     def entry_params
       entry_params = params.require(:entry).permit(
         :name, :date, :amount, :currency, :excluded, :notes, :nature, :entryable_type,
