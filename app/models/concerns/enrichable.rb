@@ -61,7 +61,9 @@ module Enrichable
     return false if enrichable_attrs.empty?
 
     was_modified = false
-    ActiveRecord::Base.transaction do
+    # A savepoint, so a failed save also undoes the enrichment log rows and the join
+    # rows that virtual attributes (like tag_ids) write on assignment.
+    ActiveRecord::Base.transaction(requires_new: true) do
       enrichable_attrs.each do |attr, value|
         self.send("#{attr}=", value)
 
@@ -71,7 +73,11 @@ module Enrichable
         end
       end
 
-      save
+      unless save
+        Rails.logger.warn("#{self.class.name} #{id} not enriched from #{source}: #{errors.full_messages.to_sentence}")
+        restore_attributes
+        raise ActiveRecord::Rollback
+      end
 
       # For virtual attributes (like tag_ids), previous_changes won't track them
       # So we need to check if the value actually changed by comparing before/after

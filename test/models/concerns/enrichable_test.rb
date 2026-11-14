@@ -76,4 +76,15 @@ class EnrichableTest < ActiveSupport::TestCase
 
     refute_includes Account.enrichable(:name), @enrichable
   end
+
+  test "a failed save enriches nothing and reports no change" do
+    original_name = @enrichable.name
+
+    assert_no_difference "DataEnrichment.count" do
+      assert_equal false, @enrichable.enrich_attributes({ name: nil }, source: "plaid")
+    end
+
+    assert_equal original_name, @enrichable.name
+    assert_equal original_name, @enrichable.reload.name
+  end
 end
