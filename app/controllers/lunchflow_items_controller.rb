@@ -746,28 +746,8 @@ class LunchflowItemsController < ApplicationController
       params.require(:lunchflow_item).permit(:name, :sync_start_date, :api_key, :base_url)
     end
 
-    # Sanitize return_to parameter to prevent XSS attacks
-    # Only allow internal paths, reject external URLs and javascript: URIs
+    # Only internal paths; see StoreLocation#sanitize_return_to
     def safe_return_to_path
-      return nil if params[:return_to].blank?
-
-      return_to = params[:return_to].to_s
-
-      # Parse the URL to check if it's external
-      begin
-        uri = URI.parse(return_to)
-
-        # Reject absolute URLs with schemes (http:, https:, javascript:, etc.)
-        # Only allow relative paths
-        return nil if uri.scheme.present?
-
-        # Ensure the path starts with / (is a relative path)
-        return nil unless return_to.start_with?("/")
-
-        return_to
-      rescue URI::InvalidURIError
-        # If the URI is invalid, reject it
-        nil
-      end
+      sanitize_return_to(params[:return_to])
     end
 end
