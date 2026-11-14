@@ -1,5 +1,5 @@
 namespace :rules do
-  desc "Apply all rules for a family"
+  desc "Apply all active rules for a family"
   task :apply_all, [ :family_id ] => :environment do |_t, args|
     family_id = args[:family_id]
 
@@ -9,10 +9,10 @@ namespace :rules do
     end
 
     family = Family.find(family_id)
-    rules = family.rules
+    rules = family.rules.where(active: true)
 
     if rules.empty?
-      puts "No rules found for family #{family_id}"
+      puts "No active rules found for family #{family_id}"
       exit 0
     end
 
