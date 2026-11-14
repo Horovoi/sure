@@ -54,9 +54,17 @@ class VectorStore::Openai < VectorStore::Base
     end
   end
 
+  # Detaches the file from the store and deletes the uploaded file itself, which would otherwise stay in the
+  # account's file storage. A file already detached from the store is still deleted.
   def remove_file(store_id:, file_id:)
     with_response do
-      client.vector_store_files.delete(vector_store_id: store_id, id: file_id)
+      begin
+        client.vector_store_files.delete(vector_store_id: store_id, id: file_id)
+      rescue Faraday::ResourceNotFound
+        nil
+      end
+
+      client.files.delete(id: file_id)
     end
   end
 
