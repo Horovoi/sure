@@ -1,4 +1,6 @@
 class Eval::Run < ApplicationRecord
+  include AASM
+
   self.table_name = "eval_runs"
 
   belongs_to :dataset, class_name: "Eval::Dataset", foreign_key: :eval_dataset_id
@@ -7,10 +9,29 @@ class Eval::Run < ApplicationRecord
   validates :provider, :model, :status, presence: true
   validates :status, inclusion: { in: %w[pending running completed failed] }
 
-  scope :pending, -> { where(status: "pending") }
-  scope :running, -> { where(status: "running") }
-  scope :completed, -> { where(status: "completed") }
-  scope :failed, -> { where(status: "failed") }
+  # A run is single-use: only a pending run starts, so a finished run is never re-run
+  # (its results would mix with the new ones). Create a new run instead.
+  aasm column: :status, whiny_persistence: true do
+    state :pending, initial: true
+    state :running
+    state :completed
+    state :failed
+
+    event :start do
+      transitions from: :pending, to: :running, after: :record_start
+    end
+
+    # complete!(metrics)
+    event :complete do
+      transitions from: :running, to: :completed, after: :record_completion
+    end
+
+    # fail!(error), an exception or a message
+    event :fail do
+      transitions from: %i[pending running], to: :failed, after: :record_failure
+    end
+  end
+
   scope :for_model, ->(model) { where(model: model) }
   scope :for_provider, ->(provider) { where(provider: provider) }
 
@@ -23,32 +44,6 @@ class Eval::Run < ApplicationRecord
   # Get accuracy from metrics or calculate
   def accuracy
     metrics.dig("accuracy") || calculate_accuracy
-  end
-
-  # Start the evaluation run
-  def start!
-    update!(status: "running", started_at: Time.current)
-  end
-
-  # Complete the evaluation run with metrics
-  def complete!(calculated_metrics)
-    update!(
-      status: "completed",
-      completed_at: Time.current,
-      metrics: calculated_metrics,
-      total_prompt_tokens: results.sum(:prompt_tokens),
-      total_completion_tokens: results.sum(:completion_tokens),
-      total_cost: results.sum(:cost)
-    )
-  end
-
-  # Fail the evaluation run
-  def fail!(error)
-    update!(
-      status: "failed",
-      completed_at: Time.current,
-      error_message: error.is_a?(Exception) ? "#{error.class}: #{error.message}" : error.to_s
-    )
   end
 
   # Summary for display
@@ -80,6 +75,22 @@ class Eval::Run < ApplicationRecord
   end
 
   private
+    def record_start
+      self.started_at = Time.current
+    end
+
+    def record_completion(calculated_metrics)
+      self.completed_at = Time.current
+      self.metrics = calculated_metrics
+      self.total_prompt_tokens = results.sum(:prompt_tokens)
+      self.total_completion_tokens = results.sum(:completion_tokens)
+      self.total_cost = results.sum(:cost)
+    end
+
+    def record_failure(error)
+      self.completed_at = Time.current
+      self.error_message = error.is_a?(Exception) ? "#{error.class}: #{error.message}" : error.to_s
+    end
 
     def calculate_accuracy
       return 0.0 if results.empty?

@@ -5,7 +5,13 @@ class Eval::Runners::Base
     @eval_run = eval_run
   end
 
+  AlreadyRunError = Class.new(StandardError)
+
   def run
+    unless eval_run.may_start?
+      raise AlreadyRunError, "Eval run #{eval_run.id} is #{eval_run.status}; create a new run to evaluate again"
+    end
+
     eval_run.start!
 
     begin
@@ -15,6 +21,9 @@ class Eval::Runners::Base
     rescue => e
       eval_run.fail!(e)
       raise
+    ensure
+      # Interrupt (Ctrl-C) and other non-StandardError exceptions skip the rescue above
+      eval_run.fail!($! || "Run ended before completing") if eval_run.running?
     end
 
     eval_run
