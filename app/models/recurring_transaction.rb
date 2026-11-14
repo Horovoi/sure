@@ -120,6 +120,39 @@ class RecurringTransaction < ApplicationRecord
     Cleaner.new(family).cleanup_stale_transactions
   end
 
+  # Moves recurring rows off a merchant that is being merged, converted,
+  # unlinked or deleted, so subscriptions survive with their settings.
+  # With to_merchant the rows point at it; without, they become name-based
+  # (keeping their name, or taking fallback_name). When the move collides
+  # with a row that already has the target identity and amount, the more
+  # informative row is kept and the other one's transactions move to it.
+  def self.reassign_merchant!(scope, to_merchant: nil, fallback_name: nil)
+    scope.find_each do |row|
+      target = to_merchant ? { merchant_id: to_merchant.id, name: nil } : { merchant_id: nil, name: row.name.presence || fallback_name }
+
+      duplicate = where(family_id: row.family_id, currency: row.currency, amount: row.amount)
+        .where(target)
+        .where.not(id: row.id)
+        .first
+
+      if duplicate
+        keeper, loser = [ row, duplicate ].sort_by(&:merge_rank)
+        Transaction.where(recurring_transaction_id: loser.id).update_all(recurring_transaction_id: keeper.id)
+        loser.destroy!
+        keeper.update!(target) if keeper == row
+      else
+        row.update!(target)
+      end
+    end
+  end
+
+  # Lower ranks are more informative: rows the user manages, then dismissed
+  # and suggested rows, then the most recent occurrence.
+  def merge_rank
+    state_rank = { "dismissed" => 0, "suggested" => 1 }.fetch(subscription_state, 2)
+    [ user_managed? ? 0 : 1, state_rank, -(last_occurrence_date&.jd || 0) ]
+  end
+
   # Create a manual recurring transaction from an existing transaction
   # Automatically calculates amount variance from past 6 months of matching transactions
   def self.create_from_transaction(transaction, date_variance: 2)

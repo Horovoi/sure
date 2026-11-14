@@ -19,6 +19,9 @@ class ProviderMerchant < Merchant
       # Update only this family's transactions to point to new merchant
       family.transactions.where(merchant_id: id).update_all(merchant_id: family_merchant.id)
 
+      # Recurring rows and subscriptions follow the transactions
+      RecurringTransaction.reassign_merchant!(family.recurring_transactions.where(merchant_id: id), to_merchant: family_merchant)
+
       family_merchant
     end
   end
@@ -27,10 +30,15 @@ class ProviderMerchant < Merchant
   # Does NOT delete the ProviderMerchant since it may be used by other families.
   # Tracks the unlink in FamilyMerchantAssociation so it shows as "recently unlinked".
   def unlink_from_family(family)
-    family.transactions.where(merchant_id: id).update_all(merchant_id: nil)
+    transaction do
+      family.transactions.where(merchant_id: id).update_all(merchant_id: nil)
 
-    # Track that this merchant was unlinked from this family
-    association = FamilyMerchantAssociation.find_or_initialize_by(family: family, merchant: self)
-    association.update!(unlinked_at: Time.current)
+      # The family's recurring rows and subscriptions become name-based
+      RecurringTransaction.reassign_merchant!(family.recurring_transactions.where(merchant_id: id), fallback_name: name)
+
+      # Track that this merchant was unlinked from this family
+      association = FamilyMerchantAssociation.find_or_initialize_by(family: family, merchant: self)
+      association.update!(unlinked_at: Time.current)
+    end
   end
 end
