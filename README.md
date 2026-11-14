@@ -40,7 +40,7 @@ Join us!
 
 ## Hosting Sure
 
-Sure is a fully working personal finance app that can be [self hosted with Docker](docs/hosting/docker.md).
+Sure runs on this machine with Docker. `bin/deploy` builds the current commit and starts it; `bin/staging` runs a private copy of production for testing. Run either with `--help` for details.
 
 ## Forking and Attribution
 
@@ -53,8 +53,6 @@ To stay compliant and avoid trademark issues:
 - "Maybe" is a trademark of Maybe Finance Inc. and therefore, use of it is NOT allowed in forked repositories (or the logo)
 
 ## Local Development Setup
-
-**If you are trying to _self-host_ the app, [read this guide to get started](docs/hosting/docker.md).**
 
 The instructions below are for developers to get started with contributing to the app.
 
@@ -89,7 +87,6 @@ For further instructions, see guides below.
 - [Mac dev setup](https://github.com/we-promise/sure/wiki/Mac-Dev-Setup-Guide)
 - [Linux dev setup](https://github.com/we-promise/sure/wiki/Linux-Dev-Setup-Guide)
 - [Windows dev setup](https://github.com/we-promise/sure/wiki/Windows-Dev-Setup-Guide)
-- Dev containers - visit [this guide](https://code.visualstudio.com/docs/devcontainers/containers)
 
 ### One-click
 

@@ -21,10 +21,9 @@ In general, _full features_ that get us closer to [our 🔜 Vision](https://gith
 
 ### Setup
 
-To get setup for local development, you have two options:
+To get setup for local development:
 
-1. [Dev Containers](https://code.visualstudio.com/docs/devcontainers/containers) with VSCode (see the `.devcontainer` folder)
-2. Local Development
+1. Local Development
    - [Mac Setup Guide](https://github.com/we-promise/sure/wiki/Mac-Dev-Setup-Guide)
    - [Linux Setup Guide](https://github.com/we-promise/sure/wiki/Linux-Dev-Setup-Guide)
    - [Windows Setup Guide](https://github.com/we-promise/sure/wiki/Windows-Dev-Setup-Guide)
