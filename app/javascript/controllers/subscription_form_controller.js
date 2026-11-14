@@ -43,6 +43,11 @@ export default class extends Controller {
       return
     }
 
+    // Every call supersedes the earlier ones: a slow rate fetch that finishes
+    // later must not overwrite the hint for the current amount and currency
+    const requestId = (this.hintRequestId = (this.hintRequestId || 0) + 1)
+    const isStale = () => requestId !== this.hintRequestId
+
     const amount = parseFloat(this.amountFieldTarget.value)
     const selectedCurrency = this.currencySelectTarget.value
     const familyCurrency = this.familyCurrencyValue
@@ -80,8 +85,10 @@ export default class extends Controller {
 
       try {
         const response = await fetch(`/subscriptions/fetch_exchange_rate?from=${selectedCurrency}&to=${targetCurrency}`)
+        if (isStale()) return
         if (response.ok) {
           const data = await response.json()
+          if (isStale()) return
           rate = data.rate
           // Cache locally for this session
           this.exchangeRatesValue = { ...this.exchangeRatesValue, [rateKey]: rate }
@@ -90,6 +97,7 @@ export default class extends Controller {
           return
         }
       } catch (e) {
+        if (isStale()) return
         this.conversionHintTarget.classList.add("hidden")
         return
       }

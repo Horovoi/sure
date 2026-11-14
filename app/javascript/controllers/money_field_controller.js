@@ -12,13 +12,18 @@ export default class extends Controller {
   }
 
   updateAmount(currency) {
+    // Currency lookups can finish out of order; only the latest one applies
+    const requestId = (this.currencyRequestId = (this.currencyRequestId || 0) + 1);
+
     new CurrenciesService().get(currency).then((currency) => {
+      if (requestId !== this.currencyRequestId) return;
+
       this.amountTarget.step = currency.step;
 
-      if (Number.isFinite(this.amountTarget.value)) {
-        this.amountTarget.value = Number.parseFloat(
-          this.amountTarget.value,
-        ).toFixed(currency.default_precision);
+      // The input value is a string, so parse it before checking it
+      const amount = Number.parseFloat(this.amountTarget.value);
+      if (Number.isFinite(amount)) {
+        this.amountTarget.value = amount.toFixed(currency.default_precision);
       }
 
       this.symbolTarget.innerText = currency.symbol;
