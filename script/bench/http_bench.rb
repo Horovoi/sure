@@ -40,9 +40,9 @@ def now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
 # Parts of a page that legitimately differ between two servers or two requests
 def normalized(body)
-  body.gsub(%r{/assets/[\w./-]+-[0-9a-f]{8,}\.(js|css)}, "/assets/X")
+  body.gsub(%r{/commit/[0-9a-f]{7,40}">[0-9a-f]{7}<}, "/commit/SHA\">SHA<")
+      .gsub(%r{/assets/[\w./-]+-[0-9a-f]{8,}\.(js|css)}, "/assets/X")
       .gsub(%r{[A-Za-z0-9_+/=-]{40,}}, "TOKEN")
-      .gsub(%r{/commit/[0-9a-f]{7,40}">[0-9a-f]{7}<}, "/commit/SHA\">SHA<")
 end
 
 clients = TARGETS.transform_values { |host| Client.new(host) }

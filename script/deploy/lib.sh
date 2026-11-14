@@ -155,6 +155,13 @@ stop_staging_app() {
   quiet staging --profile worker --profile bench rm -sf web worker proxy web-old-a web-old-b web-new driver
 }
 
+# Copies the files of a production volume into the same volume of staging
+copy_volume() {
+  docker volume inspect "sure_$1" >/dev/null 2>&1 || return 0
+  quiet staging run --rm --no-deps -v "sure_$1:/from:ro" --entrypoint sh web -c \
+    "find $2 -mindepth 1 -delete; cp -a /from/. $2/"
+}
+
 # Replaces the staging data with a fresh copy of production: database and uploaded files.
 #
 # The database is copied physically (pg_basebackup), not dumped and restored, so the
@@ -171,9 +178,9 @@ refresh_staging() {
   quiet staging up -d --wait db redis
   echo "  database copied ($(echo "select pg_size_pretty(pg_database_size(current_database()))" | sql staging))"
 
-  quiet staging run --rm --no-deps -v sure_app-storage:/from:ro --entrypoint sh web -c \
-    'find /rails/storage -mindepth 1 -delete; cp -a /from/. /rails/storage/'
-  echo "  uploaded files copied"
+  copy_volume app-storage /rails/storage
+  copy_volume icons /rails/public/icons
+  echo "  uploaded files and cached icons copied"
 
   # The copy must never be able to act on a real bank or exchange account
   staging run --rm --no-deps -v "$PWD/script/staging:/staging:ro" web bin/rails runner /staging/defuse.rb | tail -1 | sed 's/^/  /'
