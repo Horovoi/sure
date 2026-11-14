@@ -59,6 +59,16 @@ class AssistantMessage < Message
     in_flight? && updated_at.present? && updated_at < STALE_AFTER.ago
   end
 
+  # Still being answered, as far as anyone can tell
+  def live?
+    in_flight? && !stale?
+  end
+
+  # A failed or lost turn that is still the end of the chat, so Chat#retry_last_turn! would run it again
+  def retryable?
+    (failed? || stale?) && !chat.messages.where(type: %w[UserMessage AssistantMessage]).where("created_at > ?", created_at).exists?
+  end
+
   # The user message this turn answers
   def prompt
     chat.messages
@@ -89,8 +99,11 @@ class AssistantMessage < Message
     fail_turn(e)
   end
 
-  # Fails the turn unless it already ended (for example, the reaper failed it while the job was still running)
+  # Fails the turn unless it already ended (for example, the reaper failed it while the job was still running).
+  # Unsaved changes from the attempt that raised (a rejected complete! leaves the new status and provider id
+  # behind) are dropped first: the row lock refuses a dirty record.
   def fail_turn(error)
+    restore_attributes
     fail!(error)
   rescue AASM::InvalidTransition
     Rails.logger.warn("AssistantMessage #{id} is #{status}; not failing it again (#{error.message})")

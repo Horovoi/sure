@@ -56,6 +56,17 @@ class AssistantMessageTest < ActiveSupport::TestCase
     assert_includes @chat.error, "boom"
   end
 
+  test "a turn whose completion is rejected fails instead of staying in flight" do
+    turn = AssistantMessage.create!(chat: @chat, ai_model: "gpt-4.1", status: "streaming")
+    error = assert_raises(ActiveRecord::RecordInvalid) { turn.complete!("resp_new") }
+
+    turn.fail_turn(error)
+
+    assert turn.reload.failed?
+    assert_nil turn.provider_id
+    assert_equal "resp_previous", @chat.reload.latest_assistant_response_id
+  end
+
   test "fail_turn ignores a turn that already ended" do
     turn = AssistantMessage.create!(chat: @chat, ai_model: "gpt-4.1", status: "complete", content: "Done")
 

@@ -56,6 +56,21 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#chat-form button[type=submit]:not([disabled])"
   end
 
+  test "shows retry only for the last turn" do
+    chat = chats(:one)
+    failed = chat.ask!("Question", ai_model: "gpt-4.1")
+    failed.start!
+    failed.fail!(StandardError.new("boom"))
+    answered = chat.ask!("Again", ai_model: "gpt-4.1")
+    answered.start!
+    answered.append_text!("Answer")
+    answered.complete!("resp_2")
+
+    get chat_url(chat)
+
+    assert_select "#chat-error", count: 0
+  end
+
   test "shows retry for a lost turn" do
     chat = chats(:one)
     turn = chat.ask!("Question", ai_model: "gpt-4.1")

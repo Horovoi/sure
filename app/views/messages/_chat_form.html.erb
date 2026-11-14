@@ -3,7 +3,7 @@
 <div id="chat-form" class="space-y-2">
   <% model = chat && chat.persisted? ? [chat, Message.new] : Chat.new %>
   <%# While a turn runs the composer cannot send; chat_controller.js keeps this in sync with the streamed messages %>
-  <% turn_in_flight = chat&.persisted? && chat.turn_in_flight? && !chat.in_flight_turn.stale? %>
+  <% turn_in_flight = chat&.persisted? && chat.in_flight_turn&.live? %>
 
   <%= form_with model: model,
                 class: "flex lg:flex-col gap-2 bg-container px-2 py-1.5 rounded-full lg:rounded-lg shadow-border-xs",

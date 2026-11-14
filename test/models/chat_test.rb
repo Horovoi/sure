@@ -129,7 +129,7 @@ class ChatTest < ActiveSupport::TestCase
     turn = chat.ask!("Question", ai_model: "gpt-4.1")
     turn.start!
     turn.update_column(:updated_at, (AssistantMessage::STALE_AFTER + 1.minute).ago)
-    assert chat.retryable?
+    assert turn.reload.retryable?
 
     assert_equal turn, chat.retry_last_turn!
     assert turn.reload.pending?
@@ -138,7 +138,6 @@ class ChatTest < ActiveSupport::TestCase
   test "retry answers a prompt that never got a turn" do
     chat = chats(:two) # its last message is a user message with no reply
     assert chat.unanswered_prompt?
-    assert chat.retryable?
 
     turn = assert_difference -> { chat.messages.where(type: "AssistantMessage").count }, 1 do
       chat.retry_last_turn!
@@ -152,7 +151,6 @@ class ChatTest < ActiveSupport::TestCase
   test "nothing to retry after a completed turn" do
     chat = chats(:one)
 
-    assert_not chat.retryable?
     assert_raises(Chat::NothingToRetryError) { chat.retry_last_turn! }
   end
 

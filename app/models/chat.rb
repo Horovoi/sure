@@ -104,16 +104,6 @@ class Chat < ApplicationRecord
     in_flight_turn.present?
   end
 
-  def retryable?
-    last = last_turn_message
-
-    case last
-    when AssistantMessage then last.failed? || last.stale?
-    when UserMessage then true
-    else false
-    end
-  end
-
   # The last message is a prompt with no assistant message after it
   def unanswered_prompt?
     last_turn_message.is_a?(UserMessage)

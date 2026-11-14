@@ -3,6 +3,9 @@ import { Controller } from "@hotwired/stimulus";
 // Turns whose page was re-fetched once after the stream subscription connected (see #refreshIfTurnMissed)
 const refreshedTurns = new Set();
 
+// Stream sources that have connected before: a later "connected" on one of them is a reconnect
+const connectedSources = new WeakSet();
+
 // How close to the bottom (px) the user must be for new content to keep the view scrolled down
 const STICK_TO_BOTTOM_THRESHOLD = 80;
 
@@ -14,8 +17,10 @@ export default class extends Controller {
     this.stickToBottom = true;
 
     this.element.addEventListener("submit", this.#handleSubmit, true);
-    this.element.addEventListener("turbo:submit-end", this.#handleSubmitEnd);
     this.element.addEventListener("scroll", this.#handleScroll, true);
+    // Turbo fires submit-end on the form, or on the document when the form was replaced
+    // before the request finished. Both reach the document.
+    document.addEventListener("turbo:submit-end", this.#handleSubmitEnd);
 
     this.#configureObserver();
     this.#syncComposer();
@@ -24,14 +29,15 @@ export default class extends Controller {
 
   disconnect() {
     this.element.removeEventListener("submit", this.#handleSubmit, true);
-    this.element.removeEventListener("turbo:submit-end", this.#handleSubmitEnd);
     this.element.removeEventListener("scroll", this.#handleScroll, true);
+    document.removeEventListener("turbo:submit-end", this.#handleSubmitEnd);
 
     if (this.messagesObserver) {
       this.messagesObserver.disconnect();
     }
 
     clearTimeout(this.sampleQuestionTimer);
+    this.sampleQuestionTimer = null;
   }
 
   autoResize() {
@@ -49,7 +55,7 @@ export default class extends Controller {
     // One sample question at a time: a second click while one is being sent does nothing
     if (this.sampleQuestionTimer || this.#busy()) return;
 
-    this.inputTarget.value = e.params.question ?? e.currentTarget.dataset.chatQuestionParam;
+    this.inputTarget.value = e.params.question;
 
     this.sampleQuestionTimer = setTimeout(() => {
       this.sampleQuestionTimer = null;
@@ -85,11 +91,15 @@ export default class extends Controller {
     }
 
     this.submitting = true;
+    this.submittedForm = e.target;
     this.#syncComposer();
   };
 
-  #handleSubmitEnd = () => {
+  #handleSubmitEnd = (e) => {
+    if (e.detail.formSubmission?.formElement !== this.submittedForm) return;
+
     this.submitting = false;
+    this.submittedForm = null;
     this.#syncComposer();
   };
 
@@ -119,22 +129,41 @@ export default class extends Controller {
 
   // The response job starts as soon as the turn is saved, before this page subscribes to the chat stream.
   // A turn that ends fast (for example, no LLM provider configured) can finish before the subscription, and
-  // its broadcasts are lost. Once the subscription connects, re-fetch the chat once per turn to catch up.
+  // its broadcasts are lost. Once the subscription connects, re-fetch the chat once per turn to catch up
+  // (once, because the re-fetched frame subscribes again). A reconnect (sleep, network drop) can have missed
+  // broadcasts at any point of the turn, so it always catches up.
   #refreshIfTurnMissed(mutations) {
-    const connected = mutations.some(
+    const source = mutations.find(
       (m) =>
         m.type === "attributes" &&
         m.target.tagName === "TURBO-CABLE-STREAM-SOURCE" &&
         m.target.hasAttribute("connected"),
-    );
-    if (!connected) return;
+    )?.target;
+    if (!source) return;
+
+    const reconnected = connectedSources.has(source);
+    connectedSources.add(source);
 
     const turn = this.#inFlightTurn();
-    if (!turn || refreshedTurns.has(turn.id)) return;
+    if (!turn || (!reconnected && refreshedTurns.has(turn.id))) return;
     refreshedTurns.add(turn.id);
 
     const frame = this.messagesTarget.closest("turbo-frame");
     if (!frame) return;
+
+    // The composer is inside the frame: carry over a question typed while waiting
+    const draft = this.hasInputTarget ? this.inputTarget.value : "";
+    if (draft) {
+      frame.addEventListener(
+        "turbo:frame-load",
+        () => {
+          if (!this.hasInputTarget || this.inputTarget.value) return;
+          this.inputTarget.value = draft;
+          this.autoResize();
+        },
+        { once: true },
+      );
+    }
 
     if (frame.src) {
       frame.reload();
