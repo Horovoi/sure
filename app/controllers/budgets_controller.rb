@@ -28,8 +28,12 @@ class BudgetsController < ApplicationController
       params.require(:budget).permit(:start_date)
     end
 
+    # A blank expected income means none expected. Left nil, it would break the income
+    # summary on the budget page.
     def budget_params
-      params.require(:budget).permit(:budgeted_spending, :expected_income)
+      params.require(:budget).permit(:budgeted_spending, :expected_income).tap do |permitted|
+        permitted[:expected_income] = permitted[:expected_income].presence || 0 if permitted.key?(:expected_income)
+      end
     end
 
     def set_budget

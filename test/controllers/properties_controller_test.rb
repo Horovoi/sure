@@ -166,20 +166,68 @@ class PropertiesControllerTest < ActionDispatch::IntegrationTest
 
     assert draft_account.draft?
 
-    patch update_address_property_path(draft_account), params: {
-      property: {
-        address_attributes: {
-          line1: "789 Activate St",
-          locality: "New York",
-          region: "NY",
-          country: "US",
-          postal_code: "10001"
-        }
-      }
-    }
+    patch update_balances_property_path(draft_account), params: { account: { balance: 500000, currency: "USD" } }
+    assert_redirected_to address_property_path(draft_account)
+
+    Account.any_instance.expects(:sync_later).once
+    patch update_address_property_path(draft_account), params: address_params
 
     draft_account.reload
     assert draft_account.active?
     assert_redirected_to account_path(draft_account)
   end
+
+  test "address update keeps a draft without a balance in draft and sends it to the balance step" do
+    draft_account = Account.create!(
+      family: @user.family,
+      name: "Draft Property",
+      accountable: Property.new,
+      status: "draft",
+      balance: 0,
+      currency: "USD"
+    )
+
+    patch update_address_property_path(draft_account), params: address_params
+
+    assert_redirected_to balances_property_path(draft_account)
+    assert draft_account.reload.draft?
+    assert_nil draft_account.property.address
+  end
+
+  test "wizard steps only accept property accounts" do
+    depository = accounts(:depository)
+
+    get balances_property_path(depository)
+    assert_response :not_found
+
+    patch update_address_property_path(depository), params: address_params
+    assert_response :not_found
+
+    patch property_path(depository), params: { account: { name: "Renamed" } }
+    assert_response :not_found
+    assert_not_equal "Renamed", depository.reload.name
+  end
+
+  test "create always makes a property" do
+    post properties_path, params: {
+      account: { name: "Typed Property", accountable_type: "Depository", accountable_attributes: { subtype: "house" } }
+    }
+
+    assert_equal "Property", Account.order(:created_at).last.accountable_type
+  end
+
+  private
+    def address_params
+      {
+        property: {
+          address_attributes: {
+            line1: "789 Activate St",
+            locality: "New York",
+            region: "NY",
+            country: "US",
+            postal_code: "10001"
+          }
+        }
+      }
+    end
 end

@@ -42,7 +42,7 @@ class InvestmentStatement::Totals
           er.to_currency = :target_currency
         )
         WHERE a.family_id = :family_id
-          AND a.status IN ('draft', 'active')
+          AND #{Account.visible_status_sql("a")}
           AND ae.excluded = false
       SQL
     end

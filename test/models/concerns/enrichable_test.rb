@@ -76,4 +76,24 @@ class EnrichableTest < ActiveSupport::TestCase
 
     refute_includes Account.enrichable(:name), @enrichable
   end
+
+  test "a failed save enriches nothing and reports no change" do
+    original_name = @enrichable.name
+
+    assert_no_difference "DataEnrichment.count" do
+      assert_equal false, @enrichable.enrich_attributes({ name: nil }, source: "plaid")
+    end
+
+    assert_equal original_name, @enrichable.name
+    assert_equal original_name, @enrichable.reload.name
+  end
+
+  test "a new record keeps the enriched values when its first save fails" do
+    account = families(:dylan_family).accounts.new
+
+    account.enrich_attributes({ name: "Filled in" }, source: "plaid")
+
+    assert account.new_record?
+    assert_equal "Filled in", account.name
+  end
 end

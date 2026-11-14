@@ -247,6 +247,11 @@ class EnableBankingItemsController < ApplicationController
       return
     end
 
+    unless Accountable::TYPES.include?(accountable_type)
+      redirect_to accounts_path, alert: t(".invalid_account_type", default: "Unknown account type.")
+      return
+    end
+
     enable_banking_item = Current.family.enable_banking_items.where.not(session_id: nil).first
 
     unless enable_banking_item.present?
@@ -371,6 +376,12 @@ class EnableBankingItemsController < ApplicationController
     account_types.each do |enable_banking_account_id, selected_type|
       # Skip accounts marked as "skip"
       if selected_type == "skip" || selected_type.blank?
+        skipped_count += 1
+        next
+      end
+
+      unless Accountable::TYPES.include?(selected_type)
+        Rails.logger.warn("Invalid account type '#{selected_type}' submitted for Enable Banking account #{enable_banking_account_id}")
         skipped_count += 1
         next
       end

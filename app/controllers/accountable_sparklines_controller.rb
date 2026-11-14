@@ -32,7 +32,7 @@ class AccountableSparklinesController < ApplicationController
     end
 
     def account_ids
-      family.accounts.visible.where(accountable_type: accountable.name).pluck(:id)
+      family.accounts.counted_in_totals.where(accountable_type: accountable.name).pluck(:id)
     end
 
     def cache_key

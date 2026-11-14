@@ -5,7 +5,13 @@ class Budget < ApplicationRecord
 
   belongs_to :family
 
-  has_many :budget_categories, -> { includes(:category) }, dependent: :destroy
+  # Every budget category row, whatever its category's classification. Only used to
+  # sync rows and to destroy them with the budget.
+  has_many :all_budget_categories, class_name: "BudgetCategory", dependent: :destroy
+
+  # The rows a budget shows and counts: those whose category is an expense. A category
+  # switched to income keeps its row (and amount), hidden, so switching it back restores it.
+  has_many :budget_categories, -> { includes(:category).where(category_id: Category.expenses.select(:id)) }
 
   validates :start_date, :end_date, presence: true
   validates :start_date, :end_date, uniqueness: { scope: :family_id }
@@ -46,13 +52,11 @@ class Budget < ApplicationRecord
       period_end = family.budget_period_end_for(period_start)
 
       Budget.transaction do
-        budget = Budget.find_or_create_by!(
-          family: family,
-          start_date: period_start,
-          end_date: period_end
-        ) do |b|
-          b.currency = family.currency
-        end
+        budget = family.budgets.find_by(start_date: period_start, end_date: period_end) ||
+          adopt_budget_from_other_fiscal_start_day(family, period_start, period_end) ||
+          Budget.find_or_create_by!(family: family, start_date: period_start, end_date: period_end) do |b|
+            b.currency = family.currency
+          end
 
         budget.sync_budget_categories
 
@@ -61,6 +65,19 @@ class Budget < ApplicationRecord
     end
 
     private
+      # A budget's period comes from the family's fiscal start day. After that day changes,
+      # the budget for a month (say Mar 1 - Mar 31) no longer matches the month's new
+      # period (Mar 10 - Apr 9). Move it to the new period instead of starting an empty
+      # budget, so its amounts stay reachable. Skipped when another budget already
+      # uses one of the new dates.
+      def adopt_budget_from_other_fiscal_start_day(family, period_start, period_end)
+        month = period_start.beginning_of_month..period_start.end_of_month
+        stranded = family.budgets.where(start_date: month).where.not(start_date: period_start).order(:start_date).first
+        return nil unless stranded
+
+        stranded.update(start_date: period_start, end_date: period_end) ? stranded : nil
+      end
+
       def oldest_valid_budget_date(family)
         # Allow going back to either the earliest entry date OR 2 years ago, whichever is earlier
         # Ensure we return Dates (not TimeWithZone) to avoid type errors in month arithmetic
@@ -78,23 +95,23 @@ class Budget < ApplicationRecord
     self.class.date_to_param(start_date, family: family)
   end
 
+  # Adds a row for each expense category that has none. Never removes rows: this runs on
+  # every page view, and rows of categories that are no longer expenses are hidden by
+  # `budget_categories` instead (deleted categories cascade on their own).
   def sync_budget_categories
     current_category_ids = family.categories.expenses.pluck(:id).to_set
-    existing_budget_category_ids = budget_categories.pluck(:category_id).to_set
+    existing_budget_category_ids = all_budget_categories.pluck(:category_id).to_set
     categories_to_add = current_category_ids - existing_budget_category_ids
-    categories_to_remove = existing_budget_category_ids - current_category_ids
 
-    # Create missing categories
     categories_to_add.each do |category_id|
-      budget_categories.create!(
+      all_budget_categories.create!(
         category_id: category_id,
         budgeted_spending: 0,
         currency: family.currency
       )
     end
 
-    # Remove old categories
-    budget_categories.where(category_id: categories_to_remove).destroy_all if categories_to_remove.any?
+    budget_categories.reset if categories_to_add.any?
   end
 
   def uncategorized_budget_category
@@ -189,7 +206,7 @@ class Budget < ApplicationRecord
   end
 
   def percent_of_budget_spent
-    return 0 unless budgeted_spending > 0
+    return 0 unless budgeted_spending.to_d > 0
 
     (actual_spending / budgeted_spending.to_f) * 100
   end
@@ -217,8 +234,28 @@ class Budget < ApplicationRecord
     (budgeted_spending || 0) - allocated_spending
   end
 
+  # The one definition of where a budget stands, used by the budget page and the setup
+  # wizard alike:
+  #   :not_set_up      - no spending amount yet (the Setup step is not done)
+  #   :unallocated     - set up, nothing given to categories
+  #   :under_allocated - some, but not all, of the amount given to categories
+  #   :fully_allocated - all of it given to categories
+  #   :over_allocated  - categories add up to more than the amount
+  def allocation_state
+    return :not_set_up unless initialized?
+    return :over_allocated if available_to_allocate.negative?
+    return :unallocated unless allocated_spending.positive?
+
+    available_to_allocate.zero? ? :fully_allocated : :under_allocated
+  end
+
+  def over_allocated?
+    allocation_state == :over_allocated
+  end
+
+  # The Categories step is complete: something is allocated and nothing over-allocated.
   def allocations_valid?
-    initialized? && available_to_allocate >= 0 && allocated_spending > 0
+    allocation_state.in?(%i[under_allocated fully_allocated])
   end
 
   # =============================================================================
@@ -233,17 +270,17 @@ class Budget < ApplicationRecord
   end
 
   def actual_income_percent
-    return 0 unless expected_income > 0
+    return 0 unless expected_income.to_d > 0
 
     (actual_income / expected_income.to_f) * 100
   end
 
   def remaining_expected_income
-    expected_income - actual_income
+    expected_income.to_d - actual_income
   end
 
   def surplus_percent
-    return 0 unless remaining_expected_income.negative?
+    return 0 unless remaining_expected_income.negative? && expected_income.to_d > 0
 
     remaining_expected_income.abs / expected_income.to_f * 100
   end

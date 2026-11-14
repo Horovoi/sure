@@ -13,7 +13,7 @@ class BudgetCategoriesController < ApplicationController
       @budget_category = @budget.uncategorized_budget_category
       @recent_transactions = @recent_transactions.where(transactions: { category_id: nil })
     else
-      @budget_category = Current.family.budget_categories.find(params[:id])
+      @budget_category = @budget.budget_categories.find(params[:id])
       @recent_transactions = @recent_transactions.joins("LEFT JOIN categories ON categories.id = transactions.category_id")
                                                  .where("categories.id = ? OR categories.parent_id = ?", @budget_category.category.id, @budget_category.category.id)
     end
@@ -22,7 +22,7 @@ class BudgetCategoriesController < ApplicationController
   end
 
   def update
-    @budget_category = Current.family.budget_categories.find(params[:id])
+    @budget_category = @budget.budget_categories.find(params[:id])
 
     if @budget_category.update(budget_category_params)
       respond_to do |format|
@@ -30,7 +30,8 @@ class BudgetCategoriesController < ApplicationController
         format.html { redirect_to budget_budget_categories_path(@budget) }
       end
     else
-      render :index, status: :unprocessable_entity
+      @budget_categories = @budget.budget_categories.includes(:category)
+      render :index, status: :unprocessable_entity, layout: "wizard"
     end
   end
 
@@ -41,12 +42,17 @@ class BudgetCategoriesController < ApplicationController
       end
     end
 
+    # The Categories step needs a set-up budget. A month outside the budget range is a
+    # 404; a month whose Setup step is not done goes to that step first.
     def set_budget
       start_date = Budget.param_to_date(params[:budget_month_year], family: Current.family)
-      @budget = Current.family.budgets.find_by(start_date: start_date)
+      @budget = Budget.find_or_bootstrap(Current.family, start_date: start_date)
+      raise ActiveRecord::RecordNotFound unless @budget
 
-      if @budget && params[:budget_month_year] != @budget.to_param
+      if params[:budget_month_year] != @budget.to_param
         redirect_to budget_budget_categories_path(@budget) and return
       end
+
+      redirect_to edit_budget_path(@budget) unless action_name == "show" || @budget.initialized?
     end
 end

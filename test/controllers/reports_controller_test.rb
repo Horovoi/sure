@@ -70,6 +70,24 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
   end
 
+  test "budget performance uses the current fiscal budget and its budgeted amount" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+      budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+      assert_equal Date.new(2026, 3, 10), budget.start_date
+
+      budget.update!(budgeted_spending: 1000)
+      budget.budget_categories.find_by!(category: categories(:food_and_drink)).update!(budgeted_spending: 400)
+      create_transaction(account: accounts(:depository), date: Date.new(2026, 3, 12), amount: 250, category: categories(:food_and_drink))
+
+      get reports_path(period_type: :monthly, fiscal_mode: "true")
+      assert_response :ok
+
+      metrics = controller.instance_variable_get(:@summary_metrics)
+      assert_equal 25.0, metrics[:budget_percent]
+    end
+  end
+
   test "index calculates summary metrics correctly" do
     get reports_path(period_type: :monthly)
     assert_response :ok
@@ -175,6 +193,17 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_equal "text/csv", @response.media_type
     assert_match /Category/, @response.body
+  end
+
+  test "export with an API key neither creates nor reuses a browser session" do
+    api_key = api_keys(:active_key)
+    Session.where(user: api_key.user).delete_all
+
+    assert_no_difference -> { Session.count } do
+      get export_transactions_reports_path(format: :csv, period_type: :ytd, api_key: api_key.plain_key)
+    end
+
+    assert_response :ok
   end
 
   test "export transactions with invalid API key" do

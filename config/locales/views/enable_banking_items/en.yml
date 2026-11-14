@@ -24,6 +24,7 @@ en:
       success: Enable Banking connection has been queued for deletion.
     link_accounts:
       already_linked: The selected accounts are already linked.
+      invalid_account_type: Unknown account type.
       link_failed: Failed to link accounts
       no_accounts_selected: No accounts selected.
       no_session: No active Enable Banking connection. Please connect to a bank first.

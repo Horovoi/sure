@@ -18,7 +18,16 @@ class Account < ApplicationRecord
 
   enum :classification, { asset: "asset", liability: "liability" }, validate: { allow_nil: true }
 
-  scope :visible, -> { where(status: [ "draft", "active" ]) }
+  # Statuses of accounts the user sees in lists and reports. Disabled accounts and
+  # accounts being deleted are hidden. Use `visible`, or `visible_status_sql` in raw SQL.
+  VISIBLE_STATUSES = %w[draft active].freeze
+
+  scope :visible, -> { where(status: VISIBLE_STATUSES) }
+
+  # Accounts counted in totals such as net worth. A draft (a property whose setup
+  # wizard is not finished) is listed, but its balance is not counted yet.
+  scope :counted_in_totals, -> { where(status: "active") }
+
   scope :assets, -> { where(classification: "asset") }
   scope :liabilities, -> { where(classification: "liability") }
   scope :alphabetically, -> { order(:name) }
@@ -48,6 +57,12 @@ class Account < ApplicationRecord
   end
 
   accepts_nested_attributes_for :accountable, update_only: true
+
+  # delegated_type builds the accountable with `accountable_type.constantize`, and
+  # accountable_type often comes from request params. Allow only the account types.
+  def accountable_class
+    Accountable.from_type(accountable_type) || raise(ArgumentError, "Unknown account type: #{accountable_type.inspect}")
+  end
 
   # Account state machine
   aasm column: :status do
@@ -80,6 +95,12 @@ class Account < ApplicationRecord
   end
 
   class << self
+    # SQL condition for `visible`, for raw SQL that names the accounts table differently.
+    #   Account.visible_status_sql("a") # => %q("a".status IN ('draft','active'))
+    def visible_status_sql(table = table_name)
+      "#{connection.quote_table_name(table)}.status IN (#{VISIBLE_STATUSES.map { |s| connection.quote(s) }.join(',')})"
+    end
+
     def create_and_sync(attributes, skip_initial_sync: false)
       attributes[:accountable_attributes] ||= {} # Ensure accountable is created, even if empty
       # Default cash_balance to balance unless explicitly provided (e.g., Crypto sets it to 0)
@@ -214,6 +235,11 @@ class Account < ApplicationRecord
   def lock_saved_attributes!
     super
     accountable.lock_saved_attributes!
+  end
+
+  # Matches the `counted_in_totals` scope.
+  def counted_in_totals?
+    active?
   end
 
   def first_valuation
