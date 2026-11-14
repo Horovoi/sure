@@ -172,10 +172,14 @@ class Sync < ApplicationRecord
       claimed = Sync.where(id: id, status: "pending").update_all(status: "syncing", syncing_at: now, updated_at: now) == 1
       return false unless claimed
 
+      # Re-read the window: a request may have widened it after this job loaded the row
+      window_start, window_end = Sync.where(id: id).pick(:window_start_date, :window_end_date)
       self.status = "syncing"
       self.syncing_at = now
       self.updated_at = now
-      clear_attribute_changes(%w[status syncing_at updated_at])
+      self.window_start_date = window_start
+      self.window_end_date = window_end
+      clear_attribute_changes(%w[status syncing_at updated_at window_start_date window_end_date])
       Rails.logger.info("changing from pending to syncing (event: start)")
       report_warnings
       true
