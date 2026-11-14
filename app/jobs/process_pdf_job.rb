@@ -60,7 +60,6 @@ class ProcessPdfJob < ApplicationJob
 
     def upload_to_vector_store(pdf_import)
       return unless VectorStore.configured?
-      return if already_uploaded?(pdf_import)
 
       filename = pdf_import.pdf_file.filename.to_s
       file_content = pdf_import.pdf_file_content
@@ -72,9 +71,5 @@ class ProcessPdfJob < ApplicationJob
       )
 
       Rails.logger.warn("ProcessPdfJob: Vector store upload failed for import #{pdf_import.id}") unless family_document
-    end
-
-    def already_uploaded?(pdf_import)
-      pdf_import.family.family_documents.where("metadata->>'import_id' = ?", pdf_import.id.to_s).exists?
     end
 end

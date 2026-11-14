@@ -68,11 +68,29 @@ class ProcessPdfJobTest < ActiveJob::TestCase
     @family.family_documents.create!(filename: "statement.pdf", status: "ready", metadata: { "import_id" => @import.id })
     @import.process_with_ai_later
     stub_ai(@import, document_type: "contract")
-    Family.any_instance.expects(:upload_document).never
+    adapter = mock("vector_store_adapter")
+    adapter.expects(:upload_file).never
+    Family.any_instance.stubs(:vector_store_adapter).returns(adapter)
 
     ProcessPdfJob.perform_now(@import)
 
     assert @import.reload.indexed?
+  end
+
+  test "a failed vault upload is tried again on the next run" do
+    VectorStore.stubs(:configured?).returns(true)
+    @family.update_column(:vector_store_id, "vs_1")
+    @family.family_documents.create!(filename: "statement.pdf", status: "error", metadata: { "import_id" => @import.id })
+    @import.process_with_ai_later
+    stub_ai(@import, document_type: "contract")
+    adapter = mock("vector_store_adapter")
+    adapter.expects(:upload_file).once.returns(VectorStore::Response.new(success?: true, data: { file_id: "file_1" }, error: nil))
+    Family.any_instance.stubs(:vector_store_adapter).returns(adapter)
+
+    ProcessPdfJob.perform_now(@import)
+
+    assert @import.reload.indexed?
+    assert @family.family_documents.ready.exists?(provider_file_id: "file_1")
   end
 
   test "a reviewed PDF can not be processed again" do

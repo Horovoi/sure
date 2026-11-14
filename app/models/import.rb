@@ -436,20 +436,23 @@ class Import < ApplicationRecord
     end
 
     # Restores entries this import took over as duplicates. An entry whose previous
-    # owner import has since been reverted or deleted goes with this import.
+    # owner import has since been reverted or deleted goes with this import. A category
+    # or tag deleted since the claim cannot be restored and is left out.
     def release_claimed_entries!
-      claimed_entries.includes(:entry).find_each do |claim|
+      live_import_ids = Import.where(id: claimed_entries.select(:previous_import_id)).where.not(status: "reverted").ids.to_set
+      category_ids = Category.where(id: claimed_entries.select(:previous_category_id)).ids.to_set
+      tag_ids = Tag.where(id: claimed_entries.pluck(:previous_tag_ids).flatten.uniq).ids.to_set
+
+      claimed_entries.includes(entry: :entryable).find_each do |claim|
         entry = claim.entry
 
-        if claim.previous_import_id.present? && !Import.where(id: claim.previous_import_id).where.not(status: "reverted").exists?
-          next
-        end
+        next if claim.previous_import_id.present? && !live_import_ids.include?(claim.previous_import_id)
 
         entry.update_columns(import_id: claim.previous_import_id, notes: claim.previous_notes, import_locked: claim.previous_import_locked)
 
         if (txn = entry.transaction)
-          txn.update!(category_id: claim.previous_category_id)
-          txn.tag_ids = claim.previous_tag_ids
+          txn.update!(category_id: claim.previous_category_id.presence_in(category_ids))
+          txn.tag_ids = claim.previous_tag_ids.select { |tag_id| tag_ids.include?(tag_id) }
         end
       end
 

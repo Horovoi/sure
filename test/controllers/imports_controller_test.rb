@@ -82,6 +82,15 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "form[action='#{publish_import_path(import)}']", count: 0
   end
 
+  test "a failed revert offers a retry that uses the revert route's method" do
+    import = imports(:transaction)
+    import.update_column(:status, "revert_failed")
+
+    get import_url(import)
+
+    assert_select "form[action='#{revert_import_path(import)}'] input[name=_method][value=put]"
+  end
+
   test "reverting an import that is not published shows an alert" do
     import = imports(:transaction)
 

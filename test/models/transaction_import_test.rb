@@ -429,6 +429,31 @@ class TransactionImportTest < ActiveSupport::TestCase
     assert_empty @import.claimed_entries
   end
 
+  test "revert works after a claimed entry's earlier category and tag were deleted" do
+    account = accounts(:depository)
+    category = account.family.categories.create!(name: "Short lived", color: "#000000", classification: "expense", lucide_icon: "shapes")
+    tag = account.family.tags.create!(name: "Short lived")
+    existing_entry = account.entries.create!(
+      date: Date.new(2024, 1, 1), amount: 100, currency: "USD", name: "Coffee Shop",
+      entryable: Transaction.new(category: category, tags: [ tag, tags(:one) ])
+    )
+
+    configure_claiming_import(account, "01/01/2024,Coffee Shop,100,Income,Trips,from csv")
+    @import.sync_mappings
+    @import.publish
+    assert @import.reload.complete?
+
+    category.destroy!
+    tag.destroy!
+
+    @import.revert_later
+    @import.revert
+
+    assert @import.reload.reverted?
+    assert_nil existing_entry.transaction.reload.category
+    assert_equal [ tags(:one) ], existing_entry.transaction.tags.to_a
+  end
+
   test "revert returns an entry claimed from an earlier import to that import" do
     account = accounts(:depository)
     earlier = imports(:trade)

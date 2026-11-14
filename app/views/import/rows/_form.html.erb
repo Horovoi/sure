@@ -10,7 +10,6 @@
             method: :patch,
             data: {
               controller: "auto-submit-form mobile-cell-interaction",
-              auto_submit_form_trigger_value: "blur",
               mobile_cell_interaction_error_value: !cell_is_valid?(row, key) ? row.errors[key].join(", ") : "",
             }
           ) do |form| %>
