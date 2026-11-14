@@ -27,6 +27,16 @@ class AddUniqueTransferLegIndexes < ActiveRecord::Migration[7.2]
 
     remove_foreign_key :rejected_transfers, :transactions, column: :inflow_transaction_id
     remove_foreign_key :rejected_transfers, :transactions, column: :outflow_transaction_id
+
+    # Data loaded with triggers off (a restore) can hold rejections whose transactions are
+    # gone, although the old constraint is marked valid. They can never be read; drop them
+    # so the new constraint validates.
+    execute <<~SQL
+      DELETE FROM rejected_transfers r
+      WHERE NOT EXISTS (SELECT 1 FROM transactions t WHERE t.id = r.inflow_transaction_id)
+         OR NOT EXISTS (SELECT 1 FROM transactions t WHERE t.id = r.outflow_transaction_id)
+    SQL
+
     add_foreign_key :rejected_transfers, :transactions, column: :inflow_transaction_id, on_delete: :cascade
     add_foreign_key :rejected_transfers, :transactions, column: :outflow_transaction_id, on_delete: :cascade
   end
