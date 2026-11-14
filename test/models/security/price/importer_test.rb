@@ -313,6 +313,36 @@ class Security::Price::ImporterTest < ActiveSupport::TestCase
     assert_not old_price.provisional, "Old gap-filled price should not be provisional"
   end
 
+  test "a provisional price older than the lookback window is refetched and finalized" do
+    Security::Price.delete_all
+
+    # Written as provisional while recent, then no import ran during its window
+    start_date = 20.days.ago.to_date
+    stale_date = start_date + 1.day
+    (start_date..Date.current).each do |date|
+      Security::Price.create!(security: @security, date: date, price: 100, currency: "USD", provisional: date == stale_date)
+    end
+
+    # The provider never published that day (a holiday): the gap-fill becomes final
+    @provider.expects(:fetch_security_prices)
+             .with(symbol: @security.ticker, exchange_operating_mic: @security.exchange_operating_mic,
+                   start_date: get_provider_fetch_start_date(stale_date), end_date: Date.current)
+             .returns(provider_success_response([
+               OpenStruct.new(security: @security, date: start_date, price: 100, currency: "USD")
+             ]))
+
+    Security::Price::Importer.new(
+      security: @security,
+      security_provider: @provider,
+      start_date: start_date,
+      end_date: Date.current
+    ).import_provider_prices
+
+    stale = Security::Price.find_by!(security: @security, date: stale_date)
+    assert_not stale.provisional, "an old gap-fill must not stay provisional forever"
+    assert_equal 100, stale.price
+  end
+
   test "provisional weekend prices get fixed via cascade from Friday" do
     Security::Price.delete_all
 
