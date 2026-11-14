@@ -42,14 +42,14 @@ class Family::AutoMerchantDetector
 
         if merchant_id.present?
           was_modified = transaction.enrich_attribute(:merchant_id, merchant_id, source: "ai")
-          transaction.lock_attr!(:merchant_id)
+          transaction.lock_attr!(:merchant_id, source: "ai")
           modified_count += 1 if was_modified
         end
 
       elsif existing_merchant.is_a?(ProviderMerchant) && existing_merchant.source != "ai"
         # Case 2: Has provider merchant (non-AI) - enhance it with AI data
         if enhance_provider_merchant(existing_merchant, auto_detection)
-          transaction.lock_attr!(:merchant_id)
+          transaction.lock_attr!(:merchant_id, source: "ai")
           modified_count += 1
         end
       end

@@ -13,16 +13,16 @@ class Rule::ActionExecutor::SetTransactionCategory < Rule::ActionExecutor
 
     scope = transaction_scope
 
-    unless ignore_attribute_locks
-      scope = scope.enrichable(:category_id)
-    end
+    # A forced run (ignore_attribute_locks) may replace AI locks, never user locks
+    scope = scope.enrichable(:category_id, force: ignore_attribute_locks)
 
     count_modified_resources(scope) do |txn|
       # enrich_attribute returns true if the transaction was actually modified, false otherwise
       txn.enrich_attribute(
         :category_id,
         category.id,
-        source: "rule"
+        source: "rule",
+        force: ignore_attribute_locks
       )
     end
   end
