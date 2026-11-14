@@ -186,15 +186,22 @@ class Family < ApplicationRecord
   # Sub-second precision so two writes in one second still produce different keys.
   def entries_cache_version
     @entries_cache_version ||= begin
-      entries_max, entries_count = entries.pick(Arel.sql("MAX(entries.updated_at)"), Arel.sql("COUNT(*)"))
-      categories_max, categories_count = categories.pick(Arel.sql("MAX(categories.updated_at)"), Arel.sql("COUNT(*)"))
+      # One round trip: this runs on every report and transactions page
+      row = self.class.connection.select_one(self.class.sanitize_sql_array([ <<~SQL.squish, { id: id } ]))
+        SELECT
+          (SELECT EXTRACT(EPOCH FROM MAX(e.updated_at)) FROM entries e JOIN accounts a ON a.id = e.account_id WHERE a.family_id = :id) AS entries_max,
+          (SELECT COUNT(*) FROM entries e JOIN accounts a ON a.id = e.account_id WHERE a.family_id = :id) AS entries_count,
+          (SELECT EXTRACT(EPOCH FROM MAX(updated_at)) FROM accounts WHERE family_id = :id) AS accounts_max,
+          (SELECT EXTRACT(EPOCH FROM MAX(updated_at)) FROM categories WHERE family_id = :id) AS categories_max,
+          (SELECT COUNT(*) FROM categories WHERE family_id = :id) AS categories_count
+      SQL
 
       [
-        entries_max&.to_f || 0,
-        entries_count,
-        accounts.maximum(:updated_at)&.to_f,
-        categories_max&.to_f,
-        categories_count,
+        row["entries_max"].to_f,
+        row["entries_count"],
+        row["accounts_max"]&.to_f,
+        row["categories_max"]&.to_f,
+        row["categories_count"],
         currency
       ].join(":")
     end
