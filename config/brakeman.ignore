@@ -149,6 +149,29 @@
         22
       ],
       "note": ""
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "ea2b32ac6acbf98b58f85ce0a6046a23261d8c2f2237eca500c3074ab78a56ab",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/family/auto_transfer_matchable.rb",
+      "line": 92,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "transfer_match_candidates.joins(\"JOIN transactions inflow_txns ON inflow_txns.id = inflow_candidates.entryable_id\").joins(\"JOIN transactions outflow_txns ON outflow_txns.id = outflow_candidates.entryable_id\").where(:rejected_transfers => ({ :id => nil })).where(:inflow_candidates => ({ :excluded => false }), :outflow_candidates => ({ :excluded => false })).where(:inflow_txns => ({ :kind => \"standard\" }), :outflow_txns => ({ :kind => \"standard\" })).where(\"NOT #{pending_condition(\"inflow_txns\")} AND NOT #{pending_condition(\"outflow_txns\")}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Family::AutoTransferMatchable",
+        "method": "auto_match_candidates"
+      },
+      "user_input": "pending_condition(\"inflow_txns\")",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive: pending_condition only receives the literal table aliases inflow_txns and outflow_txns"
     }
   ],
   "brakeman_version": "7.1.0"
