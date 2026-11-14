@@ -35,6 +35,22 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_enqueued_with(job: SyncJob)
   end
 
+  test "user can toggle one-time but cannot set a transfer kind" do
+    patch transaction_url(@entry), params: { entry: { entryable_attributes: { id: @entry.entryable_id, kind: "one_time" } } }
+    assert_equal "one_time", @entry.transaction.reload.kind
+
+    patch transaction_url(@entry), params: { entry: { entryable_attributes: { id: @entry.entryable_id, kind: "funds_movement" } } }
+    assert_equal "one_time", @entry.transaction.reload.kind
+  end
+
+  test "a transfer leg keeps its kind when the one-time toggle is sent" do
+    transfer_leg = entries(:transfer_out)
+
+    patch transaction_url(transfer_leg), params: { entry: { entryable_attributes: { id: transfer_leg.entryable_id, kind: "one_time" } } }
+
+    assert_equal "cc_payment", transfer_leg.transaction.reload.kind
+  end
+
   test "updates with transaction details" do
     assert_no_difference [ "Entry.count", "Transaction.count" ] do
       patch transaction_url(@entry), params: {

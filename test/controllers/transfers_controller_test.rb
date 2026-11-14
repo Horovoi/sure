@@ -31,6 +31,34 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "removing a transfer records a rejection so auto-match does not pair it again" do
+    transfer = transfers(:one)
+
+    assert_difference -> { RejectedTransfer.count } => 1, -> { Transfer.count } => -1 do
+      delete transfer_url(transfer)
+    end
+
+    assert_equal "standard", transactions(:transfer_in).reload.kind
+    assert_equal "standard", transactions(:transfer_out).reload.kind
+  end
+
+  test "removing a transfer twice returns not found" do
+    transfer = transfers(:one)
+    delete transfer_url(transfer)
+    delete transfer_url(transfer)
+
+    assert_response :not_found
+  end
+
+  test "confirming an already confirmed transfer is harmless" do
+    transfer = transfers(:one)
+    transfer.confirm!
+
+    patch transfer_url(transfer), params: { transfer: { status: "confirmed" } }
+
+    assert transfer.reload.confirmed?
+  end
+
   test "can add notes to transfer" do
     transfer = transfers(:one)
     assert_nil transfer.notes

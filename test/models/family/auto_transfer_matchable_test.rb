@@ -117,6 +117,93 @@ class Family::AutoTransferMatchableTest < ActiveSupport::TestCase
     end
   end
 
+  test "auto-match sets the outflow kind from the destination account" do
+    loan = accounts(:loan)
+    outflow = create_transaction(date: Date.current, account: @depository, amount: 500)
+    inflow = create_transaction(date: Date.current, account: loan, amount: -500)
+
+    @family.auto_match_transfers!
+
+    assert_equal "loan_payment", outflow.transaction.reload.kind
+    assert_equal "funds_movement", inflow.transaction.reload.kind
+  end
+
+  test "auto-match treats a withdrawal from an investment account as a plain transfer" do
+    outflow = create_transaction(date: Date.current, account: accounts(:investment), amount: 500)
+    inflow = create_transaction(date: Date.current, account: @depository, amount: -500)
+
+    @family.auto_match_transfers!
+
+    assert_equal "funds_movement", outflow.transaction.reload.kind
+  end
+
+  test "does not auto-match excluded transactions" do
+    create_transaction(date: Date.current, account: @depository, amount: 500, excluded: true)
+    create_transaction(date: Date.current, account: @credit_card, amount: -500)
+
+    assert_no_difference -> { Transfer.count } do
+      @family.auto_match_transfers!
+    end
+  end
+
+  test "does not auto-match pending transactions" do
+    outflow = create_transaction(date: Date.current, account: @depository, amount: 500)
+    outflow.transaction.update!(extra: { "simplefin" => { "pending" => true } })
+    create_transaction(date: Date.current, account: @credit_card, amount: -500)
+
+    assert_no_difference -> { Transfer.count } do
+      @family.auto_match_transfers!
+    end
+  end
+
+  test "does not auto-match a transaction the user marked as one-time" do
+    outflow = create_transaction(date: Date.current, account: @depository, amount: 500, kind: "one_time")
+    create_transaction(date: Date.current, account: @credit_card, amount: -500)
+
+    assert_no_difference -> { Transfer.count } do
+      @family.auto_match_transfers!
+    end
+
+    assert_equal "one_time", outflow.transaction.reload.kind
+  end
+
+  test "a removed transfer is not matched again" do
+    outflow = create_transaction(date: Date.current, account: @depository, amount: 500)
+    inflow = create_transaction(date: Date.current, account: @credit_card, amount: -500)
+
+    @family.auto_match_transfers!
+    inflow.transaction.reload.transfer.reject!
+
+    assert_no_difference -> { Transfer.count } do
+      @family.auto_match_transfers!
+    end
+  end
+
+  test "a pair that loses a race is skipped without aborting the rest of the run" do
+    outflow1 = create_transaction(date: Date.current, account: @depository, amount: 500)
+    inflow1 = create_transaction(date: Date.current, account: @credit_card, amount: -500)
+    create_transaction(date: Date.current, account: @depository, amount: 700)
+    inflow2 = create_transaction(date: Date.current, account: @credit_card, amount: -700)
+
+    # Candidates were read before another run committed a transfer for the first pair
+    candidates = @family.send(:auto_match_candidates).to_a
+    Transfer.insert_all!([ { inflow_transaction_id: inflow1.entryable_id, outflow_transaction_id: outflow1.entryable_id, status: "pending" } ])
+    @family.stubs(:auto_match_candidates).returns(candidates)
+    # Skip the app-level uniqueness check so the insert hits the database index, as it would in a real race
+    Transfer.any_instance.stubs(:valid?).returns(true)
+
+    assert_difference -> { Transfer.count } => 1 do
+      @family.auto_match_transfers!
+    end
+
+    assert Transfer.exists?(inflow_transaction_id: inflow2.entryable_id)
+  end
+
+  test "auto-match takes the family transfer lock" do
+    @family.expects(:lock_transfer_matching!).once
+    @family.auto_match_transfers!
+  end
+
   private
     def load_exchange_prices
       rates = {

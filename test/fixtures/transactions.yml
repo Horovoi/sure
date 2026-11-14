@@ -3,6 +3,6 @@ one:
   merchant: amazon
 
 transfer_out:
-  kind: payment
+  kind: cc_payment
 transfer_in:
-  kind: transfer
+  kind: funds_movement

@@ -1,6 +1,8 @@
 class TransactionsController < ApplicationController
   include EntryableResource
 
+  USER_SETTABLE_KINDS = %w[standard one_time].freeze
+
   before_action :store_params!, only: :index
   before_action :load_category_groups, only: %i[new create]
 
@@ -384,6 +386,15 @@ class TransactionsController < ApplicationController
       )
 
       nature = entry_params.delete(:nature)
+
+      # A user can only toggle "one-time". Transfer kinds are written by Transfer alone, so a
+      # transfer leg keeps its kind.
+      if entry_params[:entryable_attributes]&.key?(:kind)
+        kind = entry_params[:entryable_attributes][:kind]
+        transfer_leg = @entry&.transaction? && @entry.transaction.transfer.present?
+
+        entry_params[:entryable_attributes].delete(:kind) if transfer_leg || !kind.in?(USER_SETTABLE_KINDS)
+      end
 
       if nature.present? && entry_params[:amount].present?
         signed_amount = nature == "inflow" ? -entry_params[:amount].to_d : entry_params[:amount].to_d

@@ -7,6 +7,7 @@ class Transfer::Creator
     @amount = amount.to_d
   end
 
+  # The legs' kinds (and the Investment Contributions category) are set by Transfer's after_create.
   def create
     transfer = Transfer.new(
       inflow_transaction: inflow_transaction,
@@ -27,11 +28,8 @@ class Transfer::Creator
 
     def outflow_transaction
       name = "#{name_prefix} to #{destination_account.name}"
-      kind = outflow_transaction_kind
 
       Transaction.new(
-        kind: kind,
-        category: (investment_contributions_category if kind == "investment_contribution"),
         entry: source_account.entries.build(
           amount: amount.abs,
           currency: source_account.currency,
@@ -42,15 +40,10 @@ class Transfer::Creator
       )
     end
 
-    def investment_contributions_category
-      source_account.family.investment_contributions_category
-    end
-
     def inflow_transaction
       name = "#{name_prefix} from #{source_account.name}"
 
       Transaction.new(
-        kind: "funds_movement",
         entry: destination_account.entries.build(
           amount: inflow_converted_money.amount.abs * -1,
           currency: destination_account.currency,
@@ -70,27 +63,6 @@ class Transfer::Creator
              date: date,
              fallback_rate: 1.0
            )
-    end
-
-    # The "expense" side of a transfer is treated different in analytics based on where it goes.
-    def outflow_transaction_kind
-      if destination_account.loan?
-        "loan_payment"
-      elsif destination_account.liability?
-        "cc_payment"
-      elsif destination_is_investment? && !source_is_investment?
-        "investment_contribution"
-      else
-        "funds_movement"
-      end
-    end
-
-    def destination_is_investment?
-      destination_account.investment? || destination_account.crypto?
-    end
-
-    def source_is_investment?
-      source_account.investment? || source_account.crypto?
     end
 
     def name_prefix
