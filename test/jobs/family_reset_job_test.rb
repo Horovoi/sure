@@ -93,4 +93,14 @@ class FamilyResetJobTest < ActiveJob::TestCase
     # PlaidItem should be deleted
     assert_equal 0, @family.plaid_items.reload.count
   end
+
+  test "reset also removes rules and recurring transactions" do
+    @plaid_provider.stubs(:remove_item)
+    assert @family.rules.exists? || @family.recurring_transactions.exists?, "fixtures should have rules or recurring transactions"
+
+    FamilyResetJob.perform_now(@family)
+
+    assert_equal 0, @family.rules.reload.count
+    assert_equal 0, @family.recurring_transactions.reload.count
+  end
 end
