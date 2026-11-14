@@ -6,6 +6,9 @@ export default class extends Controller {
   static targets = ["auto"];
   static values = {
     triggerEvent: { type: String, default: "input" },
+    // Skip a submit when nothing in the form changed since the last one. Turn it off for a
+    // form whose submit also does something else (the inline chat title leaves edit mode).
+    dedupe: { type: Boolean, default: true },
   };
 
   initialize() {
@@ -21,7 +24,18 @@ export default class extends Controller {
     // skipped because of another field's history (and a checkbox, whose
     // value is the same whether checked or not, submits on every toggle)
     this._lastSubmittedState = this.#formState();
+    document.addEventListener("turbo:morph", this.#rebaseline);
   }
+
+  disconnect() {
+    document.removeEventListener("turbo:morph", this.#rebaseline);
+  }
+
+  // A page morph puts the server's values back into the fields without reconnecting this
+  // controller, so what counts as "unchanged" starts again from them
+  #rebaseline = () => {
+    this._lastSubmittedState = this.#formState();
+  };
 
   // Targets may be added after connect (e.g. a field rendered later), so
   // listeners are attached per target rather than once in connect
@@ -79,7 +93,7 @@ export default class extends Controller {
 
       // Avoid duplicate submits of an unchanged form
       const state = this.#formState();
-      if (state === this._lastSubmittedState) return;
+      if (this.dedupeValue && state === this._lastSubmittedState) return;
       this._lastSubmittedState = state;
       this.element.requestSubmit();
     }, delay);

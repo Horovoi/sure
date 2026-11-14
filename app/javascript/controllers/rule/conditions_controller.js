@@ -1,6 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
-
-let lastTemplateKey = 0;
+import { nextNestedAttributeKey } from "services/nested_attribute_key";
 
 // Connects to data-controller="rule--conditions"
 export default class extends Controller {
@@ -21,7 +20,7 @@ export default class extends Controller {
   addSubCondition() {
     const html = this.subConditionTemplateTarget.innerHTML.replaceAll(
       "IDX_CHILD_PLACEHOLDER",
-      this.#uniqueKey(),
+      nextNestedAttributeKey(),
     );
 
     this.subConditionsListTarget.insertAdjacentHTML("beforeend", html);
@@ -119,13 +118,6 @@ export default class extends Controller {
     newFormField.name = priorName;
 
     return newFormField;
-  }
-
-  // Keys for nested-attribute templates. Date.now() alone repeats when two
-  // items are added within the same millisecond, and Rails then merges them.
-  #uniqueKey() {
-    lastTemplateKey = Math.max(Date.now(), lastTemplateKey + 1);
-    return lastTemplateKey;
   }
 
   #toggleValueFieldVisibility() {

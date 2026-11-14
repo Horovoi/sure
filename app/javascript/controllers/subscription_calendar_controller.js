@@ -2,25 +2,18 @@ import { Controller } from "@hotwired/stimulus"
 import { computePosition, offset, flip, shift, autoUpdate } from "@floating-ui/dom"
 
 export default class extends Controller {
-  static targets = ["drawer", "drawerTitle", "drawerContent", "calendarData", "hoverCard"]
+  static targets = ["drawer", "drawerTitle", "drawerContent", "hoverCard"]
 
   static values = {
+    // { family_currency, dates: { "YYYY-MM-DD": [subscription, ...] } }
+    data: { type: Object, default: {} },
     hoverDelay: { type: Number, default: 200 },
     longPressDelay: { type: Number, default: 400 }
   }
 
   connect() {
-    this.calendarData = {}
-    this.familyCurrency = "USD"
-    if (this.hasCalendarDataTarget) {
-      try {
-        const data = JSON.parse(this.calendarDataTarget.textContent)
-        this.familyCurrency = data.family_currency || "USD"
-        this.calendarData = data.dates || {}
-      } catch (e) {
-        console.error("Failed to parse calendar data:", e)
-      }
-    }
+    this.familyCurrency = this.dataValue.family_currency || "USD"
+    this.calendarData = this.dataValue.dates || {}
 
     this.hoverTimeout = null
     this.longPressTimeout = null

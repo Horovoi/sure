@@ -18,13 +18,9 @@ export default class extends Controller {
     new CurrenciesService().get(currency).then((currency) => {
       if (requestId !== this.currencyRequestId) return;
 
-      this.amountTarget.step = currency.step;
-
-      // The input value is a string, so parse it before checking it
-      const amount = Number.parseFloat(this.amountTarget.value);
-      if (Number.isFinite(amount)) {
-        this.amountTarget.value = amount.toFixed(currency.default_precision);
-      }
+      // A field that takes any precision (a trade price) keeps doing so. The amount the
+      // user typed is never rewritten: rounding it here would change what gets saved.
+      if (this.amountTarget.step !== "any") this.amountTarget.step = currency.step;
 
       this.symbolTarget.innerText = currency.symbol;
     });

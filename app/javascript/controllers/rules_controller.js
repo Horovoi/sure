@@ -1,6 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
-
-let lastTemplateKey = 0;
+import { nextNestedAttributeKey } from "services/nested_attribute_key";
 
 // Connects to data-controller="rules"
 export default class extends Controller {
@@ -45,17 +44,10 @@ export default class extends Controller {
   #appendTemplate(templateEl, listEl) {
     const html = templateEl.innerHTML.replaceAll(
       "IDX_PLACEHOLDER",
-      this.#uniqueKey(),
+      nextNestedAttributeKey(),
     );
 
     listEl.insertAdjacentHTML("beforeend", html);
-  }
-
-  // Keys for nested-attribute templates. Date.now() alone repeats when two
-  // items are added within the same millisecond, and Rails then merges them.
-  #uniqueKey() {
-    lastTemplateKey = Math.max(Date.now(), lastTemplateKey + 1);
-    return lastTemplateKey;
   }
 
   // Updates the prefix visibility of all conditions and condition groups

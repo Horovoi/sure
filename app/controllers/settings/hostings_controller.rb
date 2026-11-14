@@ -81,13 +81,7 @@ class Settings::HostingsController < ApplicationController
     end
 
     if hosting_params.key?(:auto_sync_time)
-      time_value = hosting_params[:auto_sync_time]
-      unless Setting.valid_auto_sync_time?(time_value)
-        flash[:alert] = t(".invalid_sync_time")
-        return redirect_to settings_hosting_path
-      end
-
-      Setting.auto_sync_time = time_value
+      Setting.auto_sync_time = hosting_params[:auto_sync_time]
       Setting.auto_sync_timezone = current_user_timezone
       sync_settings_changed = true
     end
@@ -99,33 +93,18 @@ class Settings::HostingsController < ApplicationController
     scheduled_jobs_changed = false
 
     if hosting_params.key?(:scheduled_jobs_start_time)
-      time_value = hosting_params[:scheduled_jobs_start_time]
-      unless Setting.valid_auto_sync_time?(time_value)
-        flash[:alert] = t(".invalid_sync_time")
-        return redirect_to settings_hosting_path
-      end
-      Setting.scheduled_jobs_start_time = time_value
+      Setting.scheduled_jobs_start_time = hosting_params[:scheduled_jobs_start_time]
       scheduled_jobs_changed = true
     end
 
     if hosting_params.key?(:scheduled_jobs_timezone)
-      timezone_value = hosting_params[:scheduled_jobs_timezone]
-      if timezone_value.present? && !Setting.valid_auto_sync_timezone?(timezone_value)
-        flash[:alert] = t(".invalid_timezone")
-        return redirect_to settings_hosting_path
-      end
-      Setting.scheduled_jobs_timezone = timezone_value.presence
+      Setting.scheduled_jobs_timezone = hosting_params[:scheduled_jobs_timezone].presence
       scheduled_jobs_changed = true
     end
 
     %i[data_cleaner_time security_health_check_time subscription_transactions_time].each do |field|
       if hosting_params.key?(field)
-        time_value = hosting_params[field]
-        if time_value.present? && !Setting.valid_auto_sync_time?(time_value)
-          flash[:alert] = t(".invalid_sync_time")
-          return redirect_to settings_hosting_path
-        end
-        Setting.public_send("#{field}=", time_value.presence)
+        Setting.public_send("#{field}=", hosting_params[field].presence)
         scheduled_jobs_changed = true
       end
     end

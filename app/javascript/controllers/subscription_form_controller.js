@@ -85,14 +85,15 @@ export default class extends Controller {
 
       try {
         const response = await fetch(`/subscriptions/fetch_exchange_rate?from=${selectedCurrency}&to=${targetCurrency}`)
-        if (isStale()) return
         if (response.ok) {
           const data = await response.json()
-          if (isStale()) return
           rate = data.rate
-          // Cache locally for this session
+          // Cache locally for this session, also when a newer call superseded this one,
+          // so that call's successors do not fetch the same pair again
           this.exchangeRatesValue = { ...this.exchangeRatesValue, [rateKey]: rate }
+          if (isStale()) return
         } else {
+          if (isStale()) return
           this.conversionHintTarget.classList.add("hidden")
           return
         }

@@ -57,6 +57,11 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
   test "calendar shows calendar view" do
     get calendar_subscriptions_url
     assert_response :success
+
+    # The day drawer is built from this value
+    data = JSON.parse(css_select("[data-controller='subscription-calendar']").first["data-subscription-calendar-data-value"])
+    assert_equal @family.currency, data["family_currency"]
+    assert_kind_of Hash, data["dates"]
   end
 
   test "calendar accepts month parameter" do

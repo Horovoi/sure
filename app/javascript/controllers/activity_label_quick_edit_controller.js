@@ -116,6 +116,7 @@ export default class extends Controller {
 
   #setSaving(saving) {
     this.saving = saving
-    this.element.toggleAttribute("aria-busy", saving)
+    // aria-busy takes "true"/"false"; an empty attribute is not a value
+    this.element.setAttribute("aria-busy", String(saving))
   }
 }

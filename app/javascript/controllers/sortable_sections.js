@@ -19,13 +19,7 @@ const TOUCH_SLOP_PX = 10;
 
 const DRAG_CLASSES = ["opacity-50", "scale-[1.02]"];
 const GRAB_CLASSES = ["ring-2", "ring-primary", "ring-offset-2"];
-const PLACEHOLDER_CLASSES = [
-  "border-t-4",
-  "border-b-4",
-  "border-primary",
-  "border-t-2",
-  "border-b-2",
-];
+const PLACEHOLDER_CLASSES = ["border-t-4", "border-b-4", "border-primary"];
 
 export default class SortableSectionsController extends Controller {
   static targets = ["section", "handle"];
@@ -44,6 +38,7 @@ export default class SortableSectionsController extends Controller {
     this.saveRequestId = 0;
     this.confirmedRequestId = 0;
     this.savedOrder = this.currentOrder();
+    this.requestedOrder = this.savedOrder;
 
     this.beforeCacheHandler = () => this.reset();
     document.addEventListener("turbo:before-cache", this.beforeCacheHandler);
@@ -147,10 +142,9 @@ export default class SortableSectionsController extends Controller {
   }
 
   touchEnd() {
-    if (this.mode !== "touch") {
-      this.reset();
-      return;
-    }
+    // A tap that never became a drag. Any other mode (a keyboard grab) is not this finger's to end.
+    if (this.mode === "touch-pending") this.reset();
+    if (this.mode !== "touch") return;
 
     this.moveActiveSectionTo(this.currentTouchY);
     this.reset();
@@ -271,7 +265,8 @@ export default class SortableSectionsController extends Controller {
 
     const afterElement = this.getDragAfterElement(y);
     if (afterElement == null) {
-      this.element.appendChild(this.activeSection);
+      // After the last section, which is not always the container's last child
+      this.#lastOtherSection()?.after(this.activeSection);
     } else {
       this.element.insertBefore(this.activeSection, afterElement);
     }
@@ -282,10 +277,14 @@ export default class SortableSectionsController extends Controller {
     this.clearPlaceholders();
 
     if (afterElement == null) {
-      this.showPlaceholder(this.element.lastElementChild, "after");
+      this.showPlaceholder(this.#lastOtherSection(), "after");
     } else {
       this.showPlaceholder(afterElement, "before");
     }
+  }
+
+  #lastOtherSection() {
+    return this.sectionTargets.filter((section) => section !== this.activeSection).at(-1);
   }
 
   getDragAfterElement(y) {
@@ -334,15 +333,21 @@ export default class SortableSectionsController extends Controller {
     const byKey = new Map(
       this.sectionTargets.map((section) => [section.dataset.sectionKey, section]),
     );
+    // The sections are not always the container's last children: keep them before
+    // whatever follows the last one
+    const after = this.sectionTargets.at(-1)?.nextElementSibling ?? null;
     order.forEach((key) => {
       const section = byKey.get(key);
-      if (section) this.element.appendChild(section);
+      if (section) this.element.insertBefore(section, after);
     });
   }
 
   async saveOrder() {
+    // Compared with the last order asked for, not the last one confirmed: moving a section
+    // back while the first save is still on its way must send the second save too
     const order = this.currentOrder();
-    if (order.join("\n") === this.savedOrder.join("\n")) return;
+    if (order.join("\n") === this.requestedOrder.join("\n")) return;
+    this.requestedOrder = order;
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]');
     const requestId = ++this.saveRequestId;
@@ -381,5 +386,6 @@ export default class SortableSectionsController extends Controller {
 
     this.reset();
     this.applyOrder(this.savedOrder);
+    this.requestedOrder = this.savedOrder;
   }
 }
