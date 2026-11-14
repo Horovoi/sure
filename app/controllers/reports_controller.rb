@@ -649,15 +649,16 @@ class ReportsController < ApplicationController
         trades = trades_by_treatment[treatment] || []
 
         # Sum unrealized gains from holdings (only those with known cost basis)
+        # Holdings and trades are in their own currency; convert before adding them up
         unrealized = holdings.sum do |h|
           trend = h.trend
-          trend ? trend.value : 0
+          trend ? investment_statement.to_family_money(trend.value).amount : 0
         end
 
         # Sum realized gains from sell trades
         realized = trades.sum do |t|
           gain = t.realized_gain_loss
-          gain ? gain.value : 0
+          gain ? investment_statement.to_family_money(gain.value).amount : 0
         end
 
         # Only include treatment groups that have some activity
