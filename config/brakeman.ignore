@@ -117,40 +117,6 @@
       "note": "Uses similar pattern to Rails internal form builder"
     },
     {
-      "warning_type": "Dynamic Render Path",
-      "warning_code": 15,
-      "fingerprint": "fb6f7abeabc405d6882ffd41dbe8016403ef39307a5c6b4cd7b18adfaf0c24bf",
-      "check_name": "Render",
-      "message": "Render path contains parameter value",
-      "file": "app/views/import/configurations/show.html.erb",
-      "line": 34,
-      "link": "https://brakemanscanner.org/docs/warning_types/dynamic_render_path/",
-      "code": "render(partial => permitted_import_configuration_path(Current.family.imports.find(params[:import_id])), { :locals => ({ :import => Current.family.imports.find(params[:import_id]) }) })",
-      "render_path": [
-        {
-          "type": "controller",
-          "class": "Import::ConfigurationsController",
-          "method": "show",
-          "line": 7,
-          "file": "app/controllers/import/configurations_controller.rb",
-          "rendered": {
-            "name": "import/configurations/show",
-            "file": "app/views/import/configurations/show.html.erb"
-          }
-        }
-      ],
-      "location": {
-        "type": "template",
-        "template": "import/configurations/show"
-      },
-      "user_input": "params[:import_id]",
-      "confidence": "Weak",
-      "cwe_id": [
-        22
-      ],
-      "note": ""
-    },
-    {
       "warning_type": "SQL Injection",
       "warning_code": 0,
       "fingerprint": "ea2b32ac6acbf98b58f85ce0a6046a23261d8c2f2237eca500c3074ab78a56ab",
@@ -172,7 +138,30 @@
         89
       ],
       "note": "False positive: pending_condition only receives the literal table aliases inflow_txns and outflow_txns"
+    },
+    {
+      "warning_type": "Mass Assignment",
+      "warning_code": 105,
+      "fingerprint": "d770e95392c6c69b364dcc0c99faa1c8f4f0cceb085bcc55630213d0b7b8b87f",
+      "check_name": "PermitAttributes",
+      "message": "Potentially dangerous key allowed for mass assignment",
+      "file": "app/controllers/api/v1/trades_controller.rb",
+      "line": 139,
+      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
+      "code": "params.require(:trade).permit(:account_id, :date, :qty, :price, :currency, :security_id, :ticker, :manual_ticker, :investment_activity_label, :category_id)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Api::V1::TradesController",
+        "method": "trade_params"
+      },
+      "user_input": ":account_id",
+      "confidence": "High",
+      "cwe_id": [
+        915
+      ],
+      "note": "False positive: account_id is never mass-assigned. create reads it only to find the account through current_resource_owner.family.accounts.visible, so another family's account id gives a 404."
     }
   ],
-  "brakeman_version": "7.1.0"
+  "brakeman_version": "8.1.0"
 }

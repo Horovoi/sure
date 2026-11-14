@@ -258,15 +258,29 @@ class TransactionsTest < ApplicationSystemTestCase
   end
 
   test "transfers should always sum to zero" do
+    # Between two cash accounts: a transfer into an investment account is an investment
+    # contribution, which counts as spending
     asset_account = accounts(:other_asset)
-    investment_account = accounts(:investment)
+    cash_account = accounts(:depository)
     outflow_entry = create_transaction("outflow", Date.current, 500, account: asset_account)
-    inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: investment_account)
+    inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: cash_account)
     @user.family.auto_match_transfers!
     visit transactions_url
 
     within "#entry-group-" + Date.current.to_s + "-totals" do
       assert_text "-$100.00" # transaction eleven from setup
+    end
+  end
+
+  test "a transfer into an investment account counts as spending" do
+    outflow_entry = create_transaction("outflow", Date.current, 500, account: accounts(:other_asset))
+    inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: accounts(:investment))
+    @user.family.auto_match_transfers!
+    assert outflow_entry.transaction.reload.investment_contribution?
+    visit transactions_url
+
+    within "#entry-group-" + Date.current.to_s + "-totals" do
+      assert_text "-$600.00" # the contribution plus transaction eleven from setup
     end
   end
 
