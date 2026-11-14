@@ -14,29 +14,10 @@ module ExchangeRate::Provided
 
       return nil unless provider.present? # No provider configured (some self-hosted apps)
 
-      response = provider.fetch_exchange_rate(from: from, to: to, date: date)
-
-      return nil unless response.success? # Provider error
-
-      rate = response.data
-      begin
-        ExchangeRate.find_or_create_by!(
-          from_currency: rate.from,
-          to_currency: rate.to,
-          date: rate.date
-        ) do |exchange_rate|
-          exchange_rate.rate = rate.rate
-        end if cache
-      rescue ActiveRecord::RecordNotUnique
-        # Race condition: another process inserted between our SELECT and INSERT
-        # Retry by finding the existing record
-        ExchangeRate.find_by!(
-          from_currency: rate.from,
-          to_currency: rate.to,
-          date: rate.date
-        ) if cache
+      # Ask the provider once per pair and date within a request or job, not once per caller
+      ExchangeRate::FetchMemo.fetch([ from.to_s, to.to_s, date.to_date, cache ]) do
+        fetch_rate_from_provider(from: from, to: to, date: date, cache: cache)
       end
-      rate
     end
 
     # @return [Integer] The number of exchange rates synced
@@ -55,5 +36,32 @@ module ExchangeRate::Provided
         clear_cache: clear_cache
       ).import_provider_rates
     end
+
+    private
+      def fetch_rate_from_provider(from:, to:, date:, cache:)
+        response = provider.fetch_exchange_rate(from: from, to: to, date: date)
+
+        return nil unless response.success? # Provider error
+
+        rate = response.data
+        begin
+          ExchangeRate.find_or_create_by!(
+            from_currency: rate.from,
+            to_currency: rate.to,
+            date: rate.date
+          ) do |exchange_rate|
+            exchange_rate.rate = rate.rate
+          end if cache
+        rescue ActiveRecord::RecordNotUnique
+          # Race condition: another process inserted between our SELECT and INSERT
+          # Retry by finding the existing record
+          ExchangeRate.find_by!(
+            from_currency: rate.from,
+            to_currency: rate.to,
+            date: rate.date
+          ) if cache
+        end
+        rate
+      end
   end
 end
