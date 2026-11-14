@@ -148,7 +148,7 @@ class Budget < ApplicationRecord
   end
 
   def current?
-    start_date == family.budget_period_start_for(Date.today) && end_date == family.budget_period_end_for(start_date)
+    start_date == family.budget_period_start_for(Date.current) && end_date == family.budget_period_end_for(start_date)
   end
 
   def previous_budget_param
