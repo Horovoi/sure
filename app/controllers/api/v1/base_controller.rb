@@ -250,17 +250,11 @@ class Api::V1::BaseController < ApplicationController
       @_doorkeeper_token
     end
 
-    # Set up Current context for API requests since we don't use session-based auth.
-    # Always a temporary, unsaved session: reusing one of the user's browser
-    # sessions could pick one that is impersonating someone, which would make
-    # Current.user the impersonated user.
+    # Set up Current context for API requests since we don't use session-based auth
     def setup_current_context_for_api
       return unless @current_user
 
-      Current.session = @current_user.sessions.build(
-        user_agent: request.user_agent,
-        ip_address: request.ip
-      )
+      Current.session = Session.ephemeral_for(@current_user, request)
     end
 
     # Check if AI features are enabled for the current user

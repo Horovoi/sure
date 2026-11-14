@@ -12,6 +12,24 @@ class Settings::ApiKeysControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "an impersonator cannot read the impersonated user's API key" do
+    member = users(:family_member)
+    ApiKey.create!(user: member, name: "Member key", display_key: "member_secret_key", scopes: [ "read" ])
+    admin = users(:sure_support_staff)
+    impersonation = ImpersonationSession.create!(impersonator: admin, impersonated: member, status: :in_progress)
+    sign_in admin
+    admin.sessions.order(:created_at).last.update!(active_impersonator_session: impersonation)
+
+    get settings_api_key_path
+
+    assert_redirected_to root_path
+    assert_not_includes response.body, "member_secret_key"
+
+    # Coming "back" from the page itself must not loop
+    get settings_api_key_path, headers: { "HTTP_REFERER" => settings_api_key_url }
+    assert_redirected_to root_path
+  end
+
   test "should show current API key when user has active key" do
     @api_key = ApiKey.create!(
       user: @user,

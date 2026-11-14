@@ -227,6 +227,16 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_not_equal "Renamed", family.name
   end
 
+  test "a family member saving their own preference is not told a change was refused" do
+    member = users(:family_member)
+    sign_in member
+
+    patch user_url(member), params: { user: { default_period: "last_7_days", family_attributes: { id: member.family_id } } }
+
+    assert_equal I18n.t("users.update.success"), flash[:notice]
+    assert_equal "last_7_days", member.reload.default_period
+  end
+
   test "a family admin can change household settings" do
     patch user_url(@user), params: { user: { family_attributes: { name: "New Name" } } }
 

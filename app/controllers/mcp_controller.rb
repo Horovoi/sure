@@ -123,10 +123,7 @@ class McpController < ApplicationController
         return
       end
 
-      Current.session = @mcp_user.sessions.build(
-        user_agent: request.user_agent,
-        ip_address: request.ip
-      )
+      Current.session = Session.ephemeral_for(@mcp_user, request)
     end
 
     def mcp_user

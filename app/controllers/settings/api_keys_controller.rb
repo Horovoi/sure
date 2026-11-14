@@ -3,7 +3,8 @@
 class Settings::ApiKeysController < ApplicationController
   layout "settings"
 
-  disallow_while_impersonating only: %i[new create destroy]
+  # show prints the key in full, and a copied key keeps working after the impersonation ends
+  disallow_while_impersonating
   before_action :set_api_key, only: [ :show, :destroy ]
 
   def show

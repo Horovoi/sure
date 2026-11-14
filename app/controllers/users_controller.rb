@@ -33,7 +33,7 @@ class UsersController < ApplicationController
       @user.profile_image.purge if should_purge_profile_image?
 
       # Add a special notice if AI was just enabled or disabled
-      notice = if family_attributes_refused?
+      notice = if family_change_refused?
         t(".family_settings_admin_only")
       elsif !was_ai_enabled && @user.ai_enabled
         "AI Assistant has been enabled successfully."
@@ -130,6 +130,11 @@ class UsersController < ApplicationController
     # whole family, so only a family admin may change them.
     def family_attributes_refused?
       params.dig(:user, :family_attributes).present? && !Current.user.admin?
+    end
+
+    # The preferences form always sends the family id, so only a real setting counts as a refused change
+    def family_change_refused?
+      family_attributes_refused? && params.dig(:user, :family_attributes).except(:id).present?
     end
 
     def user_params

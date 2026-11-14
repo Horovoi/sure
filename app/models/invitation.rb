@@ -8,7 +8,7 @@ class Invitation < ApplicationRecord
   validates :role, presence: true, inclusion: { in: %w[admin member] }
   validates :token, presence: true, uniqueness: true
   validates_uniqueness_of :email, scope: :family_id, message: "has already been invited to this family"
-  validate :inviter_is_admin
+  validate :inviter_is_admin, on: :create
 
   before_validation :generate_token, on: :create
   before_create :set_expiration

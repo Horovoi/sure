@@ -13,6 +13,15 @@ class InvitationTest < ActiveSupport::TestCase
     assert invitation.errors[:inviter].any?
   end
 
+  test "accept_for works after the inviter stopped being an admin" do
+    user = users(:empty)
+    invitation = @family.invitations.create!(email: user.email, role: "member", inviter: @admin)
+    @admin.update_column(:role, "member")
+
+    assert invitation.reload.accept_for(user)
+    assert_equal @family, user.reload.family
+  end
+
   test "accept_for refuses an invitation that is no longer pending" do
     user = users(:empty)
     invitation = @family.invitations.create!(email: user.email, role: "member", inviter: @admin)

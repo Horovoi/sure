@@ -18,7 +18,21 @@ module Impersonatable
     def reject_while_impersonating!
       return unless Current.impersonated_user
 
-      redirect_back_or_to root_path, alert: t("impersonation_sessions.not_allowed_while_impersonating")
+      alert = t("impersonation_sessions.not_allowed_while_impersonating")
+
+      # "Back" can be this very page (the browser keeps the referer across redirects),
+      # which would redirect here again
+      if referer_path == request.path
+        redirect_to root_path, alert: alert
+      else
+        redirect_back_or_to root_path, alert: alert
+      end
+    end
+
+    def referer_path
+      URI.parse(request.referer.to_s).path
+    rescue URI::InvalidURIError
+      nil
     end
 
     def log_impersonation_activity

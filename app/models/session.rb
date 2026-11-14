@@ -12,6 +12,14 @@ class Session < ApplicationRecord
     self.ip_address = Current.ip_address
   end
 
+  # An unsaved session for one API or MCP request, which authenticate without a browser
+  # session. Built with new rather than user.sessions.build, so saving the user can never
+  # persist it. Never reuse a browser session instead: it may be impersonating someone,
+  # which would change Current.user.
+  def self.ephemeral_for(user, request)
+    new(user: user, user_agent: request.user_agent, ip_address: request.ip)
+  end
+
   def get_preferred_tab(tab_key)
     data.dig("tab_preferences", tab_key)
   end

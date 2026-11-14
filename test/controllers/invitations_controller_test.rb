@@ -130,6 +130,11 @@ class InvitationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal @admin.family, invited_user.reload.family
     assert_equal "member", invited_user.role
     assert invitation.reload.accepted_at.present?
+
+    # A second submit of the same form
+    post confirm_invitation_url(invitation.token)
+    assert_redirected_to root_path
+    assert_equal I18n.t("invitations.confirm.no_longer_pending"), flash[:alert]
   end
 
   test "accepting an invitation never changes a super admin's role" do

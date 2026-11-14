@@ -34,19 +34,20 @@ class InvitationsController < ApplicationController
   end
 
   def accept
-    @invitation = Invitation.find_by!(token: params[:id])
-    raise ActiveRecord::RecordNotFound unless @invitation.pending?
+    @invitation = Invitation.pending.find_by!(token: params[:id])
 
     # Authentication is skipped here so that signed-out people can choose to
     # sign in or sign up. A signed-in user may accept directly.
     @signed_in_user = find_session_by_cookie&.user
-    @signed_in_user = nil unless @signed_in_user&.active?
 
     render :accept_choice, layout: "auth"
   end
 
   def confirm
-    invitation = Invitation.pending.find_by!(token: params[:id])
+    invitation = Invitation.pending.find_by(token: params[:id])
+
+    # A second submit (double click, back button) after the invitation was used
+    return redirect_to root_path, alert: t(".no_longer_pending") unless invitation
 
     # Only the invited user, in their own (not an impersonated) session
     if Current.user != Current.true_user || !invitation.email.casecmp?(Current.true_user.email)
