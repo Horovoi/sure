@@ -188,4 +188,23 @@ end
     assert_equal "Random Key Test", api_key.name
     assert_includes api_key.scopes, "read"
   end
+
+  test "a failed create keeps the existing key active" do
+    existing = ApiKey.create!(user: @user, name: "Existing", display_key: "keep_#{SecureRandom.hex(8)}", scopes: [ "read" ])
+
+    post settings_api_key_path, params: { api_key: { name: "", scopes: "read_write" } }
+
+    assert_response :unprocessable_entity
+    assert existing.reload.active?
+  end
+
+  test "creating a web key leaves the mobile key active" do
+    mobile = ApiKey.create!(user: @user, name: "Mobile", display_key: "mob_#{SecureRandom.hex(8)}", scopes: [ "read" ], source: "mobile")
+
+    post settings_api_key_path, params: { api_key: { name: "Web", scopes: "read_write" } }
+
+    assert_redirected_to settings_api_key_path
+    assert mobile.reload.active?
+    assert_equal 1, @user.api_keys.active.where(source: "web").count
+  end
 end
