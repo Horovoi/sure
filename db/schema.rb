@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_14_185921) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -997,11 +997,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_185654) do
     t.string "detected_base_currency"
     t.decimal "detected_base_amount", precision: 19, scale: 4
     t.integer "expected_month"
+    t.string "subscription_state", default: "pattern", null: false
+    t.string "inactive_reason"
     t.index ["default_account_id"], name: "index_recurring_transactions_on_default_account_id"
     t.index ["family_id", "is_subscription"], name: "idx_recurring_txns_subscriptions", where: "(is_subscription = true)"
     t.index ["family_id", "merchant_id", "amount", "currency"], name: "idx_recurring_txns_merchant", unique: true, where: "(merchant_id IS NOT NULL)"
     t.index ["family_id", "name", "amount", "currency"], name: "idx_recurring_txns_name", unique: true, where: "((name IS NOT NULL) AND (merchant_id IS NULL))"
     t.index ["family_id", "status"], name: "index_recurring_transactions_on_family_id_and_status"
+    t.index ["family_id", "subscription_state"], name: "idx_recurring_txns_family_state"
     t.index ["family_id", "suggestion_status"], name: "idx_suggested_subscriptions", where: "((suggestion_status)::text = 'suggested'::text)"
     t.index ["family_id"], name: "index_recurring_transactions_on_family_id"
     t.index ["inferred_account_id"], name: "index_recurring_transactions_on_inferred_account_id"
