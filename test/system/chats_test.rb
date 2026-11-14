@@ -53,7 +53,7 @@ class ChatsTest < ApplicationSystemTestCase
 
       visit root_url
 
-      Chat.any_instance.expects(:ask_assistant_later).once
+      AssistantResponseJob.expects(:perform_later).once
 
       within "#chat-form" do
         fill_in "chat[content]", with: "Can you help with my finances?"

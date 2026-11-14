@@ -28,57 +28,39 @@ class Assistant
     @functions = functions
   end
 
-  def respond_to(message)
-    assistant_message = AssistantMessage.new(
-      chat: chat,
-      content: "",
-      ai_model: message.ai_model
-    )
+  # Streams the response for a claimed (streaming) assistant message and completes it.
+  # Raises on failure; AssistantMessage#generate_response fails the turn.
+  def respond_to(assistant_message)
+    prompt = assistant_message.prompt
+    raise StandardError, "No user message to respond to" unless prompt
 
-    llm_provider = get_model_provider(message.ai_model)
+    llm_provider = get_model_provider(assistant_message.ai_model)
 
     unless llm_provider
-      error_message = build_no_provider_error_message(message.ai_model)
+      error_message = build_no_provider_error_message(assistant_message.ai_model)
       raise StandardError, error_message
     end
 
     responder = Assistant::Responder.new(
-      message: message,
+      message: prompt,
       instructions: instructions,
       function_tool_caller: function_tool_caller,
       llm: llm_provider
     )
 
-    latest_response_id = chat.latest_assistant_response_id
-
     responder.on(:output_text) do |text|
-      if assistant_message.content.blank?
-        stop_thinking
-
-        Chat.transaction do
-          assistant_message.append_text!(text)
-          chat.update_latest_response!(latest_response_id)
-        end
-      else
-        assistant_message.append_text!(text)
-      end
+      assistant_message.append_text!(text)
     end
 
-    responder.on(:response) do |data|
+    responder.on(:function_tool_calls) do |function_tool_calls|
+      # Saved right away, so they stay with the turn even if a later request fails
+      assistant_message.tool_calls << function_tool_calls
       update_thinking("Analyzing your data...")
-
-      if data[:function_tool_calls].present?
-        assistant_message.tool_calls = data[:function_tool_calls]
-        latest_response_id = data[:id]
-      else
-        chat.update_latest_response!(data[:id])
-      end
     end
 
-    responder.respond(previous_response_id: latest_response_id)
-  rescue => e
-    stop_thinking
-    chat.add_error(e)
+    final_response = responder.respond(previous_response_id: chat.latest_assistant_response_id)
+
+    assistant_message.complete!(final_response.id)
   end
 
   private

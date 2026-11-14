@@ -17,34 +17,21 @@ class Api::V1::ChatsController < Api::V1::BaseController
   end
 
   def create
-    @chat = Current.user.chats.build(title: chat_params[:title])
-
-    if @chat.save
-      if chat_params[:message].present?
-        @message = @chat.messages.build(
-          content: chat_params[:message],
-          type: "UserMessage",
-          ai_model: chat_params[:model].presence || Chat.default_model
-        )
-
-        if @message.save
-          # NOTE: Commenting out duplicate job enqueue to fix mobile app receiving duplicate AI responses
-          # UserMessage model already triggers AssistantResponseJob via after_create_commit callback
-          # in app/models/user_message.rb:10-12, so this manual enqueue causes the job to run twice,
-          # resulting in duplicate AI responses with different content and wasted tokens.
-          # See: https://github.com/dwvwdv/sure (mobile app integration issue)
-          # AssistantResponseJob.perform_later(@message)
-          render :show, status: :created
-        else
-          @chat.destroy
-          render json: { error: "Failed to create initial message", details: @message.errors.full_messages }, status: :unprocessable_entity
-        end
-      else
-        render :show, status: :created
-      end
+    if chat_params[:message].present?
+      @chat = Current.user.chats.start!(chat_params[:message], model: chat_params[:model], title: chat_params[:title])
+      @messages = @chat.messages.ordered
+      render :show, status: :created
     else
-      render json: { error: "Failed to create chat", details: @chat.errors.full_messages }, status: :unprocessable_entity
+      @chat = Current.user.chats.build(title: chat_params[:title])
+
+      if @chat.save
+        render :show, status: :created
+      else
+        render json: { error: "Failed to create chat", details: @chat.errors.full_messages }, status: :unprocessable_entity
+      end
     end
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: "Failed to create chat", details: e.record.errors.full_messages }, status: :unprocessable_entity
   end
 
   def update

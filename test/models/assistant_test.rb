@@ -3,207 +3,227 @@ require "test_helper"
 class AssistantTest < ActiveSupport::TestCase
   include ProviderTestHelper
 
+  # Replays scripted provider responses and records every request, like Provider::Openai#chat_response
+  class ScriptedLlm
+    attr_reader :calls
+
+    def initialize(*steps)
+      @steps = steps
+      @calls = []
+    end
+
+    def chat_response(prompt, **options)
+      @calls << options.merge(prompt: prompt)
+      step = @steps.shift || raise("unexpected chat_response call ##{@calls.size}")
+
+      Array(step[:chunks]).each { |chunk| options[:streamer]&.call(chunk) }
+      step[:response]
+    end
+  end
+
   setup do
     @chat = chats(:two)
-    @message = @chat.messages.create!(
+    @chat.update!(latest_assistant_response_id: "resp_previous")
+    @prompt = @chat.messages.create!(
       type: "UserMessage",
       content: "What is my net worth?",
       ai_model: "gpt-4.1"
     )
+    @turn = AssistantMessage.create!(chat: @chat, ai_model: "gpt-4.1")
     @assistant = Assistant.for_chat(@chat)
-    @provider = mock
+    Chat.any_instance.stubs(:assistant).returns(@assistant)
     @expected_session_id = @chat.id.to_s
     @expected_user_identifier = ::Digest::SHA256.hexdigest(@chat.user_id.to_s)
   end
 
-  test "errors get added to chat" do
-    @assistant.expects(:get_model_provider).with("gpt-4.1").returns(@provider)
-
+  test "errors fail the turn" do
     error = StandardError.new("test error")
-    @provider.expects(:chat_response).returns(provider_error_response(error))
+    use_llm(step(response: provider_error_response(error)))
 
-    @chat.expects(:add_error).with(error).once
+    @turn.generate_response
 
-    assert_no_difference "AssistantMessage.count"  do
-      @assistant.respond_to(@message)
-    end
+    assert @turn.reload.failed?
+    assert_includes @chat.reload.error, "test error"
+    assert_equal "resp_previous", @chat.latest_assistant_response_id
   end
 
   test "handles missing provider gracefully with helpful error message" do
-    # Simulate no provider configured (returns nil)
     @assistant.expects(:get_model_provider).with("gpt-4.1").returns(nil)
 
-    # Mock the registry to return empty providers
     mock_registry = mock("registry")
     mock_registry.stubs(:providers).returns([])
     @assistant.stubs(:registry).returns(mock_registry)
 
-    @chat.expects(:add_error).with do |error|
-      assert_includes error.message, "No LLM provider configured that supports model 'gpt-4.1'"
-      assert_includes error.message, "Please configure an LLM provider (e.g., OpenAI) in settings."
-      true
-    end
+    @turn.generate_response
 
-    assert_no_difference "AssistantMessage.count" do
-      @assistant.respond_to(@message)
-    end
+    assert @turn.reload.failed?
+    assert_includes @chat.reload.error, "No LLM provider configured that supports model 'gpt-4.1'"
+    assert_includes @chat.error, "Please configure an LLM provider (e.g., OpenAI) in settings."
   end
 
   test "shows available providers in error message when model not supported" do
-    # Simulate provider exists but doesn't support the model
+    @turn.update!(ai_model: "claude-3")
     @assistant.expects(:get_model_provider).with("claude-3").returns(nil)
 
-    # Create mock provider
     mock_provider = mock("openai_provider")
     mock_provider.stubs(:provider_name).returns("OpenAI")
     mock_provider.stubs(:supported_models_description).returns("models starting with: gpt-4, gpt-5, o1, o3")
 
-    # Mock the registry to return the provider
     mock_registry = mock("registry")
     mock_registry.stubs(:providers).returns([ mock_provider ])
     @assistant.stubs(:registry).returns(mock_registry)
 
-    # Update message to use unsupported model
-    @message.update!(ai_model: "claude-3")
+    @turn.generate_response
 
-    @chat.expects(:add_error).with do |error|
-      assert_includes error.message, "No LLM provider configured that supports model 'claude-3'"
-      assert_includes error.message, "Available providers:"
-      assert_includes error.message, "OpenAI: models starting with: gpt-4, gpt-5, o1, o3"
-      assert_includes error.message, "Use a supported model from the list above"
-      true
-    end
-
-    assert_no_difference "AssistantMessage.count" do
-      @assistant.respond_to(@message)
-    end
+    error = JSON.parse(@chat.reload.error)
+    assert_includes error, "No LLM provider configured that supports model 'claude-3'"
+    assert_includes error, "Available providers:"
+    assert_includes error, "OpenAI: models starting with: gpt-4, gpt-5, o1, o3"
+    assert_includes error, "Use a supported model from the list above"
   end
 
   test "responds to basic prompt" do
-    @assistant.expects(:get_model_provider).with("gpt-4.1").returns(@provider)
-
     text_chunks = [
       provider_text_chunk("I do not "),
       provider_text_chunk("have the information "),
       provider_text_chunk("to answer that question")
     ]
+    response = provider_response(id: "1", text: text_chunks.map(&:data).join)
+    llm = use_llm(step(chunks: [ *text_chunks, provider_response_chunk(response) ], response: provider_success_response(response)))
 
-    response_chunk = provider_response_chunk(
-      id: "1",
-      model: "gpt-4.1",
-      messages: [ provider_message(id: "1", text: text_chunks.join) ],
-      function_requests: []
-    )
-
-    response = provider_success_response(response_chunk.data)
-
-    @provider.expects(:chat_response).with do |message, **options|
-      assert_equal @expected_session_id, options[:session_id]
-      assert_equal @expected_user_identifier, options[:user_identifier]
-      text_chunks.each do |text_chunk|
-        options[:streamer].call(text_chunk)
-      end
-
-      options[:streamer].call(response_chunk)
-      true
-    end.returns(response)
-
-    assert_difference "AssistantMessage.count", 1 do
-      @assistant.respond_to(@message)
-      message = @chat.messages.ordered.where(type: "AssistantMessage").last
-      assert_equal "I do not have the information to answer that question", message.content
-      assert_equal 0, message.tool_calls.size
+    assert_no_difference "AssistantMessage.count" do
+      @turn.generate_response
     end
+
+    @turn.reload
+    assert @turn.complete?
+    assert_equal "I do not have the information to answer that question", @turn.content
+    assert_equal 0, @turn.tool_calls.size
+    assert_equal "1", @chat.reload.latest_assistant_response_id
+
+    assert_equal 1, llm.calls.size
+    assert_equal "What is my net worth?", llm.calls.first[:prompt]
+    assert_equal "resp_previous", llm.calls.first[:previous_response_id]
+    assert_equal @expected_session_id, llm.calls.first[:session_id]
+    assert_equal @expected_user_identifier, llm.calls.first[:user_identifier]
   end
 
   test "responds with tool function calls" do
-    @assistant.expects(:get_model_provider).with("gpt-4.1").returns(@provider).once
-
-    # Only first provider call executes function
     Assistant::Function::GetAccounts.any_instance.stubs(:call).returns("test value").once
 
-    # Call #1: Function requests
-    call1_response_chunk = provider_response_chunk(
-      id: "1",
-      model: "gpt-4.1",
-      messages: [],
-      function_requests: [
-        provider_function_request(id: "1", call_id: "1", function_name: "get_accounts", function_args: "{}")
-      ]
+    call1 = provider_response(id: "1", function_requests: [ function_request("1") ])
+    call2 = provider_response(id: "2", text: "Your net worth is $124,200")
+
+    llm = use_llm(
+      step(chunks: [ provider_response_chunk(call1) ], response: provider_success_response(call1)),
+      step(
+        chunks: [ provider_text_chunk("Your net worth is "), provider_text_chunk("$124,200"), provider_response_chunk(call2) ],
+        response: provider_success_response(call2)
+      )
     )
 
-    call1_response = provider_success_response(call1_response_chunk.data)
+    @turn.generate_response
 
-    # Call #2: Text response (that uses function results)
-    call2_text_chunks = [
-      provider_text_chunk("Your net worth is "),
-      provider_text_chunk("$124,200")
-    ]
+    @turn.reload
+    assert @turn.complete?
+    assert_equal "Your net worth is $124,200", @turn.content
+    assert_equal 1, @turn.tool_calls.size
+    assert_equal "2", @chat.reload.latest_assistant_response_id
 
-    call2_response_chunk = provider_response_chunk(
-      id: "2",
-      model: "gpt-4.1",
-      messages: [ provider_message(id: "1", text: call2_text_chunks.join) ],
-      function_requests: []
+    assert_equal [ "resp_previous", "1" ], llm.calls.map { |call| call[:previous_response_id] }
+    assert_equal [ "1" ], llm.calls.last[:function_results].map { |result| result[:call_id] }
+  end
+
+  test "runs chained function calls until the model answers" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).returns("accounts")
+
+    call1 = provider_response(id: "1", function_requests: [ function_request("a") ])
+    call2 = provider_response(id: "2", function_requests: [ function_request("b") ])
+    call3 = provider_response(id: "3", text: "Done")
+
+    llm = use_llm(
+      step(response: provider_success_response(call1)),
+      step(response: provider_success_response(call2)),
+      step(chunks: [ provider_text_chunk("Done") ], response: provider_success_response(call3))
     )
 
-    call2_response = provider_success_response(call2_response_chunk.data)
+    @turn.generate_response
 
-    sequence = sequence("provider_chat_response")
+    @turn.reload
+    assert @turn.complete?
+    assert_equal 2, @turn.tool_calls.size
+    assert_equal "3", @chat.reload.latest_assistant_response_id
+    assert_equal [ "resp_previous", "1", "2" ], llm.calls.map { |call| call[:previous_response_id] }
+  end
 
-    @provider.expects(:chat_response).with do |message, **options|
-      assert_equal @expected_session_id, options[:session_id]
-      assert_equal @expected_user_identifier, options[:user_identifier]
-      call2_text_chunks.each do |text_chunk|
-        options[:streamer].call(text_chunk)
-      end
+  test "too many function rounds fail the turn and keep the pointer" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).returns("accounts")
 
-      options[:streamer].call(call2_response_chunk)
-      true
-    end.returns(call2_response).once.in_sequence(sequence)
-
-    @provider.expects(:chat_response).with do |message, **options|
-      assert_equal @expected_session_id, options[:session_id]
-      assert_equal @expected_user_identifier, options[:user_identifier]
-      options[:streamer].call(call1_response_chunk)
-      true
-    end.returns(call1_response).once.in_sequence(sequence)
-
-    assert_difference "AssistantMessage.count", 1 do
-      @assistant.respond_to(@message)
-      message = @chat.messages.ordered.where(type: "AssistantMessage").last
-      assert_equal 1, message.tool_calls.size
+    steps = (1..(Assistant::Responder::MAX_FUNCTION_ROUNDS + 1)).map do |i|
+      step(response: provider_success_response(provider_response(id: i.to_s, function_requests: [ function_request(i.to_s) ])))
     end
+    llm = use_llm(*steps)
+
+    @turn.generate_response
+
+    assert @turn.reload.failed?
+    assert_equal Assistant::Responder::MAX_FUNCTION_ROUNDS, @turn.tool_calls.size
+    assert_equal Assistant::Responder::MAX_FUNCTION_ROUNDS + 1, llm.calls.size
+    assert_equal "resp_previous", @chat.reload.latest_assistant_response_id
+  end
+
+  test "a failure after the tool call keeps the partial text, the tool calls and the old pointer" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).returns("accounts")
+
+    call1 = provider_response(id: "1", function_requests: [ function_request("1") ])
+    use_llm(
+      step(response: provider_success_response(call1)),
+      step(chunks: [ provider_text_chunk("Your net") ], response: provider_error_response(StandardError.new("stream dropped")))
+    )
+
+    @turn.generate_response
+
+    @turn.reload
+    assert @turn.failed?
+    assert_equal "Your net", @turn.content
+    assert_equal 1, @turn.tool_calls.size
+    assert_equal "resp_previous", @chat.reload.latest_assistant_response_id
   end
 
   private
-    def provider_function_request(id:, call_id:, function_name:, function_args:)
+    def use_llm(*steps)
+      ScriptedLlm.new(*steps).tap do |llm|
+        @assistant.stubs(:get_model_provider).with("gpt-4.1").returns(llm)
+      end
+    end
+
+    def step(response:, chunks: [])
+      { response: response, chunks: chunks }
+    end
+
+    def function_request(call_id)
       Provider::LlmConcept::ChatFunctionRequest.new(
-        id: id,
+        id: "fc_#{call_id}",
         call_id: call_id,
-        function_name: function_name,
-        function_args: function_args
+        function_name: "get_accounts",
+        function_args: "{}"
       )
     end
 
-    def provider_message(id:, text:)
-      Provider::LlmConcept::ChatMessage.new(id: id, output_text: text)
+    def provider_response(id:, text: nil, function_requests: [])
+      Provider::LlmConcept::ChatResponse.new(
+        id: id,
+        model: "gpt-4.1",
+        messages: text ? [ Provider::LlmConcept::ChatMessage.new(id: id, output_text: text) ] : [],
+        function_requests: function_requests
+      )
     end
 
     def provider_text_chunk(text)
       Provider::LlmConcept::ChatStreamChunk.new(type: "output_text", data: text, usage: nil)
     end
 
-    def provider_response_chunk(id:, model:, messages:, function_requests:, usage: nil)
-      Provider::LlmConcept::ChatStreamChunk.new(
-        type: "response",
-        data: Provider::LlmConcept::ChatResponse.new(
-          id: id,
-          model: model,
-          messages: messages,
-          function_requests: function_requests
-        ),
-        usage: usage
-      )
+    def provider_response_chunk(response)
+      Provider::LlmConcept::ChatStreamChunk.new(type: "response", data: response, usage: nil)
     end
 end
