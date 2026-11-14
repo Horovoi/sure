@@ -210,6 +210,6 @@ class Api::V1::ValuationsController < Api::V1::BaseController
     end
 
     def valuation_params
-      params.require(:valuation).permit(:amount, :date, :notes)
+      params.expect(valuation: [ :amount, :date, :notes ])
     end
 end

@@ -32,7 +32,7 @@ module Admin
       end
 
       def user_params
-        params.require(:user).permit(:role)
+        params.expect(user: [ :role ])
       end
   end
 end

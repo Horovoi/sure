@@ -191,11 +191,7 @@ class PagesController < ApplicationController
 
   private
     def preferences_params
-      prefs = params.require(:preferences)
-      {}.tap do |permitted|
-        permitted["collapsed_sections"] = prefs[:collapsed_sections].to_unsafe_h if prefs[:collapsed_sections]
-        permitted["section_order"] = prefs[:section_order] if prefs[:section_order]
-      end
+      params.expect(preferences: [ collapsed_sections: {}, section_order: [] ]).to_h
     end
 
     def build_dashboard_sections

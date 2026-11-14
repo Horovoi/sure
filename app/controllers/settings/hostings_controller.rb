@@ -162,14 +162,14 @@ class Settings::HostingsController < ApplicationController
 
   private
     def hosting_params
-      params.require(:setting).permit(
+      params.expect(setting: [
         :onboarding_state, :require_email_confirmation, :brand_fetch_client_id,
         :brand_fetch_high_res_logos, :twelve_data_api_key, :openai_access_token,
         :openai_uri_base, :openai_model, :openai_json_mode, :exchange_rate_provider,
         :securities_provider, :syncs_include_pending, :auto_sync_enabled, :auto_sync_time,
         :scheduled_jobs_start_time, :scheduled_jobs_timezone,
         :data_cleaner_time, :security_health_check_time, :subscription_transactions_time
-      )
+      ])
     end
 
     def invalid_schedule_param

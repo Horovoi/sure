@@ -68,7 +68,7 @@ class Settings::ApiKeysController < ApplicationController
 
     def api_key_params
       # Convert single scope value to array for storage
-      permitted_params = params.require(:api_key).permit(:name, :scopes)
+      permitted_params = params.expect(api_key: [ :name, :scopes ])
       if permitted_params[:scopes].present?
         permitted_params[:scopes] = [ permitted_params[:scopes] ]
       end

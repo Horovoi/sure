@@ -46,7 +46,7 @@ class ImpersonationSessionsController < ApplicationController
 
   private
     def session_params
-      params.require(:impersonation_session).permit(:impersonated_id)
+      params.expect(impersonation_session: [ :impersonated_id ])
     end
 
     def set_impersonation_session

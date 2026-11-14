@@ -104,7 +104,7 @@ module Admin
       end
 
       def sso_provider_params
-        params.require(:sso_provider).permit(
+        params.expect(sso_provider: [
           :strategy,
           :name,
           :label,
@@ -123,7 +123,7 @@ module Admin
             :idp_certificate, :idp_cert_fingerprint, :name_id_format,
             role_mapping: {}
           ]
-        )
+        ])
       end
 
       # Process params to convert role_mapping comma-separated strings to arrays

@@ -379,10 +379,10 @@ class TransactionsController < ApplicationController
 
   private
     def entry_params
-      entry_params = params.require(:entry).permit(
+      entry_params = params.expect(entry: [
         :name, :date, :amount, :currency, :excluded, :notes, :nature, :entryable_type,
         entryable_attributes: [ :id, :category_id, :merchant_id, :kind, :investment_activity_label, { tag_ids: [] } ]
-      )
+      ])
 
       nature = entry_params.delete(:nature)
 
@@ -450,8 +450,9 @@ class TransactionsController < ApplicationController
       Current.session.prev_transaction_page_params
     end
 
+    # A plain hash: the user model merges nested hashes, and it only recognises real ones
     def preferences_params
-      params.require(:preferences).permit(collapsed_sections: {})
+      params.expect(preferences: [ collapsed_sections: {} ]).to_h
     end
 
     def load_category_groups

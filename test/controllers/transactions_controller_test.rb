@@ -355,4 +355,18 @@ end
     assert_redirected_to transactions_path
     assert_equal "An unexpected error occurred while creating the recurring transaction", flash[:alert]
   end
+
+  test "collapsing a second section keeps the first one collapsed" do
+    patch update_preferences_transactions_url, params: { preferences: { collapsed_sections: { upcoming: true } } }, as: :json
+    patch update_preferences_transactions_url, params: { preferences: { collapsed_sections: { summary: true } } }, as: :json
+
+    assert_response :success
+    assert_equal({ "upcoming" => true, "summary" => true }, @user.reload.preferences["transactions_collapsed_sections"])
+  end
+
+  test "malformed preferences are a bad request, not an error" do
+    patch update_preferences_transactions_url, params: { preferences: "nope" }, as: :json
+
+    assert_response :bad_request
+  end
 end

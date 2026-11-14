@@ -261,10 +261,10 @@ end
 end
 
     def transaction_params
-      params.require(:transaction).permit(
+      params.expect(transaction: [
         :account_id, :date, :amount, :name, :description, :notes, :currency,
         :category_id, :merchant_id, :nature, tag_ids: []
-      )
+      ])
     end
 
     def entry_params_for_create

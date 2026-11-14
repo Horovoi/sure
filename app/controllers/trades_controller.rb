@@ -53,16 +53,16 @@ class TradesController < ApplicationController
 
   private
     def entry_params
-      params.require(:entry).permit(
+      params.expect(entry: [
         :name, :date, :amount, :currency, :excluded, :notes, :nature,
         entryable_attributes: [ :id, :qty, :price, :investment_activity_label ]
-      )
+      ])
     end
 
     def create_params
-      params.require(:model).permit(
+      params.expect(model: [
         :date, :amount, :currency, :qty, :price, :ticker, :manual_ticker, :type, :transfer_account_id
-      )
+      ])
     end
 
     def update_entry_params

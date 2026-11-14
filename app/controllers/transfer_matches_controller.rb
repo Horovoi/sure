@@ -28,7 +28,7 @@ class TransferMatchesController < ApplicationController
     end
 
     def transfer_match_params
-      params.require(:transfer_match).permit(:method, :matched_entry_id, :target_account_id)
+      params.expect(transfer_match: [ :method, :matched_entry_id, :target_account_id ])
     end
 
     def build_transfer

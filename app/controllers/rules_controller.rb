@@ -135,15 +135,17 @@ class RulesController < ApplicationController
     end
 
     def rule_params
-      params.require(:rule).permit(
+      # Double brackets mark a collection: the form sends conditions and actions as
+      # indexed hashes ("0" => {...}), and expect takes a list of them only in this form
+      params.expect(rule: [
         :resource_type, :effective_date, :active, :name,
-        conditions_attributes: [
+        conditions_attributes: [ [
           :id, :condition_type, :operator, :value, :_destroy,
-          sub_conditions_attributes: [ :id, :condition_type, :operator, :value, :_destroy ]
-        ],
-        actions_attributes: [
+          sub_conditions_attributes: [ [ :id, :condition_type, :operator, :value, :_destroy ] ]
+        ] ],
+        actions_attributes: [ [
           :id, :action_type, :value, :_destroy
-        ]
-      )
+        ] ]
+      ])
     end
 end

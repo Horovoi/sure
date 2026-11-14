@@ -313,4 +313,20 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     # No synthetic row should appear
     assert_select "div[data-category='category-#{parent_category.id}_other']", count: 0
   end
+
+  test "reports preferences merge collapsed sections and replace the section order" do
+    patch update_preferences_reports_url, params: { preferences: { reports_collapsed_sections: { trends_insights: true } } }, as: :json
+    patch update_preferences_reports_url, params: { preferences: { reports_collapsed_sections: { net_worth: true }, reports_section_order: %w[net_worth trends_insights] } }, as: :json
+
+    assert_response :success
+    preferences = @user.reload.preferences
+    assert_equal({ "trends_insights" => true, "net_worth" => true }, preferences["reports_collapsed_sections"])
+    assert_equal %w[net_worth trends_insights], preferences["reports_section_order"]
+  end
+
+  test "malformed reports preferences are a bad request, not an error" do
+    patch update_preferences_reports_url, params: { preferences: "nope" }, as: :json
+
+    assert_response :bad_request
+  end
 end

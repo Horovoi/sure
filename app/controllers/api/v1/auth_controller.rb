@@ -170,7 +170,7 @@ module Api
       private
 
         def user_signup_params
-          params.require(:user).permit(:email, :password, :first_name, :last_name)
+          params.expect(user: [ :email, :password, :first_name, :last_name ])
         end
 
         def validate_password(password)

@@ -296,11 +296,11 @@ class SubscriptionsController < ApplicationController
     end
 
     def subscription_params
-      params.require(:recurring_transaction).permit(
+      params.expect(recurring_transaction: [
         :name, :amount, :currency, :billing_cycle, :expected_day_of_month, :expected_month,
         :category_id, :merchant_id, :subscription_service_id, :notes, :custom_logo_url, :status,
         :default_account_id, :next_expected_date
-      )
+      ])
     end
 
     def calculate_next_expected_date(subscription)

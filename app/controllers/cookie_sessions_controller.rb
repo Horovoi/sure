@@ -10,7 +10,7 @@ class CookieSessionsController < ApplicationController
 
   private
     def cookie_session_params
-      params.require(:cookie_session).permit(:tab_key, :tab_value)
+      params.expect(cookie_session: [ :tab_key, :tab_value ])
     end
 
     def save_kv_to_session(key, value)
