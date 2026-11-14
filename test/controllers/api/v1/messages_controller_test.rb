@@ -37,7 +37,7 @@ class Api::V1::MessagesControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should create message with write scope" do
-    assert_difference "Message.count" do
+    assert_difference "Message.count", 2 do
       post "/api/v1/chats/#{@chat.id}/messages",
         params: { content: "Test message", model: "gpt-4" },
         headers: bearer_auth_header(@write_token)
@@ -48,6 +48,19 @@ class Api::V1::MessagesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Test message", response_body["content"]
     assert_equal "user_message", response_body["type"]
     assert_equal "pending", response_body["ai_response_status"]
+    assert_equal @chat.in_flight_turn.id, response_body["ai_response_message_id"]
+  end
+
+  test "reports the real status of the response" do
+    turn = @chat.ask!("Question", ai_model: "gpt-4.1")
+    turn.start!
+    turn.append_text!("Answer")
+    turn.complete!("resp_1")
+
+    get "/api/v1/chats/#{@chat.id}", headers: bearer_auth_header(@write_token)
+
+    messages = JSON.parse(response.body)["messages"]
+    assert_equal "complete", messages.find { |m| m["id"] == turn.id }["status"]
   end
 
   test "should enqueue assistant response job" do
@@ -58,36 +71,50 @@ class Api::V1::MessagesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "should retry last assistant message" do
-    skip "Retry functionality needs debugging"
+  test "should not create a message while a response is being generated" do
+    @chat.ask!("First", ai_model: "gpt-4.1")
 
-    # Create an assistant message to retry
-    assistant_message = @chat.messages.create!(
-      type: "AssistantMessage",
-      content: "Previous response",
-      ai_model: "gpt-4"
-    )
+    assert_no_difference "Message.count" do
+      post "/api/v1/chats/#{@chat.id}/messages",
+        params: { content: "Second" },
+        headers: bearer_auth_header(@write_token)
+    end
 
-    assert_enqueued_with(job: AssistantResponseJob) do
+    assert_response :conflict
+  end
+
+  test "should retry a failed response" do
+    turn = @chat.ask!("Question", ai_model: "gpt-4.1")
+    turn.start!
+    turn.fail!(StandardError.new("boom"))
+    clear_enqueued_jobs
+
+    assert_enqueued_with(job: AssistantResponseJob, args: [ turn ]) do
       post "/api/v1/chats/#{@chat.id}/messages/retry",
         headers: bearer_auth_header(@write_token)
     end
 
     assert_response :accepted
-    response_body = JSON.parse(response.body)
-    assert response_body["message_id"].present?
+    assert_equal turn.id, JSON.parse(response.body)["message_id"]
+    assert turn.reload.pending?
   end
 
-  test "should not retry if no assistant message exists" do
-    # Remove all assistant messages
-    @chat.messages.where(type: "AssistantMessage").destroy_all
+  test "should not retry while a response is being generated" do
+    @chat.ask!("Question", ai_model: "gpt-4.1")
 
+    post "/api/v1/chats/#{@chat.id}/messages/retry",
+      headers: bearer_auth_header(@write_token)
+
+    assert_response :conflict
+  end
+
+  test "should not retry a completed response" do
     post "/api/v1/chats/#{@chat.id}/messages/retry.json",
       headers: bearer_auth_header(@write_token)
 
     assert_response :unprocessable_entity
     response_body = JSON.parse(response.body)
-    assert_equal "No assistant message to retry", response_body["error"]
+    assert_equal "Nothing to retry", response_body["error"]
   end
 
   test "should not access messages in other user's chat" do

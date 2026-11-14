@@ -5,6 +5,8 @@ module Family::VectorSearchable
     has_many :family_documents, dependent: :destroy
   end
 
+  # Creates the family's vector store once. Two callers racing (ProcessPdfJob and a document upload) may both
+  # create a store; only the first to claim the empty column keeps its store, the other deletes its own.
   def ensure_vector_store!
     return vector_store_id if vector_store_id.present?
 
@@ -14,12 +16,16 @@ module Family::VectorSearchable
     response = adapter.create_store(name: "Family #{id} Documents")
     return nil unless response.success?
 
-    if update(vector_store_id: response.data[:id])
-      vector_store_id
-    else
-      adapter.delete_store(store_id: response.data[:id]) rescue nil
-      nil
+    new_store_id = response.data[:id]
+    claimed = self.class.where(id: id, vector_store_id: nil).update_all(vector_store_id: new_store_id) == 1
+
+    unless claimed
+      adapter.delete_store(store_id: new_store_id) rescue nil
     end
+
+    self[:vector_store_id] = self.class.where(id: id).pick(:vector_store_id)
+    clear_attribute_changes([ :vector_store_id ])
+    vector_store_id
   end
 
   def search_documents(query, max_results: 10)
@@ -37,28 +43,27 @@ module Family::VectorSearchable
     response.success? ? response.data : []
   end
 
+  # Saves the document (pending) with its local copy first, then uploads it, so a failed upload leaves an
+  # error row instead of an orphaned remote file. Returns the ready document, or nil when the upload failed.
+  # A document for an import is uploaded once: a retried ProcessPdfJob gets the existing ready document.
   def upload_document(file_content:, filename:, metadata: {})
     adapter = vector_store_adapter
     return nil unless adapter
 
+    metadata = (metadata || {}).stringify_keys
+    if metadata["import_id"].present?
+      existing = family_documents.ready.find_by("metadata->>'import_id' = ?", metadata["import_id"].to_s)
+      return existing if existing
+    end
+
     store_id = ensure_vector_store!
     return nil unless store_id
-
-    response = adapter.upload_file(
-      store_id: store_id,
-      file_content: file_content,
-      filename: filename
-    )
-
-    return nil unless response.success?
 
     family_document = family_documents.create!(
       filename: filename,
       content_type: Marcel::MimeType.for(name: filename),
       file_size: file_content.bytesize,
-      provider_file_id: response.data[:file_id],
-      status: "ready",
-      metadata: metadata || {}
+      metadata: metadata
     )
 
     family_document.file.attach(
@@ -66,6 +71,27 @@ module Family::VectorSearchable
       filename: filename,
       content_type: family_document.content_type
     )
+
+    family_document.start_upload!
+
+    response = adapter.upload_file(
+      store_id: store_id,
+      file_content: file_content,
+      filename: filename
+    )
+
+    unless response.success?
+      family_document.mark_error!(response.error&.message)
+      return nil
+    end
+
+    begin
+      family_document.mark_ready!(response.data[:file_id])
+    rescue
+      # Do not leave a remote file that no row points to
+      adapter.remove_file(store_id: store_id, file_id: response.data[:file_id])
+      raise
+    end
 
     family_document
   end

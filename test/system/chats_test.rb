@@ -53,7 +53,7 @@ class ChatsTest < ApplicationSystemTestCase
 
       visit root_url
 
-      Chat.any_instance.expects(:ask_assistant_later).once
+      AssistantResponseJob.expects(:perform_later).once
 
       within "#chat-form" do
         fill_in "chat[content]", with: "Can you help with my finances?"
@@ -69,6 +69,32 @@ class ChatsTest < ApplicationSystemTestCase
       click_on @user.chats.reload.first.title
 
       assert_text "Can you help with my finances?"
+    end
+  end
+
+  test "composer cannot send a second message while the response is pending" do
+    with_env_overrides OPENAI_ACCESS_TOKEN: "test-token" do
+      @user.chats.destroy_all
+
+      visit root_url
+
+      AssistantResponseJob.expects(:perform_later).once
+
+      within "#chat-form" do
+        fill_in "chat[content]", with: "First question"
+        find("button[type='submit']").click
+      end
+
+      assert_text "First question"
+
+      within "#chat-form" do
+        assert_selector "button[type='submit'][disabled]"
+        fill_in "message[content]", with: "Second question"
+        find("textarea").send_keys(:enter)
+      end
+
+      assert_no_text "Second question", wait: 1
+      assert_equal 1, @user.chats.reload.first.messages.where(type: "UserMessage").count
     end
   end
 end

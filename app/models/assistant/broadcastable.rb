@@ -2,11 +2,8 @@ module Assistant::Broadcastable
   extend ActiveSupport::Concern
 
   private
+    # The pending assistant message renders the indicator; this only changes its text while the turn runs
     def update_thinking(thought)
-      chat.broadcast_update target: "thinking-indicator", partial: "chats/thinking_indicator", locals: { chat: chat, message: thought }
-    end
-
-    def stop_thinking
-      chat.broadcast_remove target: "thinking-indicator"
+      chat.broadcast_replace target: "thinking-indicator", partial: "chats/thinking_indicator", locals: { chat: chat, message: thought }
     end
 end

@@ -1,6 +1,8 @@
 require "test_helper"
 
 class ChatsControllerTest < ActionDispatch::IntegrationTest
+  include ActiveJob::TestHelper
+
   setup do
     @user = users(:family_admin)
     @family = families(:dylan_family)
@@ -17,7 +19,96 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
       post chats_url, params: { chat: { content: "Hello", ai_model: "gpt-4.1" } }
     end
 
-    assert_redirected_to chat_path(Chat.order(created_at: :desc).first, thinking: true)
+    assert_redirected_to chat_path(Chat.order(created_at: :desc).first)
+  end
+
+  test "cannot create a chat if AI is disabled" do
+    @user.update!(ai_enabled: false)
+
+    assert_no_difference("Chat.count") do
+      post chats_url, params: { chat: { content: "Hello", ai_model: "gpt-4.1" } }
+    end
+
+    assert_response :forbidden
+  end
+
+  test "shows a pending turn as thinking with the composer disabled" do
+    chat = chats(:one)
+    chat.ask!("Question", ai_model: "gpt-4.1")
+
+    get chat_url(chat)
+
+    assert_response :success
+    assert_select "[data-turn-in-flight=true] #thinking-indicator"
+    assert_select "#chat-form button[type=submit][disabled]"
+    assert_select "#chat-error", count: 0
+  end
+
+  test "shows retry for a failed turn" do
+    chat = chats(:one)
+    turn = chat.ask!("Question", ai_model: "gpt-4.1")
+    turn.start!
+    turn.fail!(StandardError.new("boom"))
+
+    get chat_url(chat)
+
+    assert_select "#chat-error form[action='#{retry_chat_path(chat)}']"
+    assert_select "#chat-form button[type=submit]:not([disabled])"
+  end
+
+  test "shows retry for a lost turn" do
+    chat = chats(:one)
+    turn = chat.ask!("Question", ai_model: "gpt-4.1")
+    turn.update_column(:updated_at, (AssistantMessage::STALE_AFTER + 1.minute).ago)
+
+    get chat_url(chat)
+
+    assert_select "#chat-error form[action='#{retry_chat_path(chat)}']"
+    assert_select "#thinking-indicator", count: 0
+  end
+
+  test "shows retry for a prompt that never got a response" do
+    chat = @user.chats.create!(title: "Orphan")
+    UserMessage.create!(chat: chat, content: "Anyone?", ai_model: "gpt-4.1")
+
+    get chat_url(chat)
+
+    assert_select "#chat-error form[action='#{retry_chat_path(chat)}']"
+  end
+
+  test "retry retries the chat in the URL, not the last viewed chat" do
+    chat = @user.chats.create!(title: "Failed one")
+    turn = chat.ask!("Question", ai_model: "gpt-4.1")
+    turn.start!
+    turn.fail!(StandardError.new("boom"))
+    @user.update!(last_viewed_chat: chats(:one))
+    clear_enqueued_jobs
+
+    post retry_chat_url(chat)
+
+    assert_redirected_to chat_path(chat)
+    assert turn.reload.pending?
+    assert_enqueued_with job: AssistantResponseJob, args: [ turn ]
+  end
+
+  test "retry is refused while a turn runs" do
+    chat = chats(:one)
+    chat.ask!("Question", ai_model: "gpt-4.1")
+    clear_enqueued_jobs
+
+    post retry_chat_url(chat)
+
+    assert_redirected_to chat_path(chat)
+    assert_equal I18n.t("chats.retry.in_progress"), flash[:alert]
+    assert_no_enqueued_jobs
+  end
+
+  test "cannot retry if AI is disabled" do
+    @user.update!(ai_enabled: false)
+
+    post retry_chat_url(chats(:one))
+
+    assert_response :forbidden
   end
 
   test "shows chat" do
