@@ -97,4 +97,22 @@ class MarketDataImporterTest < ActiveSupport::TestCase
 
     assert_equal 1, Security::Price.where(security: security, date: SNAPSHOT_START_DATE).count
   end
+
+  test "one failing security does not stop the others or the exchange rates" do
+    Security.create!(ticker: "FAIL", exchange_operating_mic: "XNAS")
+    Security.create!(ticker: "WORK", exchange_operating_mic: "XNAS")
+    Security.create!(ticker: "MINE", status: "manual")
+    Security.any_instance.stubs(:import_provider_details)
+
+    failing_importer = stub
+    failing_importer.stubs(:import_provider_prices).raises(StandardError, "boom")
+    Security::Price::Importer.expects(:new).with { |security:, **| security.ticker == "FAIL" }.returns(failing_importer)
+    Security::Price::Importer.expects(:new).with { |security:, **| security.ticker == "WORK" }.returns(stub(import_provider_prices: 1))
+    Security::Price::Importer.expects(:new).with { |security:, **| security.ticker == "MINE" }.never
+
+    MarketDataImporter.any_instance.expects(:import_exchange_rates).once
+    Sentry.expects(:capture_exception).once
+
+    MarketDataImporter.new(mode: :snapshot).import_all
+  end
 end
