@@ -8,7 +8,7 @@ Rails application for personal finance management with Plaid integration, multi-
 bin/dev              # Start development (Rails + Sidekiq + Tailwind)
 bin/rails console    # Rails console
 bin/rails test       # Run tests
-bin/ci               # Run every check (about 4 minutes)
+bin/ci               # Run every check (about 1.5 minutes)
 bin/deploy           # Build the current commit and run it as production on this machine
 bin/staging up       # Run a version on a private copy of production (http://localhost:3334)
 ```

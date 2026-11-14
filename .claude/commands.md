@@ -60,7 +60,7 @@ bin/staging down                # Stop staging
 Run this before opening a pull request:
 
 ```bash
-bin/ci   # autoloading, rubocop, erb_lint, brakeman, tests, system tests (about 4 minutes)
+bin/ci   # autoloading, rubocop, erb_lint, brakeman, tests, system tests (about 1.5 minutes)
 ```
 
 The steps are listed in `config/ci.rb`. Only proceed if ALL of them pass.
