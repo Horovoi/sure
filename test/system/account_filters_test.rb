@@ -123,6 +123,8 @@ class AccountFiltersTest < ApplicationSystemTestCase
     within find("ul#transaction-search-filters").find(:xpath, "..") do
       click_on "Clear all"
     end
+    # Wait for the cleared page, or the next filter goes into the old page's form
+    assert_no_selector "ul#transaction-search-filters"
 
     find("#activity-filter-button").click
 
