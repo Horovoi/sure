@@ -7,3 +7,8 @@ en:
         budgeted: Budgeted
     budget_categories:
       other_category: "Other %{category}"
+    budget_donut:
+      new_budget: New budget
+      of_amount: "of %{amount}"
+      spent: Spent
+      unused: Unused

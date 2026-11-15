@@ -305,4 +305,63 @@ class BudgetTest < ActiveSupport::TestCase
     assert_equal 100, budget.income_category_totals.first.weight
     assert_equal 150, budget.actual_spending
   end
+
+  # --- Spending donut ---------------------------------------------------------
+
+  test "the donut leaves out subcategory rows" do
+    food = budget_test_category("Food")
+    restaurants = budget_test_category("Restaurants", parent: food)
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 1000)
+    budget.budget_categories.find_by!(category: food).update!(budgeted_spending: 500)
+    budget_test_entry(category: restaurants, amount: 120)
+
+    budget = Budget.find(budget.id)
+    food_row = budget.budget_categories.find { |bc| bc.category_id == food.id }
+    sub_row = budget.budget_categories.find { |bc| bc.category_id == restaurants.id }
+    segments = budget.to_donut_segments_json
+
+    assert_includes segments.map { |s| s[:id] }, food_row.id
+    assert_not_includes segments.map { |s| s[:id] }, sub_row.id
+    assert_equal 120, segments.find { |s| s[:id] == food_row.id }[:amount]
+  end
+
+  test "the donut adds an uncategorized segment when something was spent without a category" do
+    food = budget_test_category("Food")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 1000)
+    budget.budget_categories.find_by!(category: food).update!(budgeted_spending: 500)
+
+    uncategorized_id = BudgetCategory.uncategorized.id
+    assert_not_includes Budget.find(budget.id).to_donut_segments_json.map { |s| s[:id] }, uncategorized_id
+
+    budget_test_entry(category: nil, amount: 60)
+    budget = Budget.find(budget.id)
+    segment = budget.to_donut_segments_json.find { |s| s[:id] == uncategorized_id }
+
+    assert_equal 60, segment[:amount]
+    assert_includes budget.donut_budget_categories.map(&:id), uncategorized_id
+  end
+
+  test "a budget with only a total shows its category segments, not one grey segment" do
+    food = budget_test_category("Food")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 1000)
+    budget_test_entry(category: food, amount: 100)
+
+    budget = Budget.find(budget.id)
+    assert_equal :unallocated, budget.allocation_state
+
+    segments = budget.to_donut_segments_json
+    food_row = budget.budget_categories.find { |bc| bc.category_id == food.id }
+
+    assert_equal 100, segments.find { |s| s[:id] == food_row.id }[:amount]
+    assert_equal 900, segments.find { |s| s[:id] == "unused" }[:amount]
+  end
+
+  test "a budget without an amount shows one grey segment" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+    assert_equal [ { color: "var(--budget-unallocated-fill)", amount: 1, id: "unused" } ], budget.to_donut_segments_json
+  end
 end

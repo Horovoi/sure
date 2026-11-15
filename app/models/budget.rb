@@ -122,6 +122,8 @@ class Budget < ApplicationRecord
 
   def uncategorized_budget_category
     budget_categories.uncategorized.tap do |bc|
+      # This budget, not a copy loaded again, so the row reads the totals loaded here.
+      bc.budget = self
       bc.budgeted_spending = [ available_to_allocate, 0 ].max
       bc.currency = family.currency
     end
@@ -182,10 +184,11 @@ class Budget < ApplicationRecord
   def to_donut_segments_json
     unused_segment_id = "unused"
 
-    # Continuous gray segment for empty budgets
-    return [ { color: "var(--budget-unallocated-fill)", amount: 1, id: unused_segment_id } ] unless allocations_valid?
+    # Continuous gray segment for a budget without an amount yet. A budget with only a
+    # total (nothing allocated) still shows what was spent.
+    return [ { color: "var(--budget-unallocated-fill)", amount: 1, id: unused_segment_id } ] unless initialized? && !over_allocated?
 
-    segments = budget_categories.map do |bc|
+    segments = donut_budget_categories.map do |bc|
       { color: bc.category.color, amount: budget_category_actual_spending(bc), id: bc.id }
     end
 
@@ -194,6 +197,16 @@ class Budget < ApplicationRecord
     end
 
     segments
+  end
+
+  # The rows of the spending donut: top-level categories (a parent's spending already
+  # includes its subcategories) plus the uncategorized row when something was spent
+  # without a category.
+  def donut_budget_categories
+    rows = budget_categories.reject(&:subcategory?)
+    uncategorized = uncategorized_budget_category
+    rows << uncategorized if budget_category_actual_spending(uncategorized).positive?
+    rows
   end
 
   # =============================================================================

@@ -217,6 +217,8 @@ class BudgetCategory < ApplicationRecord
   # so a page of budget categories does not run one query per parent category.
   def subcategories
     return [] unless category.parent_id.nil?
+    # The synthetic uncategorized row has no id, and every top-level row would match it.
+    return [] if category.id.nil?
 
     budget.budget_categories.select { |bc| bc.category.parent_id == category.id }
   end

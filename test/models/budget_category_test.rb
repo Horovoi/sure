@@ -202,4 +202,17 @@ class BudgetCategoryTest < ActiveSupport::TestCase
     assert_equal 800, @subcategory_with_limit_bc.available_to_spend
     assert_equal 800, @subcategory_inheriting_bc.available_to_spend
   end
+
+  test "the uncategorized row has no subcategories" do
+    assert_equal [], @budget.uncategorized_budget_category.subcategories
+  end
+
+  test "the uncategorized row can spend what is left to allocate, less uncategorized spending" do
+    @budget.stubs(:budget_category_actual_spending).returns(100)
+    @budget.stubs(:budget_category_actual_spending).with { |bc| bc.category_id.nil? }.returns(40)
+
+    uncategorized = @budget.uncategorized_budget_category
+
+    assert_equal [ @budget.available_to_allocate, 0 ].max - 40, uncategorized.available_to_spend
+  end
 end
