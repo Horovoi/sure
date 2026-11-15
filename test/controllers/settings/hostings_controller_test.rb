@@ -287,4 +287,80 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
       assert_select "input[name=?]", "setting[mcp_enabled]"
     end
   end
+
+  test "the scheduled jobs section lists each job with its last and next run" do
+    stub_scheduled_jobs(worker_beat: Time.current)
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+
+      assert_select "#scheduled-jobs-status table" do
+        assert_select "th[scope=row]", text: /Hourly sync/
+        assert_select "th[scope=row]", text: /Daily full backup.*Not scheduled/m
+      end
+      assert_select "#scheduled-jobs-status", text: /No worker is running/, count: 0
+    end
+  end
+
+  test "the scheduled jobs section warns when no worker is alive" do
+    stub_scheduled_jobs(worker_beat: 10.minutes.ago)
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "#scheduled-jobs-status", text: /No worker is running/
+    end
+  end
+
+  test "the page still renders when Redis is down" do
+    Sidekiq::Cron::Job.stubs(:all).raises(RedisClient::CannotConnectError, "connection refused")
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "#scheduled-jobs-status", text: /Job status is unavailable/
+      assert_select "#scheduled-jobs-status table", count: 0
+    end
+  end
+
+  test "a super admin sees the link to the Sidekiq cron page" do
+    stub_scheduled_jobs(worker_beat: Time.current)
+    sign_in users(:sure_support_staff)
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "a#sidekiq-cron-link[href=?]", "/sidekiq/cron"
+    end
+  end
+
+  test "an admin who is not a super admin does not see the Sidekiq link" do
+    stub_scheduled_jobs(worker_beat: Time.current)
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "a#sidekiq-cron-link", count: 0
+    end
+  end
+
+  test "a member does not see the Sidekiq link" do
+    stub_scheduled_jobs(worker_beat: Time.current)
+    sign_in users(:family_member)
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "#scheduled-jobs-status table"
+      assert_select "a#sidekiq-cron-link", count: 0
+    end
+  end
+
+  private
+    def stub_scheduled_jobs(worker_beat:)
+      hourly = stub(name: "sync_hourly", cron: "0 * * * *", last_enqueue_time: 30.minutes.ago, enabled?: true)
+      Sidekiq::Cron::Job.stubs(:all).returns([ hourly ])
+      Sidekiq::ProcessSet.stubs(:new).returns([ { "beat" => worker_beat.to_f } ])
+    end
 end

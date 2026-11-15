@@ -89,12 +89,64 @@
     </div>
   </details>
 
-  <div class="border-t border-subdued pt-4 mt-4">
-    <p class="text-sm font-medium text-secondary mb-3"><%= t(".non_configurable_title") %></p>
-    <div class="space-y-2 text-sm text-subdued">
-      <p><%= icon "info", size: "sm", class: "inline" %> <%= t(".non_configurable.import_market_data") %></p>
-      <p><%= icon "info", size: "sm", class: "inline" %> <%= t(".non_configurable.sync_hourly") %></p>
-      <p><%= icon "info", size: "sm", class: "inline" %> <%= t(".non_configurable.sync_cleaner") %></p>
+  <% status = @scheduled_jobs_status || ScheduledJobs::Status.new %>
+  <section id="scheduled-jobs-status" class="border-t border-subdued pt-4 mt-4 space-y-3">
+    <div class="flex items-center justify-between gap-4">
+      <div class="space-y-1">
+        <p class="text-sm font-medium text-primary"><%= t(".status.title") %></p>
+        <p class="text-secondary text-sm"><%= t(".status.description", timezone: Time.zone.name) %></p>
+      </div>
+
+      <% if Current.user&.super_admin? %>
+        <%= render DS::Link.new(
+          text: t(".status.open_sidekiq"),
+          href: "/sidekiq/cron",
+          variant: :ghost,
+          size: :sm,
+          icon: "external-link",
+          id: "sidekiq-cron-link",
+          data: { turbo: false }
+        ) %>
+      <% end %>
     </div>
-  </div>
+
+    <% if !status.available? %>
+      <%= render DS::Alert.new(variant: :warning, title: t(".status.unavailable_title"), message: t(".status.unavailable_message")) %>
+    <% else %>
+      <% unless status.worker_alive? %>
+        <%= render DS::Alert.new(variant: :error, title: t(".status.worker_down_title"), message: t(".status.worker_down_message")) %>
+      <% end %>
+
+      <%= render DS::Table.new(rows: status.entries, label: t(".status.title")) do |table| %>
+        <% table.with_column(t(".status.columns.job"), row_header: true) do |entry| %>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-sm text-primary"><%= t(".status.job_names.#{entry.name}", default: entry.name.humanize) %></span>
+            <% case entry.state %>
+            <% when :overdue %>
+              <%= render DS::Pill.new(label: t(".status.states.overdue"), tone: :warning, marker: false) %>
+            <% when :disabled %>
+              <%= render DS::Pill.new(label: t(".status.states.disabled"), tone: :neutral, marker: false) %>
+            <% when :not_scheduled %>
+              <%= render DS::Pill.new(label: t(".status.states.not_scheduled"), tone: :error, marker: false) %>
+            <% end %>
+          </div>
+          <p class="text-xs text-subdued font-mono"><%= entry.name %></p>
+        <% end %>
+        <% table.with_column(t(".status.columns.last_run"), class: "text-secondary whitespace-nowrap") do |entry| %>
+          <% if entry.last_run_at %>
+            <%= tag.time l(entry.last_run_at, format: :short), datetime: entry.last_run_at.iso8601, title: t(".status.ago", time: time_ago_in_words(entry.last_run_at)) %>
+          <% else %>
+            <%= t(".status.never") %>
+          <% end %>
+        <% end %>
+        <% table.with_column(t(".status.columns.next_run"), class: "text-secondary whitespace-nowrap") do |entry| %>
+          <% if entry.next_run_at %>
+            <%= tag.time l(entry.next_run_at, format: :short), datetime: entry.next_run_at.iso8601 %>
+          <% else %>
+            <%= t(".status.no_next_run") %>
+          <% end %>
+        <% end %>
+      <% end %>
+    <% end %>
+  </section>
 </div>
