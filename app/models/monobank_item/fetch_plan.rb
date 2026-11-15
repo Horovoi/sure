@@ -76,6 +76,16 @@ class MonobankItem::FetchPlan
     eligible_accounts.filter_map { |monobank_account| window_for(monobank_account) }
   end
 
+  # When the earliest product that is backed off after a failed request may be fetched
+  # again (it has a window waiting), or nil
+  def next_retry_at
+    candidates(ignore_backoff: true)
+      .select { |monobank_account| monobank_account.next_fetch_after.present? && monobank_account.next_fetch_after > now }
+      .select { |monobank_account| window_for(monobank_account) }
+      .map(&:next_fetch_after)
+      .min
+  end
+
   # Estimated statement requests until every product is up to date
   def windows_remaining
     eligible_accounts.sum { |monobank_account| remaining_for(monobank_account) }
@@ -133,14 +143,20 @@ class MonobankItem::FetchPlan
 
   private
     def eligible_accounts
-      return [] if monobank_item.scheduled_for_deletion? || monobank_item.requires_update?
-
-      monobank_item.monobank_accounts.includes(account_provider: :account).select { |monobank_account| eligible?(monobank_account) }
+      candidates(ignore_backoff: false)
     end
 
-    def eligible?(monobank_account)
+    def candidates(ignore_backoff:)
+      return [] if monobank_item.scheduled_for_deletion? || monobank_item.requires_update?
+
+      monobank_item.monobank_accounts.includes(account_provider: :account).select do |monobank_account|
+        eligible?(monobank_account, ignore_backoff: ignore_backoff)
+      end
+    end
+
+    def eligible?(monobank_account, ignore_backoff: false)
       return false if monobank_account.ignored?
-      return false if monobank_account.next_fetch_after.present? && monobank_account.next_fetch_after > now
+      return false if !ignore_backoff && monobank_account.next_fetch_after.present? && monobank_account.next_fetch_after > now
 
       account = monobank_account.current_account
       account.present? && Account::VISIBLE_STATUSES.include?(account.status)

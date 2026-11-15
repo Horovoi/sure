@@ -9,6 +9,7 @@ class MonobankStatementFetchJob < ApplicationJob
   queue_as :medium_priority
 
   PROCESS_EVERY_WINDOWS = 5
+  MAX_WAIT = 30.minutes
 
   discard_on ActiveJob::DeserializationError
 
@@ -16,8 +17,21 @@ class MonobankStatementFetchJob < ApplicationJob
     return unless chain_owner?(monobank_item, chain_token)
 
     provider = monobank_item.monobank_provider
-    window = MonobankItem::FetchPlan.new(monobank_item).next_window
-    return finish_chain(monobank_item, chain_token) if provider.nil? || window.nil?
+    return finish_chain(monobank_item, chain_token) if provider.nil?
+
+    plan = MonobankItem::FetchPlan.new(monobank_item)
+    window = plan.next_window
+    if window.nil?
+      # A product that failed soon comes back from its backoff: book what is here and
+      # wait for it. A longer backoff is left to the next hourly sync.
+      retry_at = plan.next_retry_at
+      if retry_at && retry_at <= Time.current + MAX_WAIT
+        monobank_item.sync_later
+        return reschedule(monobank_item, chain_token, completed_windows, at: retry_at + 1.second)
+      end
+
+      return finish_chain(monobank_item, chain_token)
+    end
 
     importer = MonobankItem::Importer.new(monobank_item, provider: provider)
 
