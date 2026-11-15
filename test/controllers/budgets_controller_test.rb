@@ -78,4 +78,26 @@ class BudgetsControllerTest < ActionDispatch::IntegrationTest
     assert_equal I18n.t("budgets.copy_previous.no_source"), flash[:alert]
     assert_nil target.reload.budgeted_spending
   end
+
+  test "a budget 13 months ahead opens" do
+    get budget_path(Budget.date_to_param(Date.current.advance(months: 13), family: @family))
+
+    assert_response :ok
+  end
+
+  test "a budget more than two years ahead is not found" do
+    get budget_path(Budget.date_to_param(Date.current.advance(years: 2, months: 1), family: @family))
+
+    assert_response :not_found
+  end
+
+  test "an empty future month offers to copy the newest earlier budget" do
+    newer = Budget.find_or_bootstrap(@family, start_date: Date.current.advance(months: 1))
+    newer.update!(budgeted_spending: 6000)
+
+    get budget_path(Budget.date_to_param(Date.current.advance(months: 3), family: @family))
+
+    assert_response :ok
+    assert_select "[data-testid=copy-previous-prompt]", text: /#{Regexp.escape(newer.name)}/
+  end
 end

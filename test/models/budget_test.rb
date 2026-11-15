@@ -58,8 +58,10 @@ class BudgetTest < ActiveSupport::TestCase
     refute Budget.budget_date_valid?(3.years.ago.beginning_of_month, family: @family)
   end
 
-  test "budget_date_valid? does not allow future dates beyond current month" do
-    refute Budget.budget_date_valid?(2.months.from_now, family: @family)
+  test "budget_date_valid? allows budgets up to two years ahead" do
+    assert Budget.budget_date_valid?(2.months.from_now, family: @family)
+    assert Budget.budget_date_valid?(Date.current.advance(years: 2), family: @family)
+    refute Budget.budget_date_valid?(Date.current.advance(years: 2, months: 1), family: @family)
   end
 
   test "budget_date_valid? works with fiscal months enabled at 2-years boundary" do
@@ -433,5 +435,64 @@ class BudgetTest < ActiveSupport::TestCase
 
     assert_equal newer, target.most_recent_initialized_budget
     assert_nil older.most_recent_initialized_budget
+  end
+
+  # --- Budgets ahead ----------------------------------------------------------
+
+  test "with fiscal start day 31 a budget is valid 24 periods ahead and not one period later" do
+    travel_to Date.new(2026, 11, 15) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 31)
+
+      assert Budget.budget_date_valid?(Budget.param_to_date("oct-2028", family: @family), family: @family)
+      assert Budget.budget_date_valid?(Budget.param_to_date("feb-2028", family: @family), family: @family)
+      refute Budget.budget_date_valid?(Budget.param_to_date("nov-2028", family: @family), family: @family)
+    end
+  end
+
+  test "next_budget_param of the current budget is the next month" do
+    travel_to Date.new(2026, 11, 15) do
+      budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+      assert budget.current?
+      assert_equal "dec-2026", budget.next_budget_param
+    end
+  end
+
+  test "with fiscal start day 31 the neighbours step one period through February" do
+    travel_to Date.new(2026, 11, 15) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 31)
+
+      january = Budget.find_or_bootstrap(@family, start_date: Budget.param_to_date("jan-2027", family: @family))
+      assert_equal [ Date.new(2027, 1, 31), Date.new(2027, 2, 27) ], [ january.start_date, january.end_date ]
+      assert_equal "feb-2027", january.next_budget_param
+
+      february = Budget.find_or_bootstrap(@family, start_date: Budget.param_to_date("feb-2027", family: @family))
+      assert_equal [ Date.new(2027, 2, 28), Date.new(2027, 3, 30) ], [ february.start_date, february.end_date ]
+      assert_equal "mar-2027", february.next_budget_param
+      assert_equal "jan-2027", february.previous_budget_param
+
+      current = Budget.find_or_bootstrap(@family, start_date: Date.current)
+      assert_equal [ Date.new(2026, 10, 31), Date.new(2026, 11, 29) ], [ current.start_date, current.end_date ]
+      assert_equal "nov-2026", current.next_budget_param
+    end
+  end
+
+  test "a budget saved with a wrong end date for fiscal start day 31 gets the right one" do
+    travel_to Date.new(2026, 11, 15) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 31)
+      saved = Budget.create!(family: @family, start_date: Date.new(2026, 10, 31), end_date: Date.new(2026, 10, 30), currency: "USD", budgeted_spending: 100)
+
+      found = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+      assert_equal saved.id, found.id
+      assert_equal Date.new(2026, 11, 29), found.end_date
+    end
+  end
+
+  test "a future month starts as an empty budget" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current.advance(months: 13))
+
+    assert budget.persisted?
+    assert_not budget.initialized?
   end
 end

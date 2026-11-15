@@ -37,20 +37,23 @@ class Budget < ApplicationRecord
       Date.new(parsed.year, parsed.month, [ day, last_dom ].min)
     end
 
+    # Budgets reach back to the oldest entry (or two years, whichever is earlier) and
+    # forward two years, so the coming months can be planned.
     def budget_date_valid?(date, family:)
       start = family.budget_period_start_for(date)
       earliest_start = family.budget_period_start_for(oldest_valid_budget_date(family))
-      current_start = family.budget_period_start_for(Date.current)
+      latest_start = family.budget_period_start_for(Date.current.advance(years: 2))
 
-      start >= earliest_start && start <= current_start
+      start >= earliest_start && start <= latest_start
     end
 
     # Read-only: the budget whose period contains the date, or nil. Unlike
     # find_or_bootstrap it never creates, moves or syncs a budget, so pages
     # that only show a figure from it can call it on every GET.
+    # The start date alone names a budget, so a budget saved with a wrong end date
+    # (see budget_starting_on) is still found.
     def find_for_date(family, date)
-      period_start = family.budget_period_start_for(date)
-      family.budgets.find_by(start_date: period_start, end_date: family.budget_period_end_for(period_start))
+      family.budgets.find_by(start_date: family.budget_period_start_for(date))
     end
 
     def find_or_bootstrap(family, start_date:)
@@ -60,7 +63,7 @@ class Budget < ApplicationRecord
       period_end = family.budget_period_end_for(period_start)
 
       Budget.transaction do
-        budget = family.budgets.find_by(start_date: period_start, end_date: period_end) ||
+        budget = budget_starting_on(family, period_start, period_end) ||
           adopt_budget_from_other_fiscal_start_day(family, period_start, period_end) ||
           family.budgets.create!(start_date: period_start, end_date: period_end, currency: family.currency)
 
@@ -71,6 +74,17 @@ class Budget < ApplicationRecord
     end
 
     private
+      # The start date alone names a budget (it is unique per family). A budget saved
+      # while a fiscal start day past the end of a short month (29 to 31) gave periods
+      # a wrong end date gets the right one here.
+      def budget_starting_on(family, period_start, period_end)
+        budget = family.budgets.find_by(start_date: period_start)
+        return nil unless budget
+
+        budget.update(end_date: period_end) unless budget.end_date == period_end
+        budget
+      end
+
       # A budget's period comes from the family's fiscal start day. After that day changes,
       # the budget for a month (say Mar 1 - Mar 31) no longer matches the month's new
       # period (Mar 10 - Apr 9). Move it to the new period instead of starting an empty
@@ -208,17 +222,18 @@ class Budget < ApplicationRecord
     start_date == family.budget_period_start_for(Date.current) && end_date == family.budget_period_end_for(start_date)
   end
 
+  # The neighbours are the periods just before the first day and just after the last
+  # day. Stepping a month from the start date would skip or repeat a period when the
+  # fiscal start day is past the end of a short month (day 31 and February).
   def previous_budget_param
-    previous_date = start_date - 1.month
+    previous_date = start_date - 1.day
     return nil unless self.class.budget_date_valid?(previous_date, family: family)
 
     self.class.date_to_param(previous_date, family: family)
   end
 
   def next_budget_param
-    return nil if current?
-
-    next_date = start_date + 1.month
+    next_date = end_date + 1.day
     return nil unless self.class.budget_date_valid?(next_date, family: family)
 
     self.class.date_to_param(next_date, family: family)
