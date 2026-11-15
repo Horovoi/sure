@@ -5,7 +5,19 @@ en:
     sso_providers:
       index:
         title: "SSO Providers"
-        description: "Manage single sign-on authentication providers for your instance"
+        description: "Manage single sign-on authentication providers for your instance."
+        restart_required: "Changes require a server restart to take effect."
+        configured_providers: "Configured Providers"
+        no_providers_configured: "No SSO providers configured yet."
+        edit: "Edit"
+        enable: "Enable"
+        disable: "Disable"
+        delete: "Delete"
+        configuration_mode:
+          title: "Configuration Mode"
+          db_backed_title: "Database-backed providers"
+          db_backed_description: "Load providers from the database instead of the YAML config"
+          hint_html: "Set %{setting} and restart the app to manage providers on this page instead of in config/auth.yml."
         add_provider: "Add Provider"
         no_providers_title: "No SSO Providers"
         no_providers_message: "Get started by adding your first SSO provider."
