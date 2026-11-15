@@ -89,9 +89,13 @@ module Enrichable
 
     return false if enrichable_attrs.empty?
 
+    # A new record's first save is not an enrichment, so it is not logged. Read before
+    # the save, which clears new_record?.
+    was_new = new_record?
     was_modified = false
-    # A savepoint, so a failed save also undoes the enrichment log rows and the join
-    # rows that virtual attributes (like tag_ids) write on assignment.
+    refused = false
+    # A savepoint, so a refused save also undoes the join rows that virtual attributes
+    # (like tag_ids) write on assignment, even inside a caller's transaction.
     ActiveRecord::Base.transaction(requires_new: true) do
       # Attributes this enrichment may overwrite release their (non-user) locks
       released = enrichable_attrs.map { |attr, _| attr.to_s }.select { |attr| locked?(attr) }
@@ -99,11 +103,6 @@ module Enrichable
 
       enrichable_attrs.each do |attr, value|
         self.send("#{attr}=", value)
-
-        # If it's a new record, this isn't technically an "enrichment".  No logging necessary.
-        unless self.new_record?
-          log_enrichment(attribute_name: attr, attribute_value: value, source: source, metadata: metadata)
-        end
       end
 
       # A new record is only being filled in (callers such as the Plaid processor set
@@ -111,7 +110,15 @@ module Enrichable
       unless save || new_record?
         Rails.logger.warn("#{self.class.name} #{id} not enriched from #{source}: #{errors.full_messages.to_sentence}")
         restore_attributes
+        refused = true
         raise ActiveRecord::Rollback
+      end
+
+      # Provenance is logged only for values the record accepted
+      unless was_new
+        enrichable_attrs.each do |attr, value|
+          log_enrichment(attribute_name: attr, attribute_value: value, source: source, metadata: metadata)
+        end
       end
 
       # For virtual attributes (like tag_ids), previous_changes won't track them
@@ -138,6 +145,8 @@ module Enrichable
         end
       end
     end
+
+    reset_collection_caches(enrichable_attrs.map(&:first)) if refused
 
     # Return whether any attributes were actually saved
     was_modified
@@ -178,6 +187,22 @@ module Enrichable
   end
 
   private
+    # The rollback removes the join rows a collection setter such as tag_ids= inserted,
+    # but not the records it loaded into the association. Resetting makes the next read
+    # go to the database, so the instance stops reporting the refused ids as current
+    # and a retry is not skipped as unchanged.
+    def reset_collection_caches(attr_names)
+      attr_names.each do |attr_name|
+        reflection = self.class.reflect_on_all_associations.find do |r|
+          r.collection? && "#{r.name.to_s.singularize}_ids" == attr_name.to_s
+        end
+        next unless reflection
+
+        association(reflection.name).reset
+        association(reflection.through_reflection.name).reset if reflection.through_reflection?
+      end
+    end
+
     # Upsert against the unique (enrichable, source, attribute) index, so a
     # rule and an AI job writing the same record at once cannot collide.
     def log_enrichment(attribute_name:, attribute_value:, source:, metadata: {})
