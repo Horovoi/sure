@@ -10,7 +10,10 @@ class Transfer::Creator
   # source_fee and destination_fee (decision 21) are what the bank charged, each in its
   # account's currency. They become linked expenses in the 'Fees' category; the legs keep
   # the principal. Blank or zero means no fee.
-  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:, exchange_rate: nil, destination_amount: nil, source_fee: nil, destination_fee: nil)
+  #
+  # tag_ids (w2-transfers transfer-tags-counterpart) go on both legs; ids of tags outside the
+  # family are left out.
+  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:, exchange_rate: nil, destination_amount: nil, source_fee: nil, destination_fee: nil, tag_ids: nil)
     @family = family
     @source_account = family.accounts.find(source_account_id) # early throw if not found
     @destination_account = family.accounts.find(destination_account_id) # early throw if not found
@@ -19,6 +22,7 @@ class Transfer::Creator
     @exchange_rate_input = exchange_rate
     @destination_amount_input = destination_amount
     @fee_inputs = { "source" => source_fee, "destination" => destination_fee }
+    @tag_ids = Array(tag_ids).compact_blank
   end
 
   # The legs' kinds (and the Investment Contributions category) are set by Transfer's after_create.
@@ -40,6 +44,7 @@ class Transfer::Creator
       next false unless transfer.save
 
       fees.each { |side, fee| transfer.set_fee!(side: side, amount: fee) }
+      apply_tags!(transfer)
       true
     end
 
@@ -52,7 +57,18 @@ class Transfer::Creator
   end
 
   private
-    attr_reader :family, :source_account, :destination_account, :date, :amount
+    attr_reader :family, :source_account, :destination_account, :date, :amount, :tag_ids
+
+    # Locked like a tag the user sets on a transaction, so a rule does not replace them
+    def apply_tags!(transfer)
+      resolved_ids = tag_ids.any? ? family.tags.where(id: tag_ids).pluck(:id) : []
+      return if resolved_ids.empty?
+
+      [ transfer.outflow_transaction, transfer.inflow_transaction ].each do |transaction|
+        transaction.tag_ids = resolved_ids
+        transaction.lock_attr!(:tag_ids)
+      end
+    end
 
     def outflow_transaction
       name = "#{name_prefix} to #{destination_account.name}"

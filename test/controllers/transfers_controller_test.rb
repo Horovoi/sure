@@ -373,4 +373,46 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
 
     assert_nil transfer.outflow_transaction.reload.category_id
   end
+
+  # --- w2-transfers transfer-tags-counterpart ---
+
+  test "creates a transfer with tags on both sides" do
+    assert_difference "Transfer.count", 1 do
+      post transfers_url, params: {
+        transfer: {
+          from_account_id: accounts(:depository).id, to_account_id: accounts(:credit_card).id,
+          date: Date.current, amount: 100, tag_ids: [ tags(:one).id ]
+        }
+      }
+    end
+
+    transfer = Transfer.order(:created_at).last
+    assert_equal [ tags(:one).id ], transfer.outflow_transaction.tag_ids
+    assert_equal [ tags(:one).id ], transfer.inflow_transaction.tag_ids
+  end
+
+  test "a failed create keeps the chosen tags" do
+    post transfers_url, params: {
+      transfer: {
+        from_account_id: accounts(:depository).id, to_account_id: accounts(:depository).id,
+        date: Date.current, amount: 100, tag_ids: [ tags(:one).id ]
+      }
+    }
+
+    assert_response :unprocessable_entity
+    assert_select "input[type=hidden][name='transfer[tag_ids][]'][value='#{tags(:one).id}']"
+  end
+
+  test "new keeps the tags another tab carried over" do
+    get new_transfer_url(draft: { tag_ids: [ tags(:two).id ] })
+
+    assert_response :success
+    assert_select "input[type=hidden][name='transfer[tag_ids][]'][value='#{tags(:two).id}']"
+  end
+
+  test "the account pickers have a search box" do
+    get new_transfer_url
+
+    assert_select "[data-controller~=select][data-controller~=list-filter] input[type=search]", minimum: 2
+  end
 end

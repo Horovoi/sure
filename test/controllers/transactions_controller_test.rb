@@ -973,4 +973,24 @@ end
     assert_select "##{ActionView::RecordIdentifier.dom_id(outflow, :category_menu_desktop)} turbo-frame#category_dropdown"
     assert_select "##{ActionView::RecordIdentifier.dom_id(inflow, :category_menu_desktop)} turbo-frame#category_dropdown", count: 0
   end
+
+  # --- w2-transfers transfer-tags-counterpart ---
+
+  test "transfer rows name the counterpart account without a lookup per row" do
+    3.times do |i|
+      Transfer::Creator.new(
+        family: families(:dylan_family), source_account_id: accounts(:depository).id,
+        destination_account_id: accounts(:connected).id, date: Date.current - i, amount: 10 + i
+      ).create
+    end
+
+    # A lazy belongs_to or has_one load ends in LIMIT; a preload does not
+    lazy_leg_lookup = /"transactions"\."id" = \$1 LIMIT|"entries"\."entryable_id" = \$1|"accounts"\."id" = \$1 LIMIT|"transfers"\."(inflow|outflow)_transaction_id" = \$1/
+    assert_no_queries_match(lazy_leg_lookup) do
+      get transactions_url
+    end
+
+    assert_response :success
+    assert_includes response.body, "#{accounts(:depository).name} → #{accounts(:connected).name}"
+  end
 end

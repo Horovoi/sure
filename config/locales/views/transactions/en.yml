@@ -130,6 +130,9 @@ en:
     transaction_category:
       set_on_outflow: The category belongs to the outgoing side of this transfer and can
         only be changed there
+    transfer_accounts:
+      incoming: "%{account} ← %{counterpart}"
+      outgoing: "%{account} → %{counterpart}"
     transfer_hint:
       dismiss: Not a transfer
       label: Transfer?

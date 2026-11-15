@@ -12,6 +12,7 @@ class TransfersController < ApplicationController
     @to_account_id = params[:to_account_id].presence
     @amount = UserDecimal.parse(draft_params[:amount])&.abs
     @date = parse_form_date(draft_params[:date])
+    @tag_ids = Array(draft_params[:tag_ids]).compact_blank
   end
 
   def show
@@ -55,7 +56,8 @@ class TransfersController < ApplicationController
       exchange_rate: transfer_params[:exchange_rate].presence,
       destination_amount: transfer_params[:destination_amount].presence,
       source_fee: transfer_params[:source_fee].presence,
-      destination_fee: transfer_params[:destination_fee].presence
+      destination_fee: transfer_params[:destination_fee].presence,
+      tag_ids: @tag_ids
     ).create
 
     if @transfer.persisted?
@@ -144,13 +146,14 @@ class TransfersController < ApplicationController
     end
 
     def transfer_params
-      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate, :destination_amount, :source_fee, :destination_fee ])
+      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate, :destination_amount, :source_fee, :destination_fee, { tag_ids: [] } ])
     end
 
     # w2-transfers transfer-form-fixes: the form's account pickers (with their logos) and
     # what it shows again after an error
     def set_form_options
       @accounts = Current.family.accounts.visible.alphabetically.includes(:account_providers, :plaid_account).to_a
+      @tags = Current.family.tags.alphabetically.to_a
     end
 
     # A form shown again after an error keeps the accounts, amount and date the user entered
@@ -159,12 +162,13 @@ class TransfersController < ApplicationController
       @to_account_id = transfer_params[:to_account_id].presence
       @amount = UserDecimal.parse(transfer_params[:amount])&.abs
       @date = parse_form_date(transfer_params[:date])
+      @tag_ids = Array(transfer_params[:tag_ids]).compact_blank
     end
 
     # The values another tab of the new-entry modal carried over (transaction_type_tabs_controller.js)
     def draft_params
       draft = params[:draft]
-      draft.is_a?(ActionController::Parameters) ? draft.permit(:amount, :date) : {}
+      draft.is_a?(ActionController::Parameters) ? draft.permit(:amount, :date, tag_ids: []) : {}
     end
 
     # Parsing raises on a bad value, which would be a 500; a blank or bad date is nil.

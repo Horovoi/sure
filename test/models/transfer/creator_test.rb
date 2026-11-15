@@ -394,4 +394,39 @@ class Transfer::CreatorTest < ActiveSupport::TestCase
       ).create
     end
   end
+
+  # --- w2-transfers transfer-tags-counterpart ---
+
+  test "tags go on both legs and are locked against rules" do
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: accounts(:depository).id, destination_account_id: accounts(:credit_card).id,
+      date: @date, amount: @amount, tag_ids: [ tags(:one).id, tags(:two).id, "" ]
+    ).create
+
+    assert transfer.persisted?
+    [ transfer.outflow_transaction, transfer.inflow_transaction ].each do |transaction|
+      assert_equal [ tags(:one).id, tags(:two).id ].sort, transaction.reload.tag_ids.sort
+      assert transaction.locked?(:tag_ids)
+    end
+  end
+
+  test "a tag of another family is left out" do
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: accounts(:depository).id, destination_account_id: accounts(:credit_card).id,
+      date: @date, amount: @amount, tag_ids: [ tags(:one).id, tags(:three).id ]
+    ).create
+
+    assert_equal [ tags(:one).id ], transfer.outflow_transaction.reload.tag_ids
+    assert_equal [ tags(:one).id ], transfer.inflow_transaction.reload.tag_ids
+  end
+
+  test "no tags leaves both legs untagged and unlocked" do
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: accounts(:depository).id, destination_account_id: accounts(:credit_card).id,
+      date: @date, amount: @amount
+    ).create
+
+    assert_empty transfer.outflow_transaction.reload.tag_ids
+    assert_not transfer.outflow_transaction.locked?(:tag_ids)
+  end
 end

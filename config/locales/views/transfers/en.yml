@@ -21,6 +21,7 @@ en:
       select_account: Select account
       source_fee: Sending fee
       submit: Create transfer
+      tags: Tags
       to: To
       transfer: Transfer
     new:
