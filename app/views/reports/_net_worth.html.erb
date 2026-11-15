@@ -17,11 +17,14 @@
         <p class="text-2xl font-semibold mb-1" style="color: <%= trend.color %>">
           <%= trend.value.format(signify_positive: true) %>
         </p>
-        <p class="text-xs" style="color: <%= trend.color %>">
-          <%= trend.value >= 0 ? "+" : "" %><%= trend.percent_formatted %>
-        </p>
+        <%# A previous value of zero makes the percentage infinite, with nothing useful to print %>
+        <% if trend.percent.finite? %>
+          <p class="text-xs" style="color: <%= trend.color %>">
+            <%= trend.value >= 0 ? "+" : "" %><%= trend.percent_formatted %>
+          </p>
+        <% end %>
       <% else %>
-        <p class="text-2xl font-semibold mb-1 text-tertiary">--</p>
+        <p class="text-2xl font-semibold mb-1 text-subdued">--</p>
       <% end %>
     </div>
 
@@ -30,7 +33,7 @@
       <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.assets_vs_liabilities") %></p>
       <div class="flex items-baseline gap-2">
         <span class="text-lg font-semibold text-success"><%= net_worth_metrics[:total_assets].format %></span>
-        <span class="text-xs text-tertiary">-</span>
+        <span class="text-xs text-subdued">-</span>
         <span class="text-lg font-semibold text-destructive"><%= net_worth_metrics[:total_liabilities].format %></span>
       </div>
     </div>
@@ -58,7 +61,7 @@
         <p class="text-sm text-secondary text-center"><%= t("reports.net_worth.no_assets") %></p>
       </div>
       <div class="bg-container-inset rounded-xl p-4">
-        <p class="text-sm text-tertiary text-center"><%= t("reports.net_worth.no_liabilities") %></p>
+        <p class="text-sm text-subdued text-center"><%= t("reports.net_worth.no_liabilities") %></p>
       </div>
     </div>
   <% end %>

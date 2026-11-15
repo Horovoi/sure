@@ -164,27 +164,6 @@ class PagesController < ApplicationController
     end
   end
 
-  def changelog
-    @release_notes = github_provider.fetch_latest_release_notes
-
-    # Fallback if no release notes are available
-    if @release_notes.nil?
-      @release_notes = {
-        avatar: "https://github.com/we-promise.png",
-        username: "we-promise",
-        name: "Release notes unavailable",
-        published_at: Date.current,
-        body: "<p>Unable to fetch the latest release notes at this time. Please check back later or visit our <a href='https://github.com/we-promise/sure/releases' target='_blank'>GitHub releases page</a> directly.</p>"
-      }
-    end
-
-    render layout: "settings"
-  end
-
-  def feedback
-    render layout: "settings"
-  end
-
   def redis_configuration_error
     render layout: "blank"
   end
@@ -264,10 +243,6 @@ class PagesController < ApplicationController
       end
 
       ordered_sections
-    end
-
-    def github_provider
-      Provider::Registry.get_provider(:github)
     end
 
     def build_cashflow_sankey_data(income_totals, expense_totals, currency, include_subcategories: true)

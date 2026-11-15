@@ -156,4 +156,35 @@ class TradesControllerTest < ActionDispatch::IntegrationTest
     assert_enqueued_with job: SyncJob
     assert_redirected_to account_url(created_entry.account)
   end
+
+  test "show labels a buy trade Buy" do
+    assert @entry.amount.positive?
+    assert @entry.trade.qty.positive?
+
+    get trade_url(@entry)
+
+    assert_response :ok
+    assert_select "##{ActionView::RecordIdentifier.dom_id(@entry, :header)} span", text: I18n.t("trades.header.buy")
+    assert_select "select[name='entry[nature]'] option[selected][value='outflow']"
+  end
+
+  test "show labels a sell trade Sell" do
+    @entry.update_columns(amount: -@entry.amount)
+    @entry.trade.update_columns(qty: -@entry.trade.qty)
+
+    get trade_url(@entry)
+
+    assert_response :ok
+    assert_select "##{ActionView::RecordIdentifier.dom_id(@entry, :header)} span", text: I18n.t("trades.header.sell")
+    assert_select "select[name='entry[nature]'] option[selected][value='inflow']"
+  end
+
+  test "a failed update sent as Turbo Stream renders the form, not a missing template" do
+    patch trade_url(@entry),
+      params: { entry: { date: "" } },
+      headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+    assert_response :unprocessable_entity
+    assert_equal "text/html", response.media_type
+  end
 end

@@ -1,6 +1,12 @@
 ---
 en:
   users:
+    user_menu:
+      aria_label: Open account menu
+      log_out: Log out
+      settings: Settings
+      unknown_build: unknown
+      version: "Version:"
     destroy:
       success: Your account has been deleted.
     update:
@@ -17,11 +23,3 @@ en:
       unauthorized: You are not authorized to perform this action
     reset_with_sample_data:
       success: Your account has been reset and sample data is being prepared. You’ll see demo data shortly.
-    user_menu:
-      aria_label: Open account menu
-      changelog: Changelog
-      contact: Contact
-      feedback: Feedback
-      log_out: Log out
-      settings: Settings
-      version: Version

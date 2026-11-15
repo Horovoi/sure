@@ -273,6 +273,18 @@
   color: theme('colors.white') !important;
 }
 
+/* Specific override for headings in prose under dark mode */
+.prose:where([data-theme=dark], [data-theme=dark] *) h1,
+.prose:where([data-theme=dark], [data-theme=dark] *) h2,
+.prose:where([data-theme=dark], [data-theme=dark] *) h3,
+.prose:where([data-theme=dark], [data-theme=dark] *) h4,
+.prose:where([data-theme=dark], [data-theme=dark] *) h5,
+.prose:where([data-theme=dark], [data-theme=dark] *) h6,
+.prose:where([data-theme=dark], [data-theme=dark] *) blockquote,
+.prose:where([data-theme=dark], [data-theme=dark] *) thead th {
+  color: theme(colors.white) !important;
+}
+
 @layer base {
   [data-theme="dark"] { 
     --color-success: var(--color-green-500);
@@ -322,21 +334,10 @@
   }
 
   /*
-    iOS PWA safe area handling
-    - Keep top padding to avoid status bar overlap.
-    - Remove bottom padding here to prevent an extra blank space below our
-      mobile bottom nav. Individual components (e.g., the mobile nav) already
-      apply pb-[env(safe-area-inset-bottom)].
+    iOS PWA safe areas: <html> and <body> carry no inset padding. Their height
+    is --app-height (viewport_controller.js), and each layout pads its own top
+    bar and the mobile bottom nav with env(safe-area-inset-*).
   */
-  html {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: 0; /* was env(safe-area-inset-bottom) */
-  }
-
-  /* Ensure the app fills the dynamic viewport height on iOS */
-  body {
-    min-height: 100dvh;
-  }
 
   /* Every <button> gets the canonical keyboard-focus outline (the same
      recipe as .focus-ring below). The transparent resting outline keeps a
@@ -422,23 +423,6 @@
         0 0 0 1px var(--color-alpha-white-50),
         0 8px 24px rgba(11, 11, 11, 0.12);
     }
-  }
-
-  /* Mobile bottom nav: safe-area adjustments
-     - Default: respect safe-area insets
-     - PWA standalone: reduce padding slightly to visually match Safari
-       minimal UI mode on iOS. Fallback via html.pwa-standalone for older iOS.
-  */
-  .mobile-bottom-nav {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  @media (display-mode: standalone) {
-    .mobile-bottom-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 36px); }
-  }
-
-  html.pwa-standalone .mobile-bottom-nav {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 36px);
   }
 
   /* Forms */

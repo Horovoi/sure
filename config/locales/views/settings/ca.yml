@@ -129,7 +129,6 @@ ca:
       bank_sync_label: Sincronització bancària
       payment_label: Pagament
       categories_label: Categories
-      feedback_label: Feedback
       general_section_title: General
       imports_label: Importacions
       exports_label: Exportacions
@@ -145,7 +144,6 @@ ca:
       self_hosting_label: Autoallotjament
       tags_label: Etiquetes
       transactions_section_title: Transaccions
-      whats_new_label: Novetats
     settings_nav_link_large:
       next: Següent
       previous: Enrere

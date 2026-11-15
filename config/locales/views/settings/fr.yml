@@ -114,7 +114,6 @@ fr:
       api_key_label: Clé API
       payment_label: Paiement
       categories_label: Catégories
-      feedback_label: Retour d'information
       general_section_title: Général
       imports_label: Importer/Exporter
       logout: Se déconnecter
@@ -129,7 +128,6 @@ fr:
       self_hosting_label: Auto-hébergement
       tags_label: Étiquettes
       transactions_section_title: Transactions
-      whats_new_label: Dernières nouvelles
       api_keys_label: Clés API
       bank_sync_label: Synchronisation de la banque
     settings_nav_link_large:

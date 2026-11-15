@@ -117,7 +117,6 @@ nl:
       api_key_label: API Key
       payment_label: Betaling
       categories_label: Categorieën
-      feedback_label: Feedback
       general_section_title: Algemeen
       imports_label: Import/Export
       logout: Uitloggen
@@ -132,7 +131,6 @@ nl:
       self_hosting_label: Zelf-Hosting
       tags_label: Tags
       transactions_section_title: Transacties
-      whats_new_label: Wat is nieuw
       api_keys_label: API Key
       bank_sync_label: Bank Sync
     settings_nav_link_large:

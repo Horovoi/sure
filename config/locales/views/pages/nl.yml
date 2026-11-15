@@ -1,8 +1,6 @@
 ---
 nl:
   pages:
-    changelog:
-      title: Wat is er nieuw
     dashboard:
       welcome: "Welkom terug, %{name}"
       subtitle: "Dit gebeurt er met uw financiën"

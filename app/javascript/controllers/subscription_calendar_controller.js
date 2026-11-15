@@ -68,7 +68,7 @@ export default class extends Controller {
             <div class="font-medium text-primary">${sub.name}</div>
             ${sub.is_foreign_currency && sub.converted_amount
               ? `<div class="text-sm text-secondary">${sub.amount}</div>
-                 <div class="text-xs text-tertiary">${sub.converted_amount}</div>`
+                 <div class="text-xs text-subdued">${sub.converted_amount}</div>`
               : `<div class="text-sm text-secondary">${sub.amount}</div>`
             }
           </div>
@@ -211,7 +211,7 @@ export default class extends Controller {
       const amountDisplay = sub.is_foreign_currency && sub.converted_amount
         ? `<div class="text-right shrink-0">
              <div class="text-primary text-sm font-semibold">${sub.amount}</div>
-             <div class="text-tertiary text-xs">${sub.converted_amount}</div>
+             <div class="text-subdued text-xs">${sub.converted_amount}</div>
            </div>`
         : `<span class="text-primary text-sm font-semibold shrink-0">${sub.amount}</span>`
 

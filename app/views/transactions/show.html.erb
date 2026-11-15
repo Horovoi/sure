@@ -46,7 +46,7 @@
     <% end %>
 
     <% dialog.with_section(title: t(".overview"), open: true) do %>
-      <div class="pb-4">
+      <div>
         <%= styled_form_with model: @entry,
               url: transaction_path(@entry),
               class: "space-y-2",
@@ -98,52 +98,50 @@
     <% end %>
 
     <% dialog.with_section(title: t(".details")) do %>
-      <div class="pb-4">
-        <%= styled_form_with model: @entry,
-              url: transaction_path(@entry),
-              class: "space-y-2",
-              data: { controller: "auto-submit-form" } do |f| %>
-          <% unless @entry.transaction.transfer? %>
-            <%= f.select :account,
-                options_for_select(
-                  Current.family.accounts.alphabetically.pluck(:name, :id),
-                  @entry.account_id
-                ),
-                { label: t(".account_label") },
-                { disabled: true } %>
+      <%= styled_form_with model: @entry,
+            url: transaction_path(@entry),
+            class: "space-y-2",
+            data: { controller: "auto-submit-form" } do |f| %>
+        <% unless @entry.transaction.transfer? %>
+          <%= f.select :account,
+              options_for_select(
+                Current.family.accounts.alphabetically.pluck(:name, :id),
+                @entry.account_id
+              ),
+              { label: t(".account_label") },
+              { disabled: true } %>
 
-            <%= f.fields_for :entryable do |ef| %>
+          <%= f.fields_for :entryable do |ef| %>
 
-              <%= render DS::MerchantSelect.new(
-                    form: ef,
-                    method: :merchant_id,
-                    merchants: Current.family.available_merchants.alphabetically.to_a,
-                    selected_id: ef.object.merchant_id,
-                    include_blank: t(".none"),
-                    label: t(".merchant_label"),
-                    auto_submit: true
-                  ) %>
+            <%= render DS::MerchantSelect.new(
+                  form: ef,
+                  method: :merchant_id,
+                  merchants: Current.family.available_merchants.alphabetically.to_a,
+                  selected_id: ef.object.merchant_id,
+                  include_blank: t(".none"),
+                  label: t(".merchant_label"),
+                  auto_submit: true
+                ) %>
 
-              <%# Tags save on their own (update_tags), so a toggle doesn't wait for the form. %>
-              <%= render DS::TagSelect.new(
-                    form: ef,
-                    tags: Current.family.tags.alphabetically.to_a,
-                    selected_ids: ef.object.tag_ids,
-                    label: t(".tags_label"),
-                    auto_submit: true,
-                    update_url: tags_transaction_path(@entry)
-                  ) %>
-            <% end %>
+            <%# Tags save on their own (update_tags), so a toggle doesn't wait for the form. %>
+            <%= render DS::TagSelect.new(
+                  form: ef,
+                  tags: Current.family.tags.alphabetically.to_a,
+                  selected_ids: ef.object.tag_ids,
+                  label: t(".tags_label"),
+                  auto_submit: true,
+                  update_url: tags_transaction_path(@entry)
+                ) %>
           <% end %>
-
-          <%= f.text_area :notes,
-                  label: t(".note_label"),
-                  placeholder: t(".note_placeholder"),
-                  rows: 5,
-                  "data-auto-submit-form-target": "auto" %>
-
         <% end %>
-      </div>
+
+        <%= f.text_area :notes,
+                label: t(".note_label"),
+                placeholder: t(".note_placeholder"),
+                rows: 5,
+                "data-auto-submit-form-target": "auto" %>
+
+      <% end %>
     <% end %>
 
     <% if (details = build_transaction_extra_details(@entry)) %>

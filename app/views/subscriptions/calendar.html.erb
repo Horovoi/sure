@@ -84,7 +84,7 @@
       <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-inset">
         <span class="text-xs text-secondary"><%= t(".this_week") %></span>
         <span class="text-xs font-medium text-primary"><%= @this_week_data.size %></span>
-        <span class="text-xs text-tertiary">·</span>
+        <span class="text-xs text-subdued">·</span>
         <span class="text-xs font-medium text-primary"><%= format_money(@this_week_total) %></span>
       </div>
       <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg <%= @today_subscriptions.any? ? "bg-green-500/10" : "bg-surface-inset" %>">

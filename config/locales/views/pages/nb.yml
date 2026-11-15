@@ -1,8 +1,6 @@
 ---
 nb:
   pages:
-    changelog:
-      title: Hva er nytt
     dashboard:
       cashflow_sankey:
         other_category: "Other %{category}"

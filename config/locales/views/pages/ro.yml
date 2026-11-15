@@ -1,8 +1,6 @@
 ---
 ro:
   pages:
-    changelog:
-      title: Ce e nou
     dashboard:
       welcome: "Bun venit, %{name}"
       subtitle: "Iată ce se întâmplă cu finanțele tale"

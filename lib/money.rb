@@ -100,6 +100,12 @@ class Money
     end
   end
 
+  # Rounded to the precision `format` prints, so a chart drawn from the amount
+  # agrees with the label next to it.
+  def for_display
+    self.class.new(amount.round(currency.default_precision), currency, store: store)
+  end
+
   def as_json
     { amount: amount, currency: currency.iso_code, formatted: format }.as_json
   end

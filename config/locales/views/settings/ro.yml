@@ -100,7 +100,6 @@ ro:
       api_key_label: Cheie API
       payment_label: Plată
       categories_label: Categorii
-      feedback_label: Feedback
       general_section_title: General
       imports_label: Importuri
       exports_label: Exporturi
@@ -116,7 +115,6 @@ ro:
       self_hosting_label: Găzduire proprie
       tags_label: Etichete
       transactions_section_title: Tranzacții
-      whats_new_label: Noutăți
       api_keys_label: Cheie API
       bank_sync_label: Sincronizare bancară
     settings_nav_link_large:

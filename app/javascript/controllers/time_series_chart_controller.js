@@ -26,6 +26,9 @@ export default class extends Controller {
   connect() {
     this._install();
     document.addEventListener("turbo:load", this._reinstall);
+    // Colors that depend on the theme are baked into SVG attributes, so a
+    // theme switch needs a redraw (theme_controller dispatches the event).
+    document.documentElement.addEventListener("theme:change", this._reinstall);
     this._setupResizeObserver();
 
     // Allow external controllers to update the dataset dynamically (e.g., fullscreen sync)
@@ -42,6 +45,10 @@ export default class extends Controller {
   disconnect() {
     this._teardown();
     document.removeEventListener("turbo:load", this._reinstall);
+    document.documentElement.removeEventListener(
+      "theme:change",
+      this._reinstall,
+    );
     this._resizeObserver?.disconnect();
     if (this._onSetData) {
       this.element.removeEventListener("timeseries:set-data", this._onSetData);
@@ -84,15 +91,12 @@ export default class extends Controller {
   }
 
   _draw() {
-    // Guard against invalid dimensions (e.g., when container is collapsed or not yet rendered)
-    const minWidth = 50;
-    const minHeight = 50;
-
-    if (
-      this._d3ContainerWidth < minWidth ||
-      this._d3ContainerHeight < minHeight
-    ) {
-      // Skip rendering if dimensions are invalid
+    // Guard against unmeasurable dimensions (e.g., when the container is
+    // collapsed or not yet rendered). A hidden container measures 0x0, and the
+    // ResizeObserver re-installs the chart as soon as layout gives it a real
+    // size, so skipping here only ever defers hidden charts. Small-but-real
+    // containers like the 32px-wide sidebar sparklines still render.
+    if (this._d3ContainerWidth <= 0 || this._d3ContainerHeight <= 0) {
       return;
     }
 
@@ -802,11 +806,17 @@ export default class extends Controller {
         </div>
 
         ${
-          datum.trend.value === 0
+          // trend.value is serialized Money ({ amount: "0.0", ... }), so compare
+          // its number; an infinite percent (zero base) serializes as null.
+          this._extractNumericValue(datum.trend.value) === 0
             ? `<span class="w-20"></span>`
             : `
           <span style="color: ${datum.trend.color};">
-            ${this._extractFormattedValue(datum.trend.value)} (${datum.trend.percent_formatted})
+            ${this._extractFormattedValue(datum.trend.value)}${
+              datum.trend.percent === null
+                ? ""
+                : ` (${datum.trend.percent_formatted})`
+            }
           </span>
         `
         }

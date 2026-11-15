@@ -82,7 +82,6 @@ nb:
       advanced_section_title: Avansert
       payment_label: Betaling
       categories_label: Kategorier
-      feedback_label: Tilbakemelding
       general_section_title: Generelt
       imports_label: Importer
       exports_label: Eksporter
@@ -96,7 +95,6 @@ nb:
       self_hosting_label: Selvhosting
       tags_label: Tagger
       transactions_section_title: Transaksjoner
-      whats_new_label: Hva er nytt
     settings_nav_link_large:
       next: Neste
       previous: Tilbake

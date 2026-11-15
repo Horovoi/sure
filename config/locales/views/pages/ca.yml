@@ -1,8 +1,6 @@
 ---
 ca:
   pages:
-    changelog:
-      title: Novetats
     dashboard:
       balance_sheet:
         add_accounts: Afegeix els teus comptes de %{name} per veure'n el detall complet

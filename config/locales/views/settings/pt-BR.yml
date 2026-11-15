@@ -92,7 +92,6 @@ pt-BR:
       api_key_label: Chave da API
       payment_label: Pagamento
       categories_label: Categorias
-      feedback_label: Feedback
       general_section_title: Geral
       imports_label: Importações
       exports_label: Exportações
@@ -106,7 +105,6 @@ pt-BR:
       self_hosting_label: Auto hospedagem
       tags_label: Tags
       transactions_section_title: Transações
-      whats_new_label: Novidades
     settings_nav_link_large:
       next: Próximo
       previous: Voltar

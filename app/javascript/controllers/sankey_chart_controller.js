@@ -376,7 +376,7 @@ export default class extends Controller {
   #createTooltip() {
     this.tooltip = d3.select("body")
       .append("div")
-      .attr("class", "bg-gray-700 text-white text-sm p-2 rounded pointer-events-none absolute z-50")
+      .attr("class", "bg-gray-700 text-white text-sm p-2 rounded pointer-events-none absolute z-50 top-0")
       .style("opacity", 0)
       .style("pointer-events", "none");
   }
