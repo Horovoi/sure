@@ -199,6 +199,7 @@ en:
         tooltip_projected: "Projected: %{amount}"
         tooltip_saved: "Saved: %{amount}"
         tooltip_target_relation: "%{percent}% of %{target} target"
+        target_label: "Target · %{amount}"
       catch_up:
         body: "Current pace %{avg}/mo · required %{required}/mo to hit your target."
       confirm_complete_title: Mark this goal complete?
