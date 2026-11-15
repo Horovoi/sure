@@ -52,7 +52,7 @@ copy_env() {
   # Encrypted columns in the copy were written with keys derived from production's
   # secret. Development has its own secret, so hand it production's for that purpose.
   export STAGING_SECRET_KEY_BASE="$secret"
-  # Production turns on extra column encryption only when these are set; mirror it exactly.
+  # When production sets explicit keys they replace the derived ones; mirror it exactly.
   local key value
   for key in ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT; do
     value=$(env_value "$key")
