@@ -224,6 +224,39 @@ class PdfImportTest < ActiveSupport::TestCase
     assert_equal Money.new(650.5, "USD"), closing.statement_amount
   end
 
+  test "publish schedules the subscription charge reconciler" do
+    RecurringTransaction::ReconcileJob.expects(:schedule_for).with(@family).once
+
+    @import.publish
+
+    assert @import.reload.complete?
+  end
+
+  test "revert restores the generated charge an imported row replaced" do
+    recurring = @family.recurring_transactions.create!(
+      name: "Card coffee club", amount: 45, currency: "USD", expected_day_of_month: 8,
+      last_occurrence_date: Date.new(2024, 3, 8), next_expected_date: Date.new(2024, 4, 8),
+      status: "active", subscription_state: "subscription", default_account: @account
+    )
+    generated = @account.entries.create!(
+      # Another amount, so the statement's duplicate matcher does not skip the coffee row
+      date: Date.new(2024, 3, 8), amount: 45, currency: "USD", name: "Card coffee club", source: "subscription",
+      entryable: Transaction.new(recurring_transaction: recurring)
+    )
+    @import.publish
+    imported = @import.reload.entries.find_by!(name: "CARD COFFEE")
+    assert imported.transaction.replace_subscription_charge!(generated, source: "test")
+
+    @import.revert_later
+    @import.revert
+
+    assert @import.reload.reverted?
+    restored = @account.entries.where(source: "subscription").sole
+    assert_equal Date.new(2024, 3, 8), restored.date
+    assert_equal recurring.id, restored.transaction.recurring_transaction_id
+    assert_equal Date.new(2024, 4, 8), recurring.reload.next_expected_date
+  end
+
   private
     def add_row(date:, amount:, name:)
       @import.rows.create!(date: date, amount: amount, name: name, currency: "USD")

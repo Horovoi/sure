@@ -337,4 +337,215 @@ class BudgetCategoryTest < ActiveSupport::TestCase
       assert_nil budget_category.suggested_daily_spending
     end
   end
+
+  # ===========================================================================
+  # Subscription reservations
+  # ===========================================================================
+
+  test "a monthly subscription due later in the period is reserved once" do
+    travel_to Date.new(2030, 3, 3) do
+      budget, bc = reservation_budget
+      reservation_row(next_expected_date: Date.new(2030, 3, 20), amount: 15)
+
+      assert_equal Money.new(15, "USD"), bc.subscriptions_reserved
+      assert_equal Money.new(15, "USD"), budget.subscriptions_reserved
+      assert_equal 0, bc.subscriptions_reserved_unconvertible_count
+    end
+  end
+
+  test "a generated charge leaves nothing reserved" do
+    travel_to Date.new(2030, 3, 25) do
+      _budget, bc = reservation_budget
+      # generate_transaction! moved the row to the next period
+      row = reservation_row(next_expected_date: Date.new(2030, 4, 20), last_occurrence_date: Date.new(2030, 3, 20))
+      reservation_charge(row, Date.new(2030, 3, 20))
+
+      assert_equal Money.new(0, "USD"), bc.subscriptions_reserved
+      refute bc.subscriptions_reserved?
+    end
+  end
+
+  test "a yearly subscription outside the period is not reserved" do
+    travel_to Date.new(2030, 3, 3) do
+      _budget, bc = reservation_budget
+      reservation_row(
+        manual: false, subscription_state: "subscription", billing_cycle: "yearly",
+        expected_month: 8, next_expected_date: Date.new(2030, 8, 20), amount: 120
+      )
+
+      assert_equal Money.new(0, "USD"), bc.subscriptions_reserved
+    end
+  end
+
+  test "a yearly subscription due in the period is reserved once" do
+    travel_to Date.new(2030, 3, 3) do
+      _budget, bc = reservation_budget
+      reservation_row(
+        manual: false, subscription_state: "subscription", billing_cycle: "yearly",
+        expected_month: 3, next_expected_date: Date.new(2030, 3, 20), amount: 120
+      )
+
+      assert_equal Money.new(120, "USD"), bc.subscriptions_reserved
+    end
+  end
+
+  test "reservations follow the fiscal month boundaries" do
+    @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+
+    travel_to Date.new(2030, 3, 11) do
+      _budget, bc = reservation_budget(start_date: Date.new(2030, 3, 10), end_date: Date.new(2030, 4, 9))
+      reservation_row(expected_day_of_month: 15, next_expected_date: Date.new(2030, 3, 15), amount: 10)
+      reservation_row(expected_day_of_month: 9, next_expected_date: Date.new(2030, 4, 9), amount: 20)
+      reservation_row(expected_day_of_month: 10, next_expected_date: Date.new(2030, 4, 10), amount: 40)
+
+      assert_equal Money.new(30, "USD"), bc.subscriptions_reserved
+    end
+  end
+
+  test "a USD subscription in a UAH family is converted at the nearest rate" do
+    @family.update!(currency: "UAH")
+
+    travel_to Date.new(2030, 3, 3) do
+      ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: Date.new(2030, 3, 1), rate: 41.5)
+      _budget, bc = reservation_budget(currency: "UAH")
+      reservation_row(next_expected_date: Date.new(2030, 3, 20), amount: 10, currency: "USD")
+
+      assert_equal Money.new(415, "UAH"), bc.subscriptions_reserved
+      assert_equal 0, bc.subscriptions_reserved_unconvertible_count
+    end
+  end
+
+  test "a subscription in a currency with no rate is counted, never converted at 1" do
+    ExchangeRate.stubs(:provider).returns(nil)
+
+    travel_to Date.new(2030, 3, 3) do
+      budget, bc = reservation_budget
+      reservation_row(next_expected_date: Date.new(2030, 3, 20), amount: 10, currency: "EUR")
+      reservation_row(next_expected_date: Date.new(2030, 3, 21), amount: 7, currency: "USD")
+
+      assert_equal Money.new(7, "USD"), bc.subscriptions_reserved
+      assert_equal 1, bc.subscriptions_reserved_unconvertible_count
+      assert_equal 1, budget.subscriptions_reserved_unconvertible_count
+      assert bc.subscriptions_reserved?
+    end
+  end
+
+  test "inactive, dismissed, income and uncategorized rows are not reserved" do
+    travel_to Date.new(2030, 3, 3) do
+      budget, bc = reservation_budget
+      date = Date.new(2030, 3, 20)
+      reservation_row(next_expected_date: date, status: "inactive", inactive_reason: "user")
+      reservation_row(next_expected_date: date, manual: false, subscription_state: "dismissed", dismissed_at: 1.day.ago)
+      reservation_row(next_expected_date: date, manual: false, subscription_state: "pattern")
+      reservation_row(next_expected_date: date, amount: -100)
+      reservation_row(next_expected_date: date, category: nil)
+
+      assert_equal Money.new(0, "USD"), bc.subscriptions_reserved
+      assert_equal Money.new(0, "USD"), budget.subscriptions_reserved
+      assert_empty budget.subscription_reservations_by_category_id
+    end
+  end
+
+  test "a linked charge within 5 days removes that date" do
+    travel_to Date.new(2030, 3, 3) do
+      _budget, bc = reservation_budget
+      near = reservation_row(next_expected_date: Date.new(2030, 3, 20), amount: 10)
+      reservation_charge(near, Date.new(2030, 3, 15), source: nil)
+      far = reservation_row(next_expected_date: Date.new(2030, 3, 22), amount: 20)
+      reservation_charge(far, Date.new(2030, 3, 16), source: nil)
+
+      assert_equal Money.new(20, "USD"), bc.subscriptions_reserved
+    end
+  end
+
+  test "a parent sums its subcategories" do
+    travel_to Date.new(2030, 3, 3) do
+      budget, parent_bc = reservation_budget
+      sub_bc = budget.budget_categories.find { |row| row.category_id == @subcategory_with_limit.id }
+      reservation_row(next_expected_date: Date.new(2030, 3, 20), amount: 10)
+      reservation_row(next_expected_date: Date.new(2030, 3, 21), amount: 5, category: @subcategory_with_limit)
+
+      assert_equal Money.new(15, "USD"), parent_bc.subscriptions_reserved
+      assert_equal Money.new(5, "USD"), sub_bc.subscriptions_reserved
+      assert_equal Money.new(15, "USD"), budget.subscriptions_reserved
+    end
+  end
+
+  test "a past budget reserves nothing" do
+    travel_to Date.new(2030, 3, 3) do
+      _budget, bc = reservation_budget(start_date: Date.new(2030, 2, 1), end_date: Date.new(2030, 2, 28))
+      reservation_row(next_expected_date: Date.new(2030, 2, 20), amount: 10)
+
+      assert_equal Money.new(0, "USD"), bc.subscriptions_reserved
+    end
+  end
+
+  test "reservations do not change spent, available or allocation figures" do
+    travel_to Date.new(2030, 3, 3) do
+      budget, bc = reservation_budget
+      before = [ bc.actual_spending, bc.available_to_spend, budget.allocated_spending, budget.available_to_spend ]
+      reservation_row(next_expected_date: Date.new(2030, 3, 20), amount: 300)
+
+      budget = Budget.find(budget.id)
+      bc = budget.budget_categories.find { |row| row.category_id == @parent_category.id }
+      assert_equal before, [ bc.actual_spending, bc.available_to_spend, budget.allocated_spending, budget.available_to_spend ]
+      assert_equal Money.new(300, "USD"), bc.subscriptions_reserved
+    end
+  end
+
+  test "reservations load once per budget" do
+    travel_to Date.new(2030, 3, 3) do
+      budget, _bc = reservation_budget
+      reservation_row(next_expected_date: Date.new(2030, 3, 20), amount: 10)
+      reservation_row(next_expected_date: Date.new(2030, 3, 21), amount: 5, category: @subcategory_with_limit)
+
+      budget = Budget.find(budget.id)
+      budget.family
+      budget.budget_categories.load
+
+      # The recurring rows and their linked charges, one query each
+      assert_queries_count(2) do
+        budget.budget_categories.each(&:subscriptions_reserved)
+        budget.subscriptions_reserved
+      end
+
+      assert_no_queries { budget.subscription_reservations_by_category_id }
+    end
+  end
+
+  private
+    # A budget of the dylan family (currency USD unless changed) for March 2030 by
+    # default, with rows for the test categories. Returns it and the parent row.
+    def reservation_budget(start_date: Date.new(2030, 3, 1), end_date: Date.new(2030, 3, 31), currency: "USD")
+      budget = Budget.create!(family: @family, start_date: start_date, end_date: end_date, currency: currency,
+                              budgeted_spending: 1000, expected_income: 1000)
+      [ @parent_category, @subcategory_with_limit, @subcategory_inheriting ].each do |category|
+        BudgetCategory.create!(budget: budget, category: category, budgeted_spending: category == @parent_category ? 500 : 0, currency: currency)
+      end
+
+      budget = Budget.find(budget.id)
+      [ budget, budget.budget_categories.find { |row| row.category_id == @parent_category.id } ]
+    end
+
+    def reservation_row(**attributes)
+      RecurringTransaction.create!({
+        family: @family,
+        name: "Streaming #{SecureRandom.hex(4)}",
+        amount: 10,
+        currency: "USD",
+        expected_day_of_month: attributes[:next_expected_date]&.day || 20,
+        last_occurrence_date: Date.new(2030, 2, 20),
+        next_expected_date: Date.new(2030, 3, 20),
+        status: "active",
+        manual: true,
+        category: @parent_category
+      }.merge(attributes))
+    end
+
+    def reservation_charge(row, date, source: "subscription")
+      Entry.create!(
+        account: accounts(:depository), date: date, name: row.name, amount: row.amount, currency: "USD", source: source,
+        entryable: Transaction.new(category: row.category, recurring_transaction: row)
+      )
+    end
 end

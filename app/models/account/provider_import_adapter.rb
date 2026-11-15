@@ -211,8 +211,7 @@ class Account::ProviderImportAdapter
         if fuzzy_suggestion
           # Store suggestion on the PENDING entry for user to review
           begin
-            store_duplicate_suggestion(
-              pending_entry: fuzzy_suggestion,
+            fuzzy_suggestion.entryable.flag_potential_duplicate!(
               posted_entry: entry,
               reason: "fuzzy_amount_match",
               posted_amount: amount,
@@ -234,8 +233,7 @@ class Account::ProviderImportAdapter
           )
           if low_confidence_suggestion
             begin
-              store_duplicate_suggestion(
-                pending_entry: low_confidence_suggestion,
+              low_confidence_suggestion.entryable.flag_potential_duplicate!(
                 posted_entry: entry,
                 reason: "low_confidence_match",
                 posted_amount: amount,
@@ -859,28 +857,6 @@ class Account::ProviderImportAdapter
   # @param reason [String] Why this was flagged (e.g., "fuzzy_amount_match", "low_confidence_match")
   # @param posted_amount [BigDecimal] The posted transaction amount
   # @param confidence [String] Confidence level: "medium" (≤30% diff) or "low" (>30% diff)
-  def store_duplicate_suggestion(pending_entry:, posted_entry:, reason:, posted_amount:, confidence: "medium")
-    return unless pending_entry&.entryable.is_a?(Transaction)
-
-    pending_transaction = pending_entry.entryable
-    existing_extra = pending_transaction.extra || {}
-
-    # Don't overwrite if already has a suggestion (keep first one found)
-    return if existing_extra["potential_posted_match"].present?
-
-    pending_transaction.update!(
-      extra: existing_extra.merge(
-        "potential_posted_match" => {
-          "entry_id" => posted_entry.id,
-          "reason" => reason,
-          "posted_amount" => posted_amount.to_s,
-          "confidence" => confidence,
-          "detected_at" => Date.current.to_s
-        }
-      )
-    )
-  end
-
   # Auto-detects investment activity label from transaction name and amount
   # Only detects extremely obvious cases to maintain high accuracy
   # Users can always manually adjust the label afterward

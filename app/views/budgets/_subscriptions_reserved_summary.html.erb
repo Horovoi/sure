@@ -1,0 +1,25 @@
+<%# locals: (budget:) %>
+<%# Subscription charges of the period that are not generated yet. Additive: the expense figure above does not include it. %>
+
+<% reserved = budget.subscriptions_reserved %>
+<% unconvertible_count = budget.subscriptions_reserved_unconvertible_count %>
+<% if reserved.amount.positive? || unconvertible_count.positive? %>
+  <div class="mt-3 pt-3 border-t border-secondary" data-testid="budget-reserved-summary">
+    <% if budget.initialized? && budget.budgeted_spending.to_d.positive? %>
+      <div class="h-1.5 mb-2 bg-container-inset rounded-full overflow-hidden flex">
+        <div class="h-full bg-inverse rounded-full" style="width: <%= budget.spent_bar_width_percent %>%"></div>
+        <div class="h-full bg-reserved-hatched text-secondary" style="width: <%= budget.subscriptions_reserved_bar_width_percent %>%"></div>
+      </div>
+    <% end %>
+    <div class="flex items-center gap-1.5 text-xs">
+      <span class="inline-block w-2.5 h-2.5 rounded-sm bg-reserved-hatched text-secondary shrink-0" aria-hidden="true"></span>
+      <span class="text-secondary"><%= t("budgets.subscription_reservations.reserved") %></span>
+      <span class="ml-auto text-primary font-medium"><%= format_money(reserved) %></span>
+    </div>
+    <% if unconvertible_count.positive? %>
+      <p class="mt-1 text-xs text-subdued">
+        <%= t("budgets.subscription_reservations.unconvertible", count: unconvertible_count) %>
+      </p>
+    <% end %>
+  </div>
+<% end %>

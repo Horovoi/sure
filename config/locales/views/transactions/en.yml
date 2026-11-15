@@ -152,6 +152,23 @@ en:
     merge_duplicate:
       success: Transactions merged successfully
       failure: Could not merge transactions
+    # w2-subs: generated subscription charges and their real charges
+    subscription_match_badge:
+      label: Subscription match
+      tooltip: This generated subscription charge may have a real charge. Open it to merge or keep both.
+    subscription_match:
+      potential_duplicate_description: Another transaction looks like the real charge of this subscription. Merge to keep the real charge, with this charge's category, tags and notes, and delete this generated charge.
+      potential_duplicate_title: Real charge found
+    replaced_subscription_charge:
+      description: "It took the place of the generated charge %{name} of %{amount}, with its category, tags and notes."
+      restore: Restore the generated charge
+      title: "Replaced the subscription charge of %{date}"
+    restore_subscription_charge:
+      failure: Could not restore the generated charge
+      not_replaced: This transaction did not replace a subscription charge
+      period_taken: The subscription already has a generated charge for that period
+      recurring_missing: The subscription of that charge no longer exists
+      success: Restored the generated subscription charge
     dismiss_duplicate:
       success: Kept as separate transactions
       failure: Could not dismiss duplicate suggestion

@@ -46,10 +46,15 @@
 
       <%# Progress Bar %>
       <div class="mb-3">
-        <div class="h-1.5 bg-container-inset rounded-full overflow-hidden">
+        <div class="h-1.5 bg-container-inset rounded-full overflow-hidden flex">
           <% bar_color = budget_category.over_budget? ? "bg-destructive" : (budget_category.near_limit? ? "bg-warning" : "bg-success") %>
           <div class="h-full <%= bar_color %> rounded-full transition-all duration-500"
                style="width: <%= budget_category.bar_width_percent %>%"></div>
+          <% if (reserved_width = budget_category.subscriptions_reserved_bar_width_percent).positive? %>
+            <div class="h-full bg-reserved-hatched text-secondary transition-all duration-500"
+                 data-testid="budget-category-reserved-bar"
+                 style="width: <%= reserved_width %>%"></div>
+          <% end %>
         </div>
       </div>
 
@@ -80,6 +85,7 @@
             </div>
           <% end %>
         <% end %>
+        <%= render "budget_categories/subscriptions_reserved", budget_category: budget_category %>
         <div class="whitespace-nowrap w-full sm:w-auto lg:ml-auto">
           <% if budget_category.available_to_spend >= 0 %>
             <span class="text-sm text-secondary"><%= t("reports.budget_performance.remaining") %>:</span>

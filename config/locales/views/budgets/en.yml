@@ -52,3 +52,12 @@ en:
       description: Copy the amounts of %{source_name} or start with an empty budget.
       fresh_button: Start fresh
       title: Set up this budget
+    actuals_summary:
+      expenses: Expenses
+      income: Income
+    subscription_reservations:
+      explanation: Subscription charges due later in this period. Spent and remaining do not include them.
+      reserved: Reserved for subscriptions
+      unconvertible:
+        one: 1 subscription left out, no exchange rate
+        other: "%{count} subscriptions left out, no exchange rate"

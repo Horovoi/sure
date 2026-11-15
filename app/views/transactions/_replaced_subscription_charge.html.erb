@@ -1,0 +1,27 @@
+<%# locals: (transaction:) %>
+<%# A real charge that took the place of a generated subscription charge, with a way to put it back %>
+
+<% if transaction.replaced_subscription_charge? %>
+  <% replaced = transaction.replaced_subscription_charge %>
+  <% replaced_date = transaction.replaced_subscription_charge_date %>
+  <div class="mx-4 my-3 p-4 rounded-lg border border-secondary bg-container-inset" data-testid="replaced-subscription-charge">
+    <div class="flex items-start gap-3">
+      <%= icon "repeat", size: "md", color: "current" %>
+      <div class="flex-1 space-y-2">
+        <p class="text-sm font-medium text-primary">
+          <%= t("transactions.replaced_subscription_charge.title", date: replaced_date ? l(replaced_date, format: :long) : "-") %>
+        </p>
+        <p class="text-sm text-secondary">
+          <%= t("transactions.replaced_subscription_charge.description",
+                name: replaced["name"],
+                amount: format_money(Money.new(replaced["amount"].to_d, replaced["currency"].presence || transaction.entry.currency))) %>
+        </p>
+        <%= button_to t("transactions.replaced_subscription_charge.restore"),
+              restore_subscription_charge_transaction_path(transaction),
+              method: :post,
+              class: "btn btn--outline btn--sm",
+              data: { turbo_frame: "_top", testid: "restore-subscription-charge" } %>
+      </div>
+    </div>
+  </div>
+<% end %>

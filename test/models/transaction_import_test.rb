@@ -559,7 +559,70 @@ class TransactionImportTest < ActiveSupport::TestCase
     assert_equal earlier.id, entry.reload.import_id
   end
 
+  test "publish schedules the subscription charge reconciler" do
+    configure_claiming_import(accounts(:depository), "01/05/2024,Streaming,15,,,")
+
+    assert_enqueued_with(job: RecurringTransaction::ReconcileJob) do
+      @import.publish
+    end
+    assert @import.reload.complete?
+  end
+
+  test "revert restores the generated charge an imported entry replaced and keeps next_expected_date" do
+    account = accounts(:depository)
+    recurring, generated = subscription_charge(account, Date.new(2024, 1, 3))
+    configure_claiming_import(account, "01/05/2024,Streaming service,15,,,")
+    @import.publish
+    imported = @import.reload.entries.sole
+    assert imported.transaction.replace_subscription_charge!(generated, source: "test")
+    next_expected = recurring.reload.next_expected_date
+
+    @import.revert_later
+    @import.revert
+
+    assert @import.reload.reverted?
+    assert_not Entry.exists?(imported.id)
+    restored = account.entries.where(source: "subscription").sole
+    assert_equal Date.new(2024, 1, 3), restored.date
+    assert_equal recurring.id, restored.transaction.recurring_transaction_id
+    # An import revert does not mark the pair: a new import of the statement may match it again
+    assert_not restored.transaction.potential_duplicate_dismissed?
+    assert_equal next_expected, recurring.reload.next_expected_date
+  end
+
+  test "an entry the import only claimed keeps what it replaced on revert" do
+    account = accounts(:depository)
+    _recurring, generated = subscription_charge(account, Date.new(2024, 1, 3))
+    existing = account.entries.create!(date: Date.new(2024, 1, 1), amount: 100, currency: "USD", name: "Coffee Shop", entryable: Transaction.new)
+    assert existing.transaction.replace_subscription_charge!(generated, source: "test")
+
+    configure_claiming_import(account, "01/01/2024,Coffee Shop,100,,,")
+    @import.publish
+    assert_equal @import.id, existing.reload.import_id
+
+    @import.revert_later
+    assert_no_difference -> { Entry.count } do
+      @import.revert
+    end
+
+    assert existing.reload.transaction.replaced_subscription_charge?
+    assert_not account.entries.where(source: "subscription").exists?
+  end
+
   private
+    def subscription_charge(account, date)
+      recurring = account.family.recurring_transactions.create!(
+        name: "Streaming service", amount: 15, currency: "USD", expected_day_of_month: date.day,
+        last_occurrence_date: date, next_expected_date: date.next_month,
+        status: "active", subscription_state: "subscription", default_account: account
+      )
+      generated = account.entries.create!(
+        date: date, amount: 15, currency: "USD", name: "Streaming service", source: "subscription",
+        entryable: Transaction.new(recurring_transaction: recurring)
+      )
+      [ recurring, generated ]
+    end
+
     def configure_claiming_import(account, row)
       @import.update!(
         account: account,

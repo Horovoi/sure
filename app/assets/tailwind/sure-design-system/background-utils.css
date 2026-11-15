@@ -47,3 +47,9 @@
 @utility bg-loader {
   @apply bg-surface-inset animate-pulse;
 }
+
+/* Money set aside but not spent yet (budget subscription reservations).
+   Stripes in the current text colour, so a text-* class picks the hue. */
+@utility bg-reserved-hatched {
+  background-image: repeating-linear-gradient(-45deg, currentColor 0 2px, transparent 2px 5px);
+}

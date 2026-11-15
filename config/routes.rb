@@ -287,6 +287,13 @@ Rails.application.routes.draw do
     end
   end
 
+  # w2-subs: put back a generated subscription charge that a real charge replaced
+  resources :transactions, only: [] do
+    member do
+      post :restore_subscription_charge
+    end
+  end
+
   resources :subscriptions, only: %i[index new create show edit update destroy] do
     collection do
       get :calendar

@@ -241,6 +241,26 @@ class TransactionsController < ApplicationController
     redirect_back_or_to transactions_path
   end
 
+  # Puts back the generated subscription charge this real charge replaced
+  # (RecurringTransaction::Reconciler or a merge) and undoes what it carried over.
+  def restore_subscription_charge
+    transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
+    outcome = transaction.restore_replaced_subscription_charge!
+
+    case outcome
+    when :restored then flash[:notice] = t("transactions.restore_subscription_charge.success")
+    when :period_taken then flash[:alert] = t("transactions.restore_subscription_charge.period_taken")
+    when :recurring_missing then flash[:alert] = t("transactions.restore_subscription_charge.recurring_missing")
+    else flash[:alert] = t("transactions.restore_subscription_charge.not_replaced")
+    end
+
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotSaved => e
+    Rails.logger.error("Failed to restore the subscription charge of transaction #{params[:id]}: #{e.message}")
+    flash[:alert] = t("transactions.restore_subscription_charge.failure")
+    redirect_back_or_to transactions_path
+  end
+
   def convert_to_trade
     @transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
     @entry = @transaction.entry
