@@ -38,6 +38,29 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_select "#cashflowSankeyChartFullscreen"
   end
 
+  test "the Sankey carries the custom cash flow period for its label links" do
+    create_transaction(account: @family.accounts.first, amount: 100, category: categories(:food_and_drink), date: 3.days.ago.to_date)
+
+    get root_path(cashflow_period: "custom", cashflow_start_date: 10.days.ago.to_date.iso8601, cashflow_end_date: Date.current.iso8601)
+
+    assert_response :ok
+    chart = css_select("#cashflowSankeyChart").sole
+    assert_equal 10.days.ago.to_date.iso8601, chart["data-sankey-chart-start-date-value"]
+    assert_equal Date.current.iso8601, chart["data-sankey-chart-end-date-value"]
+    assert_select "#cashflowSankeyChart [data-sankey-chart-target='zoomOutButton'][hidden]"
+  end
+
+  test "outflow donut segments link with the category filter value" do
+    create_transaction(account: @family.accounts.first, amount: 70, category: nil)
+
+    get root_path
+
+    assert_response :ok
+    segments = JSON.parse(css_select("[data-controller='donut-chart']").first["data-donut-chart-segments-value"])
+    uncategorized = segments.find { |segment| segment["name"] == Category.uncategorized_name }
+    assert_equal Category::UNCATEGORIZED_FILTER_VALUE, uncategorized["filter_value"]
+  end
+
   test "the subcategory toggle is off by default" do
     create_transaction(account: @family.accounts.first, amount: 100, category: categories(:food_and_drink))
 

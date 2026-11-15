@@ -75,7 +75,87 @@ class DashboardTest < ApplicationSystemTestCase
     assert_selector "#cashflowSankeyChart g[data-node-id='expense_sub_#{@child.id}']", visible: :all
   end
 
+  test "a category label opens its transactions for the widget period" do
+    make_shopping_prominent
+    visit_dashboard
+
+    find("#cashflowSankeyChart g[data-node-id='expense_#{@parent.id}'] text").click
+
+    assert_current_path(%r{/transactions\?})
+    query = Rack::Utils.parse_nested_query(URI.parse(page.current_url).query)
+    assert_equal [ @parent.filter_value ], query.dig("q", "categories")
+    assert_equal @start_date.iso8601, query.dig("q", "start_date")
+    assert_equal Date.current.iso8601, query.dig("q", "end_date")
+  end
+
+  test "the Cash Flow label zooms to the spending side instead of opening transactions" do
+    make_shopping_prominent
+    visit_dashboard
+
+    nodes = page.evaluate_script(<<~JS)
+      Array.from(document.querySelectorAll("#cashflowSankeyChart g[data-node-id]")).map(g => g.__data__)
+        .filter(d => ["cash_flow_node", "deficit_node", "surplus_node"].includes(d.id))
+        .map(d => d.filter_value ?? null)
+    JS
+    assert nodes.any?
+    assert nodes.all?(&:nil?), "structural nodes have no transactions filter"
+
+    find("#cashflowSankeyChart g[data-node-id='cash_flow_node'] text").click
+
+    assert_selector "#cashflowSankeyChart [data-sankey-chart-target='zoomOutButton']"
+    assert_current_path(root_path, ignore_query: true)
+  end
+
+  test "zoom into a category and back in the inline chart" do
+    make_shopping_prominent
+    visit_dashboard
+
+    within "#cashflowSankeyChart" do
+      assert_no_selector "g[data-node-id='expense_sub_#{@child.id}']"
+      assert_no_selector "[data-sankey-chart-target='zoomOutButton']", visible: true
+
+      find("g[data-node-id='expense_#{@parent.id}'] path").click
+
+      assert_selector "g[data-node-id='expense_sub_#{@child.id}']"
+      assert_no_selector "g[data-node-id='cash_flow_node']"
+
+      find("[data-sankey-chart-target='zoomOutButton']").click
+
+      assert_selector "g[data-node-id='cash_flow_node']"
+      assert_no_selector "[data-sankey-chart-target='zoomOutButton']", visible: true
+    end
+  end
+
+  test "zoom into a category and back in the fullscreen dialog" do
+    make_shopping_prominent
+    visit_dashboard
+
+    within "#cashflow-sankey-chart" do
+      click_button I18n.t("pages.dashboard.cashflow_sankey.expand"), enable_aria_label: true
+    end
+
+    within "#cashflowSankeyChartFullscreen" do
+      assert_selector "svg .sankey-link"
+      find("g[data-node-id='expense_#{@parent.id}'] path").click
+
+      assert_selector "g[data-node-id='expense_sub_#{@child.id}']"
+      assert_no_selector "g[data-node-id='cash_flow_node']"
+
+      click_button I18n.t("pages.dashboard.cashflow_sankey.zoom_out"), enable_aria_label: true
+
+      assert_selector "g[data-node-id='cash_flow_node']"
+    end
+
+    # The inline chart behind keeps its own, full view
+    assert_selector "#cashflowSankeyChart g[data-node-id='cash_flow_node']", visible: :all
+  end
+
   private
+    # Large enough that the chart's label rule keeps the Shopping label
+    def make_shopping_prominent
+      create_transaction(account: @account, currency: @family.currency, category: @child, amount: 500_000, date: @start_date)
+    end
+
     def visit_dashboard
       visit root_path(cashflow_period: "custom", cashflow_start_date: @start_date.iso8601, cashflow_end_date: Date.current.iso8601)
       assert_selector "#cashflowSankeyChart svg .sankey-link"

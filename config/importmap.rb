@@ -13,6 +13,7 @@ pin "utils/sankey_align", to: "utils/sankey_align.mjs"
 pin "utils/sankey_labels", to: "utils/sankey_labels.mjs"
 pin "utils/sankey_subcategories", to: "utils/sankey_subcategories.mjs"
 pin "utils/sankey_zoom", to: "utils/sankey_zoom.mjs"
+pin "utils/transactions_filter_url", to: "utils/transactions_filter_url.mjs"
 pin "@github/hotkey", to: "@github--hotkey.js" # @3.1.1
 pin "@simonwep/pickr", to: "@simonwep--pickr.js" # @1.9.1
 

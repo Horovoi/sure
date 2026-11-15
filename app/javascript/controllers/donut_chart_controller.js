@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
+import { buildCategoryTransactionsUrl } from "utils/transactions_filter_url";
 
 // Connects to data-controller="donut-chart"
 export default class extends Controller {
@@ -256,15 +257,19 @@ export default class extends Controller {
   };
 
   // Handles click on segment (optional, controlled by enableClick value)
+  // A segment without a transactions filter (Other Investments) is not a link,
+  // like its row in the category list
   #handleClick(segment) {
-    if (!segment.name || !this.startDateValue || !this.endDateValue) return;
+    const filterValue = segment.filter_value ?? segment.name;
+    if (!filterValue || segment.clickable === false) return;
 
-    const segmentName = encodeURIComponent(segment.name);
-    const startDate = this.startDateValue;
-    const endDate = this.endDateValue;
-
-    const url = `/transactions?q[categories][]=${segmentName}&q[start_date]=${startDate}&q[end_date]=${endDate}`;
-    window.location.href = url;
+    Turbo.visit(
+      buildCategoryTransactionsUrl({
+        filterValue,
+        startDate: this.startDateValue,
+        endDate: this.endDateValue,
+      }),
+    );
   }
 
   // Public methods for external highlighting (e.g., from category list hover)

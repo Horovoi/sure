@@ -29,6 +29,7 @@ en:
         custom: "Custom"
         to: "to"
         show_subcategories: "Show subcategories"
+        zoom_out: "Back to full cashflow"
         nodes:
           cash_flow: "Cash Flow"
           surplus: "Surplus"

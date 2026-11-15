@@ -4,6 +4,8 @@ import { sankey, sankeyCenter } from "d3-sankey";
 import { sankeyLabelOnRight } from "utils/sankey_align";
 import { hiddenSankeyLabels } from "utils/sankey_labels";
 import { withoutSankeySubcategories } from "utils/sankey_subcategories";
+import { sankeyNodeHasChildren, zoomSankeyData } from "utils/sankey_zoom";
+import { buildCategoryTransactionsUrl, isNavigableCategoryNode } from "utils/transactions_filter_url";
 
 // Connects to data-controller="sankey-chart"
 //
@@ -11,10 +13,17 @@ import { withoutSankeySubcategories } from "utils/sankey_subcategories";
 // subcategory toggle off, or on a narrow chart, the subcategory column is
 // dropped here; a category's value already includes its subcategories, so no
 // total changes.
+//
+// A click on a bar zooms into that node and what flows from it (a back button
+// returns); a click on a category label opens its transactions for the period.
 export default class extends Controller {
+  static targets = ["chart", "zoomOutButton"];
+
   static values = {
     data: Object,
     showSubcategories: { type: Boolean, default: false },
+    startDate: String,
+    endDate: String,
     nodeWidth: { type: Number, default: 15 },
     nodePadding: { type: Number, default: 20 },
     currencySymbol: { type: String, default: "$" },
@@ -30,6 +39,7 @@ export default class extends Controller {
   static MIN_NODE_PADDING = 4;
   static MAX_PADDING_RATIO = 0.4;
   static CORNER_RADIUS = 8;
+  static ZOOM_TRANSITION_MS = 220;
   static DEFAULT_COLOR = "#9E9E9E";
   static CSS_VAR_MAP = {
     "var(--color-success)": "#10A861",
@@ -41,6 +51,7 @@ export default class extends Controller {
 
   connect() {
     this.connected = true;
+    this.zoomRootId = null;
     // Each controller instance has a unique id to scope its SVG defs: the
     // inline chart and the fullscreen one are on the same page
     if (!this.element.id) {
@@ -52,6 +63,7 @@ export default class extends Controller {
     this.resizeObserver.observe(this.#chartElement());
     this.tooltip = null;
     this.#createTooltip();
+    this.#syncZoomControls();
 
     // Subcategory toggle, sent to this element by the toggles
     this._onSubcategoryEvent = (e) => {
@@ -84,14 +96,20 @@ export default class extends Controller {
     this.connected = false;
     document.removeEventListener("turbo:morph", this._onMorph);
     this.resizeObserver?.disconnect();
+    clearTimeout(this.drawTimeout);
     this.tooltip?.remove();
     this.tooltip = null;
     this.element.removeEventListener("sankey:set-subcategories", this._onSubcategoryEvent);
     this.element.removeEventListener("sankey:set-datasets", this._onDatasetsEvent);
   }
 
+  // New data (a period change) starts at the full view again
   dataValueChanged() {
-    if (this.connected) this.#draw();
+    if (!this.connected) return;
+
+    this.zoomRootId = null;
+    this.#syncZoomControls();
+    this.#draw();
   }
 
   showSubcategoriesValueChanged() {
@@ -105,10 +123,13 @@ export default class extends Controller {
   }
 
   // Public: replace the data (the period changed) and the mode
-  setDatasets({ data, showSubcategories, currencySymbol }) {
+  setDatasets({ data, showSubcategories, currencySymbol, startDate, endDate }) {
     if (typeof currencySymbol === "string" && currencySymbol.length) {
       this.currencySymbolValue = currencySymbol;
     }
+    // The label links filter by the period the chart shows
+    if (typeof startDate === "string") this.startDateValue = startDate;
+    if (typeof endDate === "string") this.endDateValue = endDate;
     // Stimulus Object values are parsed from JSON on every read, so compare contents
     if (data && JSON.stringify(data) !== JSON.stringify(this.dataValue)) {
       this.dataValue = data;
@@ -116,16 +137,65 @@ export default class extends Controller {
     this.setSubcategoryMode(showSubcategories);
   }
 
+  // Public (back button): return to the full view
+  zoomOut() {
+    if (!this.zoomRootId) return;
+
+    this.zoomRootId = null;
+    this.#syncZoomControls();
+    this.#draw({ animate: true });
+  }
+
+  // The morph can drop the drawing and the tooltip appended outside this
+  // element, and puts the server's hidden back button back while the zoom is
+  // kept here.
   #restoreAfterMorph() {
     if (!this.connected) return;
 
     this.tooltip?.remove();
     this.#createTooltip();
+    this.#syncZoomControls();
     if (!this.#chartElement().querySelector("svg")) this.#draw();
   }
 
   #chartElement() {
-    return this.element;
+    return this.hasChartTarget ? this.chartTarget : this.element;
+  }
+
+  #syncZoomControls() {
+    this.zoomOutButtonTargets.forEach((button) => {
+      button.hidden = !this.zoomRootId;
+    });
+  }
+
+  #zoomIn(node) {
+    if (!node.id || !sankeyNodeHasChildren(this.#drillableData(), node.id)) return;
+
+    this.zoomRootId = node.id;
+    this.#syncZoomControls();
+    this.#draw({ animate: true });
+  }
+
+  // A category label opens its transactions, filtered by the chart's period.
+  // Cash Flow, Surplus, Deficit, Other Investments and the Other [Category]
+  // leaf have no filter value; their label zooms like their bar.
+  #openCategory(node) {
+    if (!isNavigableCategoryNode(node.id) || !node.filter_value) {
+      this.#zoomIn(node);
+      return;
+    }
+
+    Turbo.visit(
+      buildCategoryTransactionsUrl({
+        filterValue: node.filter_value,
+        startDate: this.startDateValue,
+        endDate: this.endDateValue,
+      }),
+    );
+  }
+
+  #isClickableLabel(node, drillable) {
+    return (isNavigableCategoryNode(node.id) && !!node.filter_value) || sankeyNodeHasChildren(drillable, node.id);
   }
 
   // A container with no size yet (the fullscreen dialog before it opens) gets
@@ -135,24 +205,48 @@ export default class extends Controller {
     return this.#chartElement().clientWidth || 600;
   }
 
+  // The data at the current zoom, before the subcategory filter. Drill-down is
+  // decided here, so a category whose children are all subcategories still
+  // opens with the toggle off; the zoomed-in view has no Cash Flow node for
+  // the filter to work from, so it keeps them.
+  #drillableData() {
+    return this.zoomRootId ? zoomSankeyData(this.dataValue, this.zoomRootId) : this.dataValue || {};
+  }
+
   #visibleData(width) {
-    const data = this.dataValue || {};
+    const data = this.#drillableData();
     const subcategories =
       this.showSubcategoriesValue && width >= this.constructor.SUBCATEGORY_MIN_WIDTH;
 
     return subcategories ? data : withoutSankeySubcategories(data);
   }
 
-  #draw() {
+  #draw({ animate = false } = {}) {
     const width = this.#chartWidth();
     const { nodes = [], links = [] } = this.#visibleData(width) || {};
 
     const chart = d3.select(this.#chartElement());
-    chart.selectAll("svg").remove();
-    if (!nodes.length || !links.length) return;
-
+    clearTimeout(this.drawTimeout);
+    chart.selectAll("svg").interrupt();
     this.#hideTooltip();
-    this.#render(nodes, links, width);
+
+    if (!nodes.length || !links.length) {
+      chart.selectAll("svg").remove();
+      return;
+    }
+
+    if (animate) {
+      const half = this.constructor.ZOOM_TRANSITION_MS / 2;
+      chart.selectAll("svg").transition().duration(half).style("opacity", 0).remove();
+      this.drawTimeout = setTimeout(() => {
+        if (!this.connected) return;
+        chart.selectAll("svg").remove();
+        this.#render(nodes, links, width).style("opacity", 0).transition().duration(half).style("opacity", 1);
+      }, half);
+    } else {
+      chart.selectAll("svg").remove();
+      this.#render(nodes, links, width);
+    }
   }
 
   #render(nodes, links, width) {
@@ -442,6 +536,8 @@ export default class extends Controller {
         this.#hideTooltip();
       });
 
+    const drillable = this.#drillableData();
+
     nodeGroups
       .selectAll("path, text")
       .on("mouseenter", (event, d) => {
@@ -452,6 +548,24 @@ export default class extends Controller {
       .on("mouseleave", () => {
         resetHover();
         this.#hideTooltip();
+      });
+
+    // A bar zooms in; only a bar with something under it shows a pointer
+    nodeGroups
+      .selectAll("path")
+      .style("cursor", (d) => (sankeyNodeHasChildren(drillable, d.id) ? "pointer" : "default"))
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        this.#zoomIn(d);
+      });
+
+    // A label opens the category's transactions (or zooms, for a structural node)
+    nodeGroups
+      .selectAll("text")
+      .style("cursor", (d) => (this.#isClickableLabel(d, drillable) ? "pointer" : "default"))
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        this.#openCategory(d);
       });
   }
 
