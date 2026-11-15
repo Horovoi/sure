@@ -1,8 +1,20 @@
 class FamilyResetJob < ApplicationJob
   queue_as :low_priority
 
+  # Without a restorable copy nothing is deleted. The job is dropped rather than
+  # retried, so Sidekiq never resets the family later, unseen; the user can start the
+  # reset again.
+  discard_on Backup::Bundle::Error do |job, error|
+    Rails.logger.error("[FamilyResetJob] Pre-reset backup failed, nothing was deleted (family #{job.arguments.first&.id}): #{error.message}")
+  end
+
   def perform(family, load_sample_data_for_email: nil)
-    # Create a safety export before destroying any data
+    # A restorable copy of the whole database and the uploaded files comes first. It
+    # raises Backup::Bundle::Error when it fails, which stops the reset here.
+    create_pre_reset_bundle
+
+    # Then the family's own export. It is a convenience, so a failure does not stop
+    # the reset: the bundle above is the copy that can be restored.
     create_pre_reset_export(family)
 
     # Delete all family data except users. The family row lock makes a second
@@ -35,6 +47,11 @@ class FamilyResetJob < ApplicationJob
   end
 
   private
+
+    def create_pre_reset_bundle
+      dir = Backup::Bundle.create!(kind: :pre_reset, parts: %i[db storage])
+      Rails.logger.info "[FamilyResetJob] Pre-reset backup written: #{dir}"
+    end
 
     def create_pre_reset_export(family)
       return if family.accounts.empty?

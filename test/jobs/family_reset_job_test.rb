@@ -5,6 +5,8 @@ class FamilyResetJobTest < ActiveJob::TestCase
     @family = families(:dylan_family)
     @plaid_provider = mock
     Provider::Registry.stubs(:plaid_provider_for_region).returns(@plaid_provider)
+    # The pre-reset bundle (pg_dump and tar) is covered by Backup::BundleTest
+    Backup::Bundle.stubs(:create!).returns(Pathname("/backups/bundles/pre-reset/20261115T040000Z_test"))
   end
 
   test "resets family data successfully" do
@@ -118,6 +120,51 @@ class FamilyResetJobTest < ActiveJob::TestCase
       assert_equal 0, @family.public_send(association).reload.count, "#{association} should be gone after the reset"
     end
     assert @family.family_exports.reload.where(status: "completed").exists?, "the pre-reset export should survive the reset"
+  end
+
+  test "takes the pre-reset bundle before anything is deleted" do
+    @plaid_provider.stubs(:remove_item)
+    accounts_before = @family.accounts.count
+    assert accounts_before > 0
+
+    reset = sequence("reset")
+    # The block matcher also checks that nothing was deleted yet when the bundle runs
+    Backup::Bundle.expects(:create!)
+                  .with { |*args| args == [ { kind: :pre_reset, parts: %i[db storage] } ] && @family.accounts.count == accounts_before }
+                  .in_sequence(reset)
+                  .returns(Pathname("/backups/bundles/pre-reset/20261115T040000Z_test"))
+    @family.expects(:lock!).in_sequence(reset)
+
+    FamilyResetJob.perform_now(@family)
+
+    assert_equal 0, @family.accounts.reload.count
+  end
+
+  test "a failed pre-reset bundle deletes nothing and is not retried" do
+    @plaid_provider.stubs(:remove_item)
+    Backup::Bundle.stubs(:create!).raises(Backup::Bundle::Error, "disk full")
+    counts = -> { [ @family.accounts.count, @family.categories.count, @family.rules.count, @family.tags.count, @family.family_exports.count ] }
+    before = counts.call
+    assert before.first > 0
+
+    assert_nothing_raised do
+      FamilyResetJob.perform_now(@family)
+    end
+
+    assert_equal before, counts.call
+    assert_no_enqueued_jobs only: FamilyResetJob
+  end
+
+  test "takes the pre-reset bundle on the staging copy too" do
+    @plaid_provider.stubs(:remove_item)
+    Backup::Bundle.expects(:create!).with(kind: :pre_reset, parts: %i[db storage])
+                  .returns(Pathname("/backups/bundles/pre-reset/20261115T040000Z_test"))
+
+    with_env_overrides("STAGING_CLONE" => "1") do
+      FamilyResetJob.perform_now(@family)
+    end
+
+    assert_equal 0, @family.accounts.reload.count
   end
 
   private
