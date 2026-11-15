@@ -4,7 +4,7 @@ class DS::ToggleTest < ViewComponent::TestCase
   test "the checkbox announces itself as a switch" do
     render_inline(DS::Toggle.new(id: "notify", name: "user[notify]", checked: true))
 
-    assert_selector "input[type='checkbox'][role='switch'][name='user[notify]']:checked", visible: :all
+    assert_selector "input[type='checkbox'][role='switch'][name='user[notify]'][checked]", visible: :all
   end
 
   test "carries the off value in a paired hidden field" do

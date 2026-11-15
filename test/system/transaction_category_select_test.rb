@@ -44,6 +44,8 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
       find("button[data-category-select-target='button']").click
       fill_in I18n.t("ds.category_select.search_placeholder"), with: "Freelance"
       click_button I18n.t("ds.category_select.create", name: "Freelance")
+      # The create is a background request; the picker shows the category once it is saved
+      assert_selector "[data-category-select-target='selectionContainer']", text: "Freelance"
     end
 
     freelance = Category.find_by!(name: "Freelance")
@@ -73,6 +75,7 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
 
   test "Enter in the tag search creates the tag without submitting the form" do
     visit new_transaction_url
+    open_section I18n.t("transactions.form.details")
 
     assert_no_difference "Entry.count" do
       within "[data-controller='tag-select']" do
@@ -96,10 +99,14 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
     JS
 
     within "turbo-frame#drawer", visible: :all do
+      open_section I18n.t("transactions.show.details")
+
       within "[data-controller='merchant-select']" do
         find("button[data-merchant-select-target='button']").click
         find("input[type=search]").fill_in with: "Corner Bakery"
         click_button I18n.t("ds.merchant_select.create_html", name: "Corner Bakery")
+        # The create is a background request; the picker shows the merchant once it is saved
+        assert_selector "button[data-merchant-select-target='button']", text: "Corner Bakery"
       end
     end
 
@@ -123,7 +130,9 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
       click_button I18n.t("category.dropdowns.show.create", name: "Refunds")
     end
 
-    assert_selector "##{ActionView::RecordIdentifier.dom_id(transaction, :category_menu_desktop)}", text: "Refunds"
+    # The row's own button, which the server redraws after the save (the open picker
+    # already shows the name while the request runs)
+    assert_selector "##{ActionView::RecordIdentifier.dom_id(transaction, :category_menu_desktop)} button[data-ds--popover-target='button']", text: "Refunds"
     refunds = Category.find_by!(name: "Refunds")
     assert_equal "income", refunds.classification
     assert_equal refunds, transaction.reload.category
@@ -150,4 +159,10 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
     assert_selector "##{ActionView::RecordIdentifier.dom_id(entry.transaction, :tag_summary_desktop)}", text: tag.name
     assert_equal [ tag.id ], entry.transaction.reload.tag_ids
   end
+
+  private
+    # Form and drawer sections start closed; their titles render uppercase (CSS)
+    def open_section(title)
+      find("summary", text: /\A#{Regexp.escape(title)}\z/i).click
+    end
 end

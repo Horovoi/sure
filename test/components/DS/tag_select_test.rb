@@ -19,8 +19,8 @@ class DS::TagSelectTest < ViewComponent::TestCase
   test "carries localized error messages for the controller" do
     render_select(tags: [], selected_ids: [])
 
-    assert_selector "[data-tag-select-error-message-value='#{I18n.t("ds.tag_select.create_error")}']"
-    assert_selector "[data-tag-select-save-error-message-value='#{I18n.t("ds.tag_select.save_error")}']"
+    assert_selector "[data-tag-select-error-message-value=\"#{I18n.t("ds.tag_select.create_error")}\"]"
+    assert_selector "[data-tag-select-save-error-message-value=\"#{I18n.t("ds.tag_select.save_error")}\"]"
   end
 
   test "without a visible label the trigger is named by the label text" do
