@@ -22,14 +22,18 @@ class BudgetCategory < ApplicationRecord
       end.sort_by { |group| group.category.name }
     end
 
-    def initialize(budget_category, budget_subcategories = [])
+    # all_subcategories: every subcategory of the parent, when budget_subcategories is a
+    # filtered subset (the budget page's Over budget / On track sections).
+    def initialize(budget_category, budget_subcategories = [], all_subcategories: budget_subcategories)
       @budget_category = budget_category
       @budget_subcategories = budget_subcategories
+      @all_subcategories = all_subcategories
     end
 
+    # Parent spending that no subcategory accounts for, shown as an "Other <parent>" row.
     def other_spending
-      return 0 unless budget_subcategories.any?
-      direct = budget_category.actual_spending - budget_subcategories.sum(&:actual_spending)
+      return 0 unless @all_subcategories.any?
+      direct = budget_category.actual_spending - @all_subcategories.sum(&:actual_spending)
       [ direct, 0 ].max
     end
   end
@@ -155,6 +159,41 @@ class BudgetCategory < ApplicationRecord
 
   def over_budget?
     available_to_spend.negative?
+  end
+
+  # =============================================================================
+  # Budget page filter (All / Over budget / On track)
+  # =============================================================================
+
+  def budgeted?
+    display_budgeted_spending.to_d.positive?
+  end
+
+  def unbudgeted_with_spending?
+    !budgeted? && actual_spending.to_d.positive?
+  end
+
+  def over_budget_with_budget?
+    budgeted? && over_budget?
+  end
+
+  # Near-limit rows are still on track: they have money left.
+  def on_track?
+    budgeted? && !over_budget?
+  end
+
+  # Spending with no budget counts as over budget.
+  def any_over_budget?
+    unbudgeted_with_spending? || over_budget_with_budget?
+  end
+
+  def visible_on_track?
+    return false unless on_track?
+
+    # Subcategories that share the parent's budget are hidden until they have spending.
+    return true unless subcategory? && inherits_parent_budget?
+
+    actual_spending.to_d.positive?
   end
 
   def near_limit?

@@ -1,0 +1,61 @@
+<%# locals: (budget:, count:, groups:, uncategorized:, show_uncategorized:, over_budget_mode:, filter: "all") %>
+
+<%
+  if over_budget_mode
+    target = "overBudget"
+    testid = "budget-section-over-budget"
+    title = t("budgets.show.over_budget_categories.title")
+    empty_message = t("budgets.show.over_budget_categories.empty")
+    hidden = filter == "on_track"
+  else
+    target = "onTrack"
+    testid = "budget-section-on-track"
+    title = budget.initialized? ? t("budgets.show.on_track_categories.title") : t("budgets.show.categories.title")
+    empty_message = t("budgets.show.on_track_categories.empty")
+    hidden = filter == "over_budget"
+  end
+%>
+
+<%= tag.div class: "bg-container-inset rounded-xl p-1",
+            hidden: hidden,
+            data: { budget_filter_target: target, testid: testid } do %>
+  <div class="flex items-center gap-1.5 px-3 md:px-4 py-2 text-xs font-medium text-secondary uppercase">
+    <p><%= title %></p>
+    <span class="text-subdued">&middot;</span>
+    <p><%= count %></p>
+    <p class="ml-auto"><%= t("budgets.show.categories.amount") %></p>
+  </div>
+
+  <div class="bg-container py-1 shadow-border-xs rounded-md">
+    <% if count.zero? %>
+      <p class="px-4 py-6 text-sm text-secondary text-center" data-testid="budget-section-empty"><%= empty_message %></p>
+    <% else %>
+      <% groups.each_with_index do |group, index| %>
+        <%
+          parent_visible =
+            if over_budget_mode
+              group.budget_category.any_over_budget?
+            else
+              budget.initialized? ? group.budget_category.visible_on_track? : true
+            end
+        %>
+        <%= render "shared/ruler" unless index.zero? %>
+        <%= render "budgets/category_group",
+              budget: budget,
+              group: group,
+              parent_visible: parent_visible,
+              over_budget_mode: over_budget_mode %>
+      <% end %>
+
+      <%# The uncategorized row always comes last. %>
+      <% if show_uncategorized %>
+        <%= render "shared/ruler" unless groups.empty? %>
+        <div class="py-2">
+          <%= render "budget_categories/budget_category",
+                budget_category: uncategorized,
+                show_budget_meta: (over_budget_mode ? uncategorized.over_budget_with_budget? : true) %>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+<% end %>

@@ -5,6 +5,28 @@ en:
       tabs:
         actual: Actual
         budgeted: Budgeted
+      categories:
+        amount: Amount
+        edit: Edit
+        title: Categories
+      filter:
+        all: All
+        aria_label: Filter budget categories
+        on_track: On track
+        over_budget: Over budget
+      on_track_categories:
+        empty: No categories are on track
+        title: On track
+      over_budget_categories:
+        empty: No categories are over budget
+        title: Over budget
+    budget_category:
+      monthly_average: "%{amount} avg"
+    no_categories:
+      description: You have not created or assigned any expense categories to your transactions yet.
+      new_category: New category
+      title: Oops!
+      use_defaults: Use defaults (recommended)
     budget_categories:
       other_category: "Other %{category}"
     budget_donut:

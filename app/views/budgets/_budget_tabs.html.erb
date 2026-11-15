@@ -1,0 +1,21 @@
+<% current_filter = current_budget_filter %>
+<div class="w-full flex justify-center">
+  <div class="max-w-full w-full lg:w-auto overflow-x-auto no-scrollbar">
+    <div class="w-full inline-flex whitespace-nowrap bg-container-inset rounded-lg p-1 text-sm font-medium gap-0.5"
+         role="group"
+         aria-label="<%= t("budgets.show.filter.aria_label") %>">
+      <% BudgetsHelper::BUDGET_FILTERS.each do |filter| %>
+        <% active = filter == current_filter %>
+        <button type="button"
+                data-action="click->budget-filter#setFilter"
+                data-budget-filter-filter-param="<%= filter %>"
+                data-budget-filter-target="tab"
+                data-testid="budget-filter-<%= filter %>"
+                aria-pressed="<%= active %>"
+                class="w-full inline-flex justify-center items-center text-sm font-medium px-2 py-1 rounded-md transition-colors duration-200 <%= active ? "bg-container text-primary shadow-sm" : "text-secondary" %>">
+          <%= t("budgets.show.filter.#{filter}") %>
+        </button>
+      <% end %>
+    </div>
+  </div>
+</div>
