@@ -44,6 +44,56 @@ class Import::ConfigurationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "1.234,56", @import.number_format
   end
 
+  test "an outflow value of the amount type column saves" do
+    TransactionImport.any_instance.stubs(:generate_rows_from_csv)
+
+    patch import_configuration_url(@import), params: {
+      import: {
+        amount_type_strategy: "custom_column",
+        entity_type_col_label: "Type",
+        amount_type_outflow_value: "Списання"
+      }
+    }
+
+    assert_redirected_to import_clean_url(@import)
+    @import.reload
+    assert_equal "custom_column", @import.amount_type_strategy
+    assert_equal "Списання", @import.amount_type_outflow_value
+    assert_nil @import.amount_type_inflow_value
+  end
+
+  test "the form's value and meaning write the matching column and clear the other" do
+    TransactionImport.any_instance.stubs(:generate_rows_from_csv)
+    @import.update!(amount_type_strategy: "custom_column", entity_type_col_label: "Type", amount_type_inflow_value: "Зарахування")
+
+    patch import_configuration_url(@import), params: {
+      import: { amount_type_strategy: "custom_column", entity_type_col_label: "Type", amount_type_value: "Списання", amount_type_direction: "outflow" }
+    }
+
+    @import.reload
+    assert_equal "Списання", @import.amount_type_outflow_value
+    assert_nil @import.amount_type_inflow_value
+
+    patch import_configuration_url(@import), params: {
+      import: { amount_type_strategy: "custom_column", entity_type_col_label: "Type", amount_type_value: "Зарахування", amount_type_direction: "inflow" }
+    }
+
+    @import.reload
+    assert_equal "Зарахування", @import.amount_type_inflow_value
+    assert_nil @import.amount_type_outflow_value
+  end
+
+  test "both amount type values at once are rejected" do
+    TransactionImport.any_instance.expects(:generate_rows_from_csv).never
+
+    patch import_configuration_url(@import), params: {
+      import: { amount_type_strategy: "custom_column", entity_type_col_label: "Type", amount_type_inflow_value: "Зарахування", amount_type_outflow_value: "Списання" }
+    }
+
+    assert_redirected_to import_configuration_url(@import)
+    assert_equal I18n.t("activerecord.errors.models.import.amount_type_values_exclusive"), flash[:alert]
+  end
+
   test "a running import cannot be reconfigured" do
     @import.update_column(:status, "importing")
     TransactionImport.any_instance.expects(:generate_rows_from_csv).never

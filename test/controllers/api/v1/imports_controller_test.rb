@@ -50,6 +50,34 @@ class Api::V1::ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_equal csv_content, created_import.raw_file_str
   end
 
+  test "creates an import with an outflow value and shows it" do
+    csv_content = "date,amount,name,type\n2023-01-01,10.00,Coffee,Списання\n2023-01-02,5.00,Refund,Повернення"
+
+    post api_v1_imports_url,
+         params: {
+           raw_file_content: csv_content,
+           date_col_label: "date",
+           amount_col_label: "amount",
+           name_col_label: "name",
+           date_format: "%Y-%m-%d",
+           amount_type_strategy: "custom_column",
+           entity_type_col_label: "type",
+           amount_type_outflow_value: "Списання",
+           account_id: @account.id
+         },
+         headers: { Authorization: "Bearer #{@token}" }
+
+    assert_response :created
+    configuration = JSON.parse(response.body)["data"]["configuration"]
+    assert_equal "custom_column", configuration["amount_type_strategy"]
+    assert_equal "type", configuration["entity_type_col_label"]
+    assert_equal "Списання", configuration["amount_type_outflow_value"]
+    assert_nil configuration["amount_type_inflow_value"]
+
+    created_import = Import.find(JSON.parse(response.body)["data"]["id"])
+    assert_equal({ "Coffee" => 10, "Refund" => -5 }, created_import.rows.to_h { |row| [ row.name, row.signed_amount ] })
+  end
+
   test "should create import and generate rows when configured" do
     csv_content = "date,amount,name\n2023-01-01,-10.00,Test Transaction"
 

@@ -64,9 +64,11 @@ class Import::Row < ApplicationRecord
       if import.amount_type_strategy == "signed_amount"
         value * (import.signage_convention == "inflows_positive" ? -1 : 1)
       elsif import.amount_type_strategy == "custom_column"
-        inflow_value = import.amount_type_inflow_value
-
-        if entity_type == inflow_value
+        if import.amount_type_outflow_value.present?
+          # Rows with the outflow value are outflows and every other value (a deposit,
+          # a refund) is an inflow, whatever sign the amount column carries
+          entity_type == import.amount_type_outflow_value ? value.abs : -value.abs
+        elsif entity_type == import.amount_type_inflow_value
           value * -1
         else
           value

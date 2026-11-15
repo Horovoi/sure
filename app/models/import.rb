@@ -140,6 +140,7 @@ class Import < ApplicationRecord
   validates :rows_to_skip, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validate :account_belongs_to_family
   validate :rows_to_skip_within_file_bounds
+  validate :amount_type_values_exclusive
 
   has_many :rows, dependent: :destroy
   has_many :mappings, dependent: :destroy
@@ -354,7 +355,7 @@ class Import < ApplicationRecord
   end
 
   def configured?
-    uploaded? && rows_count > 0
+    uploaded? && rows_count > 0 && amount_type_configured?
   end
 
   def cleaned?
@@ -395,6 +396,7 @@ class Import < ApplicationRecord
         "entity_type_col_label", "notes_col_label", "currency_col_label",
         "date_format", "signage_convention", "number_format",
         "exchange_operating_mic_col_label",
+        "amount_type_strategy", "amount_type_inflow_value", "amount_type_outflow_value",
         "rows_to_skip"
       )
     )
@@ -402,6 +404,16 @@ class Import < ApplicationRecord
 
   def max_row_count
     10000
+  end
+
+  # The configuration form picks one value of the amount type column and what it
+  # means (Import::ConfigurationsController stores it in the matching column)
+  def amount_type_value
+    amount_type_outflow_value.presence || amount_type_inflow_value
+  end
+
+  def amount_type_direction
+    amount_type_outflow_value.present? ? "outflow" : "inflow"
   end
 
   # The currency a row is published in when it goes into +account+
@@ -685,6 +697,22 @@ class Import < ApplicationRecord
       mixed_words = words.count { |word| word.match?(/\p{Cyrillic}/) && word.match?(/\p{Latin}/) }
 
       cyrillic_words.positive? && mixed_words * 4 <= cyrillic_words
+    end
+
+    # A type column names either the inflow value (every other row is an outflow) or
+    # the outflow value (every other row is an inflow), never both.
+    def amount_type_values_exclusive
+      return unless amount_type_strategy == "custom_column"
+      return unless amount_type_inflow_value.present? && amount_type_outflow_value.present?
+
+      errors.add(:base, :amount_type_values_exclusive)
+    end
+
+    # A custom type column signs nothing until one of its values is chosen
+    def amount_type_configured?
+      return true unless amount_type_strategy == "custom_column"
+
+      amount_type_inflow_value.present? || amount_type_outflow_value.present?
     end
 
     def account_belongs_to_family

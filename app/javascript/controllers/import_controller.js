@@ -5,12 +5,14 @@ export default class extends Controller {
   static values = {
     csv: { type: Array, default: [] },
     amountTypeColumnKey: { type: String, default: "" },
+    amountTypeValuePrompt: { type: String, default: "" },
   };
 
   static targets = [
     "signedAmountFieldset",
     "customColumnFieldset",
     "amountTypeValue",
+    "amountTypeValueSelect",
     "amountTypeStrategySelect",
   ];
 
@@ -97,14 +99,16 @@ export default class extends Controller {
     this.amountTypeValueTarget.classList.remove("hidden");
     this.amountTypeValueTarget.classList.add("flex");
 
-    const select = this.amountTypeValueTarget.querySelector("select");
+    // The value select; the inflow/outflow select next to it keeps its options
+    const select = this.amountTypeValueSelectTarget;
     const currentValue = select.value;
     select.options.length = 0;
     const fragment = document.createDocumentFragment();
 
-    // Only add the prompt if there's no current value
-    if (!currentValue) {
-      fragment.appendChild(new Option("Select value", ""));
+    // Add the prompt unless the current value is one of the new column's values
+    // (after a column change the old value would otherwise pick the first option)
+    if (!currentValue || !selectableValues.includes(currentValue)) {
+      fragment.appendChild(new Option(this.amountTypeValuePromptValue, ""));
     }
 
     selectableValues.forEach((value) => {

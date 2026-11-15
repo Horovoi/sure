@@ -30,8 +30,39 @@ en:
       trade_import:
         date_format_label: Date format
       transaction_import:
+        account_label: Account
+        amount_label: Amount
+        amount_type_directions:
+          inflow: means income (inflow)
+          outflow: means spending (outflow)
+        amount_type_strategies:
+          custom_column: Custom column
+          signed_amount: Signed amount
+        amount_type_strategy_label: Amount type strategy
+        amount_type_strategy_prompt: Select strategy
+        amount_type_value_prompt: Select value
+        as_amount_type_column: as amount type column
+        category_label: Category
+        column_prompt: Select column
+        currency_default: Default
+        currency_label: Currency
         date_format_label: Date format
+        date_label: Date
+        format_prompt: Select format
+        leave_empty: Leave empty
+        name_label: Name
+        notes_label: Notes
+        number_format_label: Format
         rows_to_skip_label: Skip first n rows
+        rows_with: Rows with
+        set: Set
+        signage_convention_label: Amount type
+        signage_convention_prompt: Select convention
+        signage_conventions:
+          inflows_negative: Incomes are negative
+          inflows_positive: Incomes are positive
+        submit: Apply configuration
+        tags_label: Tags
     confirms:
       mappings:
         create_account: Create account
