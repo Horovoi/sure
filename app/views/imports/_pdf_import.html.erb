@@ -5,7 +5,7 @@
     inside still navigate the whole page. %>
 <%= turbo_frame_tag dom_id(import, :pdf_import),
       target: "_top",
-      class: "h-full",
+      class: "block h-full",
       data: import.processing? ? {
         controller: "polling",
         polling_url_value: import_path(import),
