@@ -572,7 +572,52 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ row.id ], audit.result_record_ids
   end
 
-  # --- Turn token (the in-app Claude chat) -----------------------------------------------------------------
+  # --- Budget tools ----------------------------------------------------------------------------------------
+
+  test "tools/list has get_budget as a read and update_budget as an idempotent write" do
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      tools = rpc_result["tools"].index_by { |tool| tool["name"] }
+      assert_equal true, tools["get_budget"].dig("annotations", "readOnlyHint")
+      assert_equal false, tools["update_budget"].dig("annotations", "readOnlyHint")
+      assert_equal true, tools["update_budget"].dig("annotations", "idempotentHint")
+      assert_equal [ "amount" ], tools["update_budget"].dig("inputSchema", "required")
+    end
+  end
+
+  test "a read-scope credential lists get_budget but not update_budget" do
+    Mcp::Credential.stubs(:static).returns(Mcp::Credential.new(user: @user, kind: :static, scope: :read))
+
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      names = rpc_result["tools"].map { |tool| tool["name"] }
+      assert_includes names, "get_budget"
+      assert_not_includes names, "update_budget"
+    end
+  end
+
+  test "tools/call update_budget sets the total and audits the budget with its state before" do
+    budget = Budget.find_or_bootstrap(@user.family, start_date: Date.current)
+    budget.update!(budgeted_spending: 1000, expected_income: 0)
+
+    with_mcp_env do
+      mcp_post "tools/call", params: { name: "update_budget", arguments: { month: budget.start_date.iso8601, amount: 1500 } }
+
+      assert_response :success
+      assert_equal false, rpc_result["isError"]
+    end
+
+    assert_equal 1500, budget.reload.budgeted_spending
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "update_budget", audit.tool_name
+    assert_equal "Budget", audit.result_record_type
+    assert_equal [ budget.id ], audit.result_record_ids
+    assert_equal 1000.0, audit.audit_before["budgeted_spending"]
+  end
+
+  # --- Turn token (the in-app Claude chat)-----------------------------------------------------------------
   # The turn token always has scope :full: the chat gets every tool with no approval prompt (owner answer 2).
   # No test may assert that the Claude chat lacks write, delete, rule or transfer tools.
 

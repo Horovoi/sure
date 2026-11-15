@@ -48,7 +48,11 @@ class Assistant
         Assistant::Function::UpdateSubscription,
         Assistant::Function::ReviewSubscriptionSuggestion,
         Assistant::Function::SkipSubscriptionOccurrence,
-        Assistant::Function::RecordSubscriptionCharge
+        Assistant::Function::RecordSubscriptionCharge,
+
+        # Budgets: one period's amounts and spending, then one amount at a time
+        Assistant::Function::GetBudget,
+        Assistant::Function::UpdateBudget
       ]
     end
 
