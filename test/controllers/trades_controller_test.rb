@@ -157,6 +157,30 @@ class TradesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to account_url(created_entry.account)
   end
 
+  # The type select shows its fields in the browser, so every type's fields are on
+  # the page; the other types' are in a disabled fieldset, which is not sent
+  test "new trade form enables only the fields of a buy" do
+    get new_trade_url(account_id: @entry.account_id)
+
+    assert_response :ok
+    assert_select "select[name='model[type]'] option[selected][value='buy']"
+    assert_select "fieldset[data-types='buy sell']:not([disabled]):not([hidden])", count: 2
+    assert_select "fieldset[data-types='deposit withdrawal interest'][disabled][hidden]"
+    assert_select "fieldset[data-types='deposit withdrawal'][disabled][hidden]"
+  end
+
+  test "a failed sell shows the form again as a sell" do
+    assert_no_difference "Entry.count" do
+      post trades_url(account_id: @entry.account_id), params: {
+        model: { type: "sell", manual_ticker: "AAPL", date: "", currency: "USD", qty: 10, price: 10 }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_select "select[name='model[type]'] option[selected][value='sell']"
+    assert_select "fieldset[data-types='buy sell']:not([disabled])", count: 2
+  end
+
   test "show labels a buy trade Buy" do
     assert @entry.amount.positive?
     assert @entry.trade.qty.positive?
