@@ -84,23 +84,17 @@
         data: { subscription_form_target: "nameField" } %>
   </div>
 
-  <%# Amount and Currency %>
-  <div class="grid grid-cols-2 gap-4">
-    <div class="space-y-2">
-      <%= f.number_field :amount,
-          label: t("subscriptions.form.amount"),
-          step: 0.01,
-          min: 0,
-          required: true,
-          value: subscription.amount.present? ? subscription.amount.abs : nil,
-          data: { subscription_form_target: "amountField", action: "input->subscription-form#updateConversionHint" } %>
-    </div>
-    <div class="space-y-2">
-      <%= f.select :currency,
-          Money::Currency.as_options.map { |c| [c.iso_code, c.iso_code] },
-          { label: t("subscriptions.form.currency"), selected: subscription.currency || Current.family.currency },
-          { required: true, data: { subscription_form_target: "currencySelect", action: "change->subscription-form#updateConversionHint" } } %>
-    </div>
+  <%# Amount and currency: the money field takes "12,50" and "120+35,5" and offers
+      the family's enabled currencies plus the subscription's own. %>
+  <div class="space-y-2">
+    <%= f.money_field :amount,
+        label: t("subscriptions.form.amount"),
+        min: 0,
+        required: true,
+        value: subscription.amount&.abs,
+        default_currency: Current.family.currency,
+        amount_data: { subscription_form_target: "amountField", action: "input->subscription-form#updateConversionHint" },
+        currency_data: { subscription_form_target: "currencySelect", action: "change->subscription-form#updateConversionHint" } %>
   </div>
 
   <%# Currency conversion hint %>

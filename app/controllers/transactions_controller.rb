@@ -433,6 +433,10 @@ class TransactionsController < ApplicationController
 
       nature = entry_params.delete(:nature)
 
+      # A blank amount (the drawer's other fields auto-submitting, or a field
+      # left empty) must not reach the model as nil: it would clear the amount.
+      entry_params.delete(:amount) if entry_params[:amount].blank?
+
       # A user can only toggle "one-time". Transfer kinds are written by Transfer alone, so a
       # transfer leg keeps its kind.
       if entry_params[:entryable_attributes]&.key?(:kind)

@@ -46,6 +46,147 @@
   </div>
 <% end %>
 
+<% if Current.user.admin? %>
+  <%# Which currencies the money fields offer. The base currency is always one of them. %>
+  <%= settings_section title: t(".currencies_title"), subtitle: t(".currencies_subtitle") do %>
+    <% family = @user.family %>
+    <% primary_currency_code = family.primary_currency_code %>
+    <% additional_currencies = family.secondary_enabled_currency_objects %>
+    <% additional_preview_currencies = additional_currencies.first(6) %>
+    <div class="space-y-4"
+         data-controller="currency-preferences"
+         data-currency-preferences-base-currency-value="<%= primary_currency_code %>"
+         data-currency-preferences-locale-value="<%= I18n.locale %>"
+         data-currency-preferences-selected-count-translations-value="<%= t(".selected_currencies_count").to_json %>">
+      <div class="rounded-xl border border-secondary p-4 bg-container-inset">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-secondary"><%= t(".base_currency_label") %></p>
+            <div class="mt-2">
+              <p class="text-sm font-medium text-primary"><%= primary_currency_code %></p>
+              <p class="text-sm text-secondary"><%= currency_label(primary_currency_code) %></p>
+            </div>
+          </div>
+          <div class="md:border-l md:border-secondary md:pl-4">
+            <p class="text-xs font-medium uppercase tracking-wide text-secondary"><%= t(".additional_currencies_label") %></p>
+            <% if !family.custom_enabled_currencies? %>
+              <p class="mt-2 text-sm text-secondary"><%= t(".all_currencies_enabled") %></p>
+            <% elsif additional_preview_currencies.any? %>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <% additional_preview_currencies.each do |currency| %>
+                  <%= render DS::Pill.new(label: currency.iso_code, tone: :neutral, marker: false) %>
+                <% end %>
+                <% if additional_currencies.size > additional_preview_currencies.size %>
+                  <%= render DS::Pill.new(
+                        label: t(".currencies_more", count: additional_currencies.size - additional_preview_currencies.size),
+                        tone: :neutral,
+                        marker: false
+                      ) %>
+                <% end %>
+              </div>
+            <% else %>
+              <p class="mt-2 text-sm text-secondary"><%= t(".no_additional_currencies") %></p>
+            <% end %>
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <%= render DS::Button.new(
+              text: t(".manage_currencies"),
+              type: :button,
+              class: "md:w-auto w-full justify-center",
+              data: { action: "currency-preferences#open" }
+            ) %>
+      </div>
+      <%= render DS::Dialog.new(
+            id: "currency-preferences-dialog",
+            auto_open: false,
+            disable_frame: true,
+            width: "md",
+            data: { currency_preferences_target: "dialog" }
+          ) do |dialog| %>
+        <% dialog.with_header(title: t(".manage_currencies"), subtitle: t(".manage_currencies_subtitle")) %>
+        <% dialog.with_body do %>
+          <% selected_currency_codes = family.enabled_currency_codes %>
+          <% base_currency_rows, other_currency_rows = Money::Currency.as_options.partition { |currency| currency.iso_code == primary_currency_code } %>
+          <%= styled_form_with model: @user, url: user_path(@user), class: "space-y-4", data: { action: "turbo:submit-end->currency-preferences#handleSubmitEnd" } do |form| %>
+            <%= form.hidden_field :redirect_to, value: "preferences" %>
+            <%= hidden_field_tag "user[family_attributes][id]", family.id, id: nil %>
+            <%# The base currency's checkbox is disabled (so not sent); this keeps it in the list. %>
+            <%= hidden_field_tag "user[family_attributes][enabled_currencies][]", primary_currency_code, id: nil %>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex flex-wrap gap-2">
+                <%= render DS::Button.new(
+                      text: t(".select_all_currencies"),
+                      type: :button,
+                      variant: :ghost,
+                      size: :sm,
+                      data: { action: "currency-preferences#selectAll" }
+                    ) %>
+                <%= render DS::Button.new(
+                      text: t(".select_base_only"),
+                      type: :button,
+                      variant: :ghost,
+                      size: :sm,
+                      data: { action: "currency-preferences#selectBaseOnly" }
+                    ) %>
+              </div>
+              <p class="text-sm font-medium text-secondary"
+                 data-currency-preferences-target="selectedCount"
+                 role="status"
+                 aria-live="polite"
+                 aria-atomic="true"></p>
+            </div>
+            <div data-controller="list-filter" class="space-y-3">
+              <%= render DS::SearchInput.new(
+                    placeholder: t(".currency_search_placeholder"),
+                    data: { list_filter_target: "input", action: "input->list-filter#filter" }
+                  ) %>
+              <div data-list-filter-target="list" class="max-h-80 overflow-auto rounded-xl border border-secondary divide-y divide-subdued">
+                <p class="hidden px-4 py-3 text-sm text-secondary" data-list-filter-target="emptyMessage">
+                  <%= t(".no_matching_currencies") %>
+                </p>
+                <% (base_currency_rows + other_currency_rows).each do |currency| %>
+                  <% base_currency = currency.iso_code == primary_currency_code %>
+                  <label class="<%= class_names(
+                           "filterable-item flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-surface-inset",
+                           "bg-surface-inset cursor-default": base_currency
+                         ) %>"
+                         data-filter-name="<%= "#{currency.iso_code} #{currency.name}" %>">
+                    <%= check_box_tag "user[family_attributes][enabled_currencies][]",
+                          currency.iso_code,
+                          selected_currency_codes.include?(currency.iso_code),
+                          id: "enabled_currency_#{currency.iso_code.downcase}",
+                          disabled: base_currency,
+                          class: "checkbox checkbox--light mt-0.5",
+                          data: {
+                            currency_preferences_target: "checkbox",
+                            action: "change->currency-preferences#updateSelectedCount"
+                          } %>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium text-primary"><%= currency.iso_code %></span>
+                        <% if base_currency %>
+                          <%= render DS::Pill.new(label: t(".base_currency_badge"), tone: :neutral, marker: false) %>
+                        <% end %>
+                      </div>
+                      <p class="mt-0.5 text-sm text-secondary"><%= currency.name %></p>
+                    </div>
+                  </label>
+                <% end %>
+              </div>
+            </div>
+            <div class="flex justify-end gap-2">
+              <%= render DS::Button.new(text: t(".cancel"), type: :button, variant: :ghost, data: { action: "DS--dialog#close" }) %>
+              <%= render DS::Button.new(text: t(".save_currencies"), type: :submit) %>
+            </div>
+          <% end %>
+        <% end %>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>
+
 <!-- Moved Budgeting to Advanced > Budgeting page -->
 
 <%= settings_section title: t(".theme_title"), subtitle: t(".theme_subtitle") do %>

@@ -13,7 +13,10 @@
   <section class="space-y-2">
     <%= f.collection_select :from_account_id, Current.family.accounts.alphabetically, :id, :name, { prompt: t(".select_account"), label: t(".from"), selected: @from_account_id }, required: true %>
     <%= f.collection_select :to_account_id, Current.family.accounts.alphabetically, :id, :name, { prompt: t(".select_account"), label: t(".to") }, required: true %>
-    <%= f.number_field :amount, label: t(".amount"), required: true, min: 0, placeholder: "100", step: 0.00000001 %>
+    <%# The amount is in the source account's currency, which the transfer takes
+        from it, so no currency picker or symbol is shown. step "any" keeps a
+        crypto amount's eight decimals without padding every amount to them. %>
+    <%= f.money_field :amount, label: t(".amount"), required: true, min: 0, hide_currency: true, hide_symbol: true, step: "any" %>
     <%= f.date_field :date, value: transfer.inflow_transaction&.entry&.date || Date.current, label: t(".date"), required: true, max: Date.current %>
   </section>
 

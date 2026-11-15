@@ -7,7 +7,14 @@ en:
       cancel: Cancel
       title: Are you sure?
     money_field:
+      above_max: Enter an amount of at most %{max}.
+      below_min: Enter an amount of at least %{min}.
+      invalid_amount: Enter a valid amount or calculation, such as 12,50 or 120+35,5.
       label: Amount
+      operator_add: Add
+      operator_divide: Divide
+      operator_multiply: Multiply
+      operator_subtract: Subtract
     require_family_admin:
       not_authorized: Only a family admin can do that.
     syncing_notice:

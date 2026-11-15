@@ -210,4 +210,68 @@ class Family < ApplicationRecord
   def self_hoster?
     Rails.application.config.app_mode.self_hosted?
   end
+
+  # --- Enabled currencies (w1-ds money field) ---
+  # enabled_currencies narrows the money fields' currency pickers. NULL means
+  # every currency. The base currency is always part of the list, and a
+  # record's own currency is added by the caller (`extra:`), so an amount in a
+  # currency that was turned off later still shows its currency.
+
+  def primary_currency_code
+    self.class.normalize_currency_code(currency) || "USD"
+  end
+
+  def custom_enabled_currencies?
+    enabled_currencies.present?
+  end
+
+  def enabled_currency_codes(extra: [])
+    selected_codes = if custom_enabled_currencies?
+      [ primary_currency_code, *Array(enabled_currencies) ]
+    else
+      Money::Currency.as_options.map(&:iso_code)
+    end
+
+    self.class.normalize_currency_codes([ *selected_codes, *Array(extra) ])
+  end
+
+  def enabled_currency_objects(extra: [])
+    enabled_currency_codes(extra:).map { |code| Money::Currency.new(code) }
+  end
+
+  def secondary_enabled_currency_objects(extra: [])
+    enabled_currency_objects(extra:).reject { |currency| currency.iso_code == primary_currency_code }
+  end
+
+  def self.normalize_currency_codes(values)
+    Array(values).filter_map { |value| normalize_currency_code(value) }.uniq
+  end
+
+  def self.normalize_currency_code(value)
+    return if value.blank?
+
+    Money::Currency.new(value).iso_code
+  rescue Money::Currency::UnknownCurrencyError, ArgumentError
+    nil
+  end
+
+  before_validation :normalize_enabled_currencies
+
+  private
+    # Blank, or every currency ticked, is stored as NULL ("all"), so a currency
+    # added to config/currencies.yml later is offered without a settings change.
+    # Unknown codes are dropped, and the base currency is always kept.
+    def normalize_enabled_currencies
+      return unless will_save_change_to_enabled_currencies? || enabled_currencies.present?
+
+      if enabled_currencies.blank?
+        self.enabled_currencies = nil
+        return
+      end
+
+      normalized_codes = self.class.normalize_currency_codes([ primary_currency_code, *Array(enabled_currencies) ])
+      all_codes = Money::Currency.as_options.map(&:iso_code)
+      all_selected = normalized_codes.size == all_codes.size && (normalized_codes - all_codes).empty?
+      self.enabled_currencies = all_selected ? nil : normalized_codes
+    end
 end

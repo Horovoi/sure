@@ -141,7 +141,7 @@ class UsersController < ApplicationController
       permitted = params.expect(user: [
         :first_name, :last_name, :email, :profile_image, :redirect_to, :delete_profile_image, :onboarding_step,
         :show_sidebar, :default_period, :default_account_order, :show_ai_sidebar, :ai_enabled, :theme,
-        family_attributes: [ :name, :currency, :country, :locale, :date_format, :timezone, :use_fiscal_months, :fiscal_month_start_day, :id ],
+        family_attributes: [ :name, :currency, :country, :locale, :date_format, :timezone, :use_fiscal_months, :fiscal_month_start_day, :id, { enabled_currencies: [] } ],
         goals: []
       ])
       family_attributes_refused? ? permitted.except(:family_attributes) : permitted

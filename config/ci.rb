@@ -11,4 +11,7 @@ CI.run do
 
   step "Tests: Rails", "bin/rails test"
   step "Tests: System", "bin/rails test:system"
+
+  # w1-ds: the pure JS helpers the money field and charts share (amount parsing, paste)
+  step "Tests: JavaScript", "node --test 'test/javascript/*_test.mjs'"
 end

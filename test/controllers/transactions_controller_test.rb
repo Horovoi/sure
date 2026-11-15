@@ -468,4 +468,34 @@ end
 
     assert_not_includes entry.transaction.reload.tag_ids, tag.id
   end
+
+  # --- Money field (w1-ds) ---
+
+  test "the amount is a decimal text field and the currencies follow the family's list" do
+    @user.family.update!(currency: "UAH", enabled_currencies: [ "UAH", "USD" ])
+
+    get new_transaction_url(account_id: accounts(:depository).id)
+
+    assert_response :success
+    assert_select "input[type=text][name='entry[amount]'][inputmode=decimal]"
+    options = css_select("select[name='entry[currency]'] option").map { |option| option["value"] }
+    # The account's own currency is always offered on top of the family's list.
+    assert_equal [ "UAH", "USD", accounts(:depository).currency ].uniq, options
+  end
+
+  test "the currency select keeps the money field's handler" do
+    get new_transaction_url
+
+    assert_select "select[name='entry[currency]'][data-action*='money-field#handleCurrencyChange']"
+  end
+
+  test "a blank amount in the drawer does not clear the saved amount" do
+    entry = entries(:transaction)
+    original = entry.amount
+
+    patch transaction_url(entry), params: { entry: { amount: "", notes: "Kept" } }
+
+    assert_equal original, entry.reload.amount
+    assert_equal "Kept", entry.notes
+  end
 end
