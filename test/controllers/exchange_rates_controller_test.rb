@@ -1,6 +1,8 @@
 require "test_helper"
 
 class ExchangeRatesControllerTest < ActionDispatch::IntegrationTest
+  include ProviderTestHelper
+
   setup do
     sign_in users(:family_admin)
     ExchangeRate.stubs(:provider).returns(nil)
@@ -47,10 +49,18 @@ class ExchangeRatesControllerTest < ActionDispatch::IntegrationTest
     assert_nil response.parsed_body["rate"]
   end
 
+  # A stored rate is always above zero (validation and chk_exchange_rates_rate_positive),
+  # so a zero can only come from the provider
   test "a rate of zero is no rate" do
-    ExchangeRate.create!(from_currency: "PLN", to_currency: "UAH", date: Date.current, rate: 0)
+    provider = mock
+    provider.expects(:fetch_exchange_rate).at_least_once.returns(
+      provider_success_response(OpenStruct.new(from: "PLN", to: "UAH", date: Date.current, rate: 0))
+    )
+    ExchangeRate.stubs(:provider).returns(provider)
 
-    get exchange_rate_url(from: "PLN", to: "UAH")
+    assert_no_difference "ExchangeRate.count" do
+      get exchange_rate_url(from: "PLN", to: "UAH")
+    end
 
     assert_response :not_found
   end
