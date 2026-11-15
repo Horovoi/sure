@@ -28,8 +28,10 @@
         </p>
       </div>
 
-      <div class="space-y-1">
-        <%= label_tag "budget_category_move_amount", t("budget_categories.move.amount_label"), class: "text-sm text-secondary" %>
+      <%# .form-field gives the inputs their border and focus halo; a bare
+          .form-field__input has none %>
+      <div class="form-field">
+        <%= label_tag "budget_category_move_amount", t("budget_categories.move.amount_label"), class: "form-field__label" %>
         <%= number_field_tag "budget_category_move[amount]", nil,
                              id: "budget_category_move_amount",
                              step: Money::Currency.new(budget.currency).step,
@@ -40,8 +42,8 @@
                              data: { budget_move_target: "amount" } %>
       </div>
 
-      <div class="space-y-1">
-        <%= label_tag "to_id", t("budget_categories.move.to_label"), class: "text-sm text-secondary" %>
+      <div class="form-field">
+        <%= label_tag "to_id", t("budget_categories.move.to_label"), class: "form-field__label" %>
         <%= select_tag "to_id",
                        safe_join(budget_categories.sort_by { |bc| bc.category.name_with_parent }.map { |bc|
                          tag.option(bc.category.name_with_parent,

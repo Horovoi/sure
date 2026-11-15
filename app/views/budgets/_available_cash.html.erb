@@ -28,7 +28,8 @@
     <div class="flex items-baseline justify-between gap-3 border-b border-subdued pb-2">
       <dt class="text-sm text-secondary"><%= t("budgets.available_cash.earmarked") %></dt>
       <dd class="text-sm text-secondary tabular-nums privacy-sensitive" data-testid="budget-earmarked-for-goals">
-        &minus;<%= format_money budget.earmarked_for_goals_money %>
+        <%# A minus only before a real amount: nothing earmarked reads 0.00, not -0.00 %>
+        <%= "\u2212" if budget.earmarked_for_goals_money.positive? %><%= format_money budget.earmarked_for_goals_money %>
       </dd>
     </div>
 
