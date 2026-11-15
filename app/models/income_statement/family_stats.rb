@@ -1,8 +1,11 @@
 class IncomeStatement::FamilyStats
-  def initialize(family, interval: "month", exclude_current_period: false)
+  # today: the family's date (Date.current in its time zone). It decides which period
+  # is the current one; Postgres CURRENT_DATE is the UTC date, a day off around midnight.
+  def initialize(family, interval: "month", exclude_current_period: false, today: Date.current)
     @family = family
     @interval = interval
     @exclude_current_period = exclude_current_period
+    @today = today.to_date
   end
 
   def call
@@ -26,7 +29,8 @@ class IncomeStatement::FamilyStats
           interval: @interval,
           family_id: @family.id,
           offset_days: fiscal_offset_days,
-          exclude_current_period: (@exclude_current_period ? 1 : 0)
+          exclude_current_period: (@exclude_current_period ? 1 : 0),
+          today: @today
         }
       ])
     end
@@ -39,16 +43,11 @@ class IncomeStatement::FamilyStats
               :interval,
               CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
             ) as period,
-            CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END as classification,
-            SUM(ae.amount * COALESCE(er.rate, 1)) as total
+            #{classification_sql} as classification,
+            SUM(CASE WHEN t.kind = 'investment_contribution' THEN ABS(ae.amount * #{rate_sql}) ELSE ae.amount * #{rate_sql} END) as total
           FROM transactions t
           JOIN entries ae ON ae.entryable_id = t.id AND ae.entryable_type = 'Transaction'
           JOIN accounts a ON a.id = ae.account_id
-          LEFT JOIN exchange_rates er ON (
-            er.date = ae.date AND
-            er.from_currency = ae.currency AND
-            er.to_currency = :target_currency
-          )
           WHERE a.family_id = :family_id
             AND #{Account.visible_status_sql("a")}
             AND t.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
@@ -60,10 +59,10 @@ class IncomeStatement::FamilyStats
                 CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
               ) < date_trunc(
                 :interval,
-                CASE WHEN :offset_days > 0 THEN (CURRENT_DATE - make_interval(days => :offset_days)) ELSE CURRENT_DATE END
+                CASE WHEN :offset_days > 0 THEN (CAST(:today AS date) - make_interval(days => :offset_days)) ELSE CAST(:today AS date) END
               )
             )
-          GROUP BY period, CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
+          GROUP BY period, #{classification_sql}
         )
         SELECT
           classification,
@@ -72,6 +71,18 @@ class IncomeStatement::FamilyStats
         FROM period_totals
         GROUP BY classification;
       SQL
+    end
+
+    # The nearest stored rate of the entry's day. NULL when its currency has no rate at all:
+    # the amount drops out of the SUM, and a period with nothing convertible has a NULL total.
+    def rate_sql
+      ExchangeRate.rate_sql(from: "ae.currency", to: ":target_currency", on: "ae.date")
+    end
+
+    # Same as IncomeStatement::Totals: an investment contribution is an expense whatever
+    # its sign (a provider may import a payroll contribution as an inflow)
+    def classification_sql
+      "CASE WHEN t.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END"
     end
 
     def fiscal_offset_days

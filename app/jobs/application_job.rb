@@ -21,8 +21,9 @@ class ApplicationJob < ActiveJob::Base
       nil
     end
 
+    # A family whose time zone cannot be resolved runs in UTC (Family#resolved_time_zone)
     def in_time_zone_of(family, &block)
-      zone = family&.timezone.presence
+      zone = family.try(:resolved_time_zone)
       zone ? Time.use_zone(zone, &block) : block.call
     end
 

@@ -65,4 +65,37 @@ class RuleRunTest < ActiveSupport::TestCase
 
     assert_equal [ old ], RuleRun.stale.to_a
   end
+
+  test "fail_job! writes one error entry to the debug log" do
+    transaction_error = RuntimeError.new("Fixed prompt tokens exceed context budget")
+
+    assert_difference -> { DebugLogEntry.where(category: "rule_run", level: "error").count }, 1 do
+      RuleRun.find(@run.id).fail_job!(transaction_error, source: "AutoCategorizeJob")
+    end
+
+    entry = DebugLogEntry.order(:created_at).last
+    assert_equal "AutoCategorizeJob", entry.source
+    assert_equal @rule.family, entry.family
+    assert_equal @run.id, entry.metadata["rule_run_id"]
+    assert_equal @rule.id, entry.metadata["rule_id"]
+    assert_equal "RuntimeError", entry.metadata["error_class"]
+    assert_equal "Fixed prompt tokens exceed context budget", entry.metadata["error_message"]
+  end
+
+  test "a second failing job on the same run does not log again" do
+    assert_difference -> { DebugLogEntry.count }, 1 do
+      RuleRun.find(@run.id).fail_job!(StandardError.new("first"))
+      RuleRun.find(@run.id).fail_job!(StandardError.new("second"))
+    end
+
+    assert_equal 0, @run.reload.pending_jobs_count
+  end
+
+  test "report_job logs a failed AI job under the job name" do
+    assert_difference -> { DebugLogEntry.where(source: "AutoCategorizeJob").count }, 1 do
+      RuleRun.report_job(@run.id, "AutoCategorizeJob") { raise Family::AutoCategorizer::Error, "LLM down" }
+    end
+
+    assert @run.reload.failed?
+  end
 end

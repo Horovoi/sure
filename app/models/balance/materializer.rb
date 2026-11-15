@@ -1,4 +1,19 @@
 class Balance::Materializer
+  # Upsert in chunks, so one statement never carries a multi-year history
+  PERSIST_BATCH_SIZE = 2_000
+
+  # The columns persisted from each calculated balance. Read by name, so both a
+  # Balance::BalanceData and a Balance record work.
+  PERSISTED_COLUMNS = %w[
+    date balance cash_balance currency
+    start_cash_balance start_non_cash_balance
+    cash_inflows cash_outflows
+    non_cash_inflows non_cash_outflows
+    net_market_flows
+    cash_adjustments non_cash_adjustments
+    flows_factor
+  ].freeze
+
   attr_reader :account, :strategy
 
   def initialize(account, strategy:)
@@ -53,22 +68,20 @@ class Balance::Materializer
 
     def calculate_balances
       @balances = calculator.calculate
+      # One debug log entry for the entries left out and holdings kept at 1:1 for want of
+      # an exchange rate
+      calculator.report_unconverted_amounts
     end
 
     def persist_balances
       current_time = Time.now
-      account.balances.upsert_all(
-        @balances.map { |b| b.attributes
-               .slice("date", "balance", "cash_balance", "currency",
-                      "start_cash_balance", "start_non_cash_balance",
-                      "cash_inflows", "cash_outflows",
-                      "non_cash_inflows", "non_cash_outflows",
-                      "net_market_flows",
-                      "cash_adjustments", "non_cash_adjustments",
-                      "flows_factor")
-               .merge("updated_at" => current_time) },
-        unique_by: %i[account_id date currency]
-      )
+
+      @balances.each_slice(PERSIST_BATCH_SIZE) do |slice|
+        account.balances.upsert_all(
+          slice.map { |b| PERSISTED_COLUMNS.to_h { |column| [ column, b.public_send(column) ] }.merge("updated_at" => current_time) },
+          unique_by: %i[account_id date currency]
+        )
+      end
     end
 
     def purge_stale_balances
@@ -79,15 +92,16 @@ class Balance::Materializer
         return
       end
 
-      sorted_balances = @balances.sort_by(&:date)
-      oldest_calculated_balance_date = sorted_balances.first&.date
-      newest_calculated_balance_date = sorted_balances.last&.date
+      oldest_balance, newest_balance = @balances.minmax_by(&:date)
+      oldest_calculated_balance_date = oldest_balance.date
+      newest_calculated_balance_date = newest_balance.date
       deleted_count = account.balances.delete_by("date < ? OR date > ?", oldest_calculated_balance_date, newest_calculated_balance_date)
       Rails.logger.info("Purged #{deleted_count} stale balances") if deleted_count > 0
     end
 
+    # Memoized, so the unconverted-amounts report reads the cache the calculation built
     def calculator
-      if strategy == :reverse
+      @calculator ||= if strategy == :reverse
         Balance::ReverseCalculator.new(account)
       else
         Balance::ForwardCalculator.new(account)

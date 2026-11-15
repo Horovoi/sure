@@ -129,6 +129,10 @@ en:
       edit_merchants: Edit merchants
       edit_tags: Edit tags
       import: Import
+    summary:
+      expenses: Expenses
+      income: Income
+      total_transactions: Total transactions
     index:
       transaction: transaction
       transactions: transactions

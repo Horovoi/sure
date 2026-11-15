@@ -1,0 +1,41 @@
+<%# locals: (entries:) %>
+<%# Rendered twice: inline in the settings card, and again inside the expanded
+    dialog where it gets most of the viewport width. The sticky header only has a
+    scroll container to stick to in the expanded copy; inline it is inert. %>
+<table class="w-full">
+  <thead class="bg-surface border-b border-primary sticky top-0 z-10">
+    <tr>
+      <% %w[time level category source message context metadata].each do |column| %>
+        <th class="px-4 py-3 text-left text-xs font-medium text-secondary uppercase"><%= t("settings.debugs.show.table.#{column}") %></th>
+      <% end %>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-alpha-black-200 theme-dark:divide-alpha-white-200">
+    <% missing = t("settings.debugs.show.missing_value") %>
+    <% entries.each do |entry| %>
+      <tr>
+        <td class="px-4 py-3 text-sm text-primary whitespace-nowrap align-top"><%= l(entry.created_at, format: :long) %></td>
+        <td class="px-4 py-3 text-sm text-primary whitespace-nowrap align-top"><%= entry.level %></td>
+        <td class="px-4 py-3 text-sm text-primary whitespace-nowrap align-top"><%= entry.category %></td>
+        <td class="px-4 py-3 text-sm text-primary font-mono align-top"><%= entry.source %></td>
+        <td class="px-4 py-3 text-sm text-primary align-top whitespace-pre-wrap break-words"><%= entry.message %></td>
+        <td class="px-4 py-3 text-xs text-secondary font-mono whitespace-nowrap align-top">
+          <div><%= t("settings.debugs.show.context.provider", value: entry.provider_key.presence || missing) %></div>
+          <div><%= t("settings.debugs.show.context.family", value: entry.family_id || missing) %></div>
+          <div><%= t("settings.debugs.show.context.account", value: entry.account_id || missing) %></div>
+          <div><%= t("settings.debugs.show.context.user", value: entry.user_id || missing) %></div>
+        </td>
+        <td class="px-4 py-3 text-xs text-secondary align-top">
+          <% if entry.metadata.present? %>
+            <details>
+              <summary class="cursor-pointer"><%= t("settings.debugs.show.table.view_metadata") %></summary>
+              <pre class="mt-2 whitespace-pre-wrap break-words"><%= JSON.pretty_generate(entry.metadata) %></pre>
+            </details>
+          <% else %>
+            <%= missing %>
+          <% end %>
+        </td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>

@@ -29,7 +29,14 @@ class UsersController < ApplicationController
     else
       was_ai_enabled = @user.ai_enabled
       @user.assign_attributes(onboarding_step_timestamps)
-      @user.update!(user_params.except(:redirect_to, :delete_profile_image, :onboarding_step))
+      # A rejected value (an unknown family time zone or currency) is shown, not a 500
+      unless @user.update(user_params.except(:redirect_to, :delete_profile_image, :onboarding_step))
+        respond_to do |format|
+          format.html { redirect_to(user_params[:redirect_to] == "preferences" ? settings_preferences_path : settings_profile_path, alert: @user.errors.full_messages.to_sentence) }
+          format.json { render json: { errors: @user.errors.full_messages }, status: :unprocessable_entity }
+        end
+        return
+      end
       @user.profile_image.purge if should_purge_profile_image?
 
       # Add a special notice if AI was just enabled or disabled

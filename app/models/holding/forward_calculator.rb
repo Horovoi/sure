@@ -3,8 +3,10 @@ class Holding::ForwardCalculator
 
   def initialize(account)
     @account = account
-    # Track cost basis per security: { security_id => { total_cost: BigDecimal, total_qty: BigDecimal } }
-    @cost_basis_tracker = Hash.new { |h, k| h[k] = { total_cost: BigDecimal("0"), total_qty: BigDecimal("0") } }
+    # Track cost basis per security: { security_id => { total_cost: BigDecimal, total_qty: BigDecimal, unknown: Boolean } }
+    # unknown is set once a purchase cannot be converted into the account currency: an
+    # average that leaves it out (or counts it at 1) would be a wrong figure, not a partial one.
+    @cost_basis_tracker = Hash.new { |h, k| h[k] = { total_cost: BigDecimal("0"), total_qty: BigDecimal("0"), unknown: false } }
   end
 
   def calculate
@@ -21,6 +23,7 @@ class Holding::ForwardCalculator
         current_portfolio = next_portfolio
       end
 
+      portfolio_cache.report_unconverted(source: "Holding::ForwardCalculator")
       Holding.gapfill(holdings)
     end
   end
@@ -61,7 +64,7 @@ class Holding::ForwardCalculator
           next
         end
 
-        Holding.new(
+        Holding::HoldingData.new(
           account_id: account.id,
           security_id: security_id,
           date: date,
@@ -83,20 +86,26 @@ class Holding::ForwardCalculator
 
         security_id = trade.security_id
         tracker = @cost_basis_tracker[security_id]
+        next if tracker[:unknown]
 
-        # Convert trade price to account currency if needed
-        trade_price = Money.new(trade.price, trade.currency)
-        converted_price = trade_price.exchange_to(account.currency, fallback_rate: 1).amount
+        # The trade price in the account currency at the trade's own date
+        converted_price = portfolio_cache.trade_price_in_account_currency(trade, trade_entry.date)
+
+        if converted_price.nil?
+          tracker[:unknown] = true
+          next
+        end
 
         tracker[:total_cost] += converted_price * trade.qty
         tracker[:total_qty] += trade.qty
       end
     end
 
-    # Returns the current cost basis for a security, or nil if no buys recorded
+    # Returns the current cost basis for a security, or nil if no buys recorded or a
+    # purchase has no exchange rate into the account currency
     def cost_basis_for(security_id, currency)
       tracker = @cost_basis_tracker[security_id]
-      return nil if tracker[:total_qty].zero?
+      return nil if tracker[:unknown] || tracker[:total_qty].zero?
 
       tracker[:total_cost] / tracker[:total_qty]
     end

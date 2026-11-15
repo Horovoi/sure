@@ -58,6 +58,64 @@ class MoneyTest < ActiveSupport::TestCase
     assert_raise(TypeError) { 1000 / Money.new(2) }
   end
 
+  test "mixing currencies raises in strict mode" do
+    usd = Money.new(200, :usd)
+    eur = Money.new(180, :eur)
+
+    assert Money.strict_currency?, "development and test run in strict mode"
+
+    %i[+ - / <=> > < >= <=].each do |operator|
+      error = assert_raises(Money::CurrencyMismatchError, "#{operator} must not mix currencies") { usd.public_send(operator, eur) }
+      assert_equal "USD", error.left_currency
+      assert_equal "EUR", error.right_currency
+    end
+  end
+
+  test "amounts in different currencies are not equal, without raising" do
+    assert_not_equal Money.new(100, :usd), Money.new(100, :eur)
+    assert_not Money.new(100, :usd) == Money.new(100, :eur)
+  end
+
+  test "same currency and Numeric operands are unaffected by strict mode" do
+    assert_equal Money.new(380, :eur), Money.new(200, :eur) + Money.new(180, :eur)
+    assert_equal Money.new(20, :eur), Money.new(200, :eur) - 180
+    assert_operator Money.new(1, :eur), :>, 0
+  end
+
+  test "outside strict mode a mismatch is reported once per call site and keeps the old result" do
+    strict = Money.strict_currency?
+    Money.strict_currency = false
+    Money.reset_reported_mismatches!
+
+    results = []
+    reports = capture_error_reports(Money::CurrencyMismatchError) do
+      3.times { results << Money.new(200, :usd) - Money.new(180, :eur) }
+    end
+
+    assert_equal [ Money.new(20, :usd) ] * 3, results
+    assert_equal 1, reports.size
+    assert_equal 1, DebugLogEntry.where(category: "money", source: "Money#-").count
+  ensure
+    Money.strict_currency = strict
+    Money.reset_reported_mismatches!
+  end
+
+  test "mismatch reports keep coming once the per-process memory is full" do
+    Money.reset_reported_mismatches!
+    Money::REPORTED_MISMATCHES_LIMIT.times { |i| assert Money.first_mismatch_report?([ :-, "USD", "EUR", "site #{i}" ]) }
+
+    assert Money.first_mismatch_report?([ :-, "USD", "EUR", "a new call site" ]), "a new call site must still be reported"
+    assert_not Money.first_mismatch_report?([ :-, "USD", "EUR", "a new call site" ])
+  ensure
+    Money.reset_reported_mismatches!
+  end
+
+  test "a conversion error says which rate is missing" do
+    error = Money::ConversionError.new(from_currency: "USD", to_currency: "UAH", date: Date.new(2026, 11, 15))
+
+    assert_equal "Couldn't find exchange rate from USD to UAH on 2026-11-15", error.message
+  end
+
   test "operator order does not matter" do
     assert_equal Money.new(1000) + 1000, 1000 + Money.new(1000)
     assert_equal Money.new(1000) - 1000, 1000 - Money.new(1000)
@@ -193,5 +251,17 @@ class MoneyTest < ActiveSupport::TestCase
 
     assert_equal 0, Money.new(1000).exchange_to(:jpy, fallback_rate: 0)
     assert_equal Money.new(1000, :jpy), Money.new(1000, :usd).exchange_to(:jpy, fallback_rate: 1)
+  end
+
+  test "exchange_to without a rate raises a ConversionError naming both currencies and the date" do
+    ExchangeRate.stubs(:find_rate).returns(nil)
+
+    error = assert_raises(Money::ConversionError) do
+      Money.new(10, "PLN").exchange_to("UAH", date: Date.new(2026, 11, 1))
+    end
+
+    assert_equal "PLN", error.from_currency
+    assert_equal "UAH", error.to_currency
+    assert_match "from PLN to UAH on 2026-11-01", error.message
   end
 end

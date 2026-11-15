@@ -130,6 +130,71 @@ class Holding::ForwardCalculatorTest < ActiveSupport::TestCase
     assert_holdings(expected, calculated)
   end
 
+
+  test "USD-priced security in a UAH account converts each trade at its own date" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    account = families(:empty).accounts.create!(name: "UAH", balance: 0, cash_balance: 0, currency: "UAH", accountable: Investment.new)
+    aapl = Security.create!(ticker: "AAPL", name: "Apple")
+
+    first_day = 3.days.ago.to_date
+    second_day = 2.days.ago.to_date
+    first_day.upto(Date.current) { |date| Security::Price.create!(security: aapl, date: date, price: 100, currency: "USD") }
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: first_day, rate: 40)
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: second_day, rate: 42)
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: Date.current, rate: 45)
+
+    create_trade(aapl, qty: 10, date: first_day, price: 100, currency: "USD", account: account)
+    create_trade(aapl, qty: 10, date: second_day, price: 100, currency: "USD", account: account)
+
+    calculated = Holding::ForwardCalculator.new(account).calculate
+    by_date = calculated.index_by(&:date)
+
+    # The price converts at its own date, not at today's rate
+    assert_equal 40_000, by_date[first_day].amount
+    assert_equal 84_000, by_date[second_day].amount
+    assert_equal "UAH", by_date[second_day].currency
+
+    # (10 x 100 x 40 + 10 x 100 x 42) / 20
+    assert_equal 4_000, by_date[first_day].cost_basis
+    assert_equal 4_100, by_date[Date.current].cost_basis
+  end
+
+  test "a purchase with no exchange rate leaves the cost basis unknown" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    account = families(:empty).accounts.create!(name: "UAH", balance: 0, cash_balance: 0, currency: "UAH", accountable: Investment.new)
+    aapl = Security.create!(ticker: "AAPL", name: "Apple")
+
+    trade_day = 2.days.ago.to_date
+    trade_day.upto(Date.current) { |date| Security::Price.create!(security: aapl, date: date, price: 100, currency: "USD") }
+    create_trade(aapl, qty: 10, date: trade_day, price: 100, currency: "USD", account: account)
+
+    calculated = nil
+    assert_difference -> { DebugLogEntry.where(category: "exchange_rates", source: "Holding::ForwardCalculator").count }, 1 do
+      calculated = Holding::ForwardCalculator.new(account).calculate
+    end
+
+    today = calculated.find { |h| h.date == Date.current }
+    assert_nil today.cost_basis
+    # The holding keeps its 1:1 value rather than dropping out of the balance
+    assert_equal 1_000, today.amount
+  end
+
+
+  test "returns holding data structs that the materializer persists" do
+    voo = Security.create!(ticker: "VOO#{SecureRandom.hex(2)}", name: "Vanguard S&P 500 ETF")
+    Security::Price.create!(security: voo, date: 1.day.ago.to_date, price: 500)
+    Security::Price.create!(security: voo, date: Date.current, price: 510)
+    create_trade(voo, qty: 2, date: 1.day.ago.to_date, price: 500, account: @account)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+
+    assert calculated.all? { |h| h.is_a?(Holding::HoldingData) }
+    assert_equal voo, calculated.last.security
+
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+    assert_equal 1_020, @account.holdings.find_by!(security: voo, date: Date.current).amount
+  end
+
   private
     def assert_holdings(expected, calculated)
       expected.each do |expected_entry|

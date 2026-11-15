@@ -236,22 +236,23 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_equal Money.new(0, "USD"), totals.income_money
   end
 
-  test "totals handles missing exchange rates gracefully" do
-    # Create EUR transaction without exchange rate
-    eur_entry = create_transaction(
-      account: @checking_account,
-      amount: 100,
-      currency: "EUR",
-      kind: "standard"
-    )
+  test "totals leave out an amount whose currency has no exchange rate" do
+    create_transaction(account: @checking_account, amount: 100, currency: "EUR", kind: "standard")
+    create_transaction(account: @checking_account, amount: 50, currency: "USD", kind: "standard")
 
-    search = Transaction::Search.new(@family)
-    totals = search.totals
+    totals = Transaction::Search.new(@family).totals
 
-    assert_equal 1, totals.count
-    # Should use rate of 1 when exchange rate is missing
-    assert_equal Money.new(100, "USD"), totals.expense_money # EUR 100 * 1
+    assert_equal 2, totals.count
+    # The EUR 100 is left out, never counted at 1
+    assert_equal Money.new(50, "USD"), totals.expense_money
     assert_equal Money.new(0, "USD"), totals.income_money
+  end
+
+  test "totals convert at the nearest stored rate when the day has none" do
+    create_transaction(account: @checking_account, amount: 100, currency: "EUR", kind: "standard", date: Date.current)
+    ExchangeRate.create!(from_currency: "EUR", to_currency: "USD", rate: 1.5, date: 20.days.ago.to_date)
+
+    assert_equal Money.new(150, "USD"), Transaction::Search.new(@family).totals.expense_money
   end
 
   test "totals respects category filters" do

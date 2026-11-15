@@ -10,6 +10,10 @@ class Holding::PortfolioCache
   def initialize(account, use_holdings: false)
     @account = account
     @use_holdings = use_holdings
+    @rate_memo = {}
+    @stored_rates = {}
+    @provider_failed = Set.new
+    @unconverted = {}
     load_prices
   end
 
@@ -33,15 +37,47 @@ class Holding::PortfolioCache
 
     return nil unless price
 
-    price_money = Money.new(price.price, price.currency)
-
-    converted_amount = price_money.exchange_to(account.currency, fallback_rate: 1).amount
-
     Security::Price.new(
       security_id: security_id,
       date: price.date,
-      price: converted_amount,
+      price: price_in_account_currency(price, date),
       currency: account.currency
+    )
+  end
+
+  # A trade's price in the account currency at the trade's own date, by the nearest-rate
+  # rule. nil when the pair has no rate at all: a cost basis built from it would be a
+  # guess, so the calculators leave the basis unknown instead.
+  def trade_price_in_account_currency(trade, date)
+    rate = rate_into_account_currency(trade.currency, date)
+
+    if rate.nil?
+      note_unconverted(:trade_price, trade.currency, date)
+      return nil
+    end
+
+    trade.price * rate
+  end
+
+  # Writes one warn DebugLogEntry for this calculation when any price or trade could not
+  # be converted, with the counts and the currency pairs. The calculators call it once at
+  # the end, so a sync of years of daily prices does not log one entry per day.
+  def report_unconverted(source:)
+    return if @unconverted.empty?
+
+    pairs = @unconverted.map do |(kind, from), info|
+      { kind: kind.to_s, from: from, to: account.currency, count: info[:count], first_date: info[:first_date].to_s, last_date: info[:last_date].to_s }
+    end
+    prices = pairs.select { |p| p[:kind] == "price" }.sum { |p| p[:count] }
+    trades = pairs.select { |p| p[:kind] == "trade_price" }.sum { |p| p[:count] }
+
+    DebugLogEntry.capture(
+      category: "exchange_rates",
+      level: "warn",
+      message: "No exchange rate into #{account.currency}: #{prices} price(s) kept at 1:1, #{trades} purchase(s) left the cost basis unknown",
+      source: source,
+      account: account,
+      metadata: { prices_kept_at_parity: prices, trades_without_cost_basis: trades, pairs: pairs }
     )
   end
 
@@ -51,6 +87,78 @@ class Holding::PortfolioCache
 
   private
     PriceWithPriority = Data.define(:price, :priority, :source)
+
+    # A price is converted at its own date (it used to be converted at today's rate, so
+    # every historical value moved with today's rate). With no rate at all the price is
+    # kept at 1:1 and counted: a holding without a value would drop out of the balance and
+    # its amount would show up as cash that does not exist.
+    def price_in_account_currency(price, date)
+      return price.price if price.currency.blank? || price.currency == account.currency
+
+      rate = rate_into_account_currency(price.currency, date)
+      return price.price * rate if rate
+
+      note_unconverted(:price, price.currency, date)
+      price.price
+    end
+
+    # The nearest-rate rule (ExchangeRate::Provided) without a query per day: the stored
+    # rate for the day, else the provider's for the day, else the latest stored rate before
+    # it, else the earliest after it. The stored rates of each pair are loaded once. The
+    # provider is asked at most until it first fails for a pair, so a rate-limited provider
+    # cannot turn one sync into a request per day of history.
+    def rate_into_account_currency(from, date)
+      return 1 if from.blank? || from == account.currency
+
+      @rate_memo[[ from, date ]] ||= [ lookup_rate(from, date) ]
+      @rate_memo[[ from, date ]].first
+    end
+
+    def lookup_rate(from, date)
+      rates = stored_rates_for(from)
+      exact = rates[:by_date][date]
+      return exact if exact
+
+      unless @provider_failed.include?(from)
+        fetched = ExchangeRate.find_or_fetch_rate(from: from, to: account.currency, date: date)&.rate
+        return fetched if ExchangeRate.valid_rate?(fetched)
+
+        @provider_failed << from
+      end
+
+      nearest_stored_rate(rates[:sorted], date)
+    end
+
+    def stored_rates_for(from)
+      @stored_rates[from] ||= begin
+        rows = ExchangeRate.where(from_currency: from, to_currency: account.currency)
+                           .where("exchange_rates.rate > 0")
+                           .order(:date)
+                           .pluck(:date, :rate)
+        { sorted: rows, by_date: rows.to_h }
+      end
+    end
+
+    # rows are [date, rate] in date order
+    def nearest_stored_rate(rows, date)
+      return nil if rows.empty?
+
+      after_index = rows.bsearch_index { |(rate_date, _)| rate_date > date }
+      if after_index.nil?
+        rows.last.last
+      elsif after_index.zero?
+        rows.first.last
+      else
+        rows[after_index - 1].last
+      end
+    end
+
+    def note_unconverted(kind, from, date)
+      info = (@unconverted[[ kind, from ]] ||= { count: 0, first_date: date, last_date: date })
+      info[:count] += 1
+      info[:first_date] = [ info[:first_date], date ].min
+      info[:last_date] = [ info[:last_date], date ].max
+    end
 
     def trades
       @trades ||= account.entries.includes(entryable: :security).trades.chronological.to_a

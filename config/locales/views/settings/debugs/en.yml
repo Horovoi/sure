@@ -1,0 +1,38 @@
+---
+en:
+  settings:
+    debugs:
+      show:
+        page_title: Debug
+        title: Debug event log
+        subtitle: Failures and other operational events, newest first.
+        empty: No debug events found.
+        expand: Expand
+        missing_value: "-"
+        filters:
+          all: All
+          category: Category
+          level: Level
+          source: Source
+          provider_key: Provider
+          start_date: From
+          end_date: To
+          family_id: Family ID
+          account_id: Account ID
+          user_id: User ID
+          submit: Filter
+          reset: Reset
+        table:
+          time: Time
+          level: Level
+          category: Category
+          source: Source
+          message: Message
+          context: Context
+          metadata: Metadata
+          view_metadata: View
+        context:
+          provider: provider=%{value}
+          family: family=%{value}
+          account: account=%{value}
+          user: user=%{value}

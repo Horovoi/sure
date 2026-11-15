@@ -43,6 +43,12 @@ class Family < ApplicationRecord
   validates :date_format, inclusion: { in: DATE_FORMATS.map(&:last) }
   validates :fiscal_month_start_day, inclusion: { in: 1..31 }, allow_nil: true
 
+  # Time zone and currency (w1-fx family-tz-currency-validation). Both are checked only
+  # when they change, so a family with an old bad value can still save other changes.
+  validate :timezone_must_be_a_known_zone, if: :timezone_changed?
+  validate :currency_must_be_known, if: :currency_changed?
+  before_validation :normalize_currency
+
   def assigned_merchants
     merchant_ids = transactions.where.not(merchant_id: nil).pluck(:merchant_id).uniq
     Merchant.where(id: merchant_ids)
@@ -206,7 +212,10 @@ class Family < ApplicationRecord
       accounts.maximum(:updated_at)&.to_f,
       currency,
       # Balances are converted at today's rate: a new day means a new rate
-      Date.current.iso8601
+      Date.current.iso8601,
+      # The conversion rule's version, and the newest rate into the family currency: a
+      # cache built before the day's rate arrived is replaced once it is stored
+      ExchangeRate.conversion_cache_key(currency)
     ].compact.join("_")
   end
 
@@ -266,5 +275,120 @@ class Family < ApplicationRecord
 
   def disable_subscriptions_feed!
     update!(subscriptions_feed_token: nil)
+  end
+
+  # --- Time zone and currency (w1-fx family-tz-currency-validation) ---
+
+  # How often a stored time zone that cannot be resolved is written to the debug log.
+  # Requests and jobs resolve it all the time, so without this a bad value would write
+  # one entry per page view.
+  INVALID_TIME_ZONE_LOG_INTERVAL = 1.day
+
+  # The family's time zone for Time.use_zone: requests, jobs and syncs. A blank zone, or
+  # one ActiveSupport does not know (a renamed zone, a value written past validation),
+  # gives UTC instead of raising, so a bad value can never take down every page.
+  def resolved_time_zone
+    return @resolved_time_zone if defined?(@resolved_time_zone_for) && @resolved_time_zone_for == timezone
+
+    @resolved_time_zone_for = timezone
+    @resolved_time_zone = (ActiveSupport::TimeZone[timezone] if timezone.present?) || begin
+      log_invalid_time_zone if timezone.present?
+      ActiveSupport::TimeZone["UTC"]
+    end
+  end
+
+  # Upper-case ISO code for a known currency ("uah" gives "UAH"), nil for anything else
+  def self.normalize_currency_code(value)
+    return if value.blank?
+
+    Money::Currency.new(value.to_s.strip).iso_code
+  rescue Money::Currency::UnknownCurrencyError, ArgumentError
+    nil
+  end
+
+  private def log_invalid_time_zone
+    # write(unless_exist:) is an atomic SET NX on Redis: one writer a day per bad value
+    cache_key = [ "invalid_family_time_zone", id, timezone ]
+    return unless Rails.cache.write(cache_key, true, expires_in: INVALID_TIME_ZONE_LOG_INTERVAL, unless_exist: true)
+
+    DebugLogEntry.capture(
+      category: "time_zone",
+      level: "warn",
+      message: "Family time zone #{timezone.inspect} is not a known zone; using UTC",
+      source: "Family#resolved_time_zone",
+      family: self,
+      metadata: { timezone: timezone }
+    )
+  rescue StandardError
+    nil
+  end
+
+  # ActiveSupport::TimeZone[] resolves both the identifier the preferences form submits
+  # ("Europe/Kyiv") and a Rails zone name ("Kyiv"), the same lookup resolved_time_zone uses
+  private def timezone_must_be_a_known_zone
+    return if timezone.blank?
+
+    errors.add(:timezone, :invalid) if ActiveSupport::TimeZone[timezone].nil?
+  end
+
+  private def normalize_currency
+    self.currency = self.class.normalize_currency_code(currency) || currency
+  end
+
+  private def currency_must_be_known
+    errors.add(:currency, :invalid) if self.class.normalize_currency_code(currency).nil?
+  end
+
+  # --- Exchange rate notes (w1-fx nearest-rate) ---
+
+  # Currencies the family's visible accounts, entries, trades, holdings or active
+  # subscriptions use that have no stored exchange rate into the family currency on any
+  # date. Totals leave amounts in them out rather than counting them at 1, and the
+  # dashboard, Reports and Transactions pages say so (shared/_exchange_rate_notes).
+  # Each one is also written to the debug log (once a day), since the SQL totals that
+  # leave its amounts out cannot report them one by one.
+  def currencies_without_exchange_rate
+    @currencies_without_exchange_rate ||= ExchangeRate.currencies_without_rate(exchange_rate_currencies_in_use, to: currency).tap do |missing|
+      missing.each do |from|
+        ExchangeRate.report_left_out_amount(from: from, to: currency, date: Date.current, source: "Family#currencies_without_exchange_rate", family: self)
+      end
+    end
+  end
+
+  # Currencies today's totals convert whose newest rate into the family currency is older
+  # than ExchangeRate::NEAREST_RATE_LOOKBACK_DAYS, mapped to that rate's date. Today's
+  # totals still use it, and the same pages say so. Only balances, current holdings and
+  # active subscriptions count: an old entry converts at its own date's rate.
+  def stale_exchange_rate_dates
+    @stale_exchange_rate_dates ||= ExchangeRate.stale_rate_dates(exchange_rate_currencies_held_now, to: currency)
+  end
+
+  # Visible accounts' balances, each account's holdings on its latest holding date, and
+  # active subscriptions
+  private def exchange_rate_currencies_held_now
+    account_ids = accounts.visible.select(:id)
+    latest = Holding.where(account_id: account_ids).group(:account_id).select("account_id, MAX(date) AS date")
+
+    (
+      Account.where(id: account_ids).distinct.pluck(:currency) +
+        Holding.joins("JOIN (#{latest.to_sql}) latest ON latest.account_id = holdings.account_id AND latest.date = holdings.date")
+          .distinct.pluck(:currency) +
+        recurring_transactions.active_subscriptions.distinct.pluck(:currency)
+    ).compact.uniq
+  end
+
+  # Memoized: the notes partial reads both lists in one render
+  private def exchange_rate_currencies_in_use
+    @exchange_rate_currencies_in_use ||= begin
+      account_ids = accounts.visible.select(:id)
+
+      (
+        Account.where(id: account_ids).distinct.pluck(:currency) +
+          Entry.where(account_id: account_ids).distinct.pluck(:currency) +
+          Trade.joins(:entry).where(entries: { account_id: account_ids }).distinct.pluck("trades.currency") +
+          Holding.where(account_id: account_ids).distinct.pluck(:currency) +
+          recurring_transactions.active_subscriptions.distinct.pluck(:currency)
+      ).compact.uniq
+    end
   end
 end

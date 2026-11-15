@@ -48,17 +48,19 @@ class Transaction::Search
   def totals
     @totals ||= begin
       Rails.cache.fetch("transaction_search_totals/#{cache_key_base}", expires_in: Family::AGGREGATE_CACHE_TTL) do
+        # The nearest stored rate of the entry's day; an amount in a currency with no rate
+        # at all is left out, not counted at 1
+        rate = ExchangeRate.rate_sql(
+          from: "entries.currency",
+          to: ActiveRecord::Base.connection.quote(family.currency),
+          on: "entries.date"
+        )
+
         result = transactions_scope
                   .select(
-                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN transactions.kind = 'investment_contribution' THEN ABS(entries.amount * COALESCE(er.rate, 1)) WHEN entries.amount >= 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment') THEN ABS(entries.amount * COALESCE(er.rate, 1)) ELSE 0 END), 0) as expense_total",
-                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN entries.amount < 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment', 'investment_contribution') THEN ABS(entries.amount * COALESCE(er.rate, 1)) ELSE 0 END), 0) as income_total",
+                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN transactions.kind = 'investment_contribution' THEN ABS(entries.amount * #{rate}) WHEN entries.amount >= 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment') THEN ABS(entries.amount * #{rate}) ELSE 0 END), 0) as expense_total",
+                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN entries.amount < 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment', 'investment_contribution') THEN ABS(entries.amount * #{rate}) ELSE 0 END), 0) as income_total",
                     "COUNT(entries.id) as transactions_count"
-                  )
-                  .joins(
-                    ActiveRecord::Base.sanitize_sql_array([
-                      "LEFT JOIN exchange_rates er ON (er.date = entries.date AND er.from_currency = entries.currency AND er.to_currency = ?)",
-                      family.currency
-                    ])
                   )
                   .take
 
@@ -75,7 +77,8 @@ class Transaction::Search
     [
       family.id,
       Digest::SHA256.hexdigest(attributes.sort.to_h.to_json), # cached by filters
-      family.entries_cache_version
+      family.entries_cache_version,
+      ExchangeRate.conversion_cache_key(family.currency) # a rate stored later can complete the totals
     ].join("/")
   end
 

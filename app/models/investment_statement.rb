@@ -165,12 +165,24 @@ class InvestmentStatement
     )
   end
 
-  # Converts money in any currency to the family currency with the latest known rate on or
-  # before today (1 when there is none), without calling a rate provider.
+  # Converts money in any currency to the family currency at the nearest stored rate for
+  # today (the latest on or before it, else the earliest after it), without calling a rate
+  # provider. A currency with no rate at all converts to 0: the amount is left out of every
+  # sum here rather than counted at 1, and the pages say the currency is missing.
   def to_family_money(money)
     return money if money.currency.iso_code == family.currency
 
-    Money.new(money.amount * rate_to_family_currency(money.currency.iso_code), family.currency)
+    rate = rate_to_family_currency(money.currency.iso_code)
+    Money.new(rate ? money.amount * rate : 0, family.currency)
+  end
+
+  # Like to_family_money, but nil when the currency has no stored rate into the family
+  # currency at all, so a caller can count what it left out
+  def to_family_money_or_nil(money)
+    return money if money.currency.iso_code == family.currency
+
+    rate = rate_to_family_currency(money.currency.iso_code)
+    rate && Money.new(money.amount * rate, family.currency)
   end
 
   # Investment accounts
@@ -179,13 +191,20 @@ class InvestmentStatement
   end
 
   private
+    # nil when the currency has no stored rate into the family currency at all
     def rate_to_family_currency(currency)
       @rates_to_family_currency ||= {}
-      @rates_to_family_currency[currency] ||= ExchangeRate
-        .where(from_currency: currency, to_currency: family.currency)
-        .where("date <= ?", Date.current)
-        .order(date: :desc)
-        .pick(:rate) || 1
+      return @rates_to_family_currency[currency] if @rates_to_family_currency.key?(currency)
+
+      rate = ExchangeRate.nearest_stored_rate(from: currency, to: family.currency, date: Date.current)&.rate
+      report_left_out_currency(currency) if rate.nil?
+      @rates_to_family_currency[currency] = rate
+    end
+
+    def report_left_out_currency(currency)
+      ExchangeRate.report_left_out_amount(
+        from: currency, to: family.currency, date: Date.current, source: "InvestmentStatement", family: family
+      )
     end
 
     def all_time_totals
@@ -208,7 +227,8 @@ class InvestmentStatement
       sql_hash = Digest::MD5.hexdigest(trades_scope.to_sql)
 
       Rails.cache.fetch([
-        "investment_statement", "totals_query", family.id, sql_hash, family.entries_cache_version
+        "investment_statement", "totals_query", family.id, sql_hash, family.entries_cache_version,
+        ExchangeRate.conversion_cache_key(family.currency)
        ], expires_in: Family::AGGREGATE_CACHE_TTL) { Totals.new(family, trades_scope: trades_scope).call }
     end
 

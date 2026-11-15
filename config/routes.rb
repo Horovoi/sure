@@ -135,6 +135,11 @@ Rails.application.routes.draw do
     resource :providers, only: %i[show update]
   end
 
+  # w1-fx debug-log: super-admin debug event log (Settings > Debug, no nav link)
+  namespace :settings do
+    resource :debug, only: :show
+  end
+
   resources :tags, except: :show do
     resources :deletions, only: %i[new create], module: :tag
     delete :destroy_all, on: :collection

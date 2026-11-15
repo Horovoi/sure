@@ -150,6 +150,20 @@ class Account::CurrentBalanceManagerTest < ActiveSupport::TestCase
     assert_equal 1100, account.valuations.opening_anchor.first.entry.amount
   end
 
+  test "an entry in a currency with no exchange rate is left out of the derived balance, not counted at 1" do
+    account = @family.accounts.create!(name: "Test", balance: 1000, cash_balance: 1000, currency: "USD", accountable: Depository.new)
+    account.entries.create!(date: 1.year.ago.to_date, name: "Opening", amount: 1000, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
+    account.entries.create!(date: 10.days.ago.to_date, name: "Expense", amount: 100, currency: "USD", entryable: Transaction.new)
+    account.entries.create!(date: 5.days.ago.to_date, name: "Abroad", amount: 500, currency: "PLN", entryable: Transaction.new)
+
+    assert_difference -> { DebugLogEntry.where(category: "exchange_rates", source: "Account::CurrentBalanceManager").count }, 1 do
+      Account::CurrentBalanceManager.new(account).set_current_balance(1000)
+    end
+
+    # Derived today: 1000 - 100 (the PLN 500 has no rate); the delta of 100 moves the opening
+    assert_equal 1100, account.valuations.opening_anchor.first.entry.amount
+  end
+
   test "setting the balance on the opening date changes the opening balance and keeps it an anchor" do
     account = @family.accounts.create!(name: "Brokerage", balance: 500, cash_balance: 500, currency: "USD", accountable: Investment.new)
     account.entries.create!(date: Date.current, name: "Opening", amount: 500, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))

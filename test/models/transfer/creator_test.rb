@@ -216,4 +216,38 @@ class Transfer::CreatorTest < ActiveSupport::TestCase
       )
     end
   end
+
+  test "a transfer between currencies with no exchange rate is a validation error, not a 1:1 transfer" do
+    pln_account = @family.accounts.create!(name: "PLN cash", balance: 0, currency: "PLN", accountable: Depository.new)
+
+    transfer = nil
+    assert_no_difference [ "Transfer.count", "Entry.count" ] do
+      transfer = Transfer::Creator.new(
+        family: @family,
+        source_account_id: @source_account.id,
+        destination_account_id: pln_account.id,
+        date: @date,
+        amount: @amount
+      ).create
+    end
+
+    assert_not transfer.persisted?
+    assert_includes transfer.errors.full_messages.to_sentence, "No exchange rate from USD to PLN"
+  end
+
+  test "a transfer between currencies converts at the nearest stored rate" do
+    pln_account = @family.accounts.create!(name: "PLN cash", balance: 0, currency: "PLN", accountable: Depository.new)
+    ExchangeRate.create!(from_currency: "USD", to_currency: "PLN", date: @date - 15.days, rate: 4)
+
+    transfer = Transfer::Creator.new(
+      family: @family,
+      source_account_id: @source_account.id,
+      destination_account_id: pln_account.id,
+      date: @date,
+      amount: @amount
+    ).create
+
+    assert transfer.persisted?
+    assert_equal(-400, transfer.inflow_transaction.entry.amount)
+  end
 end

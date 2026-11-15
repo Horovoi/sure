@@ -8,12 +8,19 @@ class Transfer::Creator
   end
 
   # The legs' kinds (and the Investment Contributions category) are set by Transfer's after_create.
+  # With no exchange rate at all between the two accounts' currencies the transfer is not
+  # saved and carries a validation error, rather than moving the amount at 1:1.
   def create
     transfer = Transfer.new(
       inflow_transaction: inflow_transaction,
       outflow_transaction: outflow_transaction,
       status: "confirmed"
     )
+
+    if inflow_converted_money.nil?
+      transfer.errors.add(:base, :missing_exchange_rate, from: source_account.currency, to: destination_account.currency)
+      return transfer
+    end
 
     if transfer.save
       source_account.sync_later
@@ -45,7 +52,8 @@ class Transfer::Creator
 
       Transaction.new(
         entry: destination_account.entries.build(
-          amount: inflow_converted_money.amount.abs * -1,
+          # Without a rate the transfer is never saved (see #create); the form keeps the amount
+          amount: (inflow_converted_money || Money.new(amount, source_account.currency)).amount.abs * -1,
           currency: destination_account.currency,
           date: date,
           name: name,
@@ -54,15 +62,18 @@ class Transfer::Creator
       )
     end
 
-    # If destination account has different currency, its transaction should show up as converted
-    # Future improvement: instead of a 1:1 conversion fallback, add a UI/UX flow for missing rates
+    # If destination account has different currency, its transaction shows up as converted at
+    # the nearest-rate rule. nil when the pair has no rate at all.
     def inflow_converted_money
-      Money.new(amount.abs, source_account.currency)
-           .exchange_to(
-             destination_account.currency,
-             date: date,
-             fallback_rate: 1.0
-           )
+      return @inflow_converted_money if defined?(@inflow_converted_money)
+
+      @inflow_converted_money = ExchangeRate.convert_or_leave_out(
+        Money.new(amount.abs, source_account.currency),
+        to: destination_account.currency,
+        date: date.presence || Date.current,
+        source: "Transfer::Creator",
+        family: family
+      )
     end
 
     def name_prefix

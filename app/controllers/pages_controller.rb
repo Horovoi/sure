@@ -573,7 +573,7 @@ class PagesController < ApplicationController
       family_currency = Current.family.currency
       Current.family.recurring_transactions.active_subscriptions.sum(Money.new(0, family_currency)) do |sub|
         amount = sub.billing_cycle_yearly? ? sub.amount_money / 12 : sub.amount_money
-        sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
+        subscription_amount_in(amount, family_currency)
       end
     end
 
@@ -584,7 +584,14 @@ class PagesController < ApplicationController
         .where(next_expected_date: Date.current..Date.current.end_of_week)
         .sum(Money.new(0, family_currency)) do |sub|
           amount = sub.billing_cycle_yearly? ? sub.amount_money / 12 : sub.amount_money
-          sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
+          subscription_amount_in(amount, family_currency)
         end
+    end
+
+    # A subscription in a currency with no rate at all is left out of the total (and
+    # logged), never counted at 1
+    def subscription_amount_in(amount, family_currency)
+      ExchangeRate.convert_or_leave_out(amount, to: family_currency, source: "PagesController#subscriptions_total", family: Current.family) ||
+        Money.new(0, family_currency)
     end
 end

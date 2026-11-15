@@ -4,12 +4,14 @@
   dates: @calendar_data.transform_keys(&:iso8601).transform_values { |subs|
     subs.map do |sub|
       is_foreign = sub.currency != Current.family.currency
+      # No rate at all: no converted amount, and the day total leaves it out (never at 1)
+      converted = is_foreign ? ExchangeRate.convert_or_leave_out(sub.amount_money, to: Current.family.currency, source: "subscriptions/calendar", family: Current.family)&.abs : sub.amount_money.abs
       {
         id: sub.id,
         name: sub.display_name,
         amount: format_money(-sub.amount_money),
-        converted_amount: is_foreign ? format_money(sub.amount_money.exchange_to(Current.family.currency, fallback_rate: 1).abs * -1) : nil,
-        converted_amount_raw: is_foreign ? sub.amount_money.exchange_to(Current.family.currency, fallback_rate: 1).abs.amount : sub.amount_money.abs.amount,
+        converted_amount: is_foreign && converted ? format_money(converted * -1) : nil,
+        converted_amount_raw: converted&.amount || 0,
         is_foreign_currency: is_foreign,
         billing_cycle: sub.billing_cycle,
         logo_url: sub.subscription_logo_url,

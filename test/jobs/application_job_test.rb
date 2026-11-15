@@ -47,4 +47,29 @@ class ApplicationJobTest < ActiveJob::TestCase
     assert_not enqueued_mid_transaction, "SyncJob was enqueued before its Sync row was committed"
     assert_enqueued_with job: SyncJob
   end
+
+  class ZoneProbeJob < ApplicationJob
+    cattr_accessor :zone_seen
+
+    def perform(family)
+      self.class.zone_seen = Time.zone.name
+    end
+  end
+
+  test "a job for a family with a bad time zone runs in UTC instead of raising" do
+    family = families(:dylan_family)
+    family.update_column(:timezone, "Invalid/Timezone")
+
+    assert_nothing_raised { ZoneProbeJob.perform_now(family) }
+    assert_equal "UTC", ZoneProbeJob.zone_seen
+  end
+
+  test "a job for a family runs in that family's time zone" do
+    family = families(:dylan_family)
+    family.update!(timezone: "Europe/Kyiv")
+
+    ZoneProbeJob.perform_now(family)
+
+    assert_equal ActiveSupport::TimeZone["Europe/Kyiv"].name, ZoneProbeJob.zone_seen
+  end
 end

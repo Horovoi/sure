@@ -664,4 +664,27 @@ end
     assert row.manual?
     assert_redirected_to edit_subscription_path(row)
   end
+
+  # --- Exchange rate notes (w1-fx nearest-rate) ---
+
+  test "transactions warns about a currency with no exchange rate and notes a stale one" do
+    family = @user.family
+    family.accounts.create!(name: "PLN cash", balance: 100, currency: "PLN", accountable: Depository.new)
+    family.accounts.create!(name: "EUR cash", balance: 100, currency: "EUR", accountable: Depository.new)
+    ExchangeRate.create!(from_currency: "EUR", to_currency: family.currency, date: 30.days.ago.to_date, rate: 1.1)
+
+    get transactions_path
+
+    assert_response :ok
+    assert_select "[data-testid=missing-exchange-rates]", text: /No exchange rate from PLN to #{family.currency}/
+    assert_select "[data-testid=stale-exchange-rates]", text: /EUR from #{Regexp.escape(I18n.l(30.days.ago.to_date, format: :long))}/
+  end
+
+  test "transactions shows no exchange rate note when every currency has a current rate" do
+    get transactions_path
+
+    assert_response :ok
+    assert_select "[data-testid=missing-exchange-rates]", count: 0
+    assert_select "[data-testid=stale-exchange-rates]", count: 0
+  end
 end

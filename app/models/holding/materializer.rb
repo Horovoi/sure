@@ -1,6 +1,9 @@
 # "Materializes" holdings (similar to a DB materialized view, but done at the app level)
 # into a series of records we can easily query and join with other data.
 class Holding::Materializer
+  # Upsert in chunks, so one statement never carries a multi-year history
+  PERSIST_BATCH_SIZE = 2_000
+
   def initialize(account, strategy:)
     @account = account
     @strategy = strategy
@@ -20,9 +23,10 @@ class Holding::Materializer
     # This prevents duplicates when a manually-entered account gets linked to a provider
     cleanup_calculated_holdings_for_provider_securities
 
-    # Reload holdings association to clear any cached stale data
-    # This ensures subsequent Balance calculations see the fresh holdings
-    account.holdings.reload
+    # Clear the holdings association cache so the next reader (Balance::SyncCache) sees
+    # the fresh rows. reset, not reload: the reader plucks what it needs, so loading every
+    # holding record here was wasted.
+    account.holdings.reset
 
     @holdings
   end
@@ -70,9 +74,17 @@ class Holding::Materializer
           incoming_source: "calculated"
         )
 
-        base_attrs = holding.attributes
-          .slice("date", "currency", "qty", "price", "amount", "security_id")
-          .merge("account_id" => account.id, "updated_at" => current_time)
+        # Read field by field: a calculated holding is a Holding::HoldingData, not a record
+        base_attrs = {
+          "date" => holding.date,
+          "currency" => holding.currency,
+          "qty" => holding.qty,
+          "price" => holding.price,
+          "amount" => holding.amount,
+          "security_id" => holding.security_id,
+          "account_id" => account.id,
+          "updated_at" => current_time
+        }
 
         manual = manual_cost_basis_for(holding)
 
@@ -99,27 +111,16 @@ class Holding::Materializer
         end
       end
 
-      # Upsert with cost_basis updates
-      if holdings_to_upsert_with_cost.any?
-        account.holdings.upsert_all(
-          holdings_to_upsert_with_cost,
-          unique_by: %i[account_id security_id date currency]
-        )
-      end
+      # With cost_basis updates, with the carried manual cost basis, then without
+      # cost_basis (preserves the existing value)
+      upsert_in_batches(holdings_to_upsert_with_cost)
+      upsert_in_batches(holdings_to_upsert_with_manual_cost)
+      upsert_in_batches(holdings_to_upsert_without_cost)
+    end
 
-      if holdings_to_upsert_with_manual_cost.any?
-        account.holdings.upsert_all(
-          holdings_to_upsert_with_manual_cost,
-          unique_by: %i[account_id security_id date currency]
-        )
-      end
-
-      # Upsert without cost_basis (preserves existing)
-      if holdings_to_upsert_without_cost.any?
-        account.holdings.upsert_all(
-          holdings_to_upsert_without_cost,
-          unique_by: %i[account_id security_id date currency]
-        )
+    def upsert_in_batches(rows)
+      rows.each_slice(PERSIST_BATCH_SIZE) do |slice|
+        account.holdings.upsert_all(slice, unique_by: %i[account_id security_id date currency])
       end
     end
 

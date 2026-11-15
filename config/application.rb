@@ -39,6 +39,12 @@ module Sure
       theme: [ "light", "dark" ] # available in view as params[:theme]
     }
 
+    # Days DebugLogCleanupJob keeps debug log entries. Anything but a positive integer
+    # falls back to 90.
+    config.x.debug_log = ActiveSupport::OrderedOptions.new
+    debug_log_retention_days = ENV.fetch("DEBUG_LOG_RETENTION_DAYS", "90").to_s.strip
+    config.x.debug_log.retention_days = debug_log_retention_days.match?(/\A[1-9]\d*\z/) ? debug_log_retention_days.to_i : 90
+
     # Handle OmniAuth/OIDC errors gracefully (must be before OmniAuth middleware)
     require_relative "../app/middleware/omniauth_error_handler"
     config.middleware.use OmniauthErrorHandler

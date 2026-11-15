@@ -66,6 +66,7 @@ class Sync < ApplicationRecord
       incomplete.where("syncs.created_at < ?", STALE_AFTER.ago).find_each do |sync|
         next unless sync.mark_stale_if_incomplete!
         count += 1
+        sync.send(:capture_stale)
         sync.finalize_if_all_children_finalized
       rescue => e
         # One sync that cannot be finalized must not stop the rest of the sweep
@@ -103,7 +104,7 @@ class Sync < ApplicationRecord
           end
         end
       rescue => e
-        fail_with!(e.message)
+        fail_with!(e.message, error: e)
         report_error(e)
       ensure
         # Every exit path finalizes, so a parent never waits on a child that returned early
@@ -189,9 +190,48 @@ class Sync < ApplicationRecord
       true
     end
 
-    def fail_with!(message)
+    def fail_with!(message, error: nil)
       with_lock { fail! if may_fail? }
       update_column(:error, message)
+      capture_failure(message, error)
+    end
+
+    # The Settings > Debug log keeps failed syncs, which otherwise only reach the Rails log
+    def capture_failure(message, error)
+      DebugLogEntry.capture(
+        category: "sync",
+        level: "error",
+        message: "Sync failed: #{message}",
+        source: "Sync",
+        family: family_or_nil,
+        account: syncable.is_a?(Account) ? syncable : nil,
+        metadata: {
+          sync_id: id,
+          syncable_type: syncable_type,
+          syncable_id: syncable_id,
+          parent_id: parent_id,
+          error_class: error&.class&.name,
+          backtrace: Array(error&.backtrace).first(10)
+        }.compact
+      )
+    end
+
+    def capture_stale
+      DebugLogEntry.capture(
+        category: "stale_work",
+        level: "warn",
+        message: "Sync marked stale: not finished within #{STALE_AFTER.inspect}",
+        source: "StaleWorkReaperJob",
+        family: family_or_nil,
+        account: syncable.is_a?(Account) ? syncable : nil,
+        metadata: { record_type: "Sync", record_id: id, syncable_type: syncable_type, syncable_id: syncable_id, created_at: created_at&.iso8601 }
+      )
+    end
+
+    def family_or_nil
+      family
+    rescue StandardError
+      nil
     end
 
     def rerun_if_requested
@@ -208,8 +248,8 @@ class Sync < ApplicationRecord
     end
 
     def family_time_zone
-      family&.timezone.presence || "UTC"
-    rescue
+      family&.resolved_time_zone || "UTC"
+    rescue StandardError
       "UTC"
     end
 

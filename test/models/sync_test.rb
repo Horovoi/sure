@@ -219,4 +219,32 @@ class SyncTest < ActiveSupport::TestCase
     assert_equal new_start, sync.window_start_date
     assert_equal new_end,   sync.window_end_date
   end
+
+  test "a failed sync writes one error entry to the debug log" do
+    syncable = accounts(:depository)
+    sync = Sync.create!(syncable: syncable)
+    syncable.expects(:perform_sync).with(sync).raises(StandardError.new("debug log sync error"))
+
+    assert_difference -> { DebugLogEntry.where(category: "sync", level: "error").count }, 1 do
+      sync.perform
+    end
+
+    entry = DebugLogEntry.order(:created_at).last
+    assert_equal "Sync", entry.source
+    assert_match "debug log sync error", entry.message
+    assert_equal syncable, entry.account
+    assert_equal syncable.family, entry.family
+    assert_equal sync.id, entry.metadata["sync_id"]
+    assert_equal "StandardError", entry.metadata["error_class"]
+  end
+
+  test "clean writes a warn entry to the debug log for each stale sync" do
+    Sync.create!(syncable: accounts(:depository), status: :pending, created_at: 25.hours.ago)
+
+    assert_difference -> { DebugLogEntry.where(category: "stale_work", level: "warn").count }, 1 do
+      Sync.clean
+    end
+
+    assert_equal accounts(:depository).family, DebugLogEntry.order(:created_at).last.family
+  end
 end

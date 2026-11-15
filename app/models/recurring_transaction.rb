@@ -689,11 +689,13 @@ class RecurringTransaction < ApplicationRecord
       transaction_amount = amount_for_transaction
 
       sub_money = Money.new(transaction_amount, currency)
-      converted = if currency == default_account.currency
-        sub_money
-      else
-        sub_money.exchange_to(default_account.currency, date: for_date, fallback_rate: 1)
-      end
+      # With no rate at all the charge is not booked (and is logged) rather than booked at 1;
+      # the next run books it once a rate is stored
+      converted = ExchangeRate.convert_or_leave_out(
+        sub_money, to: default_account.currency, date: for_date,
+        source: "RecurringTransaction#generate_transaction!", family: family
+      )
+      next if converted.nil?
 
       entry = default_account.entries.create!(
         date: for_date,

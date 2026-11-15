@@ -10,6 +10,7 @@ class Holding::ReverseCalculator
     Rails.logger.tagged("Holding::ReverseCalculator") do
       precompute_cost_basis
       holdings = calculate_holdings
+      portfolio_cache.report_unconverted(source: "Holding::ReverseCalculator")
       Holding.gapfill(holdings)
     end
   end
@@ -63,7 +64,7 @@ class Holding::ReverseCalculator
           next
         end
 
-        Holding.new(
+        Holding::HoldingData.new(
           account_id: account.id,
           security_id: security_id,
           date: date,
@@ -80,7 +81,9 @@ class Holding::ReverseCalculator
     # Stores: { security_id => { date => cost_basis } }
     def precompute_cost_basis
       @cost_basis_by_date = Hash.new { |h, k| h[k] = {} }
-      tracker = Hash.new { |h, k| h[k] = { total_cost: BigDecimal("0"), total_qty: BigDecimal("0") } }
+      # unknown: a purchase had no exchange rate into the account currency, so the
+      # average from that day on is unknown rather than a figure that leaves it out
+      tracker = Hash.new { |h, k| h[k] = { total_cost: BigDecimal("0"), total_qty: BigDecimal("0"), unknown: false } }
 
       trades = portfolio_cache.get_trades.sort_by(&:date)
       trade_index = 0
@@ -91,20 +94,24 @@ class Holding::ReverseCalculator
           trade_entry = trades[trade_index]
           trade = trade_entry.entryable
 
-          if trade.qty > 0 # Only track buys
+          if trade.qty > 0 && !tracker[trade.security_id][:unknown] # Only track buys
             security_id = trade.security_id
-            trade_price = Money.new(trade.price, trade.currency)
-            converted_price = trade_price.exchange_to(account.currency, fallback_rate: 1).amount
+            # The trade price in the account currency at the trade's own date
+            converted_price = portfolio_cache.trade_price_in_account_currency(trade, trade_entry.date)
 
-            tracker[security_id][:total_cost] += converted_price * trade.qty
-            tracker[security_id][:total_qty] += trade.qty
+            if converted_price.nil?
+              tracker[security_id][:unknown] = true
+            else
+              tracker[security_id][:total_cost] += converted_price * trade.qty
+              tracker[security_id][:total_qty] += trade.qty
+            end
           end
           trade_index += 1
         end
 
         # Store current cost basis snapshot for each security at this date
         tracker.each do |security_id, data|
-          next if data[:total_qty].zero?
+          next if data[:unknown] || data[:total_qty].zero?
           @cost_basis_by_date[security_id][date] = data[:total_cost] / data[:total_qty]
         end
       end

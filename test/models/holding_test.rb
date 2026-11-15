@@ -51,6 +51,10 @@ class HoldingTest < ActiveSupport::TestCase
   end
 
   test "calculates average cost basis from another currency" do
+    [ 1.day.ago.to_date, Date.current ].each do |date|
+      ExchangeRate.create!(from_currency: "CAD", to_currency: "USD", date: date, rate: 1)
+    end
+
     create_trade(@amzn.security, account: @account, qty: 10, price: 212.00, date: 1.day.ago.to_date, currency: "CAD")
     create_trade(@amzn.security, account: @account, qty: 15, price: 216.00, date: Date.current, currency: "CAD")
 
@@ -68,8 +72,23 @@ class HoldingTest < ActiveSupport::TestCase
     nvda_qty = BigDecimal("5") + BigDecimal("30")
     expected_nvda_usd = nvda_total_usd / nvda_qty
 
-    assert_equal Money.new(expected_amzn_usd, "CAD").exchange_to("USD", fallback_rate: 1), @amzn.avg_cost
-    assert_equal Money.new(expected_nvda_usd, "CAD").exchange_to("USD", fallback_rate: 1), @nvda.avg_cost
+    assert_equal Money.new(expected_amzn_usd, "CAD").exchange_to("USD"), @amzn.avg_cost
+    assert_equal Money.new(expected_nvda_usd, "CAD").exchange_to("USD"), @nvda.avg_cost
+  end
+
+  test "average cost uses the nearest stored rate when the trade's day has none" do
+    ExchangeRate.create!(from_currency: "CAD", to_currency: "USD", date: 10.days.ago.to_date, rate: 0.5)
+
+    create_trade(@amzn.security, account: @account, qty: 10, price: 200.00, date: 1.day.ago.to_date, currency: "CAD")
+
+    assert_equal Money.new(100), @amzn.avg_cost
+  end
+
+  test "average cost is unknown when a purchase's currency has no rate at all" do
+    create_trade(@amzn.security, account: @account, qty: 10, price: 212.00, date: 1.day.ago.to_date)
+    create_trade(@amzn.security, account: @account, qty: 15, price: 216.00, date: Date.current, currency: "JPY")
+
+    assert_nil @amzn.avg_cost
   end
 
   test "calculates total return trend" do

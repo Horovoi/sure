@@ -53,7 +53,7 @@ class RuleRun < ApplicationRecord
       modified_count = yield
     rescue => e
       Rails.logger.error("#{job_name} failed for rule run #{rule_run.id}: #{e.class}: #{e.message}")
-      rule_run.fail_job!(e)
+      rule_run.fail_job!(e, source: job_name)
       return
     end
 
@@ -86,18 +86,41 @@ class RuleRun < ApplicationRecord
     # Another worker finished or failed the run between our check and the lock.
   end
 
-  # Release a slot and fail the run.
-  def fail_job!(error)
+  # Release a slot and fail the run. Only the call that fails the run writes a debug log
+  # entry, so a retried or second failing job does not log the same run twice.
+  def fail_job!(error, source: "RuleRun")
     with_lock do
       self.pending_jobs_count = [ pending_jobs_count - 1, 0 ].max
       save!
     end
 
-    fail!(error) if may_fail?
+    return unless may_fail?
+
+    fail!(error)
+    capture_failure(error, source)
   rescue AASM::InvalidTransition
   end
 
   private
+    def capture_failure(error, source)
+      DebugLogEntry.capture(
+        category: "rule_run",
+        level: "error",
+        message: "Rule run failed: #{error_message.presence || error}",
+        source: source,
+        family: rule&.family,
+        metadata: {
+          rule_run_id: id,
+          rule_id: rule_id,
+          rule_name: rule_name,
+          execution_type: execution_type,
+          error_class: error.is_a?(Exception) ? error.class.name : nil,
+          error_message: error.is_a?(Exception) ? error.message : error.to_s,
+          backtrace: error.is_a?(Exception) ? Array(error.backtrace).first(10) : []
+        }.compact
+      )
+    end
+
     def no_pending_jobs?
       pending_jobs_count.zero?
     end
