@@ -26,6 +26,14 @@ search:
     - app/assets/fonts
     - app/assets/videos
     - app/assets/builds
+# Relative t(".key") calls inside private controller helpers: i18n-tasks reads the helper's
+# method name as the scope, but Rails resolves them under the calling action, whose keys exist
+# (goals.<pause|resume|...>.*, transactions.categorizes.create.*, transfers.update.rejected).
+ignore_missing:
+  - 'goals.perform_transition!.*'
+  - 'transactions.categorizes.create_rule_for.*'
+  - 'transfers.respond_to_rejection.*'
+
 ignore_unused:
   - 'activerecord.attributes.*' # i18n-tasks does not detect these on forms, forms validations (https://github.com/glebm/i18n-tasks/blob/0b4b483c82664f26c5696fb0f6aa1297356e4683/templates/config/i18n-tasks.yml#L146)
   - 'activerecord.models.*' # i18n-tasks does not detect use in dynamic model names (e.g. object.model_name.human)
