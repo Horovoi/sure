@@ -1,0 +1,163 @@
+{
+  "_about": "Sample client for the monobank fake. Times are days_ago from the moment the fake starts; the integration test starts it at 15:00 Kyiv, so days_ago < 0.625 is 'today'. Rows with _manual are the ones the owner also entered by hand in Mono Visa (the test builds that history from them). _group/_category: what MCC categorisation must give the new entry (null: no category). See README.md.",
+  "tokens": ["e2e-fake-token"],
+  "rate_limit_seconds": 60,
+  "client": {
+    "clientId": "fakeClient01",
+    "name": "Тестовий Клієнт",
+    "webHookUrl": "",
+    "permissions": "psfj"
+  },
+  "accounts": [
+    {
+      "id": "mbf-uah-black",
+      "sendId": "fakeSendUah",
+      "currencyCode": 980,
+      "cashbackType": "UAH",
+      "balance": 4200000,
+      "creditLimit": 5000000,
+      "type": "black",
+      "maskedPan": ["537541******1234"],
+      "iban": "UA903220010000026201300000001"
+    },
+    {
+      "id": "mbf-usd",
+      "currencyCode": 840,
+      "cashbackType": "None",
+      "balance": 120000,
+      "creditLimit": 0,
+      "type": "black",
+      "maskedPan": ["444111******5678"],
+      "iban": "UA903220010000026201300000002"
+    },
+    {
+      "id": "mbf-eur",
+      "currencyCode": 978,
+      "cashbackType": "None",
+      "balance": 50000,
+      "creditLimit": 0,
+      "type": "black",
+      "maskedPan": ["444111******9012"],
+      "iban": "UA903220010000026201300000003"
+    },
+    {
+      "id": "mbf-fop",
+      "currencyCode": 980,
+      "cashbackType": "None",
+      "balance": 3500000,
+      "creditLimit": 0,
+      "type": "fop",
+      "maskedPan": [],
+      "iban": "UA213996220000026007233566001"
+    }
+  ],
+  "jars": [
+    {
+      "id": "mbf-jar-vacation",
+      "sendId": "jar/fakeVacation",
+      "title": "Відпустка",
+      "description": "Море влітку",
+      "currencyCode": 980,
+      "balance": 150000,
+      "goal": 2000000
+    },
+    {
+      "id": "mbf-jar-reserve",
+      "sendId": "jar/fakeReserve",
+      "title": "Подушка безпеки",
+      "description": "",
+      "currencyCode": 980,
+      "balance": 1000000,
+      "goal": null
+    }
+  ],
+  "statements": {
+    "mbf-uah-black": [
+      { "id": "mbf-old-before-window", "days_ago": 10, "description": "Сільпо", "mcc": 5411, "amount": -51130, "_note": "older than cutover - 3 days: never fetched" },
+
+      { "id": "mbf-ov-silpo", "days_ago": 3.1, "description": "Сільпо", "mcc": 5411, "amount": -45000, "_manual": { "shift_days": 0, "name": "Silpo" } },
+      { "id": "mbf-ov-cafe", "days_ago": 2.2, "description": "Пузата Хата", "mcc": 5812, "amount": -32000, "_manual": { "shift_days": 1, "name": "Puzata Hata lunch" } },
+      { "id": "mbf-ov-kyivstar", "days_ago": 2.5, "description": "Київстар", "mcc": 4814, "amount": -25000, "_note": "not entered by hand: skipped before cutover" },
+      { "id": "mbf-ov-uklon", "days_ago": 1.3, "description": "Uklon", "mcc": 4121, "amount": -18500, "_manual": { "shift_days": 0, "name": "Taxi" } },
+      { "id": "mbf-ov-pharmacy", "days_ago": 1.1, "description": "Аптека Доброго Дня", "mcc": 5912, "amount": -27300, "_manual": { "shift_days": -1, "name": "Pharmacy" } },
+
+      { "id": "mbf-new-atb", "days_ago": 0.55, "description": "АТБ-Маркет", "mcc": 5411, "amount": -61250, "cashbackAmount": 612, "_group": "groceries", "_category": "Groceries" },
+      { "id": "mbf-new-lifecell", "days_ago": 0.5, "description": "lifecell", "mcc": 4814, "amount": -15000, "_group": "mobile_plan", "_category": "Mobile Plan" },
+      { "id": "mbf-new-netflix", "days_ago": 0.52, "description": "Netflix", "mcc": 4899, "amount": -37290, "operationAmount": -899, "currencyCode": 840, "commissionRate": 0, "_group": "streaming", "_category": "Streaming" },
+      { "id": "mbf-new-restaurant", "days_ago": 0.45, "description": "Пузата Хата", "mcc": 5812, "amount": -27900, "_group": "eating_out", "_category": "Eating Out" },
+      { "id": "mbf-new-bolt", "days_ago": 0.4, "description": "Bolt", "mcc": 4121, "amount": -14200, "_group": "taxi", "_category": "Taxi" },
+      { "id": "mbf-new-anc", "days_ago": 0.35, "description": "Аптека АНЦ", "mcc": 5912, "amount": -9870, "_group": "pharmacy", "_category": "Pharmacies" },
+      { "id": "mbf-new-p2p-in", "days_ago": 0.33, "description": "Від: Олена Петренко", "mcc": 4829, "amount": 150000, "comment": "За квитки" },
+      { "id": "mbf-new-novus", "days_ago": 0.3, "description": "Novus", "mcc": 5411, "amount": -23480, "_group": "groceries", "_category": "Groceries" },
+
+      { "id": "mbf-tr-card-to-jar", "days_ago": 0.25, "description": "На банку «Відпустка»", "mcc": 4829, "amount": -100000, "_group": "own_transfer", "_category": null },
+      { "id": "mbf-tr-jar-to-card", "days_ago": 0.2, "description": "З банки «Відпустка»", "mcc": 4829, "amount": 50000, "_group": "own_transfer", "_category": null },
+      { "id": "mbf-tr-uah-to-usd", "days_ago": 0.15, "description": "Купівля валюти", "mcc": 4829, "amount": -4150000, "operationAmount": -100000, "currencyCode": 840, "counterIban": "UA903220010000026201300000002", "_group": "own_transfer", "_category": null },
+      { "id": "mbf-tr-fop-to-card", "days_ago": 0.12, "description": "Переказ між власними рахунками", "mcc": 4829, "amount": 2000000, "counterIban": "UA213996220000026007233566001", "counterName": "ФОП Тестовий Клієнт", "_group": "own_transfer", "_category": null },
+
+      { "id": "mbf-hold-silpo", "days_ago": 0.08, "description": "Сільпо", "mcc": 5411, "amount": -38640, "hold": true },
+      { "id": "mbf-hold-uklon", "days_ago": 0.04, "description": "Uklon", "mcc": 4121, "amount": -12000, "hold": true }
+    ],
+    "mbf-usd": [
+      { "id": "mbf-usd-topup", "days_ago": 300, "description": "Поповнення з картки", "mcc": 4829, "amount": 50000 },
+      { "id": "mbf-usd-apple", "days_ago": 120, "description": "Apple", "mcc": 5818, "amount": -999 },
+      { "id": "mbf-usd-amazon", "days_ago": 45, "description": "Amazon", "mcc": 5942, "amount": -4599 },
+      { "id": "mbf-tr-usd-in", "days_ago": 0.15, "description": "Купівля валюти", "mcc": 4829, "amount": 100000, "counterIban": "UA903220010000026201300000001", "_group": "own_transfer", "_category": null }
+    ],
+    "mbf-eur": [
+      { "id": "mbf-eur-wizz", "days_ago": 80, "description": "Wizz Air", "mcc": 4511, "amount": -8900 },
+      { "id": "mbf-eur-booking", "days_ago": 20, "description": "Booking.com", "mcc": 4722, "amount": -20000 }
+    ],
+    "mbf-fop": [
+      { "id": "mbf-fop-tax", "days_ago": 30, "description": "Єдиний податок", "mcc": 9311, "amount": -160000 },
+      { "id": "mbf-fop-income", "days_ago": 5, "description": "Оплата за договором ТОВ «Клієнт»", "mcc": 4829, "amount": 5500000, "counterEdrpou": "12345678", "counterName": "ТОВ «Клієнт»" },
+      { "id": "mbf-tr-fop-out", "days_ago": 0.12, "description": "Переказ на картку", "mcc": 4829, "amount": -2000000, "counterIban": "UA903220010000026201300000001", "_group": "own_transfer", "_category": null }
+    ],
+    "mbf-jar-vacation": [
+      { "id": "mbf-jar-old-topup", "days_ago": 60, "description": "З чорної картки", "mcc": 4829, "amount": 100000 },
+      { "id": "mbf-tr-jar-in", "days_ago": 0.25, "description": "З чорної картки", "mcc": 4829, "amount": 100000, "_group": "own_transfer", "_category": null },
+      { "id": "mbf-tr-jar-out", "days_ago": 0.2, "description": "На чорну картку", "mcc": 4829, "amount": -50000, "_group": "own_transfer", "_category": null }
+    ],
+    "mbf-jar-reserve": [
+      { "id": "mbf-reserve-1", "days_ago": 150, "description": "З чорної картки", "mcc": 4829, "amount": 500000 },
+      { "id": "mbf-reserve-2", "days_ago": 30, "description": "З чорної картки", "mcc": 4829, "amount": 500000 }
+    ]
+  },
+  "faults": [
+    { "path_prefix": "/personal/statement/mbf-eur", "status": 500, "times": 1, "_note": "first EUR statement fails once: the account backs off, the others continue" }
+  ],
+  "expected": {
+    "link": { "account_name": "Mono Visa", "monobank_account_id": "mbf-uah-black", "cutover_date": "auto" },
+    "claims": 4,
+    "skipped_before_cutover": 1,
+    "never_imported": ["mbf-old-before-window"],
+    "pending": 2,
+    "pending_ids": ["mbf-hold-silpo", "mbf-hold-uklon"],
+    "transfers": 4,
+    "transfer_pairs": [
+      { "outflow": "mbf-tr-card-to-jar", "inflow": "mbf-tr-jar-in" },
+      { "outflow": "mbf-tr-jar-out", "inflow": "mbf-tr-jar-to-card" },
+      { "outflow": "mbf-tr-uah-to-usd", "inflow": "mbf-tr-usd-in" },
+      { "outflow": "mbf-tr-fop-out", "inflow": "mbf-tr-fop-to-card" }
+    ],
+    "exchange_rates": [ { "from": "USD", "to": "UAH", "rate": 41.5 }, { "from": "EUR", "to": "UAH", "rate": 48.2 } ],
+    "balances": {
+      "mbf-uah-black": 8000.00,
+      "mbf-usd": 1200.00,
+      "mbf-eur": 500.00,
+      "mbf-fop": 35000.00,
+      "mbf-jar-vacation": 1500.00,
+      "mbf-jar-reserve": 10000.00
+    },
+    "account_types": {
+      "mbf-uah-black": "CreditCard",
+      "mbf-usd": "Depository",
+      "mbf-eur": "Depository",
+      "mbf-fop": "Depository",
+      "mbf-jar-vacation": "Depository",
+      "mbf-jar-reserve": "Depository"
+    },
+    "categories": { "groceries": 2, "mobile_plan": 1, "streaming": 1, "eating_out": 1, "taxi": 1, "pharmacy": 1, "own_transfer": 0 },
+    "category_names": { "groceries": "Groceries", "mobile_plan": "Mobile Plan", "streaming": "Streaming", "eating_out": "Eating Out", "taxi": "Taxi", "pharmacy": "Pharmacies" }
+  }
+}
