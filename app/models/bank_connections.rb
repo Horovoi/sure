@@ -12,6 +12,18 @@
 module BankConnections
   ENV_KEY = "BANK_CONNECTIONS_ENABLED".freeze
 
+  # Every Family association that holds provider connection items, in sync order.
+  # The family syncer and the family reset both walk this list, so a new provider
+  # is added here once. A test checks it against the Family `has_many :*_items`
+  # reflections.
+  ITEM_ASSOCIATIONS = %i[
+    plaid_items
+    lunchflow_items
+    enable_banking_items
+    coinstats_items
+    coinbase_items
+  ].freeze
+
   def self.enabled?
     ActiveModel::Type::Boolean.new.cast(ENV[ENV_KEY]) == true
   end

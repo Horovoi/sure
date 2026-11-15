@@ -77,6 +77,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     provider = mock
     provider.expects(:remove_item).with(plaid_item.access_token).once
     PlaidItem.any_instance.stubs(:plaid_provider).returns(provider)
+    Backup::Bundle.expects(:create!).with(kind: :pre_reset, parts: %i[db storage]).returns(Pathname("/backups/bundles/pre-reset/x"))
 
     perform_enqueued_jobs(only: FamilyResetJob) do
       delete reset_user_url(@user)
@@ -106,6 +107,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     provider = mock
     provider.expects(:remove_item).with(plaid_item.access_token).once
     PlaidItem.any_instance.stubs(:plaid_provider).returns(provider)
+    Backup::Bundle.expects(:create!).with(kind: :pre_reset, parts: %i[db storage]).returns(Pathname("/backups/bundles/pre-reset/x"))
     Demo::Generator.any_instance.expects(:generate_new_user_data_for!).with(@user.family, email: @user.email)
 
     perform_enqueued_jobs(only: FamilyResetJob) do

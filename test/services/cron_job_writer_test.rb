@@ -33,6 +33,24 @@ class CronJobWriterTest < ActiveSupport::TestCase
     assert_equal "dynamic", Sidekiq::Cron::Job.find(@job).source
   end
 
+  test "upsert writes a new job as an ActiveJob" do
+    CronJobWriter.upsert(name: @job, klass: "SyncAllJob", cron: "5 0 * * * Europe/Kyiv", description: "test")
+
+    assert_equal "1", Sidekiq::Cron::Job.find(@job).to_hash[:active_job]
+  end
+
+  test "upsert rewrites a job saved without the active_job flag once, then leaves it alone" do
+    legacy = Sidekiq::Cron::Job.new(name: @job, cron: "5 0 * * * Europe/Kyiv", class: "SyncAllJob", queue: "scheduled", description: "test", source: "dynamic")
+    assert legacy.save
+    assert_equal "0", Sidekiq::Cron::Job.find(@job).to_hash[:active_job]
+
+    CronJobWriter.upsert(name: @job, klass: "SyncAllJob", cron: "5 0 * * * Europe/Kyiv", description: "test")
+    assert_equal "1", Sidekiq::Cron::Job.find(@job).to_hash[:active_job]
+
+    Sidekiq::Cron::Job.any_instance.expects(:save).never
+    CronJobWriter.upsert(name: @job, klass: "SyncAllJob", cron: "5 0 * * * Europe/Kyiv", description: "test")
+  end
+
   test "upsert raises on an invalid job instead of reporting success" do
     assert_raises(CronJobWriter::Error) do
       CronJobWriter.upsert(name: @job, klass: "SyncAllJob", cron: "not a cron", description: "test")

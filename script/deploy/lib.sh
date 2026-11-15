@@ -171,6 +171,21 @@ copy_volume() {
     "find $2 -mindepth 1 -delete; cp -a /from/. $2/"
 }
 
+# Writes a gzipped tarball of a production volume to a file on the host, for the
+# pre-deploy bundle. The volume is mounted read-only into a one-off container that runs
+# only tar (no Rails boot). A volume that does not exist yet gives an empty archive.
+archive_volume() {
+  local volume="sure_$1" out="$2" empty
+  if docker volume inspect "$volume" >/dev/null 2>&1; then
+    prod run --rm --no-deps -T -v "$volume:/from:ro" --entrypoint tar web -czf - -C /from . > "$out" || return 1
+  else
+    empty=$(mktemp -d)
+    tar -czf "$out" -C "$empty" . || return 1
+    rmdir "$empty"
+  fi
+  [ -s "$out" ] && tar -tzf "$out" >/dev/null || return 1
+}
+
 # Replaces the staging data with a fresh copy of production: database and uploaded files.
 #
 # The database is copied physically (pg_basebackup), not dumped and restored, so the
@@ -191,7 +206,11 @@ refresh_staging() {
   copy_volume icons /rails/public/icons
   echo "  uploaded files and cached icons copied"
 
-  # The copy must never be able to act on a real bank or exchange account
+  defuse_staging
+}
+
+# The copy must never be able to act on a real bank or exchange account
+defuse_staging() {
   staging run --rm --no-deps -v "$PWD/script/staging:/staging:ro" web bin/rails runner /staging/defuse.rb | tail -1 | sed 's/^/  /'
 }
 

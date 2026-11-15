@@ -17,6 +17,12 @@ class AutoSyncSchedulerTest < ActiveSupport::TestCase
     assert_equal "SyncAllJob", job.klass
   end
 
+  test "registers the nightly sync as an ActiveJob" do
+    AutoSyncScheduler.sync!
+
+    assert_equal "1", Sidekiq::Cron::Job.find(AutoSyncScheduler::JOB_NAME).to_hash[:active_job]
+  end
+
   test "removes the job when auto sync is disabled" do
     AutoSyncScheduler.sync!
     Setting.auto_sync_enabled = false

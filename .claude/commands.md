@@ -8,6 +8,11 @@ bin/rails console      # Open Rails console
 bin/setup              # Initial project setup (dependencies + database)
 ```
 
+Development enqueues jobs into Sidekiq, as production does, so `bin/dev` and
+`bin/rails console` need Redis on `REDIS_URL` (default `redis://localhost:6379`).
+The `worker` process in `Procfile.dev` runs the jobs. `bin/staging dev` points
+`REDIS_URL` at the staging Redis on port 6380 instead.
+
 ## Testing
 
 ```bash

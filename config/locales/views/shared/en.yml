@@ -10,6 +10,10 @@ en:
       label: Amount
     require_family_admin:
       not_authorized: Only a family admin can do that.
+    sync_toast:
+      close: Close
+      message: New data available
+      refresh: Refresh
     syncing_notice:
       syncing: Syncing accounts data...
     transaction_tabs:

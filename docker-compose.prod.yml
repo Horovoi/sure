@@ -83,6 +83,13 @@ services:
       - app-storage:/rails/storage
       # Subscription icons cached by the app; kept across deploys
       - icons:/rails/public/icons
+      # Backup bundles (Backup::Bundle): written under /backups/bundles, next to the
+      # sidecar's daily/weekly/monthly folders, and mirrored to /offsite
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ${OFFSITE_BACKUP_DIR:-./backups/offsite}:/offsite
+      # Read by age to put an encrypted copy in each bundle. A single-file mount follows
+      # the inode, so bin/deploy rewrites the file in place (cat >), never replaces it.
+      - ./.env.production:/run/secrets/env.production:ro
     restart: unless-stopped
     depends_on:
       db:
@@ -93,6 +100,10 @@ services:
         condition: service_healthy
     environment:
       <<: *rails_env
+      BACKUP_ROOT: /backups
+      OFFSITE_BACKUP_ROOT: /offsite
+      BACKUP_ENV_FILE: /run/secrets/env.production
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
     networks:
       - sure_net
 

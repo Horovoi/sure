@@ -8,6 +8,9 @@
 #   bin/staging down [--wipe]       stop staging (--wipe also deletes the copy)
 #   bin/staging dev                 run bin/dev (hot reload) on the copy
 #   bin/staging run <command...>    run a command against the copy, e.g. bin/rails console
+#   bin/staging exec <command...>   run a command in the running staging worker container,
+#                                   e.g. bin/staging exec bin/rails 'backup:create[manual]'
+#   bin/staging restore <bundle>    load a backup bundle (backups/bundles/<kind>/<name>) into the copy
 #   bin/staging bench <old> <new>   compare page speed of two versions on the copy
 #
 # <ref> is any git commit, branch or tag. Without one, `up` runs the version that
@@ -112,6 +115,13 @@ case "$command" in
   dev)
     ensure_copy
     copy_env
+    # bin/dev runs its own Sidekiq worker on the copy's Redis. A staging worker
+    # container would take jobs from the same queues and run the image's code, so
+    # stop it: every job then runs the working tree.
+    if [ -n "$(staging --profile worker ps --status running -q worker 2>/dev/null)" ]; then
+      quiet staging --profile worker stop worker
+      echo "  stopped the staging worker container so bin/dev's worker runs the jobs"
+    fi
     echo "▸ bin/dev on the staging copy (database on port $STAGING_DB_PORT, Redis on $STAGING_REDIS_PORT)"
     exec bin/dev "$@"
     ;;
@@ -121,6 +131,62 @@ case "$command" in
     ensure_copy
     copy_env
     exec "$@"
+    ;;
+
+  exec)
+    [ $# -gt 0 ] || die "usage: bin/staging exec <command...>"
+    [ -n "$(staging --profile worker ps --status running -q worker 2>/dev/null)" ] ||
+      die "the staging worker is not running; start it with bin/staging up --worker"
+    staging --profile worker exec -T worker "$@"
+    ;;
+
+  restore)
+    [ $# -eq 1 ] || die "usage: bin/staging restore <bundle-dir>"
+    [ -d "$1" ] || die "no such folder: $1"
+    bundle=$(cd "$1" && pwd)
+    image_exists "$TAG" || die "no local image sure:$TAG; run bin/deploy first"
+
+    step "Checking $bundle"
+    files=$(ruby script/staging/bundle_check.rb verify "$bundle") || die "the bundle does not match its manifest; nothing was changed"
+    echo "$files" | grep -qx 'db.sql.gz' || die "the bundle has no db.sql.gz"
+    echo "  every file matches the manifest ($(echo "$files" | tr '\n' ' '))"
+    [ ! -f "$bundle/env.production.age" ] || echo "  env.production.age is not decrypted: staging keeps using .env.production"
+
+    step "Loading the bundle into the copy"
+    stop_staging_app
+    quiet staging up -d --wait db redis
+    quiet staging exec -T db sh -c \
+      'dropdb -U "$POSTGRES_USER" --if-exists --force "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+    # pg_dump 17 writes "SET transaction_timeout", which the postgres 16 server rejects
+    if ! gunzip -c "$bundle/db.sql.gz" | sed '/^SET transaction_timeout = /d' |
+      staging exec -T db sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null; then
+      die "loading db.sql.gz failed; the staging database is incomplete (bin/staging refresh replaces it)"
+    fi
+    echo "  database loaded ($(echo "select pg_size_pretty(pg_database_size(current_database()))" | sql staging))"
+
+    restored_counts=$(mktemp)
+    table_counts staging > "$restored_counts" || die "could not count the restored rows"
+
+    for part in "storage.tar.gz:/rails/storage" "icons.tar.gz:/rails/public/icons"; do
+      file="${part%%:*}" target="${part#*:}"
+      if [ -f "$bundle/$file" ]; then
+        quiet staging run --rm --no-deps -v "$bundle:/bundle:ro" --entrypoint sh web -c \
+          "find $target -mindepth 1 -delete && tar -xzf /bundle/$file -C $target" ||
+          die "unpacking $file into staging failed"
+        echo "  $file unpacked into $target"
+      else
+        echo "  $file is not in this bundle; $target is left as it was"
+      fi
+    done
+
+    defuse_staging
+    ruby script/staging/bundle_check.rb compare "$bundle" "$restored_counts"
+    rm -f "$restored_counts"
+
+    step "Starting sure:$TAG on the restored copy"
+    migrate_on_copy
+    start_staging
+    echo "✓ Staging runs the restored bundle: http://localhost:$STAGING_PORT"
     ;;
 
   bench)

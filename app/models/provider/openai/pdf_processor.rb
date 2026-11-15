@@ -184,6 +184,11 @@ class Provider::Openai::PdfProcessor
       nil
     end
 
+    # Renders each page to a base64 PNG with pdftoppm (poppler-utils, installed in the
+    # Docker base image). Kernel#system returns nil when the executable cannot be
+    # started and false when it ran but exited non-zero. A missing binary is a broken
+    # install, so it raises instead of looking like an unreadable PDF; a PDF that
+    # pdftoppm rejects still gives [] and the caller reports it as before.
     def convert_pdf_to_images
       return [] if pdf_content.blank?
 
@@ -192,12 +197,16 @@ class Provider::Openai::PdfProcessor
         File.binwrite(pdf_path, pdf_content)
 
         output_prefix = File.join(tmpdir, "page")
-        system("pdftoppm", "-png", "-r", "150", pdf_path, output_prefix)
+        rendered = system("pdftoppm", "-png", "-r", "150", pdf_path, output_prefix)
+        raise Provider::Openai::Error, "Could not convert PDF to images: pdftoppm (poppler-utils) is not installed" if rendered.nil?
+        return [] unless rendered
 
         Dir.glob(File.join(tmpdir, "page-*.png")).sort.map do |image_path|
           Base64.strict_encode64(File.binread(image_path))
         end
       end
+    rescue Provider::Openai::Error
+      raise
     rescue => error
       Rails.logger.error("Failed to convert PDF to images: #{error.message}")
       []
