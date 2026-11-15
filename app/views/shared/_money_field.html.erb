@@ -127,10 +127,12 @@
         rather than click so the controller's preventDefault keeps the input
         focused (and the on-screen keyboard up), plus keydown Enter/Space for
         keyboard use. Positioned absolutely so showing it never shifts the
-        fields below at the moment the user clicks past it. %>
-    <div class="hidden group-focus-within/money-field:flex items-center gap-1 absolute left-0 right-0 top-full -mt-px z-10 bg-container border border-t-0 border-secondary rounded-b-md p-1">
+        fields below at the moment the user clicks past it. Only the operator
+        buttons take the pointer: a click on the rest of the row reaches what is
+        below it (the form's submit button, for one), which the row covers. %>
+    <div class="hidden group-focus-within/money-field:flex items-center gap-1 absolute left-0 right-0 top-full -mt-px z-10 bg-container border border-t-0 border-secondary rounded-b-md p-1 pointer-events-none">
       <% [ [ "+", "+", :operator_add ], [ "−", "-", :operator_subtract ], [ "×", "*", :operator_multiply ], [ "÷", "/", :operator_divide ] ].each do |text, operator, label_key| %>
-        <%= render DS::Button.new(text: text, variant: :outline, size: :sm,
+        <%= render DS::Button.new(text: text, variant: :outline, size: :sm, class: "pointer-events-auto",
               data: { action: "mousedown->money-field#insertOperator touchstart->money-field#insertOperator keydown.enter->money-field#insertOperator keydown.space->money-field#insertOperator", "money-field-operator-param": operator },
               aria: { label: t(".#{label_key}") }) %>
       <% end %>

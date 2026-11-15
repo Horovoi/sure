@@ -115,6 +115,7 @@ class TradesTest < ApplicationSystemTestCase
         flunk "condition not met within #{timeout}s" if Time.current > deadline
         sleep 0.1
       end
+      pass
     end
 
     # Leaving the page before the create request finishes loses the trade

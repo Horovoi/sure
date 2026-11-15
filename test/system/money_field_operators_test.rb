@@ -51,6 +51,19 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
     assert_no_selector OPERATOR_ROW
   end
 
+  # The row passes clicks on its empty part to what it covers, so its buttons must
+  # still take the pointer themselves
+  test "a click on an operator button inserts it at the cursor" do
+    visit new_transaction_url
+
+    find_field("entry[amount]").click
+    find_field("entry[amount]").send_keys("120")
+    find(OPERATOR_ROW).click
+    find_field("entry[amount]").send_keys("30")
+
+    assert_field "entry[amount]", with: "120+30"
+  end
+
   test "a comma decimal saves the amount, and a currency change keeps what was typed" do
     entry = create_transaction("Market") do
       fill_in "entry[amount]", with: "12,50"
