@@ -30,6 +30,8 @@ class ChartThemeRepaintTest < ApplicationSystemTestCase
     assert_selector "html[data-theme='dark']"
     assert_selector "#{CHART} svg"
     assert_no_selector "#{CHART} svg[data-drawn-before]"
+    # The redraw keeps the drag-to-select brush
+    assert_selector "#{CHART} .drag-select-brush .overlay", visible: :all
 
     # The endpoint markers only appear when the series is not flat; when they
     # are there, their outline must follow the theme.

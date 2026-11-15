@@ -27,7 +27,7 @@
             data: { "auto-submit-form-target": "auto" } %>
         <% end %>
 
-        <% account_period_options = Period.as_options + [["Custom", "custom"]] %>
+        <% account_period_options = Period.as_options + [[t("UI.account.chart.custom_period"), "custom"]] %>
         <%= form.select :period,
                     account_period_options,
                     { selected: selected_key },
@@ -40,7 +40,7 @@
                   value: period_start_value,
                   data: { "auto-submit-form-target": "auto" },
                   class: "bg-container border border-secondary rounded-lg px-2 py-2 text-sm text-primary focus:outline-hidden focus:ring-0" %>
-            <span class="text-secondary text-sm">to</span>
+            <span class="text-secondary text-sm"><%= t("UI.account.chart.date_range_separator") %></span>
             <%= form.date_field :end_date,
                   value: period_end_value,
                   data: { "auto-submit-form-target": "auto" },
@@ -65,10 +65,11 @@
         id="lineChart"
         class="w-full h-full"
         data-controller="time-series-chart"
-        data-time-series-chart-data-value="<%= series.to_json %>"></div>
+        data-time-series-chart-data-value="<%= series.to_json %>"
+        data-time-series-chart-selectable-value="true"></div>
       <% else %>
         <div class="w-full h-full flex items-center justify-center">
-          <p class="text-secondary text-sm">No data available</p>
+          <p class="text-secondary text-sm"><%= t("UI.account.chart.no_data_available") %></p>
         </div>
       <% end %>
     </div>

@@ -28,7 +28,7 @@
     <div class="flex items-center gap-2">
       <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "net_worth_section" } do |form| %>
         <div class="flex flex-wrap items-center gap-2">
-          <% net_worth_options = Period.as_options + [["Custom", "custom"]] %>
+          <% net_worth_options = Period.as_options + [[t(".custom_period"), "custom"]] %>
           <% selected_key = period.key || "custom" %>
           <%= form.select :net_worth_period,
                         net_worth_options,
@@ -42,7 +42,7 @@
                     value: period.start_date,
                     data: { "auto-submit-form-target": "auto" },
                     class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
-              <span class="text-secondary text-sm">to</span>
+              <span class="text-secondary text-sm"><%= t(".date_range_separator") %></span>
               <%= form.date_field :net_worth_end_date,
                     value: period.end_date,
                     data: { "auto-submit-form-target": "auto" },
@@ -62,6 +62,11 @@
     data-time-series-chart-data-value="<%= series.to_json %>"
     data-time-series-chart-endpoint-markers-value="true"
     data-time-series-chart-show-y-guides-value="true"
+    data-time-series-chart-selectable-value="true"
+    data-time-series-chart-select-period-param-value="net_worth_period"
+    data-time-series-chart-select-start-param-value="net_worth_start_date"
+    data-time-series-chart-select-end-param-value="net_worth_end_date"
+    draggable="false"
     data-period-label="<%= period.key.present? ? period.label : nil %>"
     data-period-start="<%= period.start_date %>"
     data-period-end="<%= period.end_date %>"></div>

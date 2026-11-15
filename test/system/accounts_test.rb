@@ -115,6 +115,24 @@ class AccountsTest < ApplicationSystemTestCase
     assert_equal 2500, opening_anchor.entry.amount
   end
 
+  test "a drag on the account chart sets its custom period" do
+    account = accounts(:depository)
+    visit account_path(account)
+
+    drag_across find("#lineChart .drag-select-brush .overlay", visible: :all)
+
+    assert_current_path(%r{/accounts/#{account.id}\?.*period=custom})
+    query = Rack::Utils.parse_query(URI.parse(current_url).query)
+    start_date = Date.parse(query.fetch("start_date"))
+    end_date = Date.parse(query.fetch("end_date"))
+    assert_operator start_date, :<, end_date
+
+    assert_equal "custom", find_field("period").value
+    assert_field "start_date", with: start_date.iso8601
+    assert_field "end_date", with: end_date.iso8601
+    assert_selector "#lineChart .drag-select-brush .overlay", visible: :all
+  end
+
   private
 
     def open_new_account_modal

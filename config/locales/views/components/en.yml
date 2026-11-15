@@ -4,6 +4,10 @@ en:
     account:
       activity_date:
         balance_tooltip: "The end of day balance, after all transactions and adjustments"
+      chart:
+        custom_period: Custom
+        date_range_separator: to
+        no_data_available: No data available
   ds:
     alert:
       variants:
