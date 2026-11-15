@@ -52,7 +52,9 @@ Rails.application.routes.draw do
     delete :disable
   end
 
-  mount Lookbook::Engine, at: "/design-system"
+  # Component previews for development (bin/dev) and the test suite. Production and the
+  # staging copy (RAILS_ENV=production) do not mount them.
+  mount Lookbook::Engine, at: "/design-system" unless Rails.env.production?
 
   # Queue dashboard. Development mounts it open. Everywhere else (production, staging,
   # test) the route exists only for a signed-in, active super admin; see
