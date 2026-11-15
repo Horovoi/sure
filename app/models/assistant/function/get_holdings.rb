@@ -165,11 +165,10 @@ class Assistant::Function::GetHoldings < Assistant::Function
     # In the family currency, each holding at today's nearest stored rate. It used to add
     # up the raw amounts of every currency; one with no rate at all is left out.
     def converted_total(holdings)
-      rate = ExchangeRate.rate_sql(
-        from: "holdings.currency",
-        to: ActiveRecord::Base.connection.quote(family.currency),
-        on: ActiveRecord::Base.connection.quote(Date.current)
-      )
+      rate = Holding.sanitize_sql_array([
+        ExchangeRate.rate_sql(from: "holdings.currency", to: ":target_currency", on: ":today"),
+        { target_currency: family.currency, today: Date.current }
+      ])
 
       holdings.sum(Arel.sql("COALESCE(holdings.amount * #{rate}, 0)"))
     end

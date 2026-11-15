@@ -126,9 +126,10 @@ class Family::BayesCategorizer
 
     # A category whose lock says the AI or this classifier set it
     def automatic_category_sql
-      connection = Transaction.connection
-      sources = AUTOMATIC_CATEGORY_SOURCES.map { |source| connection.quote(source) }.join(", ")
-      Arel.sql("COALESCE(transactions.locked_attributes -> 'category_id' ->> 'source', '') IN (#{sources})")
+      Transaction.sanitize_sql_array([
+        "COALESCE(transactions.locked_attributes -> 'category_id' ->> 'source', '') IN (?)",
+        AUTOMATIC_CATEGORY_SOURCES
+      ])
     end
 
     # Per-category token-count models: { category_id => { total:, counts: } }.

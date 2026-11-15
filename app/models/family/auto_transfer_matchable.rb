@@ -44,14 +44,14 @@ module Family::AutoTransferMatchable
       "ABS(inflow_candidates.date - outflow_candidates.date) as date_diff",
       "(CASE WHEN inflow_candidates.currency = outflow_candidates.currency THEN 0 ELSE 1 END) as match_rank"
     ]).from("entries inflow_candidates")
-      .joins("
+      .joins(Entry.sanitize_sql_array([ "
         JOIN entries outflow_candidates ON (
           inflow_candidates.amount < 0 AND
           outflow_candidates.amount > 0 AND
           inflow_candidates.account_id <> outflow_candidates.account_id AND
-          inflow_candidates.date BETWEEN outflow_candidates.date - #{date_window} AND outflow_candidates.date + #{date_window}
+          inflow_candidates.date BETWEEN outflow_candidates.date - :date_window AND outflow_candidates.date + :date_window
         )
-      ").joins("
+      ", { date_window: date_window } ])).joins("
         LEFT JOIN transfers existing_transfers ON (
           existing_transfers.inflow_transaction_id = inflow_candidates.entryable_id OR
           existing_transfers.outflow_transaction_id = outflow_candidates.entryable_id
@@ -67,17 +67,10 @@ module Family::AutoTransferMatchable
       .where(Account.visible_status_sql("inflow_accounts"))
       .where(Account.visible_status_sql("outflow_accounts"))
       .where("inflow_candidates.entryable_type = 'Transaction' AND outflow_candidates.entryable_type = 'Transaction'")
-      .where("
-        (
-          inflow_candidates.currency = outflow_candidates.currency AND
-          inflow_candidates.amount = -outflow_candidates.amount
-        ) OR (
-          inflow_candidates.currency <> outflow_candidates.currency AND
-          ABS(inflow_candidates.amount / NULLIF(outflow_candidates.amount * #{transfer_match_rate_sql}, 0))
-            BETWEEN #{1 - tolerance} AND #{1 + tolerance}
-          #{"AND (#{confirmed_route_sql} OR (#{linked_account_sql('inflow_accounts')} AND #{linked_account_sql('outflow_accounts')}))" if restrict_cross_currency_to_routes}
-        )
-      ")
+      .where(
+        transfer_amounts_match_sql(restrict_cross_currency_to_routes: restrict_cross_currency_to_routes),
+        family_currency: primary_currency_code, min_ratio: 1 - tolerance, max_ratio: 1 + tolerance
+      )
       .where(existing_transfers: { id: nil })
 
     if account_id
@@ -203,16 +196,37 @@ module Family::AutoTransferMatchable
         .where(inflow_txns: { kind: "standard" }, outflow_txns: { kind: "standard" })
         # A transfer's linked fee is an expense of that transfer, never a leg of another
         .where(inflow_txns: { fee_transfer_id: nil }, outflow_txns: { fee_transfer_id: nil })
-        .where("NOT #{pending_condition('inflow_txns')} AND NOT #{pending_condition('outflow_txns')}")
+        .where.not(pending_condition("inflow_txns"))
+        .where.not(pending_condition("outflow_txns"))
+    end
+
+    # Same currency: exactly opposite amounts. Different currencies: the inflow within
+    # :min_ratio..:max_ratio of the converted outflow, and with restrict_cross_currency_to_routes
+    # only on a known route or between two linked accounts. Binds :family_currency,
+    # :min_ratio and :max_ratio.
+    def transfer_amounts_match_sql(restrict_cross_currency_to_routes:)
+      route_condition = "AND (#{confirmed_route_sql} OR (#{linked_account_sql('inflow_accounts')} AND #{linked_account_sql('outflow_accounts')}))" if restrict_cross_currency_to_routes
+
+      <<~SQL.squish
+        (
+          inflow_candidates.currency = outflow_candidates.currency AND
+          inflow_candidates.amount = -outflow_candidates.amount
+        ) OR (
+          inflow_candidates.currency <> outflow_candidates.currency AND
+          ABS(inflow_candidates.amount / NULLIF(outflow_candidates.amount * #{transfer_match_rate_sql}, 0))
+            BETWEEN :min_ratio AND :max_ratio
+          #{route_condition}
+        )
+      SQL
     end
 
     # The rate that converts the outflow's currency into the inflow's on the outflow's date:
-    # the direct pair, else the cross rate through the family currency. NULL with neither.
+    # the direct pair, else the cross rate through the family currency (bind :family_currency).
+    # NULL with neither.
     def transfer_match_rate_sql
-      family_currency = self.class.connection.quote(primary_currency_code)
       direct = ExchangeRate.rate_sql(from: "outflow_candidates.currency", to: "inflow_candidates.currency", on: "outflow_candidates.date")
-      outflow_to_family = ExchangeRate.rate_sql(from: "outflow_candidates.currency", to: family_currency, on: "outflow_candidates.date")
-      inflow_to_family = ExchangeRate.rate_sql(from: "inflow_candidates.currency", to: family_currency, on: "outflow_candidates.date")
+      outflow_to_family = ExchangeRate.rate_sql(from: "outflow_candidates.currency", to: ":family_currency", on: "outflow_candidates.date")
+      inflow_to_family = ExchangeRate.rate_sql(from: "inflow_candidates.currency", to: ":family_currency", on: "outflow_candidates.date")
 
       "COALESCE(#{direct}, #{outflow_to_family} / NULLIF(#{inflow_to_family}, 0))"
     end
