@@ -47,7 +47,7 @@ export default class extends Controller {
 
   connect() {
     this._install();
-    document.addEventListener("turbo:load", this._reinstall);
+    document.addEventListener("turbo:load", this._reinstallIfStale);
     // Colors that depend on the theme are baked into SVG attributes, so a
     // theme switch needs a redraw (theme_controller dispatches the event).
     document.documentElement.addEventListener("theme:change", this._reinstall);
@@ -66,7 +66,7 @@ export default class extends Controller {
 
   disconnect() {
     this._teardown();
-    document.removeEventListener("turbo:load", this._reinstall);
+    document.removeEventListener("turbo:load", this._reinstallIfStale);
     document.documentElement.removeEventListener(
       "theme:change",
       this._reinstall,
@@ -83,6 +83,30 @@ export default class extends Controller {
     this._install();
   };
 
+  // The ResizeObserver reports the size the chart already has once it starts
+  // observing, and turbo:load follows the connect of a page visit. Drawing
+  // again then replaced the chart, and the drag overlay under the pointer,
+  // right after the page showed. Draw again only for a new size or new data,
+  // or when a morph took the drawn chart away.
+  _reinstallIfStale = () => {
+    if (this._drawnState === this._currentState() && this._isDrawn) return;
+
+    this._reinstall();
+  };
+
+  _currentState() {
+    const container = this._d3Container.node();
+    return [
+      container.clientWidth,
+      container.clientHeight,
+      this.element.getAttribute(`data-${this.identifier}-data-value`),
+    ].join("|");
+  }
+
+  get _isDrawn() {
+    return this._d3Container.node().querySelector("svg") !== null;
+  }
+
   _teardown() {
     this._d3SvgMemo = null;
     this._d3GroupMemo = null;
@@ -95,6 +119,7 @@ export default class extends Controller {
   }
 
   _install() {
+    this._drawnState = this._currentState();
     this._normalizeDataPoints();
     this._rememberInitialContainerSize();
     this._draw();
@@ -1171,7 +1196,7 @@ export default class extends Controller {
 
   _setupResizeObserver() {
     this._resizeObserver = new ResizeObserver(() => {
-      this._reinstall();
+      this._reinstallIfStale();
     });
     this._resizeObserver.observe(this.element);
   }
