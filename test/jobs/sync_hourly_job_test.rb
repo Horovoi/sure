@@ -35,6 +35,32 @@ class SyncHourlyJobTest < ActiveJob::TestCase
     end
   end
 
+  test "syncs only the hourly providers that are switched on" do
+    enable_bank_connections(:lunchflow, :plaid)
+
+    CoinstatsItem.expects(:active).never
+    LunchflowItem.expects(:active).never
+    PlaidItem.expects(:active).never
+
+    SyncHourlyJob.perform_now
+  end
+
+  test "reads the hourly providers from the registry" do
+    hourly = BankConnections::Provider.new(key: "testbank", association: :testbank_items, item_class_name: "LunchflowItem",
+      account_class_name: "LunchflowAccount", label: "Test", description: nil, docs_url: nil, hourly: true,
+      balance_includes_pending: false, settings_partial: nil, config_keys: [], generic_listing: false)
+    BankConnections.stubs(:enabled_providers).returns([ hourly ])
+
+    item = mock("item")
+    item.expects(:sync_later).once
+    relation = mock("relation")
+    relation.stubs(:find_each).yields(item)
+    LunchflowItem.expects(:active).returns(relation)
+    CoinstatsItem.expects(:active).never
+
+    SyncHourlyJob.perform_now
+  end
+
   test "skips provider items when bank connections are disabled" do
     CoinstatsItem.expects(:active).never
     CoinstatsItem.any_instance.expects(:sync_later).never

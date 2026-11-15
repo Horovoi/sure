@@ -59,7 +59,7 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     # Create initial transaction
     entry = @adapter.import_transaction(
       external_id: "plaid_duplicate_test",
-      amount: 100.00,
+      amount: 123.45,
       currency: "USD",
       date: Date.current,
       name: "Original Name",
@@ -591,11 +591,12 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
         source: "lunchflow"
       )
 
-      # Should be the same entry, now claimed by the provider
+      # Should be the same entry, now claimed by the provider. What the user recorded stays.
       assert_equal manual_entry.id, entry.id
       assert_equal "lunchflow_12345", entry.external_id
       assert_equal "lunchflow", entry.source
-      assert_equal "Coffee Shop - Lunchflow", entry.name
+      assert_equal "Coffee Shop", entry.name
+      assert_equal "lunchflow", entry.transaction.reload.extra.dig("provider_claim", "source")
     end
   end
 
@@ -909,7 +910,7 @@ class Account::ProviderImportAdapterTest < ActiveSupport::TestCase
     assert_difference "@account.entries.count", 1 do
       posted_entry = @adapter.import_transaction(
         external_id: "lunchflow_posted_big_diff",
-        amount: 100.00, # 100% increase - way outside 25% tolerance
+        amount: 101.00, # 100% increase - way outside 25% tolerance
         currency: "USD",
         date: Date.current,
         name: "Store",

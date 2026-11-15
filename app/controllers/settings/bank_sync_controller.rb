@@ -3,29 +3,16 @@ class Settings::BankSyncController < ApplicationController
 
   layout "settings"
 
+  # The enabled bank connection providers that have a page to read about them
   def show
-    @providers = [
+    @providers = BankConnections.enabled_providers.select(&:docs_url).map do |provider|
       {
-        name: "Lunch Flow",
-        description: "US, Canada, UK, EU, Brazil and Asia through multiple open banking providers.",
-        path: "https://lunchflow.app/features/sure-integration",
-        target: "_blank",
-        rel: "noopener noreferrer"
-      },
-      {
-        name: "Plaid",
-        description: "US & Canada bank connections with transactions, investments, and liabilities.",
-        path: "https://github.com/we-promise/sure/blob/main/docs/hosting/plaid.md",
-        target: "_blank",
-        rel: "noopener noreferrer"
-      },
-      {
-        name: "Enable Banking (beta)",
-        description: "European bank connections via open banking APIs across multiple countries.",
-        path: "https://enablebanking.com",
+        name: provider.label,
+        description: provider.description,
+        path: provider.docs_url,
         target: "_blank",
         rel: "noopener noreferrer"
       }
-    ]
+    end
   end
 end

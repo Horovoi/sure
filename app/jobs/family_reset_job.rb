@@ -36,7 +36,7 @@ class FamilyResetJob < ApplicationJob
       family.categories.destroy_all
       family.tags.destroy_all
       family.merchants.destroy_all
-      BankConnections::ITEM_ASSOCIATIONS.each do |association|
+      BankConnections.item_associations.each do |association|
         family.public_send(association).destroy_all
       end
       family.imports.destroy_all

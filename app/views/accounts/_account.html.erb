@@ -40,7 +40,7 @@
           <%= icon("pencil-line", size: "sm") %>
         <% end %>
 
-        <% if !account.linked? && bank_connections_enabled? && ["Depository", "CreditCard", "Investment", "Crypto"].include?(account.accountable_type) %>
+        <% if !account.linked? && provider_link_available?(account) %>
           <%= link_to select_provider_account_path(account),
                       data: { turbo_frame: :modal },
                       class: "group-hover/account:flex hidden hover:opacity-80 items-center justify-center gap-1",

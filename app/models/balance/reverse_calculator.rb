@@ -1,4 +1,11 @@
 class Balance::ReverseCalculator < Balance::BaseCalculator
+  # stop_date: the earliest day to calculate (default: the opening anchor date). The
+  # cutover calculator stops the reverse part at the cutover date.
+  def initialize(account, stop_date: nil, include_pending: false)
+    super(account, include_pending: include_pending)
+    @stop_date = stop_date
+  end
+
   def calculate
     Rails.logger.tagged("Balance::ReverseCalculator") do
       # Since it's a reverse sync, we're starting with the "end of day" balance components and
@@ -10,7 +17,7 @@ class Balance::ReverseCalculator < Balance::BaseCalculator
       end_non_cash_balance = account.current_anchor_balance - end_cash_balance
 
       # Calculates in reverse-chronological order (End of day -> Start of day)
-      account.current_anchor_date.downto(account.opening_anchor_date).map do |date|
+      account.current_anchor_date.downto(@stop_date || account.opening_anchor_date).map do |date|
         flows = flows_for_date(date)
 
         if use_opening_anchor_for_date?(date)

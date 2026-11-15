@@ -33,6 +33,22 @@ class RecurringTransaction::ReconcilerTest < ActiveSupport::TestCase
     assert_equal @recurring.id, stored["recurring_transaction_id"]
   end
 
+  test "a provider's pending hold is not a real charge, its settled row is" do
+    hold = real_charge(days: 1)
+    hold.update!(external_id: "hold-1", source: "monobank")
+    hold.transaction.update!(extra: { "monobank" => { "pending" => true } })
+
+    result = reconcile
+
+    assert_empty result.replaced
+    assert_empty result.flagged
+    assert Entry.exists?(@generated.id)
+    assert_nil hold.reload.transaction.recurring_transaction_id
+
+    hold.transaction.update!(extra: { "monobank" => { "pending" => false } })
+    assert_equal [ hold.id ], reconcile(dry_run: true).replaced.map { |pair| pair.real_entry.id }
+  end
+
   test "amount at 14.9% is replaced and at 15.1% is flagged" do
     near = real_charge(days: 1, amount: 114.9)
     assert_equal [ near.id ], reconcile(dry_run: true).replaced.map { |pair| pair.real_entry.id }
