@@ -13,7 +13,7 @@
     <%= yield :head %>
   </head>
 
-  <body class="h-[var(--app-height,100dvh)] overflow-hidden antialiased">
+  <body class="h-[var(--app-height,100dvh)] overflow-hidden antialiased flex flex-col">
     <% if Rails.env.development? %>
       <button hidden data-controller="hotkey" data-hotkey="t t /" data-action="theme#toggle"></button>
     <% end %>
@@ -40,6 +40,10 @@
     <%= render "impersonation_sessions/super_admin_bar" if Current.true_user&.super_admin? && show_super_admin_bar? %>
     <%= render "impersonation_sessions/approval_bar" if Current.true_user&.impersonated_support_sessions&.initiated&.any? %>
 
-    <%= yield %>
+    <%# The page takes the height the bars above leave, so its own h-full layout
+        (the sidebar user menu at the bottom) stays inside the window. %>
+    <div class="flex-1 min-h-0">
+      <%= yield %>
+    </div>
   </body>
 </html>

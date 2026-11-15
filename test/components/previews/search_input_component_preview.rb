@@ -7,8 +7,6 @@ class SearchInputComponentPreview < ViewComponent::Preview
   # Inside a panel that draws its own focus chrome with focus-ring-within.
   # @display container_classes max-w-[400px]
   def embedded
-    content_tag(:div, class: "bg-container rounded-lg border border-secondary focus-ring-within") do
-      render DS::SearchInput.new(variant: :embedded, placeholder: "Search categories")
-    end
+    render_with_template
   end
 end

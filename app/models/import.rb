@@ -272,7 +272,7 @@ class Import < ApplicationRecord
   end
 
   def csv_rows
-    @csv_rows ||= parsed_csv
+    parsed_csv
   end
 
   def csv_headers
@@ -280,7 +280,7 @@ class Import < ApplicationRecord
   end
 
   def csv_sample
-    @csv_sample ||= parsed_csv.first(2)
+    parsed_csv.first(2)
   end
 
   def dry_run
@@ -330,7 +330,7 @@ class Import < ApplicationRecord
       }
     end
 
-    rows.insert_all!(mapped_rows)
+    rows.insert_all!(with_row_order(mapped_rows))
     refresh_rows_count!
   end
 
@@ -486,6 +486,16 @@ class Import < ApplicationRecord
       update_column(:rows_count, rows.count)
     end
 
+    # Row ids are random UUIDs and insert_all! gives every row the same timestamp, so
+    # each row gets its own microsecond to keep Import::Row.ordered in file order.
+    def with_row_order(mapped_rows)
+      now = Time.current
+      mapped_rows.each_with_index.map do |row, index|
+        stamp = now + Rational(index, 1_000_000)
+        row.merge(created_at: stamp, updated_at: stamp)
+      end
+    end
+
     # Puts back the generated subscription charges that this import's own entries
     # replaced (Transaction#replace_subscription_charge!), before those entries go.
     # Entries the import only claimed stay, and keep what they replaced.
@@ -562,8 +572,13 @@ class Import < ApplicationRecord
       account&.currency || family.currency
     end
 
+    # Parsed again when the file or how it is read changes on the same object
+    # (a re-upload, a new separator or rows_to_skip)
     def parsed_csv
-      return @parsed_csv if defined?(@parsed_csv)
+      csv_source = [ raw_file_str, col_sep, rows_to_skip ]
+      return @parsed_csv if defined?(@parsed_csv) && @parsed_csv_source == csv_source
+
+      @parsed_csv_source = csv_source
 
       csv_content = raw_file_str || ""
       if rows_to_skip.to_i > 0

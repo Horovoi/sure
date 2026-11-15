@@ -53,12 +53,13 @@ class SyncToastTest < ApplicationSystemTestCase
     visit root_path
     page.execute_script("document.activeElement?.blur()")
     mark_window
-    assert_no_text "$7,777.00"
+    # The account row sits in a collapsed sidebar group, so its text is in the page but not visible
+    assert_no_text :all, "$7,777.00"
 
     @account.update!(balance: 7777)
     deliver_sync_toast(auto_refresh_delay: 100)
 
-    assert_text "$7,777.00"
+    assert_text :all, "$7,777.00"
     assert_no_selector "#sync-toast[role='status']", visible: :all
     assert page.evaluate_script("window.__syncToastMarker === true"), "the refresh must be a Turbo morph, not a full reload"
   end

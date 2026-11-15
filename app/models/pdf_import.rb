@@ -192,7 +192,7 @@ class PdfImport < Import
         }
       end
 
-      Import::Row.insert_all!(mapped_rows) if mapped_rows.any?
+      Import::Row.insert_all!(with_row_order(mapped_rows)) if mapped_rows.any?
       rows.reset
       @already_recorded = nil
       refresh_rows_count!

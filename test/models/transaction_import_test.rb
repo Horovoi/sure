@@ -99,7 +99,7 @@ class TransactionImportTest < ActiveSupport::TestCase
       @import.publish
     end
 
-    assert_equal [ -100, 200, -300 ], @import.entries.map(&:amount)
+    assert_equal [ -100, 200, -300 ], @import.entries.order(:date).map(&:amount)
   end
 
   test "does not create duplicate when matching transaction exists with same name" do
@@ -570,7 +570,8 @@ class TransactionImportTest < ActiveSupport::TestCase
 
   test "revert restores the generated charge an imported entry replaced and keeps next_expected_date" do
     account = accounts(:depository)
-    recurring, generated = subscription_charge(account, Date.new(2024, 1, 3))
+    # 4 days apart: outside the already-recorded window (3 days), so the import creates its own entry
+    recurring, generated = subscription_charge(account, Date.new(2024, 1, 1))
     configure_claiming_import(account, "01/05/2024,Streaming service,15,,,")
     @import.publish
     imported = @import.reload.entries.sole
@@ -583,7 +584,7 @@ class TransactionImportTest < ActiveSupport::TestCase
     assert @import.reload.reverted?
     assert_not Entry.exists?(imported.id)
     restored = account.entries.where(source: "subscription").sole
-    assert_equal Date.new(2024, 1, 3), restored.date
+    assert_equal Date.new(2024, 1, 1), restored.date
     assert_equal recurring.id, restored.transaction.recurring_transaction_id
     # An import revert does not mark the pair: a new import of the statement may match it again
     assert_not restored.transaction.potential_duplicate_dismissed?

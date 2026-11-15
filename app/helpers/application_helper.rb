@@ -37,6 +37,15 @@ module ApplicationHelper
     end
   end
 
+  # SSO provider icons come from config/auth.yml, env vars or the admin form, so a
+  # name that is not a Lucide icon (such as the default "google") falls back to "key".
+  def sso_provider_icon_key(name)
+    LucideRails::IconProvider.icon(name.to_s)
+    name.to_s
+  rescue ArgumentError
+    "key"
+  end
+
   # The chevron for a <details> summary. It follows its own <details> (the
   # arbitrary variant), not `group-open:`, which matches any open ancestor
   # group: a disclosure nested in an open one would otherwise show as open.
