@@ -75,6 +75,10 @@ module ActiveSupport
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
 
+    # rails-settings-cached keeps an in-memory cache that the per-test rollback does
+    # not undo, so a Setting value written in one test would leak into later ones.
+    setup { Setting.clear_cache }
+
     # Add more helper methods to be used by all tests here...
     def sign_in(user)
       post sessions_path, params: { email: user.email, password: user_password_test }
