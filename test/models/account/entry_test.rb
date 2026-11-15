@@ -172,4 +172,44 @@ class EntryTest < ActiveSupport::TestCase
         entryable: transaction
       )
     end
+
+    test "chronological order breaks a date and created_at tie by id" do
+      account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
+      created_at = Time.current.change(usec: 0)
+      entries = 3.times.map do |i|
+        create_transaction(account: account, name: "Tie #{i}", date: Date.current, created_at: created_at)
+      end
+      ids = entries.map(&:id).sort
+
+      assert_equal ids, account.entries.where(id: ids).chronological.pluck(:id)
+      assert_equal ids.reverse, account.entries.where(id: ids).reverse_chronological.pluck(:id)
+    end
+
+    test "bulk_update! gives a balance update only the entry fields" do
+      account = accounts(:depository)
+      transaction_entry = create_transaction(account: account, name: "Bulk transaction")
+      valuation_entry = create_valuation(account: account, date: 3.days.ago.to_date)
+      category = categories(:food_and_drink)
+
+      updated = Entry.where(id: [ transaction_entry.id, valuation_entry.id ])
+                     .bulk_update!({ notes: "Bulk note", category_id: category.id })
+
+      assert_equal 2, updated
+      assert_equal "Bulk note", valuation_entry.reload.notes
+      assert_equal "Bulk note", transaction_entry.reload.notes
+      assert_equal category, transaction_entry.transaction.category
+    end
+
+    test "bulk_update! with only a category leaves a balance update untouched" do
+      account = accounts(:depository)
+      transaction_entry = create_transaction(account: account, name: "Category only")
+      valuation_entry = create_valuation(account: account, date: 6.days.ago.to_date)
+      category = categories(:food_and_drink)
+
+      assert_no_changes -> { valuation_entry.reload.updated_at } do
+        Entry.where(id: [ transaction_entry.id, valuation_entry.id ]).bulk_update!({ category_id: category.id })
+      end
+
+      assert_equal category, transaction_entry.reload.transaction.category
+    end
 end

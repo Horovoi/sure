@@ -28,7 +28,8 @@ class Entry < ApplicationRecord
     order(
       date: :asc,
       Arel.sql("CASE WHEN entries.entryable_type = 'Valuation' THEN 1 ELSE 0 END") => :asc,
-      created_at: :asc
+      created_at: :asc,
+      id: :asc # tie-break, so paging never skips or repeats entries created in the same instant
     )
   }
 
@@ -36,7 +37,8 @@ class Entry < ApplicationRecord
     order(
       date: :desc,
       Arel.sql("CASE WHEN entries.entryable_type = 'Valuation' THEN 1 ELSE 0 END") => :desc,
-      created_at: :desc
+      created_at: :desc,
+      id: :desc # tie-break, so paging never skips or repeats entries created in the same instant
     )
   }
 
@@ -138,9 +140,12 @@ class Entry < ApplicationRecord
 
       transaction do
         all.each do |entry|
-          if bulk_attributes.present?
-            bulk_attributes[:entryable_attributes][:id] = entry.entryable_id if bulk_attributes[:entryable_attributes].present?
-            entry.update! bulk_attributes
+          attrs = bulk_attributes_for(entry, bulk_attributes)
+          update_entry_tags = update_tags && entry.transaction?
+          next if attrs.blank? && !update_entry_tags
+
+          if attrs.present?
+            entry.update! attrs
 
             if entry.saved_change_to_date?
               start_date = [ entry.date_previously_was, entry.date ].compact.min
@@ -149,7 +154,7 @@ class Entry < ApplicationRecord
             end
           end
 
-          if update_tags && entry.transaction?
+          if update_entry_tags
             entry.transaction.tag_ids = tag_ids
             entry.transaction.save!
             entry.entryable.lock_attr!(:tag_ids) if entry.transaction.tags.any?
@@ -166,6 +171,22 @@ class Entry < ApplicationRecord
 
       all.size
     end
+
+    private
+      # Category and merchant belong to a transaction: a valuation or trade in the
+      # selection gets only the entry fields. Each entry gets its own copy with its
+      # own entryable id.
+      def bulk_attributes_for(entry, bulk_attributes)
+        attrs = bulk_attributes.deep_dup
+
+        if entry.transaction? && attrs[:entryable_attributes].present?
+          attrs[:entryable_attributes][:id] = entry.entryable_id
+        else
+          attrs.delete(:entryable_attributes)
+        end
+
+        attrs
+      end
   end
 
   private

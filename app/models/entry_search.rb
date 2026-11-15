@@ -22,6 +22,12 @@ class EntrySearch
   }.freeze
 
   class << self
+    # Ids of the transactions that carry at least one of the named tags, once each.
+    # The caller's scope limits the result to its family.
+    def tagged_transaction_ids(tags)
+      Tagging.joins(:tag).where(taggable_type: "Transaction", tags: { name: tags }).select(:taggable_id)
+    end
+
     def apply_search_filter(scope, search)
       return scope if search.blank?
 
@@ -182,14 +188,11 @@ class EntrySearch
         .where(merchants: { name: merchants })
     end
 
+    # A subquery, not a join, so an entry with two of the filtered tags is one row
     def apply_tag_conditions(query, tags)
       return query if tags.blank?
 
-      query
-        .joins(TRANSACTIONS_JOIN)
-        .joins("INNER JOIN taggings ON taggings.taggable_type = 'Transaction' AND taggings.taggable_id = transactions.id")
-        .joins("INNER JOIN tags ON tags.id = taggings.tag_id")
-        .where(tags: { name: tags })
+      query.where(entryable_type: "Transaction", entryable_id: self.class.tagged_transaction_ids(tags))
     end
 
     def build_transaction_type_condition(txn_types)

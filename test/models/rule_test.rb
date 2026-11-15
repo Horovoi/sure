@@ -314,4 +314,66 @@ class RuleTest < ActiveSupport::TestCase
     assert_nil transaction_entry2.transaction.category,
       "Transaction on other account should not be categorized"
   end
+
+  test "displayed_condition skips an empty compound condition" do
+    rule = Rule.new(
+      family: @family,
+      resource_type: "transaction",
+      actions: [ Rule::Action.new(action_type: "exclude_transaction") ],
+      conditions: [
+        Rule::Condition.new(condition_type: "compound", operator: "and"),
+        Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "starbucks")
+      ]
+    )
+
+    displayed = rule.displayed_condition
+
+    assert_equal "transaction_name", displayed.condition_type
+    assert_equal "starbucks", displayed.value
+    assert_equal 0, rule.additional_displayable_conditions_count
+    assert_equal "If transaction name like starbucks", rule.primary_condition_title
+  end
+
+  test "a rule with only an empty compound condition has no condition title" do
+    rule = Rule.new(
+      family: @family,
+      resource_type: "transaction",
+      actions: [ Rule::Action.new(action_type: "exclude_transaction") ],
+      conditions: [ Rule::Condition.new(condition_type: "compound", operator: "and") ]
+    )
+
+    assert_nil rule.displayed_condition
+    assert_equal I18n.t("rules.no_condition"), rule.primary_condition_title
+  end
+
+  test "additional_displayable_conditions_count ignores empty compound conditions" do
+    rule = Rule.new(
+      family: @family,
+      resource_type: "transaction",
+      actions: [ Rule::Action.new(action_type: "exclude_transaction") ],
+      conditions: [
+        Rule::Condition.new(condition_type: "compound", operator: "and"),
+        Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "first"),
+        Rule::Condition.new(condition_type: "transaction_amount", operator: ">", value: 100)
+      ]
+    )
+
+    assert_equal 1, rule.additional_displayable_conditions_count
+  end
+
+  test "matches_transaction? follows the rule's conditions" do
+    matching = create_transaction(date: Date.current, account: @account, name: "Coffee shop")
+    other = create_transaction(date: Date.current, account: @account, name: "Hardware store")
+
+    rule = Rule.create!(
+      family: @family,
+      resource_type: "transaction",
+      effective_date: 1.day.ago.to_date,
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "coffee") ],
+      actions: [ Rule::Action.new(action_type: "set_transaction_category", value: @groceries_category.id) ]
+    )
+
+    assert rule.matches_transaction?(matching.transaction)
+    assert_not rule.matches_transaction?(other.transaction)
+  end
 end

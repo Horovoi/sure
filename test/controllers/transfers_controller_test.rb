@@ -137,4 +137,16 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_match "Date is invalid", response.body
   end
+
+  test "the new transfer form lists only visible accounts" do
+    disabled_account = accounts(:depository)
+    disabled_account.update_column(:status, "disabled")
+
+    get new_transfer_url
+
+    assert_response :success
+    assert_select "select[name='transfer[from_account_id]'] option[value='#{disabled_account.id}']", count: 0
+    assert_select "select[name='transfer[to_account_id]'] option[value='#{disabled_account.id}']", count: 0
+    assert_select "select[name='transfer[from_account_id]'] option[value='#{accounts(:credit_card).id}']"
+  end
 end

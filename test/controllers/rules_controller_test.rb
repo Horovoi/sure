@@ -192,4 +192,33 @@ class RulesControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to rules_url
   end
+
+  test "index renders a rule with an empty compound condition" do
+    rule = @user.family.rules.build(resource_type: "transaction")
+    rule.conditions.build(condition_type: "compound", operator: "and")
+    rule.actions.build(action_type: "exclude_transaction")
+    rule.save!
+
+    get rules_url
+
+    assert_response :success
+    assert_includes response.body, I18n.t("rules.no_condition")
+  end
+
+  test "index shows the next condition when the first compound condition is empty" do
+    rule = @user.family.rules.build(resource_type: "transaction")
+    rule.conditions.build(condition_type: "compound", operator: "and")
+    rule.conditions.build(condition_type: "transaction_name", operator: "like", value: "edge-case-name")
+    rule.actions.build(action_type: "exclude_transaction")
+    rule.save!
+
+    get rules_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(rule)}" do
+      assert_select "span", text: /edge-case-name/
+      assert_select "span", text: /#{Regexp.escape(I18n.t("rules.no_condition"))}/, count: 0
+      assert_select "p", text: /more condition/, count: 0
+    end
+  end
 end

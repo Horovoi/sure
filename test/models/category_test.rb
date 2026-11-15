@@ -45,4 +45,41 @@ class CategoryTest < ActiveSupport::TestCase
     assert_equal [ "Food & Drink", "Restaurants" ], option_labels
     assert_equal [ categories(:food_and_drink).id, categories(:subcategory).id ], option_ids
   end
+
+  test "accepts six-digit hex colors" do
+    [ "#FFFFFF", "#000000", "#123456", "#ABCDEF", "#abcdef" ].each do |color|
+      category = Category.new(name: "Category #{color}", color: color, lucide_icon: "shapes", family: @family)
+      assert category.valid?, "#{color} should be valid"
+    end
+  end
+
+  test "rejects a color that is not six-digit hex" do
+    [ "invalid", "#123", "#1234567", "#GGGGGG", "red", "ffffff", "#ffff" ].each do |color|
+      category = Category.new(name: "Category #{color}", color: color, lucide_icon: "shapes", family: @family)
+      assert_not category.valid?, "#{color} should be invalid"
+      assert category.errors.of_kind?(:color, :invalid)
+    end
+  end
+
+  test "an existing category with an old non-hex color still saves other fields" do
+    category = categories(:income)
+    category.update_column(:color, "#abc")
+
+    assert category.update(name: "Renamed income")
+    assert_not category.update(color: "#abcd"), "changing to a bad color is still rejected"
+  end
+
+  test "changing a parent's color updates its subcategories" do
+    parent = categories(:food_and_drink)
+    subcategory = categories(:subcategory)
+    previous_updated_at = subcategory.updated_at
+
+    travel 1.second do
+      parent.update!(color: "#123456")
+    end
+
+    subcategory.reload
+    assert_equal "#123456", subcategory.color
+    assert_operator subcategory.updated_at, :>, previous_updated_at
+  end
 end

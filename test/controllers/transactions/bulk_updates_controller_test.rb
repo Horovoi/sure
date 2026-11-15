@@ -67,4 +67,35 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
 
     post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Only notes" } }
   end
+
+  test "a selection with balance updates gets only the entry fields" do
+    account = accounts(:depository)
+    valuation = account.entries.create!(date: 8.days.ago.to_date, name: "Value", amount: 100, currency: "USD", entryable: Valuation.new(kind: "reconciliation"))
+    transaction = entries(:transaction)
+
+    post transactions_bulk_update_url, params: {
+      bulk_update: { entry_ids: [ valuation.id, transaction.id ], category_id: Category.second.id, notes: "Mixed note" }
+    }
+
+    assert_redirected_to transactions_url
+    assert_equal "Mixed note", valuation.reload.notes
+    assert_equal Category.second, transaction.reload.transaction.category
+  end
+
+  test "an update that breaks an entry rolls the whole selection back" do
+    account = accounts(:depository)
+    first = account.entries.create!(date: 8.days.ago.to_date, name: "Value 1", amount: 100, currency: "USD", entryable: Valuation.new(kind: "reconciliation"))
+    second = account.entries.create!(date: 9.days.ago.to_date, name: "Value 2", amount: 200, currency: "USD", entryable: Valuation.new(kind: "reconciliation"))
+
+    # Two balance updates of one account cannot share a date
+    post transactions_bulk_update_url, params: {
+      bulk_update: { entry_ids: [ first.id, second.id ], date: 10.days.ago.to_date, notes: "Rolled back" }
+    }
+
+    assert_redirected_to transactions_url
+    assert flash[:alert].present?
+    assert_nil first.reload.notes
+    assert_equal 8.days.ago.to_date, first.date
+    assert_equal 9.days.ago.to_date, second.reload.date
+  end
 end

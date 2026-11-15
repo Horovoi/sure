@@ -2,6 +2,23 @@
 en:
   rules:
     no_action: No Action
+    no_condition: No condition
+    rule:
+      action_with_value: "%{action} to %{value}"
+      all_resources: All past and future %{resources}
+      delete: Delete
+      edit: Edit
+      for: FOR
+      if: IF
+      more_actions:
+        one: and %{count} more action
+        other: and %{count} more actions
+      more_conditions:
+        one: and %{count} more condition
+        other: and %{count} more conditions
+      reapply: Re-apply rule
+      resources_since: "%{resources} on or after %{date}"
+      then: THEN
     actions:
       value_placeholder: Enter a value
     apply_all:

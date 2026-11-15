@@ -160,6 +160,16 @@ en:
         invalid_qty_or_price: Invalid quantity or price. Please enter valid positive values.
         conversion_failed: "Failed to convert transaction: %{error}"
         unexpected_error: "Unexpected error during conversion: %{error}"
+    create:
+      success: Transaction created
+    update:
+      success: Transaction updated
+    bulk_updates:
+      create:
+        invalid: "Nothing was updated: %{errors}"
+        success:
+          one: "%{count} transaction updated"
+          other: "%{count} transactions updated"
     searches:
       filters:
         amount_filter:
