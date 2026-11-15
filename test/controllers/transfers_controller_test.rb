@@ -89,4 +89,52 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
       transfer.reload
     end
   end
+
+  test "creates a transfer from an ISO date" do
+    assert_difference "Transfer.count", 1 do
+      post transfers_url, params: {
+        transfer: {
+          from_account_id: accounts(:depository).id,
+          to_account_id: accounts(:credit_card).id,
+          date: 2.days.ago.to_date.iso8601,
+          amount: 100
+        }
+      }
+    end
+
+    assert_equal 2.days.ago.to_date, Transfer.order(:created_at).last.date
+    assert_equal "Transfer created", flash[:notice]
+  end
+
+  test "a blank transfer date shows the form again" do
+    assert_no_difference [ "Transfer.count", "Entry.count" ] do
+      post transfers_url, params: {
+        transfer: {
+          from_account_id: accounts(:depository).id,
+          to_account_id: accounts(:credit_card).id,
+          date: "",
+          amount: 100
+        }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_match "Date can&#39;t be blank", response.body
+  end
+
+  test "a bad transfer date shows the form again instead of a server error" do
+    assert_no_difference [ "Transfer.count", "Entry.count" ] do
+      post transfers_url, params: {
+        transfer: {
+          from_account_id: accounts(:depository).id,
+          to_account_id: accounts(:credit_card).id,
+          date: "not-a-date",
+          amount: 100
+        }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_match "Date is invalid", response.body
+  end
 end

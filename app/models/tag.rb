@@ -5,7 +5,8 @@ class Tag < ApplicationRecord
   has_many :import_mappings, as: :mappable, dependent: :destroy, class_name: "Import::Mapping"
 
   validates :name, presence: true, uniqueness: { scope: :family }
-  validates :color, format: { with: /\A#[0-9A-Fa-f]{6}\z/ }, allow_nil: true
+  # Checked only when the colour changes, so an old row with another colour can still be renamed
+  validates :color, format: { with: /\A#[0-9A-Fa-f]{6}\z/ }, allow_nil: true, if: :will_save_change_to_color?
 
   scope :alphabetically, -> { order(:name) }
 

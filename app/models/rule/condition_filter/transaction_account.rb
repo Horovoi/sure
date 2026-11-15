@@ -4,7 +4,11 @@ class Rule::ConditionFilter::TransactionAccount < Rule::ConditionFilter
   end
 
   def options
-    family.accounts.alphabetically.pluck(:name, :id)
+    family.accounts.listable.alphabetically.pluck(:name, :id)
+  end
+
+  def prepare(scope)
+    scope.with_entry
   end
 
   def apply(scope, operator, value)

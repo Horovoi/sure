@@ -99,7 +99,8 @@ class Rule::ConditionFilter
     def normalize_value(value)
       return value unless type == "text"
 
-      value.to_s.gsub(/\s+/, " ").strip
+      # Collapse whitespace the way normalize_field does on the SQL side
+      value.to_s.gsub(/[[:space:]]+/, " ").strip
     end
 
     def normalize_field(field)
