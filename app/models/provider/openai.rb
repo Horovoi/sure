@@ -269,6 +269,14 @@ class Provider::Openai < Provider
           # for the "response chunk" in the stream and return it (it is already parsed)
           if stream_proxy.present?
             response_chunk = collected_chunks.find { |chunk| chunk.type == "response" }
+
+            # A stream can end without a completed response (response.failed, response.incomplete, an error
+            # event, or a dropped connection). Raised here, the rescue below records the failure once.
+            if response_chunk.nil?
+              error_chunk = collected_chunks.find { |chunk| chunk.type == "error" }
+              raise Error.new(stream_error_message(error_chunk), details: error_chunk&.data&.details)
+            end
+
             response = response_chunk.data
             usage = response_chunk.usage
             Rails.logger.debug("Stream response usage: #{usage.inspect}")
@@ -506,11 +514,11 @@ class Provider::Openai < Provider
 
       if error
         generation&.end(
-          output: { error: error.message, details: error.respond_to?(:details) ? error.details : nil },
+          output: { error: safe_error_message(error), details: error.respond_to?(:details) ? error.details : nil },
           level: "ERROR"
         )
         trace&.update(
-          output: { error: error.message },
+          output: { error: safe_error_message(error) },
           level: "ERROR"
         )
       else
@@ -526,7 +534,7 @@ class Provider::Openai < Provider
 
       # For error cases, record with zero tokens
       if error.present?
-        Rails.logger.info("Recording failed LLM usage - Error: #{error.message}")
+        Rails.logger.info("Recording failed LLM usage - Error: #{safe_error_message(error)}")
 
         # Extract HTTP status code if available from the error
         http_status_code = extract_http_status_code(error)
@@ -541,7 +549,7 @@ class Provider::Openai < Provider
           total_tokens: 0,
           estimated_cost: nil,
           metadata: {
-            error: error.message,
+            error: safe_error_message(error),
             http_status_code: http_status_code
           }
         )
@@ -602,11 +610,36 @@ class Provider::Openai < Provider
         error.status_code
       elsif error.respond_to?(:response) && error.response.respond_to?(:code)
         error.response.code.to_i
-      elsif error.message =~ /(\d{3})/
+      elsif safe_error_message(error) =~ /(\d{3})/
         # Extract 3-digit HTTP status code from error message
         $1.to_i
       else
         nil
+      end
+    end
+
+    # Some client errors raise from #message itself (they read a response body that is not there)
+    def safe_error_message(error)
+      error&.message
+    rescue => e
+      "(message unavailable: #{e.class})"
+    end
+
+    # The message for a Responses stream that ended without a completed response: the provider's own message
+    # when an error chunk carried one, else the usual causes
+    def stream_error_message(error_chunk)
+      upstream = error_chunk&.data
+      if upstream&.message.present?
+        prefix = case upstream.event
+        when "response.incomplete" then "OpenAI response was incomplete"
+        when "response.failed" then "OpenAI response failed"
+        else "OpenAI returned an error"
+        end
+        code_suffix = upstream.code.present? ? " [#{upstream.code}]" : ""
+        "#{prefix}#{code_suffix}: #{upstream.message}"
+      else
+        "OpenAI stream ended without a completion event. Common causes: an expired previous_response_id, " \
+          "a context-length overflow, or a transient OpenAI error."
       end
     end
 end

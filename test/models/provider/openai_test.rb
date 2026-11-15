@@ -312,9 +312,69 @@ class Provider::OpenaiTest < ActiveSupport::TestCase
     assert_equal "none", sent[1][:tool_choice]
   end
 
+  test "a stream that ends with response.failed fails with the provider message and records usage once" do
+    family = families(:dylan_family)
+    stub_stream(@subject, {
+      "type" => "response.failed",
+      "response" => { "error" => { "message" => "Previous response not found", "code" => "previous_response_not_found" } }
+    })
+
+    response = nil
+    assert_difference -> { family.llm_usages.count }, 1 do
+      response = @subject.chat_response("hi", model: @subject_model, streamer: proc { |_| }, family: family)
+    end
+
+    assert_not response.success?
+    assert_kind_of Provider::Openai::Error, response.error
+    assert_match(/Previous response not found/, response.error.message)
+    assert_match(/previous_response_not_found/, response.error.message)
+
+    usage = family.llm_usages.order(:created_at).last
+    assert_equal 0, usage.total_tokens
+    assert_match(/Previous response not found/, usage.metadata["error"])
+  end
+
+  test "a stream that ends with response.incomplete fails with the reason" do
+    stub_stream(@subject, { "type" => "response.incomplete", "response" => { "incomplete_details" => { "reason" => "max_output_tokens" } } })
+
+    response = @subject.chat_response("hi", model: @subject_model, streamer: proc { |_| })
+
+    assert_not response.success?
+    assert_match(/incomplete \[max_output_tokens\]/, response.error.message)
+  end
+
+  test "a stream that ends with no response and no error event fails with a useful message" do
+    stub_stream(@subject)
+
+    response = @subject.chat_response("hi", model: @subject_model, streamer: proc { |_| })
+
+    assert_not response.success?
+    assert_kind_of Provider::Openai::Error, response.error
+    assert_match(/stream ended without a completion event/i, response.error.message)
+  end
+
+  test "failed usage is recorded even when the error message itself raises" do
+    family = families(:dylan_family)
+    broken = Class.new(StandardError) { def message = raise(NoMethodError, "undefined method 'data' for nil") }.new
+
+    @subject.send(:record_llm_usage, family: family, model: @subject_model, operation: "chat", error: broken)
+
+    assert_equal "(message unavailable: NoMethodError)", family.llm_usages.order(:created_at).last.metadata["error"]
+  end
+
   private
     def sample_function
       { name: "get_accounts", description: "Lists accounts", params_schema: { type: "object", properties: {}, required: [], additionalProperties: false }, strict: true }
+    end
+
+    # Stubs client.responses.create with a stream that sends these events and no completed response
+    def stub_stream(provider, *events)
+      responses = Object.new
+      responses.define_singleton_method(:create) do |parameters:|
+        events.each { |event| parameters[:stream].call(event) }
+        nil
+      end
+      provider.send(:client).stubs(:responses).returns(responses)
     end
 
     # Stubs client.responses.create with a completed stream and returns the parameters of every request

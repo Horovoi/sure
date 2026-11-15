@@ -113,4 +113,34 @@ class AssistantMessageTest < ActiveSupport::TestCase
     assert turn.reload.failed?
     assert_includes @chat.reload.error, "config broke"
   end
+
+  test "an OpenAI stream failure fails the turn with the provider message, and the turn can be retried" do
+    UserMessage.create!(chat: @chat, content: "What is my net worth?", ai_model: "gpt-4.1")
+    turn = AssistantMessage.create!(chat: @chat, ai_model: "gpt-4.1")
+
+    provider = Provider::Openai.new("test-token")
+    responses = Object.new
+    responses.define_singleton_method(:create) do |parameters:|
+      parameters[:stream].call({ "type" => "response.output_text.delta", "delta" => "Your net" })
+      parameters[:stream].call({ "type" => "response.failed", "response" => { "error" => { "message" => "Previous response not found", "code" => "previous_response_not_found" } } })
+      nil
+    end
+    provider.send(:client).stubs(:responses).returns(responses)
+    Assistant.any_instance.stubs(:get_model_provider).with("gpt-4.1").returns(provider)
+
+    assert_difference -> { @chat.user.family.llm_usages.count }, 1 do
+      turn.generate_response
+    end
+
+    assert turn.reload.failed?
+    assert_includes @chat.reload.error, "Previous response not found"
+    assert_equal "resp_previous", @chat.latest_assistant_response_id
+    assert turn.retryable?
+
+    assert_enqueued_with(job: AssistantResponseJob) do
+      assert_equal turn, @chat.retry_last_turn!
+    end
+    assert turn.reload.pending?
+    assert_equal "", turn.content
+  end
 end
