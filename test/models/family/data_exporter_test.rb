@@ -47,7 +47,7 @@ class Family::DataExporterTest < ActiveSupport::TestCase
     assert zip_data.is_a?(StringIO)
 
     # Check that the zip contains all expected files
-    expected_files = [ "accounts.csv", "transactions.csv", "trades.csv", "categories.csv", "rules.csv", "all.ndjson" ]
+    expected_files = [ "accounts.csv", "transactions.csv", "trades.csv", "categories.csv", "merchants.csv", "rules.csv", "all.ndjson" ]
 
     Zip::File.open_buffer(zip_data) do |zip|
       actual_files = zip.entries.map(&:name)
@@ -216,6 +216,73 @@ class Family::DataExporterTest < ActiveSupport::TestCase
       # Should export category name instead of UUID
       assert_equal "Test Category", actions[0]["value"]
     end
+  end
+
+  test "exports merchants in CSV format scoped to the family" do
+    merchant = @family.merchants.create!(name: "Coffee Shop", color: "#123456", website_url: "https://coffeeshop.com")
+    other_merchant = @other_family.merchants.create!(name: "Other Family Store")
+
+    zip_data = @exporter.generate_export
+
+    Zip::File.open_buffer(zip_data) do |zip|
+      merchants_csv = zip.read("merchants.csv")
+      assert merchants_csv.start_with?("name,color,website_url")
+
+      rows = CSV.parse(merchants_csv, headers: true)
+      row = rows.find { |csv_row| csv_row["name"] == merchant.name }
+
+      assert_not_nil row
+      assert_equal "#123456", row["color"]
+      assert_equal "https://coffeeshop.com", row["website_url"]
+      assert_not rows.any? { |csv_row| csv_row["name"] == other_merchant.name }
+    end
+  end
+
+  test "rule operand lookup matches uppercase UUID values" do
+    assert_equal @category, @exporter.send(:operand_record, :categories, @category.id.upcase, fallback_to_name: true)
+  end
+
+  test "rule operand lookup skips the name fallback for stale UUID values" do
+    @exporter.expects(:operand_records_by_name).never
+
+    assert_nil @exporter.send(:operand_record, :categories, SecureRandom.uuid, fallback_to_name: true)
+  end
+
+  test "operand id and name lookups for the same relation share a single query" do
+    assert_queries_count(1) do
+      @exporter.send(:operand_records_by_id, :categories)
+      @exporter.send(:operand_records_by_name, :categories)
+    end
+  end
+
+  test "rule operands export as names with one lookup per operand type" do
+    merchant = @family.merchants.create!(name: "Batch Merchant")
+
+    4.times do |i|
+      rule = @family.rules.build(name: "Batch rule #{i}", resource_type: "transaction", active: true)
+      rule.conditions.build(condition_type: "transaction_category", operator: "=", value: @category.id)
+      rule.conditions.build(condition_type: "transaction_merchant", operator: "=", value: merchant.id)
+      rule.actions.build(action_type: "set_transaction_category", value: @category.id)
+      rule.actions.build(action_type: "set_transaction_merchant", value: merchant.id)
+      rule.actions.build(action_type: "set_transaction_tags", value: @tag.id)
+      rule.save!
+    end
+
+    lookups = []
+    callback = ->(*, payload) { lookups << payload[:sql] if payload[:sql].match?(/FROM "(categories|merchants|tags)"/) }
+    rules_csv = nil
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+      rules_csv = @exporter.send(:generate_rules_csv)
+    end
+
+    # At most one query each for categories, merchants and tags, whatever the rule count
+    assert_operator lookups.size, :<=, 3, lookups.join("\n")
+
+    row = CSV.parse(rules_csv, headers: true).find { |csv_row| csv_row["name"] == "Batch rule 0" }
+    conditions = JSON.parse(row["conditions"])
+    actions = JSON.parse(row["actions"])
+    assert_equal [ "Batch Merchant", "Test Category" ], conditions.map { |c| c["value"] }.sort
+    assert_equal [ "Test Category", "Batch Merchant", "Test Tag" ].sort, actions.map { |a| a["value"] }.sort
   end
 
   test "exports rule actions and maps tag UUIDs to names" do
