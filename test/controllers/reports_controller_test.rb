@@ -398,4 +398,149 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "[data-testid=unconverted-gains-note]", text: /1 gain is not included/
   end
+
+  # -- Period arrows (period_offset) -----------------------------------------
+
+  test "period offset steps back calendar periods of every type" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: false)
+
+      assert_report_period [ Date.new(2026, 3, 1), Date.new(2026, 3, 20) ], period_type: :monthly
+      assert_report_period [ Date.new(2026, 2, 1), Date.new(2026, 2, 28) ], period_type: :monthly, period_offset: -1
+      assert_report_period [ Date.new(2025, 12, 1), Date.new(2025, 12, 31) ], period_type: :monthly, period_offset: -3
+      assert_report_period [ Date.new(2025, 10, 1), Date.new(2025, 12, 31) ], period_type: :quarterly, period_offset: -1
+      assert_report_period [ Date.new(2025, 7, 1), Date.new(2025, 12, 31) ], period_type: :last_6_months, period_offset: -1
+      assert_report_period [ Date.new(2025, 1, 1), Date.new(2025, 12, 31) ], period_type: :ytd, period_offset: -1
+      assert_report_period [ Date.new(2024, 1, 1), Date.new(2024, 12, 31) ], period_type: :ytd, period_offset: -2
+    end
+  end
+
+  test "period offset steps back fiscal periods of every type" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+
+      assert_report_period [ Date.new(2026, 3, 10), Date.new(2026, 3, 20) ], period_type: :monthly
+      assert_report_period [ Date.new(2026, 2, 10), Date.new(2026, 3, 9) ], period_type: :monthly, period_offset: -1
+      assert_report_period [ Date.new(2025, 10, 10), Date.new(2026, 1, 9) ], period_type: :quarterly, period_offset: -1
+      assert_report_period [ Date.new(2025, 7, 10), Date.new(2026, 1, 9) ], period_type: :last_6_months, period_offset: -1
+      assert_report_period [ Date.new(2025, 1, 10), Date.new(2026, 1, 9) ], period_type: :ytd, period_offset: -1
+
+      # Calendar mode on a fiscal family steps calendar periods
+      assert_report_period [ Date.new(2026, 2, 1), Date.new(2026, 2, 28) ], period_type: :monthly, fiscal_mode: "false", period_offset: -1
+    end
+  end
+
+  test "fiscal steps go back to the start day after a month that clamps it" do
+    travel_to Date.new(2026, 3, 31) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 31)
+
+      assert_report_period [ Date.new(2026, 2, 28), Date.new(2026, 3, 30) ], period_type: :monthly, period_offset: -1
+      assert_report_period [ Date.new(2026, 1, 31), Date.new(2026, 2, 27) ], period_type: :monthly, period_offset: -2
+    end
+  end
+
+  test "period_mode=last from old links means one period back" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: false)
+
+      assert_report_period [ Date.new(2026, 2, 1), Date.new(2026, 2, 28) ], period_type: :monthly, period_mode: "last"
+      assert_report_period [ Date.new(2025, 10, 1), Date.new(2025, 12, 31) ], period_type: :quarterly, period_mode: "last"
+      # An explicit offset wins over the old mode
+      assert_report_period [ Date.new(2026, 1, 1), Date.new(2026, 1, 31) ], period_type: :monthly, period_mode: "last", period_offset: -2
+    end
+  end
+
+  test "a future or invalid period offset shows the current period" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: false)
+
+      assert_report_period [ Date.new(2026, 3, 1), Date.new(2026, 3, 20) ], period_type: :monthly, period_offset: 2
+      assert_report_period [ Date.new(2026, 3, 1), Date.new(2026, 3, 20) ], period_type: :monthly, period_offset: "abc"
+      assert_report_period [ Date.new(2026, 3, 1), Date.new(2026, 3, 20) ], period_type: :unknown
+    end
+  end
+
+  test "a custom range steps by its own length" do
+    assert_report_period [ Date.new(2026, 2, 19), Date.new(2026, 2, 28) ],
+      period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10", period_offset: -1
+    assert_report_period [ Date.new(2026, 2, 9), Date.new(2026, 2, 18) ],
+      period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10", period_offset: -2
+
+    # The arrows keep the chosen range as their anchor
+    assert_select "a[data-hotkey='ArrowLeft'][href=?]",
+      reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10", period_offset: -3)
+    assert_select "a[data-hotkey='ArrowRight'][href=?]",
+      reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10", period_offset: -1)
+  end
+
+  test "the next arrow is off on the current period and there is no Current link" do
+    get reports_path(period_type: :monthly)
+    assert_response :ok
+
+    assert_select "button[disabled][aria-label=?]", I18n.t("reports.index.period_nav.next")
+    assert_select "a[data-hotkey='ArrowRight']", count: 0
+    assert_select "a[data-hotkey='ArrowLeft'][href=?]", reports_path(period_type: :monthly, fiscal_mode: "false", period_offset: -1)
+    assert_select "[data-testid='report-period-nav'] a", text: I18n.t("reports.index.period_nav.current"), count: 0
+    # The Current/Last toggle is gone
+    assert_select "a[href*='period_mode']", count: 0
+  end
+
+  test "a past period links forward and back to the current period" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: false)
+      get reports_path(period_type: :quarterly, period_offset: -2)
+      assert_response :ok
+
+      assert_select "a[data-hotkey='ArrowLeft'][href=?]", reports_path(period_type: :quarterly, fiscal_mode: "false", period_offset: -3)
+      assert_select "a[data-hotkey='ArrowRight'][href=?]", reports_path(period_type: :quarterly, fiscal_mode: "false", period_offset: -1)
+      assert_select "[data-testid='report-period-nav'] a[href=?]", reports_path(period_type: :quarterly, fiscal_mode: "false"),
+        text: I18n.t("reports.index.period_nav.current")
+      assert_select "[data-testid='report-period-label']", text: "Q3 2025"
+    end
+  end
+
+  test "the period label names the period" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: false)
+
+      get reports_path(period_type: :monthly, period_offset: -1)
+      assert_select "[data-testid='report-period-label']", text: "February 2026"
+      get reports_path(period_type: :last_6_months, period_offset: -1)
+      assert_select "[data-testid='report-period-label']", text: "H2 2025"
+      get reports_path(period_type: :ytd)
+      assert_select "[data-testid='report-period-label']", text: "2026 to date"
+      get reports_path(period_type: :ytd, period_offset: -1)
+      assert_select "[data-testid='report-period-label']", text: "2025"
+    end
+  end
+
+  test "period arrows carry their keyboard shortcuts" do
+    get reports_path(period_type: :monthly, period_offset: -2)
+    assert_response :ok
+
+    assert_select "a[aria-keyshortcuts='ArrowLeft'][data-hotkey='ArrowLeft']"
+    assert_select "a[aria-keyshortcuts='ArrowRight'][data-hotkey='ArrowRight']"
+    assert_select "[role='tooltip']", text: "Previous period (←)"
+    assert_select "[role='tooltip']", text: "Next period (→)"
+  end
+
+  test "the sort link keeps the period offset" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: false)
+      create_transaction(account: accounts(:depository), date: Date.new(2026, 1, 12), amount: 25, category: categories(:food_and_drink))
+
+      get reports_path(period_type: :monthly, period_offset: -2)
+      assert_response :ok
+
+      assert_select "a[href*='sort_by=amount'][href*='period_offset=-2']"
+    end
+  end
+
+  private
+    def assert_report_period(expected, **query)
+      get reports_path(query)
+      assert_response :ok
+      assert_equal expected, [ controller.instance_variable_get(:@start_date), controller.instance_variable_get(:@end_date) ],
+        "period for #{query.inspect}"
+    end
 end
