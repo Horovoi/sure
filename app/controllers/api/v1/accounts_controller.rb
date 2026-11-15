@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Api::V1::AccountsController < Api::V1::BaseController
-  include Pagy::Backend
-
   # Ensure proper scope authorization for read access
   before_action :ensure_read_scope
 

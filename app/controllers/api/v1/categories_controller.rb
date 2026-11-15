@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Api::V1::CategoriesController < Api::V1::BaseController
-  include Pagy::Backend
-
   before_action :ensure_read_scope
   before_action :set_category, only: :show
 

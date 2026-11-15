@@ -248,23 +248,7 @@ class User < ApplicationRecord
   end
 
   def update_dashboard_preferences(prefs)
-    # Use pessimistic locking to ensure atomic read-modify-write
-    # This prevents race conditions when multiple sections are collapsed quickly
-    transaction do
-      lock! # Acquire row-level lock (SELECT FOR UPDATE)
-
-      updated_prefs = (preferences || {}).deep_dup
-      prefs.each do |key, value|
-        if value.is_a?(Hash)
-          updated_prefs[key] ||= {}
-          updated_prefs[key] = updated_prefs[key].merge(value)
-        else
-          updated_prefs[key] = value
-        end
-      end
-
-      update!(preferences: updated_prefs)
-    end
+    merge_preferences(prefs)
   end
 
   # Reports preferences management
@@ -277,22 +261,7 @@ class User < ApplicationRecord
   end
 
   def update_reports_preferences(prefs)
-    # Use pessimistic locking to ensure atomic read-modify-write
-    transaction do
-      lock!
-
-      updated_prefs = (preferences || {}).deep_dup
-      prefs.each do |key, value|
-        if value.is_a?(Hash)
-          updated_prefs[key] ||= {}
-          updated_prefs[key] = updated_prefs[key].merge(value)
-        else
-          updated_prefs[key] = value
-        end
-      end
-
-      update!(preferences: updated_prefs)
-    end
+    merge_preferences(prefs)
   end
 
   # Transactions preferences management
@@ -301,24 +270,26 @@ class User < ApplicationRecord
   end
 
   def update_transactions_preferences(prefs)
-    transaction do
-      lock!
-
-      updated_prefs = (preferences || {}).deep_dup
-      prefs.each do |key, value|
-        if value.is_a?(Hash)
-          updated_prefs["transactions_#{key}"] ||= {}
-          updated_prefs["transactions_#{key}"] = updated_prefs["transactions_#{key}"].merge(value)
-        else
-          updated_prefs["transactions_#{key}"] = value
-        end
-      end
-
-      update!(preferences: updated_prefs)
-    end
+    merge_preferences(prefs.transform_keys { |key| "transactions_#{key}" })
   end
 
   private
+    # Merges into the stored preferences: a hash value (collapsed sections) is merged
+    # key by key, anything else (section order) replaces the stored value. The row
+    # lock makes the read-modify-write atomic when sections are toggled quickly.
+    def merge_preferences(prefs)
+      transaction do
+        lock!
+
+        merged = (preferences || {}).deep_dup
+        prefs.each do |key, value|
+          merged[key] = value.is_a?(Hash) ? (merged[key] || {}).merge(value) : value
+        end
+
+        update!(preferences: merged)
+      end
+    end
+
     def credentials_changed_on_save?
       return false if saved_change_to_active? # deactivation revokes everything itself
 

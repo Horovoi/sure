@@ -53,6 +53,6 @@ class HoldingsController < ApplicationController
     end
 
     def holding_params
-      params.require(:holding).permit(:cost_basis)
+      params.expect(holding: [ :cost_basis ])
     end
 end

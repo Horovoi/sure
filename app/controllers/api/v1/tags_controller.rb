@@ -109,7 +109,7 @@ module Api
         #
         # @return [ActionController::Parameters] Permitted parameters
         def tag_params
-          params.require(:tag).permit(:name, :color)
+          params.expect(tag: [ :name, :color ])
         end
 
         # Serialize a tag to JSON format

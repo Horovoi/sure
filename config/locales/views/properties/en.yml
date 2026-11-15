@@ -23,12 +23,13 @@ en:
       year_built_placeholder: '2000'
     new:
       title: Enter property details
-    overview:
-      living_area: Living Area
-      market_value: Market Value
-      purchase_price: Purchase Price
-      trend: Trend
-      unknown: Unknown
-      year_built: Year Built
+    tabs:
+      overview:
+        living_area: Living Area
+        market_value: Market Value
+        purchase_price: Purchase Price
+        trend: Trend
+        unknown: Unknown
+        year_built: Year Built
     update_address:
       balance_required: Enter the property's value before its address.

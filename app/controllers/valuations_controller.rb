@@ -94,6 +94,6 @@ class ValuationsController < ApplicationController
 
   private
     def entry_params
-      params.require(:entry).permit(:date, :amount, :notes)
+      params.expect(entry: [ :date, :amount, :notes ])
     end
 end

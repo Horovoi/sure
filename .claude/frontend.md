@@ -106,3 +106,8 @@ en:
 - Hierarchical keys by feature: `accounts.index.title`
 - Descriptive key names: `show_details` not `button`
 - Update `config/locales/en.yml` for new strings
+- Tests raise on a missing translation, so every key a rendered page uses needs English text
+- A relative key (`t(".title")`) resolves against the template that is rendering, not the
+  file it is written in. Use the full key inside a block passed to a partial
+  (`render "accounts/form" do ... end`), and in a controller method that several actions
+  call (there it resolves against the running action)

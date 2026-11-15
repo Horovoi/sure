@@ -11,6 +11,7 @@ en:
       date: Date
       description: Description
       description_placeholder: Describe transaction
+      details: Details
       expense: Expense
       income: Income
       none: (none)
@@ -43,6 +44,22 @@ en:
       mark_recurring: Mark as Recurring
       mark_recurring_subtitle: Track this as a recurring transaction. Amount variance is automatically calculated from past 6 months of similar transactions.
       mark_recurring_title: Recurring Transaction
+      overview: Overview
+      settings: Settings
+      name_label: Name
+      nature: Type
+      none: "(none)"
+      note_label: Notes
+      note_placeholder: Enter a note
+      merchant_label: Merchant
+      tags_label: Tags
+      uncategorized: "(uncategorized)"
+      transfer: Transfer
+      loan_payment: Loan payment
+      potential_duplicate_title: Possible duplicate detected
+      potential_duplicate_description: This pending transaction may be the same as the posted transaction below. If so, merge them to avoid double-counting.
+      merge_duplicate: Yes, merge them
+      keep_both: No, keep both
     activity_labels:
       buy: Buy
       sell: Sell
@@ -66,11 +83,6 @@ en:
     overview: Overview
     settings: Settings
     tags_label: Tags
-    uncategorized: "(uncategorized)"
-    potential_duplicate_title: Possible duplicate detected
-    potential_duplicate_description: This pending transaction may be the same as the posted transaction below. If so, merge them to avoid double-counting.
-    merge_duplicate: Yes, merge them
-    keep_both: No, keep both
     transaction:
       pending: Pending
       pending_tooltip: Pending transaction — may change when posted

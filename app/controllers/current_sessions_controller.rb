@@ -9,6 +9,6 @@ class CurrentSessionsController < ApplicationController
 
   private
     def session_params
-      params.require(:current_session).permit(:tab_key, :tab_value)
+      params.expect(current_session: [ :tab_key, :tab_value ])
     end
 end

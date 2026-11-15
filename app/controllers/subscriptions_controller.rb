@@ -91,7 +91,7 @@ class SubscriptionsController < ApplicationController
     if @subscription.save
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
 
-      redirect_to subscriptions_path, notice: t(".created")
+      redirect_to subscriptions_path, notice: t("subscriptions.created")
     else
       @subscription_services = SubscriptionService.alphabetically
       @accounts = Current.family.accounts.visible.alphabetically
@@ -123,7 +123,7 @@ class SubscriptionsController < ApplicationController
         @subscription.save!
       end
       @subscription.logo.attach(params[:recurring_transaction][:logo]) if params.dig(:recurring_transaction, :logo).present?
-      redirect_to subscriptions_path, notice: t(".updated")
+      redirect_to subscriptions_path, notice: t("subscriptions.updated")
     else
       @subscription_services = SubscriptionService.alphabetically
       @accounts = Current.family.accounts.visible.alphabetically
@@ -134,7 +134,7 @@ class SubscriptionsController < ApplicationController
 
   def destroy
     @subscription.destroy!
-    redirect_to subscriptions_path, notice: t(".deleted")
+    redirect_to subscriptions_path, notice: t("subscriptions.deleted")
   end
 
   def toggle_status
@@ -296,11 +296,11 @@ class SubscriptionsController < ApplicationController
     end
 
     def subscription_params
-      params.require(:recurring_transaction).permit(
+      params.expect(recurring_transaction: [
         :name, :amount, :currency, :billing_cycle, :expected_day_of_month, :expected_month,
         :category_id, :merchant_id, :subscription_service_id, :notes, :custom_logo_url, :status,
         :default_account_id, :next_expected_date
-      )
+      ])
     end
 
     def calculate_next_expected_date(subscription)

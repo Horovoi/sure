@@ -66,6 +66,6 @@ class ChatsController < ApplicationController
     end
 
     def chat_params
-      params.require(:chat).permit(:title, :content, :ai_model)
+      params.expect(chat: [ :title, :content, :ai_model ])
     end
 end

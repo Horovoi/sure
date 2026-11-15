@@ -39,7 +39,7 @@ module EntryableResource
 
     @entry.sync_account_later
 
-    redirect_back_or_to account_path(account), notice: t("account.entries.destroy.success")
+    redirect_back_or_to account_path(account), notice: t("entries.destroy.success")
   end
 
   private

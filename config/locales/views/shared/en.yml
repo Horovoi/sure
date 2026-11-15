@@ -12,5 +12,9 @@ en:
       not_authorized: Only a family admin can do that.
     syncing_notice:
       syncing: Syncing accounts data...
+    transaction_tabs:
+      expense: Expense
+      income: Income
+      transfer: Transfer
     trend_change:
       no_change: "no change"

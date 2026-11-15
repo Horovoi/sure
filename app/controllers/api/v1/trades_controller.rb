@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Api::V1::TradesController < Api::V1::BaseController
-  include Pagy::Backend
-
   before_action :ensure_read_scope, only: [ :index, :show ]
   before_action :ensure_write_scope, only: [ :create, :update, :destroy ]
   before_action :set_trade, only: [ :show, :update, :destroy ]
@@ -135,17 +133,17 @@ class Api::V1::TradesController < Api::V1::BaseController
     end
 
     def trade_params
-      params.require(:trade).permit(
+      params.expect(trade: [
         :account_id, :date, :qty, :price, :currency,
         :security_id, :ticker, :manual_ticker, :investment_activity_label, :category_id
-      )
+      ])
     end
 
     def trade_update_params
-      params.require(:trade).permit(
+      params.expect(trade: [
         :name, :date, :amount, :currency, :notes, :nature, :type,
         :qty, :price, :investment_activity_label, :category_id
-      )
+      ])
     end
 
     def build_entry_params_for_update

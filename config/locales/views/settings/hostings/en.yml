@@ -44,6 +44,9 @@ en:
         title: Brand Fetch Settings
         high_res_label: Enable high-resolution logos
         high_res_description: When enabled, logos will be retrieved at 120x120 resolution instead of 40x40. This provides sharper images on high-DPI displays.
+        cache_icons_label: Cache subscription icons
+        cache_icons_description: Download all subscription service icons from Brand Fetch and store them locally.
+        cache_icons_button: Cache All Icons
       openai_settings:
         description: Enter the access token and optionally configure a custom OpenAI-compatible provider
         env_configured_message: Successfully configured through environment variables.
@@ -116,3 +119,4 @@ en:
           sync_cleaner: "Sync cleaner: Runs every hour (maintenance)"
       reset_scheduled_jobs:
         scheduled_jobs_reset: Scheduled job times have been reset to defaults.
+        scheduler_sync_failed: Could not reset the scheduled job times. Please try again or check the server logs.

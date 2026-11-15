@@ -90,6 +90,6 @@ class CategoriesController < ApplicationController
     end
 
     def category_params
-      params.require(:category).permit(:name, :color, :parent_id, :classification, :lucide_icon)
+      params.expect(category: [ :name, :color, :parent_id, :classification, :lucide_icon ])
     end
 end

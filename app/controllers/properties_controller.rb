@@ -88,24 +88,22 @@ class PropertiesController < ApplicationController
 
   private
     def balance_params
-      params.require(:account).permit(:balance, :currency)
+      params.expect(account: [ :balance, :currency ])
     end
 
     def address_params
-      params.require(:property)
-            .permit(address_attributes: [ :line1, :line2, :locality, :region, :country, :postal_code ])
+      params.expect(property: [ address_attributes: [ :line1, :line2, :locality, :region, :country, :postal_code ] ])
     end
 
     def property_params
-      params.require(:account)
-            .permit(
-              :name,
-              :accountable_type,
-              :institution_name,
-              :institution_domain,
-              :notes,
-              accountable_attributes: [ :id, :subtype, :year_built, :area_unit, :area_value ]
-            )
+      params.expect(account: [
+        :name,
+        :accountable_type,
+        :institution_name,
+        :institution_domain,
+        :notes,
+        accountable_attributes: [ :id, :subtype, :year_built, :area_unit, :area_value ]
+      ])
     end
 
     # Only properties: other account types have no `property`, and the property forms

@@ -3,11 +3,11 @@ source "https://rubygems.org"
 ruby file: ".ruby-version"
 
 # Rails
-gem "rails", "~> 7.2.2"
+gem "rails", "~> 8.1.0"
 
 # Drivers
 gem "pg", "~> 1.5"
-gem "redis", "~> 5.4"
+gem "redis"
 
 # Deployment
 gem "puma", ">= 5.0"
@@ -22,7 +22,7 @@ gem "lucide-rails"
 # Hotwire + UI
 gem "stimulus-rails"
 gem "turbo-rails"
-gem "view_component"
+gem "view_component", "~> 4.0"
 
 # https://github.com/lookbook-hq/lookbook/issues/712
 # TODO: Remove max version constraint when fixed
@@ -45,8 +45,11 @@ gem "logtail-rails"
 gem "skylight", groups: [ :production ]
 
 # Active Storage
-gem "aws-sdk-s3", "~> 1.208.0", require: false
+gem "aws-sdk-s3", "~> 1.208", require: false
 gem "image_processing", ">= 1.2"
+# image_processing 2 leaves the backend to the app. Loaded only when a variant is made:
+# the production image has libvips, this Mac does not.
+gem "ruby-vips", require: false
 
 # Other
 gem "ostruct"
@@ -77,7 +80,7 @@ gem "httparty"
 gem "rotp", "~> 6.3"
 gem "rqrcode", "~> 3.0"
 gem "activerecord-import"
-gem "rubyzip", "~> 2.3"
+gem "rubyzip"
 gem "pdf-reader"
 
 # OpenID Connect, OAuth & SAML authentication
@@ -98,7 +101,7 @@ gem "flipper-active_record"
 
 # AI
 gem "ruby-openai"
-gem "langfuse-ruby", "~> 0.1.4", require: "langfuse"
+gem "langfuse-ruby", require: "langfuse"
 
 group :development, :test do
   gem "debug", platforms: %i[mri windows]
@@ -128,6 +131,7 @@ end
 group :test do
   gem "capybara"
   gem "selenium-webdriver"
+  gem "minitest"
   gem "mocha"
   gem "vcr"
   gem "webmock"

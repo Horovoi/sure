@@ -4,13 +4,13 @@ class Setting < RailsSettings::Base
 
   cache_prefix { "v1" }
 
-  # Third-party API keys
-  field :twelve_data_api_key, type: :string, default: ENV["TWELVE_DATA_API_KEY"]
-  field :openai_access_token, type: :string, default: ENV["OPENAI_ACCESS_TOKEN"]
-  field :openai_uri_base, type: :string, default: ENV["OPENAI_URI_BASE"]
-  field :openai_model, type: :string, default: ENV["OPENAI_MODEL"]
-  field :openai_json_mode, type: :string, default: ENV["LLM_JSON_MODE"]
-  field :brand_fetch_client_id, type: :string, default: ENV["BRAND_FETCH_CLIENT_ID"]
+  # Third-party API keys. An empty variable (common in env files) counts as not set.
+  field :twelve_data_api_key, type: :string, default: ENV["TWELVE_DATA_API_KEY"].presence
+  field :openai_access_token, type: :string, default: ENV["OPENAI_ACCESS_TOKEN"].presence
+  field :openai_uri_base, type: :string, default: ENV["OPENAI_URI_BASE"].presence
+  field :openai_model, type: :string, default: ENV["OPENAI_MODEL"].presence
+  field :openai_json_mode, type: :string, default: ENV["LLM_JSON_MODE"].presence
+  field :brand_fetch_client_id, type: :string, default: ENV["BRAND_FETCH_CLIENT_ID"].presence
   field :brand_fetch_high_res_logos, type: :boolean, default: ENV.fetch("BRAND_FETCH_HIGH_RES_LOGOS", "false") == "true"
 
   BRAND_FETCH_LOGO_SIZE_STANDARD = 40

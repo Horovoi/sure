@@ -61,11 +61,11 @@ class TransfersController < ApplicationController
     end
 
     def transfer_params
-      params.require(:transfer).permit(:from_account_id, :to_account_id, :amount, :date, :name, :excluded)
+      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded ])
     end
 
     def transfer_update_params
-      params.require(:transfer).permit(:notes, :status, :category_id)
+      params.expect(transfer: [ :notes, :status, :category_id ])
     end
 
     def update_transfer_status

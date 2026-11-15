@@ -162,14 +162,14 @@ class Settings::HostingsController < ApplicationController
 
   private
     def hosting_params
-      params.require(:setting).permit(
+      params.expect(setting: [
         :onboarding_state, :require_email_confirmation, :brand_fetch_client_id,
         :brand_fetch_high_res_logos, :twelve_data_api_key, :openai_access_token,
         :openai_uri_base, :openai_model, :openai_json_mode, :exchange_rate_provider,
         :securities_provider, :syncs_include_pending, :auto_sync_enabled, :auto_sync_time,
         :scheduled_jobs_start_time, :scheduled_jobs_timezone,
         :data_cleaner_time, :security_health_check_time, :subscription_transactions_time
-      )
+      ])
     end
 
     def invalid_schedule_param
@@ -189,7 +189,7 @@ class Settings::HostingsController < ApplicationController
     end
 
     def ensure_admin
-      redirect_to settings_hosting_path, alert: t(".not_authorized") unless Current.user.admin?
+      redirect_to settings_hosting_path, alert: t("settings.hostings.not_authorized") unless Current.user.admin?
     end
 
     def sync_auto_sync_scheduler!
@@ -197,7 +197,7 @@ class Settings::HostingsController < ApplicationController
     rescue StandardError => error
       Rails.logger.error("[AutoSyncScheduler] Failed to sync scheduler: #{error.message}")
       Rails.logger.error(error.backtrace.join("\n"))
-      flash[:alert] = t(".scheduler_sync_failed")
+      flash[:alert] = t("settings.hostings.update.scheduler_sync_failed")
     end
 
     def sync_scheduled_jobs_manager!
@@ -205,7 +205,7 @@ class Settings::HostingsController < ApplicationController
     rescue StandardError => error
       Rails.logger.error("[ScheduledJobsManager] Failed to sync scheduler: #{error.message}")
       Rails.logger.error(error.backtrace.join("\n"))
-      flash[:alert] = t(".scheduler_sync_failed")
+      flash[:alert] = t("settings.hostings.update.scheduler_sync_failed")
     end
 
     def current_user_timezone

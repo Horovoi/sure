@@ -4,7 +4,7 @@ class ApplicationController < ActionController::Base
           FeatureGuardable, BankConnectionsGuardable, Notifiable, SafePagination
   include Pundit::Authorization
 
-  include Pagy::Backend
+  include Paginatable
 
   # Pundit uses current_user by default, but this app uses Current.user
   def pundit_user

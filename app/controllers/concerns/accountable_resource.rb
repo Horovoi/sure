@@ -85,10 +85,10 @@ module AccountableResource
     end
 
     def account_params
-      params.require(:account).permit(
+      params.expect(account: [
         :name, :balance, :subtype, :currency, :accountable_type, :return_to,
         :institution_name, :institution_domain, :notes,
         accountable_attributes: self.class.permitted_accountable_attributes
-      )
+      ])
     end
 end

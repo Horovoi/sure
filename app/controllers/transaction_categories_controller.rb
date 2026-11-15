@@ -47,6 +47,6 @@ class TransactionCategoriesController < ApplicationController
 
   private
     def entry_params
-      params.require(:entry).permit(:entryable_type, entryable_attributes: [ :id, :category_id ])
+      params.expect(entry: [ :entryable_type, entryable_attributes: [ :id, :category_id ] ])
     end
 end

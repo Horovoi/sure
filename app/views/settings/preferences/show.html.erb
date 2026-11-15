@@ -16,7 +16,7 @@
             { data: { auto_submit_form_target: "auto" }, disabled: !Current.user.admin? } %>
 
         <%= family_form.select :timezone,
-            timezone_options,
+            timezone_options(family_form.object.timezone),
             { label: t(".timezone") },
             { data: { auto_submit_form_target: "auto" }, disabled: !Current.user.admin? } %>
 

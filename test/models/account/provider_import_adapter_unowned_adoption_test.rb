@@ -20,7 +20,7 @@ class Account::ProviderImportAdapterUnownedAdoptionTest < ActiveSupport::TestCas
     )
     ap = AccountProvider.create!(account: investment_account, provider: lfa)
 
-    holding_date = Date.today - 4.days
+    holding_date = Date.current - 4.days
 
     # Existing composite row without provider ownership (unowned)
     existing_unowned = investment_account.holdings.create!(

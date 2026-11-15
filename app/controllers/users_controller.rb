@@ -8,7 +8,7 @@ class UsersController < ApplicationController
     if @user.resend_confirmation_email
       redirect_to settings_profile_path, notice: t(".success")
     else
-      redirect_to settings_profile_path, alert: t("no_pending_change")
+      redirect_to settings_profile_path, alert: t(".no_pending_change")
     end
   end
 
@@ -123,7 +123,7 @@ class UsersController < ApplicationController
     end
 
     def rule_prompt_settings_params
-      params.require(:user).permit(:rule_prompt_dismissed_at, :rule_prompts_disabled)
+      params.expect(user: [ :rule_prompt_dismissed_at, :rule_prompts_disabled ])
     end
 
     # Household settings (currency, locale, fiscal months, ...) belong to the
@@ -138,12 +138,12 @@ class UsersController < ApplicationController
     end
 
     def user_params
-      permitted = params.require(:user).permit(
+      permitted = params.expect(user: [
         :first_name, :last_name, :email, :profile_image, :redirect_to, :delete_profile_image, :onboarding_step,
         :show_sidebar, :default_period, :default_account_order, :show_ai_sidebar, :ai_enabled, :theme,
         family_attributes: [ :name, :currency, :country, :locale, :date_format, :timezone, :use_fiscal_months, :fiscal_month_start_day, :id ],
         goals: []
-      )
+      ])
       family_attributes_refused? ? permitted.except(:family_attributes) : permitted
     end
 

@@ -133,11 +133,7 @@ class ReportsController < ApplicationController
     end
 
     def preferences_params
-      prefs = params.require(:preferences)
-      {}.tap do |permitted|
-        permitted["reports_collapsed_sections"] = prefs[:reports_collapsed_sections].to_unsafe_h if prefs[:reports_collapsed_sections]
-        permitted["reports_section_order"] = prefs[:reports_section_order] if prefs[:reports_section_order]
-      end
+      params.expect(preferences: [ reports_collapsed_sections: {}, reports_section_order: [] ]).to_h
     end
 
     def build_reports_sections

@@ -8,6 +8,7 @@ Rails application for personal finance management with Plaid integration, multi-
 bin/dev              # Start development (Rails + Sidekiq + Tailwind)
 bin/rails console    # Rails console
 bin/rails test       # Run tests
+bin/ci               # Run every check (about 1.5 minutes)
 bin/deploy           # Build the current commit and run it as production on this machine
 bin/staging up       # Run a version on a private copy of production (http://localhost:3334)
 ```
@@ -35,7 +36,9 @@ Production runs locally in Docker at http://localhost:3333. Read [Deploy and Sta
 
 ## Before Opening a PR
 
-Run all checks: `bin/rails test && bin/rubocop -a && bundle exec erb_lint ./app/**/*.erb -a && bin/brakeman --no-pager`
+Run all checks: `bin/ci` (autoloading, rubocop, erb_lint, brakeman, tests and system tests; the steps are in `config/ci.rb`).
+
+Tests need Postgres on port 5432 and Redis on port 6379. To fix what the linters can fix by themselves: `bin/rubocop -a` and `bundle exec erb_lint --lint-all -a`.
 
 ## Plan Mode
 

@@ -8,6 +8,6 @@ class Transactions::BulkDeletionsController < ApplicationController
 
   private
     def bulk_delete_params
-      params.require(:bulk_delete).permit(entry_ids: [])
+      params.expect(bulk_delete: [ entry_ids: [] ])
     end
 end

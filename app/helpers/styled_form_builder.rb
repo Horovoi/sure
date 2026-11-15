@@ -1,18 +1,23 @@
 class StyledFormBuilder < ActionView::Helpers::FormBuilder
-  class_attribute :text_field_helpers, default: field_helpers - [ :label, :check_box, :radio_button, :fields_for, :fields, :hidden_field, :file_field ]
+  # Rails 8 renamed two field helpers, text_area to textarea and check_box to checkbox,
+  # and kept the old names as aliases of the base methods. Both spellings of the
+  # non-text helpers are left out here, and text_area is aliased below so that
+  # form.text_area stays styled.
+  NON_TEXT_FIELD_HELPERS = [ :label, :check_box, :checkbox, :radio_button, :fields_for, :fields, :hidden_field, :file_field ].freeze
+  class_attribute :text_field_helpers, default: field_helpers - NON_TEXT_FIELD_HELPERS
 
   text_field_helpers.each do |selector|
-    class_eval <<-RUBY_EVAL, __FILE__, __LINE__ + 1
-      def #{selector}(method, options = {})
-        form_options = options.slice(:label, :label_tooltip, :inline, :container_class, :required)
-        html_options = options.except(:label, :label_tooltip, :inline, :container_class)
+    define_method(selector) do |method, options = {}|
+      form_options = options.slice(:label, :label_tooltip, :inline, :container_class, :required)
+      html_options = options.except(:label, :label_tooltip, :inline, :container_class)
 
-        build_field(method, form_options, html_options) do |merged_options|
-          super(method, merged_options)
-        end
+      build_field(method, form_options, html_options) do |merged_options|
+        super(method, merged_options)
       end
-    RUBY_EVAL
+    end
   end
+
+  alias_method :text_area, :textarea
 
   def radio_button(method, tag_value, options = {})
     merged_options = { class: "form-field__radio" }.merge(options)

@@ -1,9 +1,6 @@
 require "test_helper"
 
 class AutoSyncSchedulerTest < ActiveSupport::TestCase
-  # These tests share the one sync_all_accounts cron job in Redis
-  parallelize(workers: 1)
-
   setup do
     Setting.auto_sync_enabled = true
     Setting.auto_sync_time = "02:22"

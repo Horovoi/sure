@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Api::V1::ImportsController < Api::V1::BaseController
-  include Pagy::Backend
-
   # Ensure proper scope authorization
   before_action :ensure_read_scope, only: [ :index, :show ]
   before_action :ensure_write_scope, only: [ :create ]

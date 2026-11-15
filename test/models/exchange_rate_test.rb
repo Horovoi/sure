@@ -122,8 +122,8 @@ class ExchangeRateTest < ActiveSupport::TestCase
 
     assert_nil ExchangeRate.find_or_fetch_rate(from: "USD", to: "EUR", date: Date.current)
 
-    # Rails does this between requests and between jobs
-    ActiveSupport::CurrentAttributes.reset_all
+    # Rails does this, for every CurrentAttributes class, between requests and between jobs
+    ExchangeRate::FetchMemo.reset
 
     assert_nil ExchangeRate.find_or_fetch_rate(from: "USD", to: "EUR", date: Date.current)
   end
