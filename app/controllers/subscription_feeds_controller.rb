@@ -20,6 +20,6 @@ class SubscriptionFeedsController < ApplicationController
   private
     # Upcoming dates are counted in the family's time zone (Kyiv), as the app does
     def feed_time_zone(family)
-      ActiveSupport::TimeZone[family.timezone.to_s] || Time.zone
+      family.resolved_time_zone
     end
 end
