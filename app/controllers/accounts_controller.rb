@@ -223,7 +223,8 @@ class AccountsController < ApplicationController
     def account_search_params
       cleaned = params.fetch(:q, {}).permit(
         :start_date, :end_date, :search, :amount, :amount_operator,
-        categories: [], merchants: [], types: [], tags: [], status: []
+        categories: [], merchants: [], types: [], tags: [], status: [],
+        attachment_status: [] # w3-toolstrx transaction-attachments
       ).to_h.compact_blank
       cleaned.delete("amount_operator") if cleaned["amount"].blank?
       cleaned

@@ -202,6 +202,23 @@ class EntrySearchTest < ActiveSupport::TestCase
     assert_not_includes results, transfer
   end
 
+  # w3-toolstrx transaction-attachments
+  test "attachment filter on the account page leaves out entries that are not transactions" do
+    with_file = create_transaction(account: @account, name: "With receipt")
+    with_file.entryable.attachments.attach(io: file_fixture("receipt.pdf").open, filename: "r.pdf", content_type: "application/pdf")
+    with_file.entryable.attachments.attach(io: file_fixture("receipt.pdf").open, filename: "r2.pdf", content_type: "application/pdf")
+    without_file = create_transaction(account: @account, name: "No receipt")
+    valuation = create_valuation(account: @account, amount: 500, date: 17.days.ago.to_date)
+
+    with_results = @account.entries.search(attachment_status: [ "with" ]).to_a
+    assert_equal [ with_file ], with_results
+
+    without_results = @account.entries.search(attachment_status: [ "without" ])
+    assert_includes without_results, without_file
+    assert_not_includes without_results, with_file
+    assert_not_includes without_results, valuation
+  end
+
   private
 
     def create_pending_transaction(account:, name:, provider:, date: Date.current, amount: 100, **transaction_attributes)

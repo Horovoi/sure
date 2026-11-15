@@ -319,6 +319,12 @@ Rails.application.routes.draw do
     end
   end
 
+  # --- Transaction attachments (w3-toolstrx): receipts on a transaction, by transaction id ---
+  resources :transactions, only: [] do
+    resources :attachments, only: %i[show create destroy], controller: :transaction_attachments
+  end
+  # --- end transaction attachments ---
+
   resources :subscriptions, only: %i[index new create show edit update destroy] do
     collection do
       get :calendar

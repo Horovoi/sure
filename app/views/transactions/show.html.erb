@@ -170,6 +170,11 @@
       <% end %>
     <% end %>
 
+    <%# w3-toolstrx transaction-attachments %>
+    <% dialog.with_section(title: t("transaction_attachments.section_title"), open: @entry.transaction.attachments.attached?) do %>
+      <%= render "transaction_attachments/attachments", transaction: @entry.transaction %>
+    <% end %>
+
     <% if (details = build_transaction_extra_details(@entry)) %>
       <% dialog.with_section(title: t(".additional_details"), open: false) do %>
         <div class="px-3 py-2 space-y-3">

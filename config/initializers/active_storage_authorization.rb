@@ -1,8 +1,9 @@
 # Active Storage serves any blob to whoever holds its signed URL, and those URLs
 # do not expire for redirect routes. This adds the app's login to every blob,
 # representation and disk route, and checks the owning record for the record
-# types below, so a leaked or guessed link to a family export, an import file or
-# a family document is a 404 for anyone outside that family.
+# types below, so a leaked or guessed link to a family export, an import file,
+# a family document or a transaction's receipt is a 404 for anyone outside that
+# family.
 #
 # Account logos and avatars are not sensitive: any signed-in user may load them.
 # An uploaded merchant logo is served to the merchant's family only. A blob with
@@ -16,7 +17,7 @@ module ActiveStorageAttachmentAuthorization
 
   # STI subclasses (PdfImport, FamilyMerchant, ...) are stored under their base class
   # ("Import", "Merchant").
-  PROTECTED_RECORD_TYPES = %w[FamilyExport Import FamilyDocument Merchant].freeze
+  PROTECTED_RECORD_TYPES = %w[FamilyExport Import FamilyDocument Merchant Transaction].freeze
 
   # Tracked variants and previews are blobs of their own, attached to an
   # ActiveStorage::VariantRecord or to their source blob. They are authorized
@@ -52,6 +53,8 @@ module ActiveStorageAttachmentAuthorization
         family_record_attachment_authorized?(attachment)
       when "Merchant"
         merchant_attachment_authorized?(attachment)
+      when "Transaction"
+        transaction_attachment_authorized?(attachment)
       else
         false
       end
@@ -68,6 +71,16 @@ module ActiveStorageAttachmentAuthorization
       attachment.record.is_a?(FamilyMerchant) && family_record_attachment_authorized?(attachment)
     rescue ActiveRecord::RecordNotFound
       false
+    end
+
+    # A transaction has no family_id of its own; it belongs to its entry's account's family
+    # (w3-toolstrx transaction-attachments).
+    def transaction_attachment_authorized?(attachment)
+      family_id = Account.joins(:entries)
+        .where(entries: { entryable_type: "Transaction", entryable_id: attachment.record_id })
+        .pick(:family_id)
+
+      family_id.present? && Current.family.present? && family_id == Current.family.id
     end
 
     def family_record_attachment_authorized?(attachment)

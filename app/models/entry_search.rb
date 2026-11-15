@@ -14,6 +14,7 @@ class EntrySearch
   attribute :categories, array: true
   attribute :merchants, array: true
   attribute :tags, array: true
+  attribute :attachment_status, array: true
   TRANSACTIONS_JOIN = "INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'"
   ALL_FILTER_TYPES = %w[balance_update expense income trade transfer].freeze
   ENTRYABLE_TYPE_MAP = {
@@ -35,6 +36,19 @@ class EntrySearch
       Arel::Nodes::Not.new(
         Tagging.where(taggable_type: "Transaction").where(taggings[:taggable_id].eq(transaction_id)).arel.exists
       )
+    end
+
+    # EXISTS over the files of the transaction whose id is transaction_id (an Arel
+    # attribute), for the attachment filter (w3-toolstrx transaction-attachments)
+    def attachment_condition(transaction_id)
+      attachments = ActiveStorage::Attachment.arel_table
+
+      ActiveStorage::Attachment
+        .where(record_type: "Transaction", name: "attachments")
+        .where(attachments[:record_id].eq(transaction_id))
+        .select(1)
+        .arel
+        .exists
     end
 
     def apply_search_filter(scope, search)
@@ -133,6 +147,7 @@ class EntrySearch
     query = apply_category_conditions(query, categories)
     query = apply_merchant_conditions(query, merchants)
     query = apply_tag_conditions(query, tags)
+    query = apply_attachment_conditions(query, attachment_status)
     query
   end
 
@@ -223,6 +238,16 @@ class EntrySearch
       untagged = self.class.untagged_condition(entries[:entryable_id]) if include_untagged
 
       query.where(entryable_type: "Transaction").where([ tagged, untagged ].compact.reduce(:or))
+    end
+
+    # With or without a file. Only a transaction takes files, so either value leaves
+    # balance updates and trades out, as the Untagged option does.
+    def apply_attachment_conditions(query, statuses)
+      wanted = Array(statuses) & Transaction::Search::ATTACHMENT_STATUSES
+      return query unless wanted.one?
+
+      attached = self.class.attachment_condition(Entry.arel_table[:entryable_id])
+      query.where(entryable_type: "Transaction").where(wanted == [ "with" ] ? attached : attached.not)
     end
 
     def build_transaction_type_condition(txn_types)

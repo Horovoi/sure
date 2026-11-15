@@ -554,4 +554,30 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_equal "Untagged", Tag.untagged.name
     assert_equal merchants(:netflix).name, merchants(:netflix).filter_value
   end
+
+  # --- w3-toolstrx transaction-attachments: With / Without attachment -------------------------------------------
+  test "attachment filter finds transactions with or without a file, each once" do
+    with_two = create_transaction(account: @checking_account, amount: 30)
+    2.times { |i| attach_receipt(with_two.entryable, "r#{i}.pdf") }
+    without = create_transaction(account: @checking_account, amount: 40)
+
+    with_search = Transaction::Search.new(@family, filters: { attachment_status: [ "with" ] })
+    assert_equal [ with_two.entryable.id ], with_search.transactions_scope.pluck(:id)
+    assert_equal 1, with_search.totals.count
+    assert_equal Money.new(30, @family.currency), with_search.totals.expense_money
+
+    without_ids = Transaction::Search.new(@family, filters: { attachment_status: [ "without" ] }).transactions_scope.pluck(:id)
+    assert_equal [ without.entryable.id ], without_ids
+
+    both_ids = Transaction::Search.new(@family, filters: { attachment_status: %w[with without] }).transactions_scope.pluck(:id)
+    assert_equal [ with_two.entryable.id, without.entryable.id ].sort, both_ids.sort
+
+    unknown_ids = Transaction::Search.new(@family, filters: { attachment_status: [ "bogus" ] }).transactions_scope.pluck(:id)
+    assert_equal both_ids.sort, unknown_ids.sort
+  end
+
+  private
+    def attach_receipt(transaction, filename)
+      transaction.attachments.attach(io: file_fixture("receipt.pdf").open, filename: filename, content_type: "application/pdf")
+    end
 end

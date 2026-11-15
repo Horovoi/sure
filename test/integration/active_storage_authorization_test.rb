@@ -239,6 +239,44 @@ class ActiveStorageAuthorizationTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  # w3-toolstrx transaction-attachments
+  test "a transaction receipt loads for its family only" do
+    transaction = entries(:transaction).transaction # dylan_family
+    transaction.attachments.attach(io: file_fixture("receipt.pdf").open, filename: "receipt.pdf", content_type: "application/pdf")
+    attachment = transaction.attachments.last
+
+    sign_in @member
+    get rails_blob_path(attachment)
+    assert_response :redirect
+    disk_url = response.location
+    follow_redirect!
+    assert_response :success
+
+    sign_out @member
+    sign_in @outsider
+    get rails_blob_path(attachment)
+    assert_response :not_found
+    get disk_url
+    assert_response :not_found
+    get transaction_attachment_path(transaction, attachment)
+    assert_response :not_found
+  end
+
+  test "a variant of a transaction receipt follows the transaction's family" do
+    transaction = entries(:transaction).transaction
+    transaction.attachments.attach(io: file_fixture("square-placeholder.png").open, filename: "photo.png", content_type: "image/png")
+    variant = transaction.attachments.last.variant(resize_to_limit: [ 20, 20 ]).processed
+
+    sign_in @outsider
+    get rails_representation_path(variant)
+    assert_response :not_found
+
+    sign_out @outsider
+    sign_in @admin
+    get rails_representation_path(variant)
+    assert_response :redirect
+  end
+
   private
     def attach_family_export(family)
       export = family.family_exports.create!(status: :completed)

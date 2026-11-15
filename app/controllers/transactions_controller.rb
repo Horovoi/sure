@@ -489,7 +489,8 @@ class TransactionsController < ApplicationController
                 :start_date, :end_date, :search, :amount,
                 :amount_operator, :active_accounts_only,
                 accounts: [], account_ids: [],
-                categories: [], merchants: [], types: [], tags: [], status: []
+                categories: [], merchants: [], types: [], tags: [], status: [],
+                attachment_status: [] # w3-toolstrx transaction-attachments
               )
               .to_h
               # A blank member (q[account_ids][]=) is no filter, not a filter that matches nothing

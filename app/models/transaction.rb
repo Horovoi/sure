@@ -44,6 +44,23 @@ class Transaction < ApplicationRecord
   before_destroy :release_goal_pledge
   # --- end goal pledges ---
 
+  # --- Attachments (w3-toolstrx transaction-attachments) ---
+  # Receipts and invoices. TransactionAttachmentsController serves them through the
+  # Active Storage blob routes, which config/initializers/active_storage_authorization.rb
+  # limits to the transaction's family. The files go away with the transaction
+  # (purge_later), and the backup's storage tarball keeps them.
+  MAX_ATTACHMENTS_PER_TRANSACTION = 10
+  MAX_ATTACHMENT_SIZE = 10.megabytes
+  ALLOWED_ATTACHMENT_CONTENT_TYPES = %w[
+    image/jpeg image/png image/gif image/webp image/heic image/heif
+    application/pdf
+  ].freeze
+
+  has_many_attached :attachments
+
+  validate :validate_attachments, if: -> { attachments.attached? }
+  # --- end attachments ---
+
   enum :kind, {
     standard: "standard", # A regular transaction, included in budget analytics
     funds_movement: "funds_movement", # Movement of funds between accounts, excluded from budget analytics
@@ -413,6 +430,28 @@ class Transaction < ApplicationRecord
       pledge.release! if pledge&.may_release?
     end
     # --- end goal pledges ---
+
+    # --- Attachments (w3-toolstrx transaction-attachments) ---
+    # The content type is the one Active Storage identified (Marcel): from the file's
+    # bytes where they show one, else from the declared type and the extension.
+    def validate_attachments
+      if attachments.size > MAX_ATTACHMENTS_PER_TRANSACTION
+        errors.add(:attachments, :too_many, max: MAX_ATTACHMENTS_PER_TRANSACTION)
+      end
+
+      attachments.each do |attachment|
+        filename = attachment.filename.to_s
+
+        if attachment.byte_size.to_i > MAX_ATTACHMENT_SIZE
+          errors.add(:attachments, :too_large, filename: filename, max_mb: MAX_ATTACHMENT_SIZE / 1.megabyte)
+        end
+
+        unless attachment.content_type.in?(ALLOWED_ATTACHMENT_CONTENT_TYPES)
+          errors.add(:attachments, :invalid_format, filename: filename, file_format: attachment.content_type.to_s)
+        end
+      end
+    end
+    # --- end attachments ---
 
     # Copies what the generated charge carries onto this real transaction and
     # stores the generated charge's values, with what was carried over so a

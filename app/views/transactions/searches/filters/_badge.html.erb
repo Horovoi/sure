@@ -43,6 +43,11 @@
       <%= icon(param_value.downcase == "pending" ? "clock" : "check", size: "sm") %>
       <p><%= t(".#{param_value.downcase}") %></p>
     </div>
+  <% elsif param_key == "attachment_status" && param_value.in?(Transaction::Search::ATTACHMENT_STATUSES) %>
+    <div class="flex items-center gap-2 px-1">
+      <%= icon("paperclip", size: "sm") %>
+      <p><%= t(".attachment_#{param_value}") %></p>
+    </div>
   <% elsif param_key == "categories" && Category.uncategorized_filter_value?(param_value) %>
     <div class="flex items-center gap-2">
       <p><%= Category.uncategorized_name %></p>

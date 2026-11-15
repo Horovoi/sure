@@ -2,6 +2,9 @@ class Transaction::Search
   include ActiveModel::Model
   include ActiveModel::Attributes
 
+  # Values of the attachment filter (w3-toolstrx transaction-attachments)
+  ATTACHMENT_STATUSES = %w[with without].freeze
+
   attribute :search, :string
   attribute :amount, :string
   attribute :amount_operator, :string
@@ -14,6 +17,7 @@ class Transaction::Search
   attribute :categories, array: true
   attribute :merchants, array: true
   attribute :tags, array: true
+  attribute :attachment_status, array: true
   attribute :active_accounts_only, :boolean, default: true
 
   attr_reader :family
@@ -34,6 +38,7 @@ class Transaction::Search
       query = apply_status_filter(query, status)
       query = apply_merchant_filter(query, merchants)
       query = apply_tag_filter(query, tags)
+      query = apply_attachment_status_filter(query, attachment_status)
       # Enforce minimum search length of 2 characters for name search
       query = EntrySearch.apply_search_filter(query, search.to_s.length >= 2 ? search : nil)
       query = EntrySearch.apply_date_filters(query, start_date, end_date)
@@ -190,6 +195,16 @@ class Transaction::Search
       untagged = EntrySearch.untagged_condition(transactions[:id]) if include_untagged
 
       query.where([ tagged, untagged ].compact.reduce(:or))
+    end
+
+    # With or without a file. EXISTS, not a join: several files on one transaction would
+    # list it twice and count it twice in totals. Both values picked means no filter.
+    def apply_attachment_status_filter(query, statuses)
+      wanted = Array(statuses) & ATTACHMENT_STATUSES
+      return query unless wanted.one?
+
+      attached = EntrySearch.attachment_condition(Transaction.arel_table[:id])
+      query.where(wanted == [ "with" ] ? attached : attached.not)
     end
 
     def apply_status_filter(query, statuses)
