@@ -15,7 +15,7 @@ class ComboboxDarkThemeTest < ApplicationSystemTestCase
     sign_in @user
 
     # The trade form only renders the security combobox when a provider exists.
-    Security.stubs(:providers).returns([ mock("security_provider") ])
+    Security.stubs(:provider).returns(mock("security_provider"))
     Security.stubs(:search_provider).returns([ securities(:aapl), securities(:msft) ])
   end
 
