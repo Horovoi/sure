@@ -335,3 +335,58 @@ class MonobankFake::AppTest < ActiveSupport::TestCase
       "/personal/statement/#{account}/#{from.to_i}/#{to.to_i}"
     end
 end
+
+class MonobankFakeHelperTest < ActiveSupport::TestCase
+  include MonobankFakeHelper
+
+  test "with_monobank_fake serves the fake on 127.0.0.1:4599 through WebMock and sets the client's ENV" do
+    with_monobank_fake(min_request_interval: 1, env: { "MONOBANK_INITIAL_HISTORY_DAYS" => 30 }) do |fake|
+      assert_equal MonobankFakeHelper::MONOBANK_FAKE_URL, ENV["MONOBANK_API_BASE_URL"]
+      assert_equal "1", ENV["MONOBANK_MIN_REQUEST_INTERVAL"]
+      assert_equal "30", ENV["MONOBANK_INITIAL_HISTORY_DAYS"]
+      assert_equal 1.0, fake.rate_limit_seconds
+
+      response = HTTParty.get("#{ENV['MONOBANK_API_BASE_URL']}/personal/client-info", headers: { "X-Token" => "e2e-fake-token" })
+      assert_equal 200, response.code
+      assert_equal "fakeClient01", JSON.parse(response.body)["clientId"]
+      assert_equal 429, HTTParty.get("#{MonobankFakeHelper::MONOBANK_FAKE_URL}/personal/client-info", headers: { "X-Token" => "e2e-fake-token" }).code
+      assert_equal 403, HTTParty.get("#{MonobankFakeHelper::MONOBANK_FAKE_URL}/personal/client-info", headers: { "X-Token" => "other" }).code
+      assert_equal 1, fake.early_requests
+    end
+
+    assert_nil ENV["MONOBANK_API_BASE_URL"]
+    signature = WebMock::RequestSignature.new(:get, "#{MonobankFakeHelper::MONOBANK_FAKE_URL}/personal/client-info")
+    assert_nil WebMock::StubRegistry.instance.registered_request?(signature), "the stub is removed after the block"
+  end
+
+  test "the fake's clock follows travel_to" do
+    travel_to Time.zone.parse("2026-11-15 15:00:00 +0200") do
+      fixture = monobank_sample_fixture
+      with_monobank_fake(fixture) do |fake|
+        assert_equal Time.current.to_i, fake.started_at.to_i
+        assert_equal 60.0, fake.rate_limit_seconds, "the fixture's limit when no interval is given"
+
+        from = (Time.current - 1.day).to_i
+        url = "#{MonobankFakeHelper::MONOBANK_FAKE_URL}/personal/statement/mbf-uah-black/#{from}"
+        rows = JSON.parse(HTTParty.get(url, headers: { "X-Token" => "e2e-fake-token" }).body)
+        assert_equal "mbf-hold-uklon", rows.first["id"]
+        assert_equal (Time.current - 0.04.days).to_i, rows.first["time"]
+
+        travel 59.seconds
+        assert_equal 429, HTTParty.get(url, headers: { "X-Token" => "e2e-fake-token" }).code
+        travel 1.second
+        assert_equal 200, HTTParty.get(url, headers: { "X-Token" => "e2e-fake-token" }).code
+      end
+    end
+  end
+
+  test "admin endpoints work through the helper" do
+    with_monobank_fake do |fake|
+      response = HTTParty.post("#{MonobankFakeHelper::MONOBANK_FAKE_URL}/__fake/cancel_hold",
+                               headers: { "X-Fake-Admin" => "1", "Content-Type" => "application/json" },
+                               body: JSON.generate(account: "mbf-uah-black", hold_id: "mbf-hold-uklon"))
+      assert_equal 200, response.code
+      assert_equal 4_212_000, fake.balance("mbf-uah-black")
+    end
+  end
+end
