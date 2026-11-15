@@ -1,0 +1,41 @@
+<%# locals: (family:) %>
+<% rows = mcc_mapping_rows(family) %>
+<% changed = rows.count { |row| row.selected != MccCategoryMapping::AUTOMATIC } %>
+
+<div id="mcc-mappings" class="space-y-3">
+  <div class="space-y-1">
+    <h3 class="text-sm font-medium text-primary"><%= t("settings.mcc_mappings.section.title") %></h3>
+    <p class="text-sm text-secondary"><%= t("settings.mcc_mappings.section.description") %></p>
+  </div>
+
+  <%= render DS::Disclosure.new(
+        title: t("settings.mcc_mappings.section.toggle", count: rows.size, changed: changed),
+        align: "left",
+        variant: :default
+      ) do %>
+    <%= styled_form_with url: settings_mcc_mapping_path,
+                         method: :patch,
+                         scope: :mcc_mapping,
+                         data: { turbo_frame: "_top" },
+                         class: "space-y-4" do |form| %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+        <%= form.fields_for :groups do |groups_form| %>
+          <% rows.each do |row| %>
+            <div class="space-y-1">
+              <%= groups_form.select row.group.key,
+                                     row.options,
+                                     { label: row.group.label, selected: row.selected } %>
+              <% if row.group.examples.present? %>
+                <p class="text-xs text-secondary"><%= row.group.examples %></p>
+              <% end %>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+
+      <div class="flex justify-end">
+        <%= render DS::Button.new(text: t("settings.mcc_mappings.section.save"), type: "submit") %>
+      </div>
+    <% end %>
+  <% end %>
+</div>

@@ -1,0 +1,175 @@
+---
+en:
+  mcc:
+    groups:
+      bank_fees:
+        examples: Card and account fees, commissions, late payment charges
+        label: Bank fees
+      beauty:
+        examples: Cosmetics stores, hairdressers, barbers, spas, massage
+        label: Beauty and personal care
+      books:
+        examples: Bookstores, newsstands, publishers
+        label: Books
+      car:
+        examples: Anything for the car
+        label: Car
+      car_rental:
+        examples: Car rental companies
+        label: Car rental
+      car_service:
+        examples: Car service and repair, parts, tyres, car washes, dealers
+        label: Car service
+      cash_withdrawal:
+        examples: ATMs and cash desks. Not categorised unless you choose a category.
+        label: Cash withdrawals
+      cashback:
+        examples: Cashback paid out by the bank
+        label: Cashback
+      charity:
+        examples: Charitable foundations, donations, religious organisations
+        label: Charity
+      clothing:
+        examples: Clothing and shoe stores, tailors
+        label: Clothing
+      coffee:
+        examples: Coffee shops (found by name, they have no code of their own)
+        label: Coffee
+      delivery:
+        examples: Couriers and postal services, such as Nova Poshta and Ukrposhta
+        label: Delivery and post
+      digital_subscriptions:
+        examples: Apps, cloud storage, software and other digital subscriptions
+        label: Digital subscriptions
+      eating_out:
+        examples: Restaurants, cafes, bars, caterers, food delivery
+        label: Eating out
+      education:
+        examples: Schools, universities, courses, online learning
+        label: Education
+      electronics:
+        examples: Electronics and appliance stores, phones, computers, repairs
+        label: Electronics
+      entertainment:
+        examples: Cinemas, theatres, concerts, games, attractions, amusement parks
+        label: Entertainment
+      fast_food:
+        examples: Fast food restaurants
+        label: Fast food
+      food_and_drinks:
+        examples: Wine and liquor stores
+        label: Food and drinks
+      fuel:
+        examples: Petrol stations, fuel dealers, electric vehicle charging
+        label: Fuel
+      gambling:
+        examples: Betting, casinos, lotteries. Not categorised unless you choose a
+          category.
+        label: Gambling
+      government_fees:
+        examples: State fees, fines, court costs, government services
+        label: Government fees
+      groceries:
+        examples: Supermarkets, bakeries, butchers, convenience stores
+        label: Groceries
+      gym:
+        examples: Gyms, fitness and sports clubs
+        label: Gym
+      health:
+        examples: Anything for health
+        label: Health
+      home:
+        examples: Hardware and furniture stores, garden centres, repairs, cleaning
+        label: Home
+      income:
+        examples: Any income
+        label: Income
+      insurance:
+        examples: Insurance premiums
+        label: Insurance
+      interest:
+        examples: Interest paid to you. Interest you pay on a credit card counts as
+          a bank fee.
+        label: Interest
+      internet:
+        examples: Home internet providers
+        label: Internet
+      kids:
+        examples: Toy stores, child care
+        label: Kids
+      lodging:
+        examples: Hotels, hostels, Booking.com, Airbnb, campsites
+        label: Lodging
+      medical_services:
+        examples: Doctors, dentists, clinics, hospitals, laboratories, opticians
+        label: Medical services
+      military_support:
+        examples: Donations to the army and military funds
+        label: Military support
+      mobile_plan:
+        examples: Mobile operators and phone top-ups
+        label: Mobile plan
+      own_transfer:
+        examples: Jar top-ups, currency exchange, transfers between your own cards
+        label: Transfers between own accounts
+      p2p_incoming:
+        examples: Card-to-card transfers you receive
+        label: Incoming transfers
+      p2p_outgoing:
+        examples: Card-to-card transfers you send
+        label: Outgoing transfers
+      parking:
+        examples: Parking lots and garages, road tolls
+        label: Parking and tolls
+      pets:
+        examples: Pet shops, veterinarians
+        label: Pets
+      pharmacy:
+        examples: Pharmacies and drugstores
+        label: Pharmacies
+      public_transport:
+        examples: Metro, buses, trams, suburban trains, ferries
+        label: Public transport
+      railways:
+        examples: Train tickets
+        label: Railways
+      refund:
+        examples: Money returned by a shop or service
+        label: Refunds
+      rent:
+        examples: Rent paid through estate agents and property managers
+        label: Rent
+      salary:
+        examples: Salary payments
+        label: Salary
+      services:
+        examples: Laundry, dry cleaning, legal, accounting and other services
+        label: Services
+      shopping:
+        examples: Marketplaces, department stores, gifts, jewellery, florists, other
+          stores
+        label: Shopping
+      sports:
+        examples: Sporting goods, bicycle shops, sports clubs and fields
+        label: Sports
+      streaming:
+        examples: Video and music streaming, pay TV
+        label: Streaming
+      taxes:
+        examples: Tax payments
+        label: Taxes
+      taxi:
+        examples: Taxis and ride hailing
+        label: Taxi
+      transportation:
+        examples: Any transport
+        label: Transportation
+      travel:
+        examples: Travel agencies, tour operators, cruises, intercity buses
+        label: Travel
+      travel_air:
+        examples: Airlines and airports
+        label: Flights
+      utilities:
+        examples: Electricity, gas, water, heating
+        label: Utilities

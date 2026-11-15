@@ -1,0 +1,5 @@
+# Kept on the empty family, so tests of other families start with every group automatic.
+empty_cash_withdrawal:
+  family: empty
+  group_key: cash_withdrawal
+  disabled: true
