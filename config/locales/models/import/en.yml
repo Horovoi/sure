@@ -3,11 +3,15 @@ en:
   activerecord:
     attributes:
       import:
+        amount_type_inflow_value: Inflow value
+        amount_type_outflow_value: Outflow value
         currency: Currency
         number_format: Number Format
     errors:
       models:
         import:
+          amount_type_values_exclusive: Choose either an inflow value or an outflow
+            value for the amount type column, not both.
           attributes:
             raw_file_str:
               invalid_csv_format: is not a valid CSV format

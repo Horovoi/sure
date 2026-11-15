@@ -23,6 +23,37 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "turbo-frame#modal"
   end
 
+  test "the document upload on the new page submits through Turbo" do
+    adapter = mock("vector_store_adapter")
+    adapter.stubs(:supported_extensions).returns(%w[.pdf .txt])
+    VectorStore.stubs(:adapter).returns(adapter)
+
+    get new_import_url
+
+    assert_response :success
+    assert_select "form[data-turbo-frame=_top] input[type=file][onchange='this.form.requestSubmit()']", count: 1
+    assert_select "input[type=file][onchange='this.form.submit()']", count: 0
+    assert_includes response.body, I18n.t("imports.new.import_file")
+  end
+
+  test "create with an empty request body redirects back with an alert" do
+    assert_no_difference "Import.count" do
+      post imports_url
+    end
+
+    assert_redirected_to new_import_url
+    assert_equal I18n.t("imports.create.missing_upload"), flash[:alert]
+  end
+
+  test "a DocumentImport without its file creates no import and redirects with an alert" do
+    assert_no_difference "Import.count" do
+      post imports_url, params: { import: { type: "DocumentImport" } }
+    end
+
+    assert_redirected_to new_import_url
+    assert_equal I18n.t("imports.create.missing_upload"), flash[:alert]
+  end
+
   test "creates import" do
     assert_difference "Import.count", 1 do
       post imports_url, params: {
@@ -145,6 +176,43 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_nil import.reload.account
   end
 
+  test "choosing or changing a PDF import's account moves its rows to the account currency" do
+    import = @user.family.imports.create!(type: "PdfImport")
+    import.update_columns(status: "pending", ai_summary: "Summary", document_type: "bank_statement")
+    import.rows.create!(date: "01/01/2024", amount: "-10", name: "Coffee", currency: "UAH")
+    eur_account = accounts(:credit_card)
+    eur_account.update_column(:currency, "EUR")
+
+    patch import_url(import), params: { pdf_import: { account_id: accounts(:depository).id } }
+
+    assert_redirected_to import_path(import)
+    assert_equal "Account saved.", flash[:notice]
+    assert_equal [ "USD" ], import.rows.pluck(:currency)
+
+    patch import_url(import), params: { pdf_import: { account_id: eur_account.id } }
+
+    assert_equal eur_account, import.reload.account
+    assert_equal [ "EUR" ], import.rows.pluck(:currency)
+  end
+
+  test "a PDF import under review lists rows the account already records" do
+    account = accounts(:depository)
+    existing = account.entries.create!(date: Date.new(2024, 1, 2), amount: 10, currency: "USD", name: "Coffee by hand", entryable: Transaction.new)
+    import = @user.family.imports.create!(type: "PdfImport", account: account)
+    import.update_columns(status: "pending", ai_summary: "Summary", document_type: "bank_statement")
+    import.rows.create!(date: "01/01/2024", amount: "-10", name: "CARD COFFEE", currency: "USD")
+    import.rows.create!(date: "01/01/2024", amount: "-25", name: "BAKERY", currency: "USD")
+    import.update_column(:rows_count, 2)
+
+    get import_url(import)
+
+    assert_response :success
+    assert_select "#already_recorded a[href='#{entry_path(existing)}']"
+    assert_select "form[action='#{publish_import_path(import)}']"
+    assert_includes response.body, "Publish 1 new transaction"
+    assert_includes response.body, "1 transaction already recorded"
+  end
+
   test "a processing PDF offers a way out" do
     import = @user.family.imports.create!(type: "PdfImport")
     import.update_column(:status, "processing")
@@ -153,6 +221,31 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "form[action='#{import_path(import)}'] input[name='_method'][value='delete']"
+  end
+
+  test "a processing PDF import polls the page and keeps a refresh link" do
+    import = @user.family.imports.create!(type: "PdfImport")
+    import.update_column(:status, "processing")
+
+    get import_url(import)
+
+    assert_response :success
+    assert_select "turbo-frame##{dom_id(import, :pdf_import)}[target='_top'][data-controller='polling'][data-polling-url-value='#{import_path(import)}']"
+    assert_select "turbo-frame##{dom_id(import, :pdf_import)} a[href='#{import_path(import)}']", text: "Refresh status"
+  end
+
+  test "a PDF import that is not processing does not poll" do
+    import = @user.family.imports.create!(type: "PdfImport", account: accounts(:depository))
+
+    %w[pending processing_failed indexed complete].each do |status|
+      import.update_columns(status: status, ai_summary: "Summary", document_type: "bank_statement")
+
+      get import_url(import)
+
+      assert_response :success
+      assert_select "turbo-frame##{dom_id(import, :pdf_import)}", count: 1
+      assert_select "turbo-frame##{dom_id(import, :pdf_import)}[data-polling-url-value]", count: 0, message: "#{status} should not poll"
+    end
   end
 
   test "a PDF whose processing failed can be retried" do

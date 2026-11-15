@@ -1,5 +1,8 @@
 class RuleImport < Import
   def import!
+    # A failed earlier run rolled back what it created, so its lookups are stale
+    @categories_by_name = @merchants_by_name = @tags_by_name = nil
+
     transaction do
       rows.each do |row|
         create_or_update_rule_from_row(row)
@@ -215,25 +218,12 @@ class RuleImport < Import
 
       # Map category names to UUIDs
       if condition_type == "transaction_category"
-        category = family.categories.find_by(name: value)
-        unless category
-          category = family.categories.create!(
-            name: value,
-            color: Category::UNCATEGORIZED_COLOR,
-            classification: "expense",
-            lucide_icon: "shapes"
-          )
-        end
-        return category.id
+        return find_or_create_category(value).id
       end
 
       # Map merchant names to UUIDs
       if condition_type == "transaction_merchant"
-        merchant = family.merchants.find_by(name: value)
-        unless merchant
-          merchant = family.merchants.create!(name: value)
-        end
-        return merchant.id
+        return find_or_create_merchant(value).id
       end
 
       value
@@ -247,40 +237,52 @@ class RuleImport < Import
 
       # Map category names to UUIDs
       if action_type == "set_transaction_category"
-        category = family.categories.find_by(name: value)
-        # Create category if it doesn't exist
-        unless category
-          category = family.categories.create!(
-            name: value,
-            color: Category::UNCATEGORIZED_COLOR,
-            classification: "expense",
-            lucide_icon: "shapes"
-          )
-        end
-        return category.id
+        return find_or_create_category(value).id
       end
 
       # Map merchant names to UUIDs
       if action_type == "set_transaction_merchant"
-        merchant = family.merchants.find_by(name: value)
-        # Create merchant if it doesn't exist
-        unless merchant
-          merchant = family.merchants.create!(name: value)
-        end
-        return merchant.id
+        return find_or_create_merchant(value).id
       end
 
       # Map tag names to UUIDs
       if action_type == "set_transaction_tags"
-        tag = family.tags.find_by(name: value)
-        # Create tag if it doesn't exist
-        unless tag
-          tag = family.tags.create!(name: value)
-        end
-        return tag.id
+        return find_or_create_tag(value).id
       end
 
       value
+    end
+
+    # Loaded with one query per operand type for the whole import, and extended
+    # when a name is created, so a later row naming the same category, merchant
+    # or tag reuses it instead of querying (or creating it) again.
+    def categories_by_name
+      @categories_by_name ||= family.categories.reload.index_by(&:name)
+    end
+
+    def merchants_by_name
+      @merchants_by_name ||= family.merchants.reload.index_by(&:name)
+    end
+
+    def tags_by_name
+      @tags_by_name ||= family.tags.reload.index_by(&:name)
+    end
+
+    def find_or_create_category(name)
+      categories_by_name[name] ||= family.categories.create!(
+        name: name,
+        color: Category::UNCATEGORIZED_COLOR,
+        classification: "expense",
+        lucide_icon: "shapes"
+      )
+    end
+
+    def find_or_create_merchant(name)
+      merchants_by_name[name] ||= family.merchants.create!(name: name)
+    end
+
+    def find_or_create_tag(name)
+      tags_by_name[name] ||= family.tags.create!(name: name)
     end
 
     def parse_boolean(value)
@@ -299,8 +301,13 @@ class RuleImport < Import
     def parse_json_safely(json_string, field_name)
       return [] if json_string.blank?
 
-      # Clean up the JSON string - remove extra escaping that might come from CSV parsing
       cleaned = json_string.to_s.strip
+
+      # Most API-created rows already store valid JSON. Parse them as-is before
+      # falling back to the legacy cleanup path for older malformed payloads.
+      parse_json_payload(cleaned, normalize_legacy_strings: false)
+    rescue JSON::ParserError
+      # Clean up the JSON string - remove extra escaping that might come from CSV parsing
 
       # Remove surrounding quotes if present (both single and double)
       cleaned = cleaned.gsub(/\A["']+|["']+\z/, "")
@@ -331,8 +338,46 @@ class RuleImport < Import
       end
 
       # Try parsing
-      JSON.parse(cleaned)
+      parse_json_payload(cleaned, normalize_legacy_strings: true)
     rescue JSON::ParserError => e
       raise JSON::ParserError.new("Invalid JSON in #{field_name}: #{e.message}. Raw value: #{json_string.inspect}")
+    end
+
+    def parse_json_payload(payload, normalize_legacy_strings:)
+      parsed = JSON.parse(payload)
+      parsed = JSON.parse(parsed) if wrapped_json_payload?(parsed)
+
+      normalize_json_values(parsed, normalize_legacy_strings:)
+    end
+
+    def wrapped_json_payload?(value)
+      return false unless value.is_a?(String)
+
+      stripped_value = value.strip
+      stripped_value.start_with?("[", "{")
+    end
+
+    def normalize_json_values(value, normalize_legacy_strings:)
+      case value
+      when Array
+        value.map { |item| normalize_json_values(item, normalize_legacy_strings:) }
+      when Hash
+        value.transform_values { |item| normalize_json_values(item, normalize_legacy_strings:) }
+      when String
+        normalized = value
+          .gsub(/\\u([0-9a-fA-F]{4})/i) { [ $1.to_i(16) ].pack("U") }
+          .gsub('\\"', '"')
+
+        if normalize_legacy_strings
+          normalized = normalized
+            .gsub("\\n", "\n")
+            .gsub("\\r", "\r")
+            .gsub("\\t", "\t")
+        end
+
+        normalized
+      else
+        value
+      end
     end
 end

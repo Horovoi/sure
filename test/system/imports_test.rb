@@ -1,4 +1,5 @@
 require "application_system_test_case"
+require "ostruct"
 
 class ImportsTest < ApplicationSystemTestCase
   include ActiveJob::TestHelper
@@ -189,5 +190,45 @@ class ImportsTest < ApplicationSystemTestCase
     assert_text "Import successful"
 
     click_on "Back to dashboard"
+  end
+
+  test "PDF import skips a transaction that is already recorded" do
+    account = accounts(:depository)
+    account.entries.create!(date: Date.new(2024, 3, 11), amount: 50, currency: "USD", name: "Coffee typed by hand", entryable: Transaction.new)
+
+    provider = stub("openai")
+    provider.stubs(:supports_pdf_processing?).returns(true)
+    provider.stubs(:process_pdf).returns(OpenStruct.new(success?: true, data: OpenStruct.new(summary: "March statement", document_type: "bank_statement")))
+    provider.stubs(:extract_bank_statement).returns(OpenStruct.new(
+      success?: true,
+      data: { transactions: [
+        { date: "2024-03-10", amount: "-50", name: "CARD COFFEE" },
+        { date: "2024-03-12", amount: "-25", name: "BAKERY" }
+      ] }
+    ))
+    Provider::Registry.stubs(:get_provider).with(:openai).returns(provider)
+
+    import = @user.family.imports.create!(type: "PdfImport", date_format: "%m/%d/%Y")
+    import.pdf_file.attach(io: StringIO.new("%PDF-1.4 test"), filename: "statement.pdf", content_type: "application/pdf")
+    import.process_with_ai_later
+    perform_enqueued_jobs
+
+    visit import_path(import)
+
+    assert_text "Ready for Review"
+    select account.name, from: "pdf_import[account_id]"
+    click_on "Save account"
+
+    assert_text "1 transaction already recorded"
+    find("summary", text: "1 transaction already recorded").click
+    assert_link "Coffee typed by hand"
+
+    click_on "Publish 1 new transaction"
+    perform_enqueued_jobs
+    visit import_path(import)
+
+    assert_text "Import complete"
+    assert_equal [ "BAKERY" ], import.reload.entries.pluck(:name)
+    assert_equal 1, account.entries.where(name: "Coffee typed by hand").count
   end
 end

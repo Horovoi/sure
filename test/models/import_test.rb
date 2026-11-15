@@ -190,6 +190,95 @@ class ImportTest < ActiveSupport::TestCase
     assert_equal "mine", entry.notes
   end
 
+  test "CSV-only date formats are not offered as a global family preference" do
+    assert_empty Import::CSV_ONLY_DATE_FORMATS & Family::DATE_FORMATS
+    assert_empty Import::CSV_ONLY_DATE_FORMATS.map(&:last) & Family::DATE_FORMATS.map(&:last)
+  end
+
+  test "DD/MM/YY and DD.MM.YY rows parse" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n15/05/24,Coffee,10\n", date_format: "%d/%m/%y")
+    row = import.rows.first
+    assert row.valid?, row.errors.full_messages.to_sentence
+    assert_equal "2024-05-15", row.date_iso
+
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n01.11.26,Coffee,10\n", date_format: "%d.%m.%y")
+    row = import.rows.first
+    assert row.valid?, row.errors.full_messages.to_sentence
+    assert_equal "2026-11-01", row.date_iso
+  end
+
+  test "a 4-digit year under a 2-digit year format is a row error" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n01.11.2025,Coffee,10\n", date_format: "%d.%m.%y")
+    row = import.rows.first
+
+    refute row.valid?
+    assert row.errors.added?(:date, "must exactly match the format: %d.%m.%y")
+    refute import.cleaned?
+  end
+
+  test "a 4-digit year format still accepts a trailing time" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n01.11.2025 10:30,Coffee,10\n", date_format: "%d.%m.%Y")
+
+    assert import.rows.first.valid?
+  end
+
+  test "a custom type column cannot name both an inflow and an outflow value" do
+    @import.assign_attributes(amount_type_strategy: "custom_column", entity_type_col_label: "type", amount_type_inflow_value: "Зарахування", amount_type_outflow_value: "Списання")
+
+    assert_not @import.valid?
+    assert @import.errors.added?(:base, :amount_type_values_exclusive)
+
+    @import.amount_type_inflow_value = nil
+    assert @import.valid?, @import.errors.full_messages.to_sentence
+  end
+
+  test "both amount type values are allowed while the strategy is signed amount" do
+    @import.assign_attributes(amount_type_strategy: "signed_amount", amount_type_inflow_value: "in", amount_type_outflow_value: "out")
+
+    assert @import.valid?, @import.errors.full_messages.to_sentence
+  end
+
+  test "a custom type column with neither value is not configured" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount,type\n01/01/2024,Coffee,10,Списання\n", amount_type_strategy: "custom_column", entity_type_col_label: "type")
+
+    assert import.rows_count.positive?
+    assert_not import.configured?
+    assert_not import.publishable?
+
+    import.update!(amount_type_outflow_value: "Списання")
+    assert import.configured?
+
+    import.update!(amount_type_outflow_value: nil, amount_type_inflow_value: "Зарахування")
+    assert import.configured?
+  end
+
+  test "an old custom column import with only an inflow value stays valid and configured" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount,type\n01/01/2024,Coffee,10,debit\n", amount_type_strategy: "custom_column", entity_type_col_label: "type", amount_type_inflow_value: "credit")
+
+    assert import.valid?
+    assert import.configured?
+  end
+
+  test "apply_template! copies the amount type strategy and both values" do
+    template = imports(:trade)
+    template.update_columns(
+      type: "TransactionImport",
+      status: "complete",
+      entity_type_col_label: "type",
+      amount_type_strategy: "custom_column",
+      amount_type_inflow_value: nil,
+      amount_type_outflow_value: "Списання"
+    )
+
+    @import.apply_template!(Import.find(template.id))
+    @import.reload
+
+    assert_equal "type", @import.entity_type_col_label
+    assert_equal "custom_column", @import.amount_type_strategy
+    assert_nil @import.amount_type_inflow_value
+    assert_equal "Списання", @import.amount_type_outflow_value
+  end
+
   private
     def configure_csv(import, account: @account, csv: "date,name,amount\n01/01/2024,Coffee,10\n", **labels)
       import.update!(

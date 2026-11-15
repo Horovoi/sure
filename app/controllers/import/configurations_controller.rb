@@ -31,7 +31,8 @@ class Import::ConfigurationsController < ApplicationController
     end
 
     def import_params
-      params.fetch(:import, {}).permit(
+      # Not params.expect: the category and rule import forms send no fields at all
+      attributes = params.fetch(:import, {}).permit(
         :date_col_label,
         :amount_col_label,
         :name_col_label,
@@ -50,7 +51,25 @@ class Import::ConfigurationsController < ApplicationController
         :signage_convention,
         :amount_type_strategy,
         :amount_type_inflow_value,
+        :amount_type_outflow_value,
+        :amount_type_value,
+        :amount_type_direction,
         :rows_to_skip
       )
+
+      assign_amount_type_identifier(attributes)
+    end
+
+    # The form picks one value of the type column and whether it means inflow or
+    # outflow; it is stored in the matching column and the other one is cleared.
+    def assign_amount_type_identifier(attributes)
+      value = attributes.delete(:amount_type_value)
+      direction = attributes.delete(:amount_type_direction)
+      return attributes if value.nil? && direction.nil?
+
+      outflow = direction == "outflow"
+      attributes[:amount_type_inflow_value] = outflow ? nil : value.presence
+      attributes[:amount_type_outflow_value] = outflow ? value.presence : nil
+      attributes
     end
 end

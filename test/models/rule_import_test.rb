@@ -159,6 +159,68 @@ class RuleImportTest < ActiveSupport::TestCase
     assert_equal existing_tag.id, action.value
   end
 
+  test "reuses a category created for an earlier row within the same import" do
+    csv = <<~CSV
+      name,resource_type,active,effective_date,conditions,actions
+      "First coffee rule","transaction",true,,"[{\"condition_type\":\"transaction_name\",\"operator\":\"like\",\"value\":\"coffee\"}]","[{\"action_type\":\"set_transaction_category\",\"value\":\"Coffee Shops\"}]"
+      "Second coffee rule","transaction",true,,"[{\"condition_type\":\"transaction_name\",\"operator\":\"like\",\"value\":\"latte\"}]","[{\"action_type\":\"set_transaction_category\",\"value\":\"Coffee Shops\"}]"
+    CSV
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+
+    assert_difference -> { Category.where(family: @family).count }, 1 do
+      import.send(:import!)
+    end
+
+    category = Category.find_by!(family: @family, name: "Coffee Shops")
+    assert_equal category.id, Rule.find_by!(family: @family, name: "First coffee rule").actions.first.value
+    assert_equal category.id, Rule.find_by!(family: @family, name: "Second coffee rule").actions.first.value
+  end
+
+  test "looks up each operand type once for the whole import" do
+    merchant = @family.merchants.create!(name: "Coffee Place")
+    tag = @family.tags.create!(name: "Morning")
+
+    csv = CSV.generate do |out|
+      out << %w[name resource_type active effective_date conditions actions]
+      5.times do |i|
+        out << [
+          "Batched rule #{i}",
+          "transaction",
+          true,
+          "",
+          [
+            { condition_type: "transaction_category", operator: "=", value: "Groceries" },
+            { condition_type: "transaction_merchant", operator: "=", value: "Coffee Place" }
+          ].to_json,
+          [
+            { action_type: "set_transaction_category", value: "Groceries" },
+            { action_type: "set_transaction_merchant", value: "Coffee Place" },
+            { action_type: "set_transaction_tags", value: "Morning" }
+          ].to_json
+        ]
+      end
+    end
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+
+    lookups = []
+    callback = ->(*, payload) { lookups << payload[:sql] if payload[:sql].match?(/FROM "(categories|merchants|tags)"/) && payload[:sql].start_with?("SELECT") }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+      import.send(:import!)
+    end
+
+    # One query each for categories, merchants and tags, not one per row
+    assert_operator lookups.size, :<=, 3, lookups.join("\n")
+
+    Rule.where(family: @family).where("name LIKE ?", "Batched rule %").find_each do |rule|
+      assert_equal [ @category.id, merchant.id ], rule.conditions.order(:condition_type).map(&:value)
+      assert_equal [ @category.id, merchant.id, tag.id ].sort, rule.actions.map(&:value).sort
+    end
+  end
+
   test "updates existing rule when re-importing with same name" do
     # First import
     import1 = @family.imports.create!(type: "RuleImport", raw_file_str: @csv, col_sep: ",")
@@ -234,5 +296,84 @@ class RuleImportTest < ActiveSupport::TestCase
     assert_raises ActiveRecord::RecordInvalid do
       import.send(:import!)
     end
+  end
+
+  test "imports valid JSON conditions whose values contain escaped quotes" do
+    csv = CSV.generate do |out|
+      out << %w[name resource_type active effective_date conditions actions]
+      out << [
+        "Quoted value rule",
+        "transaction",
+        true,
+        "",
+        [ { condition_type: "transaction_name", operator: "=", value: "ני\\u0022ע-קניה" } ].to_json,
+        [ { action_type: "set_transaction_name", value: "Quoted transfer" } ].to_json
+      ]
+    end
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+
+    assert_nothing_raised do
+      import.send(:import!)
+    end
+
+    rule = Rule.find_by!(family: @family, name: "Quoted value rule")
+    condition = rule.conditions.first
+    assert_equal "ני\"ע-קניה", condition.value
+  end
+
+  test "imports wrapped JSON payloads from legacy rows" do
+    wrapped_conditions = [ { condition_type: "transaction_name", operator: "like", value: "legacy grocery" } ].to_json.to_json
+    wrapped_actions = [ { action_type: "set_transaction_category", value: "Groceries" } ].to_json.to_json
+
+    csv = CSV.generate do |out|
+      out << %w[name resource_type active effective_date conditions actions]
+      out << [
+        "Wrapped payload rule",
+        "transaction",
+        true,
+        "",
+        wrapped_conditions,
+        wrapped_actions
+      ]
+    end
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+
+    assert_nothing_raised do
+      import.send(:import!)
+    end
+
+    rule = Rule.find_by!(family: @family, name: "Wrapped payload rule")
+    condition = rule.conditions.first
+    action = rule.actions.first
+
+    assert_equal "legacy grocery", condition.value
+    assert_equal @category.id, action.value
+  end
+
+  test "preserves literal backslash sequences in valid JSON values" do
+    csv = CSV.generate do |out|
+      out << %w[name resource_type active effective_date conditions actions]
+      out << [
+        "Literal backslash rule",
+        "transaction",
+        true,
+        "",
+        [ { condition_type: "transaction_name", operator: "=", value: 'C:\new\test' } ].to_json,
+        [ { action_type: "set_transaction_name", value: "Path rule" } ].to_json
+      ]
+    end
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+    import.send(:import!)
+
+    rule = Rule.find_by!(family: @family, name: "Literal backslash rule")
+    condition = rule.conditions.first
+
+    assert_equal 'C:\new\test', condition.value
   end
 end

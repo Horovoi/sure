@@ -30,8 +30,39 @@ en:
       trade_import:
         date_format_label: Date format
       transaction_import:
+        account_label: Account
+        amount_label: Amount
+        amount_type_directions:
+          inflow: means income (inflow)
+          outflow: means spending (outflow)
+        amount_type_strategies:
+          custom_column: Custom column
+          signed_amount: Signed amount
+        amount_type_strategy_label: Amount type strategy
+        amount_type_strategy_prompt: Select strategy
+        amount_type_value_prompt: Select value
+        as_amount_type_column: as amount type column
+        category_label: Category
+        column_prompt: Select column
+        currency_default: Default
+        currency_label: Currency
         date_format_label: Date format
+        date_label: Date
+        format_prompt: Select format
+        leave_empty: Leave empty
+        name_label: Name
+        notes_label: Notes
+        number_format_label: Format
         rows_to_skip_label: Skip first n rows
+        rows_with: Rows with
+        set: Set
+        signage_convention_label: Amount type
+        signage_convention_prompt: Select convention
+        signage_conventions:
+          inflows_negative: Incomes are negative
+          inflows_positive: Incomes are positive
+        submit: Apply configuration
+        tags_label: Tags
     confirms:
       mappings:
         create_account: Create account
@@ -68,15 +99,107 @@ en:
         instructions_4: Columns marked with an asterisk (*) are required data.
         instructions_5: No commas, no currency symbols, and no parentheses in numbers.
         title: Import your data
+      update:
+        invalid_csv: Must be valid CSV with headers and at least one row of data
+        success: CSV uploaded successfully.
   imports:
     not_editable: This import can no longer be changed.
+    create:
+      csv_uploaded: CSV uploaded successfully.
+      document_upload_failed: Document upload failed.
+      document_upload_unavailable: Document upload is not configured.
+      document_uploaded: Document uploaded successfully.
+      file_too_large: File is too large. Maximum size is %{max_size}MB.
+      invalid_csv_type: Invalid file type. Please upload a CSV file.
+      invalid_pdf: Invalid PDF file.
+      missing_upload: We didn't receive your file. Please try uploading it again.
+      pdf_too_large: PDF is too large. Maximum size is %{max_size}MB.
+      pdf_uploaded: PDF uploaded. AI processing has started.
+      unsupported_document_type: Unsupported document file type.
     destroy:
       not_deletable: This import can't be deleted while it is running or still published. Revert it first.
     index:
       title: Imports
       new: New Import
+    already_recorded:
+      description: The account already has these transactions (same amount, date
+        up to 3 days apart). They are skipped and left as they are. Open one to check it.
+      entry_details: "%{amount} on %{date}"
+      row_date: "Statement date: %{date}"
+      title:
+        one: 1 transaction already recorded
+        other: "%{count} transactions already recorded"
+      unnamed_row: Unnamed transaction
     pdf_import:
+      back_to_dashboard: Back to dashboard
+      back_to_imports: Back to imports
+      complete:
+        description: The new transactions from your statement were added to the account.
+        nothing_new: Every transaction in this statement was already recorded, so nothing
+          new was added.
+        title: Import complete
+      delete_import: Delete import
+      document_type: Document type
+      failed:
+        description: The PDF could not be processed.
+        title: Processing failed
+        try_another_file: Try another file
+      indexed:
+        description: The file was analyzed and added to the family document vault.
+        summary: Summary
+        title: Document indexed
+      processing:
+        description: AI is classifying the PDF and extracting any transactions it can
+          find.
+        title: Processing document
+      refresh_status: Refresh status
       retry_processing: Retry processing
+      review:
+        account_hint: Choose which account these transactions should be published into.
+        account_label: Import to account
+        account_prompt: Select an account...
+        create_account: Create account
+        description:
+          one: We extracted 1 transaction from your statement. Choose an account, review
+            it, and publish when ready.
+          other: We extracted %{count} transactions from your statement. Choose an account,
+            review them, and publish when ready.
+        no_accounts: No manual accounts available. Create one first to publish this
+          import.
+        publish:
+          zero: Finish import (nothing new to add)
+          one: Publish 1 new transaction
+          other: Publish %{count} new transactions
+        review_transactions: Review transactions
+        save_account: Save account
+        select_account: Select an account above to continue.
+        title: Ready for Review
+      unknown_document_type: Unknown
+      unknown_state:
+        description: Refresh the page or return to Imports.
+        title: Unknown import state
+    pdf_import_counts:
+      already_recorded: Already recorded
+      extracted: Extracted from the statement
+      imported: Imported
+      new: New
+      title: Transactions
+    pdf_statement_balance_check:
+      account_amount: "Account: %{amount}"
+      difference: "Differs by %{amount}"
+      match: Matches the account
+      missing: The statement does not show this balance or its date.
+      not_available: Not available
+      not_synced: The account balance for this day is not calculated yet. Refresh
+        once the account has synced.
+      sides:
+        closing: Closing balance
+        opening: Opening balance
+      statement_amount: "Statement: %{amount}"
+      title: Statement balances
+    update:
+      account_not_found: Account not found.
+      account_saved: Account saved.
     publish:
       not_publishable: This import can't be published in its current state.
     retry_processing:
@@ -117,15 +240,21 @@ en:
         of our import templates like Mint.
       import_accounts: Import accounts
       import_categories: Import categories
+      import_file: Import file
+      import_file_description: Upload PDFs and other searchable documents to the family vault.
       import_mint: Import from Mint
       import_portfolio: Import investments
       import_rules: Import rules
       import_transactions: Import transactions
+      requires_account: Create an account first to unlock this import type.
       resume: Resume %{type}
       sources: Sources
       title: New CSV Import
     ready:
       description: Here's a summary of the new items that will be added to your account
         once you publish this import.
+      count: count
+      item: item
+      publish: Publish import
       reverted_notice: This import was reverted. You can review it and publish it again.
       title: Confirm your import data

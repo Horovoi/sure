@@ -8,22 +8,23 @@
                      data: {
                        controller: "import",
                        import_csv_value: import.csv_rows.to_json,
-                       import_amount_type_column_key_value: @import.entity_type_col_label
+                       import_amount_type_column_key_value: @import.entity_type_col_label,
+                       import_amount_type_value_prompt_value: t(".amount_type_value_prompt")
                      } do |form| %>
 
   <%# Row Skip Configuration - must be first to configure before column mapping %>
   <%= form.number_field :rows_to_skip,
-                        { label: t(".rows_to_skip_label", default: "Skip first n rows"), min: 0, step: 1, data: { action: "change->import#refreshForm" } } %>
+                        { label: t(".rows_to_skip_label"), min: 0, step: 1, data: { action: "change->import#refreshForm" } } %>
 
   <%# Date Configuration %>
   <div class="flex items-center gap-4">
     <%= form.select :date_col_label,
                     import.csv_headers,
-                    { label: "Date", prompt: "Select column" },
+                    { label: t(".date_label"), prompt: t(".column_prompt") },
                     required: true %>
     <%= form.select :date_format,
-                    Family::DATE_FORMATS,
-                    { label: t(".date_format_label"), prompt: "Select format" },
+                    Family::DATE_FORMATS + Import::CSV_ONLY_DATE_FORMATS,
+                    { label: t(".date_format_label"), prompt: t(".format_prompt") },
                     required: true %>
   </div>
 
@@ -31,21 +32,21 @@
   <div class="flex items-center gap-4">
     <%= form.select :amount_col_label,
                     import.csv_headers,
-                    { label: "Amount", container_class: "w-2/5", prompt: "Select column" },
+                    { label: t(".amount_label"), container_class: "w-2/5", prompt: t(".column_prompt") },
                     required: true %>
     <%= form.select :currency_col_label,
                     import.csv_headers,
-                    { include_blank: "Default", label: "Currency", container_class: "w-1/5" } %>
+                    { include_blank: t(".currency_default"), label: t(".currency_label"), container_class: "w-1/5" } %>
     <%= form.select :number_format,
                     Import::NUMBER_FORMATS.keys,
-                    { label: "Format", prompt: "Select format", container_class: "w-2/5" },
+                    { label: t(".number_format_label"), prompt: t(".format_prompt"), container_class: "w-2/5" },
                     required: true %>
   </div>
 
   <%# Amount Type Strategy %>
   <%= form.select :amount_type_strategy,
-                  Import::AMOUNT_TYPE_STRATEGIES.map { |strategy| [strategy.humanize, strategy] },
-                  { label: "Amount type strategy", prompt: "Select strategy" },
+                  Import::AMOUNT_TYPE_STRATEGIES.map { |strategy| [t(".amount_type_strategies.#{strategy}"), strategy] },
+                  { label: t(".amount_type_strategy_label"), prompt: t(".amount_type_strategy_prompt") },
                   required: true,
                   data: {
                     action: "import#handleAmountTypeStrategyChange",
@@ -58,8 +59,8 @@
     <div class="flex items-center gap-2">
       <span class="text-sm shrink-0 text-secondary">↪</span>
       <%= form.select :signage_convention,
-                      [["Incomes are positive", "inflows_positive"], ["Incomes are negative", "inflows_negative"]],
-                      { label: "Amount type", prompt: "Select convention" },
+                      [[t(".signage_conventions.inflows_positive"), "inflows_positive"], [t(".signage_conventions.inflows_negative"), "inflows_negative"]],
+                      { label: t(".signage_convention_label"), prompt: t(".signage_convention_prompt") },
                       required: @import.amount_type_strategy == "signed_amount" %>
     </div>
   <% end %>
@@ -70,23 +71,29 @@
     <div class="space-y-2">
       <div class="flex items-center gap-2 text-sm">
         <span class="shrink-0 text-secondary">↪</span>
-        <span class="text-secondary">Set</span>
+        <span class="text-secondary"><%= t(".set") %></span>
         <%= form.select :entity_type_col_label,
                         import.csv_headers,
-                        { prompt: "Select column", container_class: "w-48 px-3 py-1.5 border border-secondary rounded-md" },
+                        { prompt: t(".column_prompt"), container_class: "w-48 px-3 py-1.5 border border-secondary rounded-md" },
                         required: @import.amount_type_strategy == "custom_column",
                         data: { action: "import#handleAmountTypeChange" } %>
-        <span class="text-secondary">as amount type column</span>
+        <span class="text-secondary"><%= t(".as_amount_type_column") %></span>
       </div>
 
+      <%# One value of the type column and what it means. "Outflow" suits a file with
+          one spending value and several income values (a deposit, a refund). %>
       <div class="items-center gap-2 text-sm <%= @import.entity_type_col_label.nil? ? "hidden" : "flex" %>" data-import-target="amountTypeValue">
         <span class="shrink-0 text-secondary">↪</span>
-        <span class="text-secondary">Set</span>
-        <%= form.select :amount_type_inflow_value,
+        <span class="text-secondary"><%= t(".rows_with") %></span>
+        <%= form.select :amount_type_value,
                         @import.selectable_amount_type_values,
-                        { prompt: "Select column", container_class: "w-48 px-3 py-1.5 border border-secondary rounded-md" },
+                        { prompt: t(".amount_type_value_prompt"), container_class: "w-48 px-3 py-1.5 border border-secondary rounded-md" },
+                        required: @import.amount_type_strategy == "custom_column",
+                        data: { import_target: "amountTypeValueSelect" } %>
+        <%= form.select :amount_type_direction,
+                        [[t(".amount_type_directions.inflow"), "inflow"], [t(".amount_type_directions.outflow"), "outflow"]],
+                        { container_class: "w-56 px-3 py-1.5 border border-secondary rounded-md" },
                         required: @import.amount_type_strategy == "custom_column" %>
-        <span class="text-secondary">as "income" (inflow) value</span>
       </div>
     </div>
   <% end %>
@@ -95,21 +102,21 @@
   <% unless import.account.present? %>
     <%= form.select :account_col_label,
                     import.csv_headers,
-                    { include_blank: "Leave empty", label: "Account" } %>
+                    { include_blank: t(".leave_empty"), label: t(".account_label") } %>
   <% end %>
 
   <%= form.select :name_col_label,
                   import.csv_headers,
-                  { include_blank: "Leave empty", label: "Name" } %>
+                  { include_blank: t(".leave_empty"), label: t(".name_label") } %>
   <%= form.select :category_col_label,
                   import.csv_headers,
-                  { include_blank: "Leave empty", label: "Category" } %>
+                  { include_blank: t(".leave_empty"), label: t(".category_label") } %>
   <%= form.select :tags_col_label,
                   import.csv_headers,
-                  { include_blank: "Leave empty", label: "Tags" } %>
+                  { include_blank: t(".leave_empty"), label: t(".tags_label") } %>
   <%= form.select :notes_col_label,
                   import.csv_headers,
-                  { include_blank: "Leave empty", label: "Notes" } %>
+                  { include_blank: t(".leave_empty"), label: t(".notes_label") } %>
 
-  <%= form.submit "Apply configuration", disabled: !import.editable? %>
+  <%= form.submit t(".submit"), disabled: !import.editable? %>
 <% end %>

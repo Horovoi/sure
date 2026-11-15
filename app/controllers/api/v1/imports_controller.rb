@@ -154,7 +154,8 @@ class Api::V1::ImportsController < Api::V1::BaseController
         :signage_convention,
         :col_sep,
         :amount_type_strategy,
-        :amount_type_inflow_value
+        :amount_type_inflow_value,
+        :amount_type_outflow_value
       )
     end
 

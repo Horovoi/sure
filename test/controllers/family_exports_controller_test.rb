@@ -140,6 +140,45 @@ class FamilyExportsControllerTest < ActionDispatch::IntegrationTest
     assert_not ActiveStorage::Attachment.exists?(file_id)
   end
 
+  test "index responds to html with settings layout" do
+    get family_exports_path
+    assert_response :success
+    assert_select "title" # rendered with layout
+  end
+
+  test "index responds to turbo_stream without raising MissingTemplate" do
+    get family_exports_path, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+    assert_redirected_to family_exports_path
+  end
+
+  test "index polls the export list while an export is pending or processing" do
+    @family.family_exports.destroy_all
+
+    %w[pending processing].each do |status|
+      export = @family.family_exports.create!
+      export.update_column(:status, status)
+
+      get family_exports_path
+
+      assert_response :success
+      assert_select "turbo-frame#family_exports[target='_top'][data-controller='polling'][data-polling-url-value='#{family_exports_path}']"
+
+      export.destroy
+    end
+  end
+
+  test "index does not poll when every export has finished" do
+    @family.family_exports.destroy_all
+    @family.family_exports.create!.update_column(:status, "completed")
+    @family.family_exports.create!.update_column(:status, "failed")
+
+    get family_exports_path
+
+    assert_response :success
+    assert_select "turbo-frame#family_exports", count: 1
+    assert_select "turbo-frame#family_exports[data-polling-url-value]", count: 0
+  end
+
   test "non-admin cannot delete export" do
     export = @family.family_exports.create!(status: "completed")
     sign_in @non_admin

@@ -1,0 +1,24 @@
+<%# locals: (import:, already_recorded:) %>
+
+<div class="space-y-2">
+  <h2 class="font-medium text-primary"><%= t("imports.pdf_import_counts.title") %></h2>
+
+  <dl class="text-sm bg-gray-500/5 rounded-lg divide-y divide-primary">
+    <div class="flex items-center justify-between gap-2 px-3 py-2">
+      <dt class="text-secondary"><%= t("imports.pdf_import_counts.extracted") %></dt>
+      <dd class="text-primary font-medium"><%= import.rows_count %></dd>
+    </div>
+
+    <% if import.account.present? %>
+      <div class="flex items-center justify-between gap-2 px-3 py-2">
+        <dt class="text-secondary"><%= t("imports.pdf_import_counts.already_recorded") %></dt>
+        <dd class="text-primary font-medium"><%= already_recorded.size %></dd>
+      </div>
+
+      <div class="flex items-center justify-between gap-2 px-3 py-2">
+        <dt class="text-secondary"><%= import.complete? ? t("imports.pdf_import_counts.imported") : t("imports.pdf_import_counts.new") %></dt>
+        <dd class="text-primary font-medium"><%= import.complete? ? import.entries.count : import.rows_count - already_recorded.size %></dd>
+      </div>
+    <% end %>
+  </dl>
+</div>

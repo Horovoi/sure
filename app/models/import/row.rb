@@ -22,6 +22,23 @@ class Import::Row < ApplicationRecord
     Date.strptime(date, import.date_format).iso8601
   end
 
+  # The row date, or nil when it is blank or does not match the import date format
+  def parsed_date
+    return if date.blank? || import.date_format.blank?
+    return if leftover_digits?
+
+    Date.strptime(date, import.date_format)
+  rescue ArgumentError, TypeError # Date::Error is an ArgumentError
+    nil
+  end
+
+  # The signed amount the import would write, or nil when the amount does not parse
+  def parsed_signed_amount
+    return if amount.blank? || BigDecimal(amount.to_s, exception: false).nil?
+
+    signed_amount
+  end
+
   def signed_amount
     if import.type == "TradeImport"
       price.to_d * apply_trade_signage_convention(qty.to_d)
@@ -47,9 +64,11 @@ class Import::Row < ApplicationRecord
       if import.amount_type_strategy == "signed_amount"
         value * (import.signage_convention == "inflows_positive" ? -1 : 1)
       elsif import.amount_type_strategy == "custom_column"
-        inflow_value = import.amount_type_inflow_value
-
-        if entity_type == inflow_value
+        if import.amount_type_outflow_value.present?
+          # Rows with the outflow value are outflows and every other value (a deposit,
+          # a refund) is an inflow, whatever sign the amount column carries
+          entity_type == import.amount_type_outflow_value ? value.abs : -value.abs
+        elsif entity_type == import.amount_type_inflow_value
           value * -1
         else
           value
@@ -68,7 +87,7 @@ class Import::Row < ApplicationRecord
     def date_valid
       return if date.blank?
 
-      parsed_date = Date.strptime(date, import.date_format) rescue nil
+      parsed_date = self.parsed_date
 
       if parsed_date.nil?
         errors.add(:date, "must exactly match the format: #{import.date_format}")
@@ -81,6 +100,13 @@ class Import::Row < ApplicationRecord
       if parsed_date < min_date || parsed_date > max_date
         errors.add(:date, "must be between #{min_date} and #{max_date}")
       end
+    end
+
+    # Date.strptime ignores text after the match, so "01.11.2026" under "%d.%m.%y"
+    # parses as 2020-11-01 with "26" left over. Digits left over mean the year (or
+    # another field) is longer than the format allows.
+    def leftover_digits?
+      Date._strptime(date, import.date_format)&.dig(:leftover).to_s.match?(/\A\d/)
     end
 
     def currency_is_valid

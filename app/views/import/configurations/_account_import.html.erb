@@ -9,7 +9,7 @@
   <div class="flex items-center gap-4">
     <%= form.select :date_col_label, import.csv_headers, { include_blank: "Leave empty", label: "Balance Date" } %>
     <%= form.select :date_format,
-                    Family::DATE_FORMATS,
+                    Family::DATE_FORMATS + Import::CSV_ONLY_DATE_FORMATS,
                     { label: "Date Format", prompt: "Select format" },
                     required: @import.date_col_label.present? %>
   </div>

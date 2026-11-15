@@ -25,6 +25,10 @@ class Family::DataExporter
       zipfile.put_next_entry("categories.csv")
       zipfile.write generate_categories_csv
 
+      # Add merchants.csv
+      zipfile.put_next_entry("merchants.csv")
+      zipfile.write generate_merchants_csv
+
       # Add rules.csv
       zipfile.put_next_entry("rules.csv")
       zipfile.write generate_rules_csv
@@ -115,6 +119,21 @@ class Family::DataExporter
             category.parent&.name,
             category.classification,
             category.lucide_icon
+          ]
+        end
+      end
+    end
+
+    def generate_merchants_csv
+      CSV.generate do |csv|
+        csv << [ "name", "color", "website_url" ]
+
+        # Only export merchants belonging to this family
+        @family.merchants.find_each do |merchant|
+          csv << [
+            merchant.name,
+            merchant.color,
+            merchant.website_url
           ]
         end
       end
@@ -277,7 +296,7 @@ class Family::DataExporter
         effective_date: rule.effective_date&.iso8601,
         position: rule.position,
         stop_processing: rule.stop_processing,
-        conditions: rule.conditions.where(parent_id: nil).map { |condition| serialize_condition(condition) },
+        conditions: top_level_conditions(rule.conditions).map { |condition| serialize_condition(condition) },
         actions: rule.actions.map { |action| serialize_action(action) }
       }
     end
@@ -307,15 +326,13 @@ class Family::DataExporter
       return condition.value unless condition.value.present?
 
       # Map category UUIDs to names for portability
-      if condition.condition_type == "transaction_category" && condition.value.present?
-        category = @family.categories.find_by(id: condition.value)
-        return category&.name || condition.value
+      if condition.condition_type == "transaction_category"
+        return operand_record(:categories, condition.value)&.name || condition.value
       end
 
       # Map merchant UUIDs to names for portability
-      if condition.condition_type == "transaction_merchant" && condition.value.present?
-        merchant = @family.merchants.find_by(id: condition.value)
-        return merchant&.name || condition.value
+      if condition.condition_type == "transaction_merchant"
+        return operand_record(:merchants, condition.value)&.name || condition.value
       end
 
       condition.value
@@ -325,28 +342,61 @@ class Family::DataExporter
       return action.value unless action.value.present?
 
       # Map category UUIDs to names for portability
-      if action.action_type == "set_transaction_category" && action.value.present?
-        category = @family.categories.find_by(id: action.value) || @family.categories.find_by(name: action.value)
-        return category&.name || action.value
+      if action.action_type == "set_transaction_category"
+        return operand_record(:categories, action.value, fallback_to_name: true)&.name || action.value
       end
 
       # Map merchant UUIDs to names for portability
-      if action.action_type == "set_transaction_merchant" && action.value.present?
-        merchant = @family.merchants.find_by(id: action.value) || @family.merchants.find_by(name: action.value)
-        return merchant&.name || action.value
+      if action.action_type == "set_transaction_merchant"
+        return operand_record(:merchants, action.value, fallback_to_name: true)&.name || action.value
       end
 
       # Map tag UUIDs to names for portability
-      if action.action_type == "set_transaction_tags" && action.value.present?
-        tag = @family.tags.find_by(id: action.value) || @family.tags.find_by(name: action.value)
-        return tag&.name || action.value
+      if action.action_type == "set_transaction_tags"
+        return operand_record(:tags, action.value, fallback_to_name: true)&.name || action.value
       end
 
       action.value
     end
 
+    # Rules are serialized twice (rules.csv and all.ndjson), so each operand type is
+    # loaded once per export instead of one query per condition or action.
+    def operand_record(relation_key, value, fallback_to_name: false)
+      if uuid_like?(value)
+        operand_records_by_id(relation_key)[value.to_s.downcase]
+      elsif fallback_to_name
+        operand_records_by_name(relation_key)[value]
+      end
+    end
+
+    def operand_records(relation_key)
+      @operand_records ||= {}
+      # reload: a stale, already loaded association on @family must not leak into the export
+      @operand_records[relation_key] ||= @family.public_send(relation_key).reload.to_a
+    end
+
+    def operand_records_by_id(relation_key)
+      @operand_records_by_id ||= {}
+      @operand_records_by_id[relation_key] ||= operand_records(relation_key).index_by(&:id)
+    end
+
+    def operand_records_by_name(relation_key)
+      @operand_records_by_name ||= {}
+      @operand_records_by_name[relation_key] ||= operand_records(relation_key).index_by(&:name)
+    end
+
+    def uuid_like?(value)
+      value.to_s.match?(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/)
+    end
+
+    # Conditions are preloaded with their sub-conditions; filtering in memory avoids
+    # a query per rule
+    def top_level_conditions(conditions)
+      conditions.select { |condition| condition.parent_id.nil? }
+    end
+
     def serialize_conditions_for_csv(conditions)
-      conditions.where(parent_id: nil).map { |c| serialize_condition(c) }.to_json
+      top_level_conditions(conditions).map { |c| serialize_condition(c) }.to_json
     end
 
     def serialize_actions_for_csv(actions)

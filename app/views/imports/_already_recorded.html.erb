@@ -1,0 +1,32 @@
+<%# locals: (import:, matches:) %>
+<%# matches: { row id => Entry } from Import::DuplicateMatcher %>
+
+<% if matches.any? %>
+  <div id="already_recorded" class="bg-container border border-primary rounded-xl p-2">
+    <%= render DS::Disclosure.new(title: t("imports.already_recorded.title", count: matches.size), align: "left") do %>
+      <p class="text-xs text-secondary px-3 pb-2"><%= t("imports.already_recorded.description") %></p>
+
+      <div class="bg-container shadow-border-xs rounded-lg text-sm divide-y divide-primary">
+        <% import.rows.where(id: matches.keys).ordered.each do |row| %>
+          <% entry = matches.fetch(row.id) %>
+
+          <div class="flex items-start justify-between gap-4 px-4 py-3">
+            <div class="min-w-0">
+              <p class="text-primary truncate"><%= row.name.presence || t("imports.already_recorded.unnamed_row") %></p>
+              <p class="text-xs text-secondary"><%= t("imports.already_recorded.row_date", date: row.date) %></p>
+            </div>
+
+            <%= link_to entry_path(entry),
+                        class: "min-w-0 text-right hover:underline",
+                        data: { turbo_frame: "drawer", turbo_prefetch: false } do %>
+              <p class="text-primary truncate"><%= entry.name %></p>
+              <p class="text-xs text-secondary">
+                <%= t("imports.already_recorded.entry_details", amount: format_money(-entry.amount_money), date: l(entry.date, format: :long)) %>
+              </p>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
