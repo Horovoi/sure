@@ -1,0 +1,50 @@
+<%= content_for :page_title, t(".title") %>
+
+<% if Current.family.auto_match_transfers_disabled? %>
+  <%= render DS::Alert.new(message: t(".disabled_notice"), variant: :info) %>
+<% end %>
+
+<%= settings_section title: t(".pending_title"), subtitle: t(".pending_subtitle") do %>
+  <% if @pending_transfers.empty? %>
+    <%= render DS::EmptyState.new(icon: "link-2", title: t(".empty_title"), description: t(".empty_description")) %>
+  <% else %>
+    <div class="space-y-3"
+         data-controller="auto-match-bulk-select"
+         data-auto-match-bulk-select-count-template-value="<%= t(".selected_count") %>">
+      <div class="flex flex-wrap items-center justify-between gap-3 min-h-8">
+        <label class="flex items-center gap-2 text-sm text-secondary cursor-pointer" for="auto_match_select_all">
+          <%= check_box_tag "select_all", "1", false,
+                id: "auto_match_select_all",
+                class: "checkbox checkbox--light",
+                data: { auto_match_bulk_select_target: "selectAll", action: "auto-match-bulk-select#toggleAll" } %>
+          <%= t(".select_all", count: @pagy.count) %>
+        </label>
+
+        <%# The row checkboxes sit outside this form: each row's Confirm and Reject are
+            their own button_to forms, and forms cannot nest. The controller copies the
+            selected ids into the form on submit. %>
+        <div class="hidden" data-auto-match-bulk-select-target="bar">
+          <%= form_with url: bulk_update_auto_matches_path, method: :patch,
+                class: "flex flex-wrap items-center gap-2",
+                data: { turbo_frame: "_top", testid: "auto-match-bulk-bar", action: "submit->auto-match-bulk-select#populateIds" } do %>
+            <span class="text-sm text-secondary" data-auto-match-bulk-select-target="count"></span>
+            <%= render DS::Button.new(text: t(".confirm_selected"), type: "submit", name: "status", value: "confirmed", size: :sm) %>
+            <%= render DS::Button.new(text: t(".reject_selected"), type: "submit", name: "status", value: "rejected", size: :sm, variant: :outline_destructive) %>
+          <% end %>
+        </div>
+      </div>
+
+      <div class="rounded-xl bg-container-inset p-1">
+        <div class="bg-container rounded-lg shadow-border-xs divide-y divide-subdued">
+          <% @pending_transfers.each do |transfer| %>
+            <%= render "auto_matches/pending_transfer", transfer: transfer %>
+          <% end %>
+        </div>
+      </div>
+
+      <% if @pagy.pages > 1 %>
+        <%= render "shared/pagination", pagy: @pagy %>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>

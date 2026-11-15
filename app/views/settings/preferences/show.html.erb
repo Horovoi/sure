@@ -40,7 +40,7 @@
             { label: t(".country") },
             { data: { auto_submit_form_target: "auto" }, disabled: !Current.user.admin? } %>
 
-        <p class="text-xs italic pl-2 text-secondary">Please note, we are still working on translations for various languages.</p>
+        <p class="text-xs italic pl-2 text-secondary"><%= t(".translations_note") %></p>
       <% end %>
     <% end %>
   </div>
@@ -188,6 +188,40 @@
 <% end %>
 
 <!-- Moved Budgeting to Advanced > Budgeting page -->
+
+<%# w2-transfers transfer-match-policy: the family-wide auto-match switch %>
+<%= settings_section title: t(".transfers_title"), subtitle: t(".transfers_subtitle") do %>
+  <div class="space-y-3">
+    <%= styled_form_with model: @user, data: { controller: "auto-submit-form" } do |form| %>
+      <%= form.hidden_field :redirect_to, value: "preferences" %>
+      <%= form.fields_for :family do |family_form| %>
+        <div class="flex items-center justify-between gap-4">
+          <div class="space-y-1">
+            <label for="auto_match_transfers_enabled" class="text-sm font-medium text-primary"><%= t(".auto_match_label") %></label>
+            <p class="text-xs text-secondary"><%= t(".auto_match_description") %></p>
+            <% unless Current.user.admin? %>
+              <p class="text-xs text-subdued"><%= t(".auto_match_admin_only") %></p>
+            <% end %>
+          </div>
+          <%= render DS::Toggle.new(
+                id: "auto_match_transfers_enabled",
+                name: "#{family_form.object_name}[auto_match_transfers_enabled]",
+                checked: family_form.object.auto_match_transfers_enabled?,
+                disabled: !Current.user.admin?,
+                data: { auto_submit_form_target: "auto" }
+              ) %>
+        </div>
+      <% end %>
+    <% end %>
+    <%= render DS::Link.new(
+          text: @pending_auto_match_count.positive? ? t(".review_matches_count", count: @pending_auto_match_count) : t(".review_matches"),
+          href: auto_matches_path,
+          variant: :outline,
+          size: :sm,
+          icon: "link-2"
+        ) %>
+  </div>
+<% end %>
 
 <%= settings_section title: t(".theme_title"), subtitle: t(".theme_subtitle") do %>
   <div data-controller="theme" data-theme-user-preference-value="<%= @user.theme %>">

@@ -13,6 +13,7 @@ module SettingsHelper
     { label: :categories_label, path: :categories_path },
     { label: :tags_label, path: :tags_path },
     { label: :rules_label, path: :rules_path },
+    { label: :auto_matches_label, path: :auto_matches_path },
     { label: :merchants_label, path: :family_merchants_path },
     # Advanced section
     { label: :budgeting_label, path: :settings_budgeting_path },

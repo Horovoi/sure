@@ -186,6 +186,18 @@ Rails.application.routes.draw do
 
   resources :transfers, only: %i[new create destroy show update]
 
+  # --- w2-transfers transfer-match-policy: review page for pending transfer auto-matches ---
+  resources :auto_matches, only: :index do
+    member do
+      patch :confirm
+      patch :reject
+    end
+    collection do
+      patch :bulk_update
+    end
+  end
+  # --- end w2-transfers transfer-match-policy ---
+
   resources :imports, only: %i[index new show create update destroy] do
     member do
       post :publish

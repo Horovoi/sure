@@ -917,7 +917,8 @@ class Demo::Generator
         currency: to_account.currency,
         date: date
       )
-      Transfer.create!(inflow_transaction: inflow.entryable, outflow_transaction: outflow.entryable)
+      # Confirmed, like Transfer::Creator: only a confirmed transfer gives the legs their kinds
+      Transfer.create!(inflow_transaction: inflow.entryable, outflow_transaction: outflow.entryable, status: "confirmed")
     end
 
     def load_securities!

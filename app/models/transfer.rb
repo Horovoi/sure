@@ -6,9 +6,12 @@
 # - a RejectedTransfer row for the same pair: the user said "these are not a transfer", so
 #   auto-match must never pair them again. Rejecting or removing a transfer records one.
 #
-# `transactions.kind` on both legs is a stored copy of "this leg is part of a Transfer". The
-# Transfer is its only writer: after_create sets the kinds (see .outflow_kind_for) and
-# before_destroy sets the surviving legs back to standard.
+# `transactions.kind` on both legs is a stored copy of "this leg is part of a confirmed
+# Transfer". The Transfer is its only writer:
+# - a transfer created confirmed (Creator, manual match, rules) sets the kinds on create;
+# - a pending one (an auto-match) leaves the legs as they are, so an unreviewed suggestion
+#   never moves budgets or reports, and the confirm event sets them;
+# - reject and destroy set the surviving legs' transfer kinds back to standard.
 class Transfer < ApplicationRecord
   include AASM
 
@@ -19,10 +22,14 @@ class Transfer < ApplicationRecord
     state :pending, initial: true
     state :confirmed
 
-    event :confirm do
+    # Runs inside the event's database transaction, so the status and the kinds change together
+    event :confirm, after: :apply_transaction_kinds do
       transitions from: :pending, to: :confirmed
     end
   end
+
+  # The kinds a leg takes from a transfer (apply_transaction_kinds)
+  LEG_KINDS = (Transaction::TRANSFER_KINDS + %w[investment_contribution]).freeze
 
   validates :inflow_transaction_id, uniqueness: true
   validates :outflow_transaction_id, uniqueness: true
@@ -35,13 +42,14 @@ class Transfer < ApplicationRecord
   validate :transfer_has_opposite_amounts, on: :create
   validate :transfer_within_date_range, on: :create
 
-  after_create :apply_transaction_kinds
+  after_create :apply_transaction_kinds, if: :confirmed?
   after_create :clear_rejection
   before_destroy :reset_transaction_kinds
 
   class << self
     # The one rule for the kind of the outflow leg. Every way of making a transfer (Creator,
-    # auto-match, manual match, rules) goes through after_create, which uses this.
+    # auto-match, manual match, rules) reaches it through apply_transaction_kinds, on create
+    # when confirmed or on the confirm event.
     def outflow_kind_for(source_account:, destination_account:)
       if destination_account.loan?
         "loan_payment"
@@ -151,10 +159,13 @@ class Transfer < ApplicationRecord
       RejectedTransfer.where(inflow_transaction_id: inflow_transaction_id, outflow_transaction_id: outflow_transaction_id).delete_all
     end
 
-    # Sets the legs that survive this transfer back to standard. When the transfer is destroyed
-    # because one of its legs is being destroyed, that leg is left alone.
+    # Sets the transfer kinds of the legs that survive this transfer back to standard. Another
+    # kind (a one-time mark on a leg of a pending match) is the user's and stays. When the
+    # transfer is destroyed because one of its legs is being destroyed, that leg is left alone.
     def reset_transaction_kinds
       surviving_legs.each do |txn|
+        next unless txn.kind.in?(LEG_KINDS)
+
         attrs = { kind: "standard" }
 
         if txn.investment_contribution? && txn.category_id.present? && txn.category_id == family&.investment_contributions_category&.id

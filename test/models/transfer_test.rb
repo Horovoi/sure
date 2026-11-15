@@ -118,11 +118,11 @@ class TransferTest < ActiveSupport::TestCase
     assert_equal "funds_movement", Transfer.outflow_kind_for(source_account: accounts(:credit_card), destination_account: depository)
   end
 
-  test "creating a transfer sets the kinds of both legs from the accounts" do
+  test "creating a confirmed transfer sets the kinds of both legs from the accounts" do
     outflow_entry = create_transaction(date: Date.current, account: accounts(:depository), amount: 500)
     inflow_entry = create_transaction(date: Date.current, account: accounts(:loan), amount: -500)
 
-    Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
+    Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction, status: "confirmed")
 
     assert_equal "loan_payment", outflow_entry.transaction.reload.kind
     assert_equal "funds_movement", inflow_entry.transaction.reload.kind
@@ -145,7 +145,7 @@ class TransferTest < ActiveSupport::TestCase
     category = ensure_investment_contributions_category(family)
     outflow_entry = create_transaction(date: Date.current, account: accounts(:depository), amount: 500)
     inflow_entry = create_transaction(date: Date.current, account: accounts(:investment), amount: -500)
-    transfer = Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
+    transfer = Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction, status: "confirmed")
 
     assert_equal category, outflow_entry.transaction.reload.category
 
@@ -196,4 +196,95 @@ class TransferTest < ActiveSupport::TestCase
     assert transfer.reload.confirmed?
     assert_equal "edited", transfer.notes
   end
+
+  # --- Kinds only on confirm (w2-transfers transfer-match-policy, decision 20) ---
+
+  test "a pending transfer leaves both legs as they were" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+
+    assert transfer.pending?
+    assert_equal "standard", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  test "confirm sets both legs' kinds from the destination account" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+
+    transfer.confirm!
+
+    assert transfer.reload.confirmed?
+    assert_equal "cc_payment", transfer.outflow_transaction.reload.kind
+    assert_equal "funds_movement", transfer.inflow_transaction.reload.kind
+  end
+
+  test "confirm gives an uncategorized outflow into an investment account the contributions category" do
+    category = ensure_investment_contributions_category(families(:dylan_family))
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:investment))
+
+    assert_nil transfer.outflow_transaction.reload.category
+
+    transfer.confirm!
+
+    outflow = transfer.outflow_transaction.reload
+    assert_equal "investment_contribution", outflow.kind
+    assert_equal category, outflow.category
+  end
+
+  test "confirm keeps an outflow category the user set" do
+    ensure_investment_contributions_category(families(:dylan_family))
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:investment))
+    transfer.outflow_transaction.update!(category: categories(:food_and_drink))
+
+    transfer.confirm!
+
+    assert_equal categories(:food_and_drink), transfer.outflow_transaction.reload.category
+  end
+
+  test "a failed confirm leaves the transfer pending and the legs unchanged" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+    Transaction.any_instance.stubs(:update!).raises(ActiveRecord::RecordInvalid.new(Transaction.new))
+
+    assert_raises(ActiveRecord::RecordInvalid) { transfer.confirm! }
+
+    assert transfer.reload.pending?
+  end
+
+  test "reject resets the kinds of a confirmed transfer" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+    transfer.confirm!
+
+    transfer.reject!
+
+    assert_equal "standard", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  test "reject keeps a one-time mark the user put on a leg of a pending match" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+    transfer.outflow_transaction.update!(kind: "one_time")
+
+    transfer.reject!
+
+    assert_equal "one_time", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  test "destroy resets the kinds of a confirmed transfer" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:loan))
+    transfer.confirm!
+    assert_equal "loan_payment", transfer.outflow_transaction.reload.kind
+
+    transfer.destroy!
+
+    assert_equal "standard", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  private
+    def create_pending_transfer(from:, to:)
+      outflow_entry = create_transaction(date: Date.current, account: from, amount: 500)
+      inflow_entry = create_transaction(date: Date.current, account: to, amount: -500)
+
+      Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
+    end
 end

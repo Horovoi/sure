@@ -99,6 +99,16 @@ en:
         theme_system: System
         theme_title: Theme
         timezone: Timezone
+        translations_note: Please note, we are still working on translations for various languages.
+        transfers_title: Transfers
+        transfers_subtitle: How transfers between your accounts are found
+        auto_match_label: Match transfers automatically
+        auto_match_description: After each sync, pairs of transactions that look like one transfer are suggested for review. A suggestion changes nothing until you confirm it.
+        auto_match_admin_only: Only an admin can change this setting.
+        review_matches: Review transfer matches
+        review_matches_count:
+          one: Review 1 pending match
+          other: Review %{count} pending matches
     profiles:
       destroy:
         cannot_remove_self: You cannot remove yourself from the account.
@@ -169,6 +179,7 @@ en:
         sso_warning_message: This is your only login method. You should set a password in your security settings before disconnecting, otherwise you may be locked out of your account.
     settings_nav:
       accounts_label: Accounts
+      auto_matches_label: Transfer matches
       advanced_section_title: Advanced
       ai_prompts_label: AI Prompts
       api_key_label: API Key

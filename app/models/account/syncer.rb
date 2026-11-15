@@ -14,8 +14,9 @@ class Account::Syncer
     materialize_balances
   end
 
+  # Only the pairs with a leg in this account: the family sync matches the rest
   def perform_post_sync
-    account.family.auto_match_transfers!
+    account.family.auto_match_transfers!(account: account)
   end
 
   private
