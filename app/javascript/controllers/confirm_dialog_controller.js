@@ -5,6 +5,16 @@ import { Controller } from "@hotwired/stimulus";
 export default class extends Controller {
   static targets = ["title", "subtitle", "confirmButton"];
 
+  // The dialog markup renders the translated defaults; keep them for
+  // confirmations that leave out a title, body or button label.
+  connect() {
+    this.defaults = {
+      title: this.titleTarget.textContent.trim(),
+      body: this.subtitleTarget.textContent.trim(),
+      confirmText: this.confirmButtonTargets[0]?.textContent.trim(),
+    };
+  }
+
   handleConfirm(rawData) {
     const data = this.#normalizeRawData(rawData);
 
@@ -34,12 +44,14 @@ export default class extends Controller {
         button.setAttribute("hidden", true);
       }
 
-      button.textContent = data.confirmText || "Confirm";
+      button.textContent = data.confirmText || this.defaults.confirmText;
     });
 
-    this.titleTarget.textContent = data.title || "Are you sure?";
-    this.subtitleTarget.innerHTML =
-      data.body || "This action cannot be undone.";
+    this.titleTarget.textContent = data.title || this.defaults.title;
+    // Text, never HTML: bodies interpolate record names (merchants, accounts,
+    // imports) that come from imports, providers and other family members,
+    // however the caller built the confirmation.
+    this.subtitleTarget.textContent = data.body || this.defaults.body;
   }
 
   // If data is a string, it's the title.  Otherwise, return the parsed object.
@@ -48,7 +60,7 @@ export default class extends Controller {
       const parsed = JSON.parse(rawData);
 
       if (typeof parsed === "boolean") {
-        return { title: "Are you sure?" };
+        return {};
       }
 
       return parsed;

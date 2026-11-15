@@ -53,7 +53,6 @@ es:
         owed: Cantidad adeudada
       menu:
         confirm_accept: Eliminar "%{name}"
-        confirm_body_html: "<p>Al eliminar esta cuenta, borrarás su historial de valores, afectando varios aspectos de tu cuenta general. Esta acción tendrá un impacto directo en los cálculos de tu patrimonio neto y en los gráficos de la cuenta.</p><br /> <p>Después de la eliminación, no podrás restaurar la información de la cuenta, ya que tendrás que añadirla como una nueva cuenta.</p>"
         confirm_title: ¿Eliminar cuenta?
         edit: Editar
         import: Importar transacciones

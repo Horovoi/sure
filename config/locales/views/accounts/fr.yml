@@ -69,8 +69,6 @@ fr:
         owed: Montant dû
       menu:
         confirm_accept: Supprimer "%{name}"
-        confirm_body_html: "<p>En supprimant ce compte, vous effacerez son historique de valeur,
-          affectant divers aspects de votre solde global. Cette action aura un impact direct sur vos calculs de valeur nette et les graphiques des comptes.</p><br /> <p>Après la suppression, il n'y a aucun moyen de restaurer l'information du compte car vous aurez besoin d'en ajouter un nouveau.</p>"
         confirm_title: Supprimer le compte ?
         edit: Modifier
         import: Importer des transactions

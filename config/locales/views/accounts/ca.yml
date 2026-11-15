@@ -90,12 +90,6 @@ ca:
         owed: Import degut
       menu:
         confirm_accept: Elimina "%{name}"
-        confirm_body_html: "<p>En eliminar aquest compte, s'esborrarà l'historial
-          de valors, afectant diversos aspectes del teu compte global. Aquesta acció
-          tindrà un impacte directe en el càlcul del teu patrimoni net i els gràfics
-          dels comptes.</p><br /> <p>Després de l'eliminació, no hi haurà manera de
-          restaurar la informació del compte perquè hauràs d'afegir-lo com un compte
-          nou.</p>"
         confirm_title: Vols eliminar el compte?
         edit: Edita
         import: Importa transaccions

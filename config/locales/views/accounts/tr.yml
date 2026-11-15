@@ -49,7 +49,6 @@ tr:
         owed: Borç miktarı
       menu:
         confirm_accept: "%{name} hesabını sil"
-        confirm_body_html: "<p>Bu hesabı silerek, değer geçmişini silmiş olacaksınız ve bu, genel hesabınızın çeşitli yönlerini etkileyecektir. Bu işlem, net değer hesaplamalarınızı ve hesap grafiklerinizi doğrudan etkileyecektir.</p><br /> <p>Silme işleminden sonra, hesabı yeni bir hesap olarak eklemeniz gerekeceğinden, hesap bilgilerini geri yüklemenin bir yolu olmayacaktır.</p>"
         confirm_title: Hesap silinsin mi?
         edit: Düzenle
         import: İşlemleri içe aktar
