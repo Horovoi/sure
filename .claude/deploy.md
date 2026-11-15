@@ -122,6 +122,56 @@ have their own lane and cannot hold up syncs, imports and rule runs.
 - A chat turn waiting in the AI queue counts as lost after 30 minutes without progress, a running
   one after 10 minutes (`AssistantMessage::PENDING_STALE_AFTER` and `STALE_AFTER`).
 
+## Claude bridge
+
+Claude in Sure's chat runs through a small Node server on this Mac, `claude_bridge/server.ts`.
+It drives Claude Code through the Agent SDK with the owner's own `claude auth login` (no API
+key). Sure, in Docker, calls it at `http://host.docker.internal:3339`.
+
+```bash
+bin/claude-bridge install [--write-env]   # LaunchAgent + `claude mcp add --scope user sure`
+bin/claude-bridge status                  # Node, bundled Claude Code, agent, login, usage, token
+bin/claude-bridge logs                    # follow ~/Library/Logs/sure-claude-bridge.log
+bin/claude-bridge restart
+bin/claude-bridge uninstall               # unload, `claude mcp remove`, files to the Trash
+bin/claude-bridge run                     # foreground, for bin/dev or bin/staging dev
+```
+
+- **Install** runs `npm ci` in `claude_bridge/`, then writes
+  `~/Library/LaunchAgents/ua.sure.claude-bridge.plist` (the absolute Node path, RunAtLoad,
+  KeepAlive), `~/.config/sure-claude-bridge/config.json` (port, token and the MCP URL
+  allowlist, mode 600) and the log file, and loads the agent with `launchctl bootstrap`.
+  It also registers production's `/mcp` with Claude Code (`claude mcp add --scope user
+  --transport http sure http://localhost:3333/mcp`, header from `MCP_API_TOKEN` in
+  `.env.production`; the token is never printed).
+- **The token.** `CLAUDE_BRIDGE_TOKEN` must be the same in `config.json` and
+  `.env.production`. Install takes it from `.env.production` if it is there, else from an
+  earlier install, else makes a new one. It does not edit `.env.production` on its own:
+  it asks (or takes `--write-env`) and otherwise prints the `CLAUDE_BRIDGE_URL` and
+  `CLAUDE_BRIDGE_TOKEN` lines to add. `docker-compose.prod.yml` passes both to web and
+  worker; they take effect at the next `bin/deploy`. Without them the Claude chat is off.
+- **Re-run install after a Node upgrade.** The plist records the absolute Node path (nvm),
+  and `status` reports when it is gone.
+- **Network.** It listens on `127.0.0.1:3339` only, drops connections from anything but
+  loopback, and checks the token on every request. Nothing on the LAN can reach it, unlike
+  the app on `0.0.0.0:3333`. Each turn's `mcp.url` must be one of Sure's local `/mcp`
+  endpoints (ports 3333, 3000, 3334).
+- **What a turn may do.** No built-in tools (no shell, files or web); only Sure's MCP tools,
+  all of them, with no approval prompt, through a per-turn token sent over stdin. Claude
+  Code ignores the owner's settings, hooks, plugins and other MCP servers for these turns.
+  At most 2 turns at a time (a third gets "busy"), 16 tool rounds, 8 minutes.
+  A turn stops when Sure disconnects or when a usage window is used up.
+- **Version pin.** `@anthropic-ai/claude-agent-sdk` is pinned exactly. The Claude Code it
+  bundles must be at least `sure.minClaudeCodeVersion` in `claude_bridge/package.json`
+  (the first version that speaks MCP 2026-07-28 with Sure); the bridge refuses to start
+  otherwise. To upgrade: change the pin, `npm install` in `claude_bridge/`, run
+  `node --test 'claude_bridge/*.test.ts'`, then `bin/claude-bridge install`.
+- **Logs** hold ids, error codes and timings, never prompts, answers or tokens.
+- **Staging** containers cannot reach the bridge (their network is closed). To try Claude
+  against the copy, run `bin/staging dev` and `bin/claude-bridge run` (or the agent).
+- Turns are saved as Claude Code sessions under `~/.claude/projects/` for the folder
+  `~/Library/Application Support/sure-claude-bridge/work`; each turn forks the last one.
+
 ## Files
 
 | File | Role |

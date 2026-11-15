@@ -33,6 +33,10 @@ x-rails-env: &rails_env
   # Brand Fetch (for logos/icons)
   BRAND_FETCH_CLIENT_ID: ${BRAND_FETCH_CLIENT_ID}
   BRAND_FETCH_HIGH_RES_LOGOS: ${BRAND_FETCH_HIGH_RES_LOGOS:-false}
+  # Claude in chat: the bridge on this Mac (bin/claude-bridge install). Empty = off.
+  # host.docker.internal reaches the host's loopback, where the bridge listens.
+  CLAUDE_BRIDGE_URL: ${CLAUDE_BRIDGE_URL:-}
+  CLAUDE_BRIDGE_TOKEN: ${CLAUDE_BRIDGE_TOKEN:-}
 
 services:
   # Each container is named <project>-<service> (sure-web, sure-staging-web). Without

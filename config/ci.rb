@@ -11,4 +11,7 @@ CI.run do
 
   step "Tests: Rails", "bin/rails test"
   step "Tests: System", "bin/rails test:system"
+
+  # The host-side Claude bridge (Node, no dependencies needed for its tests)
+  step "Tests: Claude bridge", "node --test 'claude_bridge/*.test.ts'"
 end

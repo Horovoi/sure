@@ -70,3 +70,7 @@
 /.claude/
 /coverage/
 **/.DS_Store
+
+# The Claude bridge runs on the host (bin/claude-bridge), never in the image
+/claude_bridge/
+/bin/claude-bridge
