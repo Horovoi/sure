@@ -1,8 +1,40 @@
 ---
 en:
   budget_categories:
+    allocation_progress:
+      exceeded_by_html: "Budget exceeded by %{amount}"
+      left_to_allocate: left to allocate
+      over_set: "> 100% set"
+      percent_set: "%{percent} set"
+    budget_category:
+      rolled_over: "+%{amount} rolled over"
+    budget_category_form:
+      monthly_average: "%{amount}/m avg"
+      parent_title: Includes its subcategories' amounts, and is never less than their sum
+      rollover_label: Rollover
+      rollover_title: Keep this category's unspent money from one period to the next
+      shared_placeholder: Shared
+      shared_title: Leave empty to share the parent's budget. An amount here is added to the parent's.
     confirm_button:
       confirm: Confirm
+    move:
+      amount_label: Amount
+      available: "(%{amount} available)"
+      button_title: Move money from this category
+      cancel: Cancel
+      dialog_title: Move money
+      errors:
+        different_budgets: Both categories must belong to the same budget.
+        insufficient_funds: That is more than this category can give. A parent can give only the part of its amount that is not in its subcategories.
+        non_positive_amount: Enter an amount greater than zero.
+        parent_child: Money cannot move between a category and its own subcategory. Change the subcategory's amount instead.
+        same_category: Pick a different category to move the money to.
+        uncategorized: Uncategorized is not an envelope, so money cannot move in or out of it.
+      from_label: From
+      no_destination: There is no category this one can move money to. A category cannot move money to its own parent or subcategories.
+      submit: Move
+      success: Money moved.
+      to_label: To
     index:
       description: Adjust category budgets to set spending limits. Unallocated funds will be automatically assigned as uncategorized.
       title: Edit your category budgets
@@ -18,5 +50,6 @@ en:
       overview: Overview
       period_spending: "%{period} spending"
       recent_transactions: Recent Transactions
+      rolled_over: Rolled over
       status: Status
       view_all: View all category transactions

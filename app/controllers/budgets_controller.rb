@@ -6,6 +6,8 @@ class BudgetsController < ApplicationController
   end
 
   def show
+    # The budget page is where the carry is read, so it is brought up to date here
+    @budget.recompute_rollover!
     @source_budget = @budget.most_recent_initialized_budget unless @budget.initialized?
   end
 
@@ -30,6 +32,8 @@ class BudgetsController < ApplicationController
 
     if source_budget
       @budget.copy_from!(source_budget)
+      # The copy brings the rollover choices, so the copied month's carry changes
+      @budget.recompute_rollover!
       redirect_to budget_budget_categories_path(@budget), notice: t(".success", source_name: source_budget.name)
     else
       redirect_to budget_path(@budget), alert: t(".no_source")

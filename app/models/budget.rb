@@ -18,7 +18,8 @@ class Budget < ApplicationRecord
 
   monetize :budgeted_spending, :expected_income, :allocated_spending,
            :actual_spending, :available_to_spend, :available_to_allocate,
-           :estimated_spending, :estimated_income, :actual_income, :remaining_expected_income
+           :estimated_spending, :estimated_income, :actual_income, :remaining_expected_income,
+           :total_rolled_over
   # w3-reports goals-free-cash
   monetize :available_cash, :earmarked_for_goals, :free_cash
 
@@ -124,12 +125,14 @@ class Budget < ApplicationRecord
     current_category_ids = family.categories.expenses.pluck(:id).to_set
     existing_budget_category_ids = all_budget_categories.pluck(:category_id).to_set
     categories_to_add = current_category_ids - existing_budget_category_ids
+    inherited_rollover = inherited_rollover_flags(categories_to_add)
 
     categories_to_add.each do |category_id|
       all_budget_categories.create!(
         category_id: category_id,
         budgeted_spending: 0,
-        currency: family.currency
+        currency: family.currency,
+        rollover_enabled: inherited_rollover.include?(category_id)
       )
     end
 
@@ -173,11 +176,12 @@ class Budget < ApplicationRecord
       .first
   end
 
-  # Copies the total, the expected income and each expense row's amount from an
-  # earlier budget of the family. Amounts are written to each row as they are, never
-  # added up from subcategories, so a parent and its subcategory keep the source
-  # amounts. Rows of categories that are now income stay hidden and untouched. The
-  # rollover carry is not copied: the rollover code calculates it.
+  # Copies the total, the expected income and each expense row's amount and rollover
+  # choice from an earlier budget of the family. Amounts are written to each row as
+  # they are, never added up from subcategories, so a parent and its subcategory keep
+  # the source amounts. Rows of categories that are now income stay hidden and
+  # untouched. The rollover carry is not copied: Budget::RolloverCalculator writes it
+  # (the copy_previous action recomputes after the copy).
   def copy_from!(source_budget)
     raise ArgumentError, "source budget must belong to the same family" unless source_budget.family_id == family_id
     raise ArgumentError, "source budget must precede target budget" unless source_budget.start_date < start_date
@@ -196,7 +200,7 @@ class Budget < ApplicationRecord
         target_bc = target_by_category[source_bc.category_id]
         next unless target_bc
 
-        target_bc.update!(budgeted_spending: source_bc[:budgeted_spending])
+        target_bc.update!(budgeted_spending: source_bc[:budgeted_spending], rollover_enabled: source_bc.rollover_enabled)
       end
     end
   end
@@ -334,6 +338,14 @@ class Budget < ApplicationRecord
   # =============================================================================
   def allocated_spending
     budget_categories.reject { |bc| bc.subcategory? }.sum(&:budgeted_spending)
+  end
+
+  # The carry of every envelope, for information only: allocated_spending and
+  # available_to_allocate stay "what was planned for this period". A shared subcategory
+  # has no carry and a parent's is net of its ring-fenced subcategories', so each
+  # amount counts once.
+  def total_rolled_over
+    budget_categories.reject(&:inherits_parent_budget?).sum(&:rolled_over_amount)
   end
 
   def allocated_percent
@@ -516,6 +528,30 @@ class Budget < ApplicationRecord
   # The panel is about money held now, so only the current period shows it
   def shows_available_cash?
     current?
+  end
+
+  # =============================================================================
+  # Rollover (w3-envelope)
+  # =============================================================================
+
+  # Brings the stored carry of the family's chain up to date. Only the budget page and
+  # the budget wizard call it: find_or_bootstrap, the reports and the dashboard stay
+  # free of writes.
+  def recompute_rollover!
+    budget_categories.reset if Budget::RolloverCalculator.new(family: family).recompute!
+    self
+  end
+
+  # Rollover is a standing choice about an envelope: a new row takes it from the last
+  # set-up budget before this one, the chain the carry walks. Switching it off on a
+  # period overrides it from there on.
+  def inherited_rollover_flags(category_ids)
+    return Set.new if category_ids.empty?
+
+    source = most_recent_initialized_budget
+    return Set.new unless source
+
+    source.all_budget_categories.where(category_id: category_ids.to_a, rollover_enabled: true).pluck(:category_id).to_set
   end
 
   private

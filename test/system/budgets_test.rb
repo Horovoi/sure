@@ -157,4 +157,80 @@ class BudgetsTest < ApplicationSystemTestCase
       assert_link I18n.t("budgets.available_cash.goals_link"), href: goals_path
     end
   end
+
+  # w3-envelope envelope-budgeting
+  test "editing a subcategory amount changes its parent's row in the categories step" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 10_000, expected_income: 10_000)
+    parent = budget.budget_categories.find_by!(category: categories(:food_and_drink))
+    child = budget.budget_categories.find_by!(category: categories(:subcategory))
+    parent.update!(budgeted_spending: 400)
+
+    visit budget_budget_categories_path(budget)
+
+    parent_field_id = ActionView::RecordIdentifier.dom_id(parent, :budgeted_spending)
+    child_field_id = ActionView::RecordIdentifier.dom_id(child, :budgeted_spending)
+    assert_equal 400, find_field(id: parent_field_id).value.to_d
+
+    # Number fields submit on change, which the browser fires when the field loses focus
+    child_field = find_field(id: child_field_id)
+    child_field.set("150")
+    child_field.send_keys(:tab)
+
+    assert_selector "##{parent_field_id}" do |field|
+      field.value.to_d == 550
+    end
+    assert_equal 550, parent.reload.budgeted_spending
+  end
+
+  # w3-envelope budget-rollover-moves
+  test "the move-money dialog moves an amount from one category to another" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 10_000, expected_income: 10_000)
+    from = budget.budget_categories.find_by!(category: categories(:food_and_drink))
+    to = budget.budget_categories.find_by!(category: categories(:subscriptions))
+    from.update!(budgeted_spending: 400)
+    to.update!(budgeted_spending: 100)
+
+    visit budget_budget_categories_path(budget)
+
+    within("##{ActionView::RecordIdentifier.dom_id(from, :form)}") do
+      find("[data-testid='budget-move-button']").click
+    end
+
+    within_testid("budget-move-dialog") do
+      assert_text I18n.t("budget_categories.move.dialog_title")
+      assert_text categories(:food_and_drink).name
+      # The category's own subcategory cannot receive its money
+      assert_selector "option[disabled]", text: categories(:subcategory).name_with_parent
+      fill_in "budget_category_move_amount", with: "150"
+      select categories(:subscriptions).name, from: "to_id"
+      click_button I18n.t("budget_categories.move.submit")
+    end
+
+    assert_text I18n.t("budget_categories.move.success")
+    assert_no_selector "[data-testid='budget-move-dialog'][open]"
+    assert_selector "##{ActionView::RecordIdentifier.dom_id(to, :budgeted_spending)}" do |field|
+      field.value.to_d == 250
+    end
+    assert_equal 250, from.reload.budgeted_spending
+    assert_equal 250, to.reload.budgeted_spending
+  end
+
+  test "a rollover carry shows on the budget page card" do
+    previous = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    previous.update!(budgeted_spending: 10_000, expected_income: 10_000)
+    category = @family.categories.create!(name: "Holiday fund", classification: "expense", color: "#4da568", lucide_icon: "plane")
+    previous.sync_budget_categories
+    previous.budget_categories.find_by!(category: category).update!(budgeted_spending: 75, rollover_enabled: true)
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 10_000, expected_income: 10_000)
+    budget.budget_categories.find_by!(category: category).update!(budgeted_spending: 25)
+
+    visit budget_path(budget)
+
+    within_testid("budget-category-rolled-over") do
+      assert_text I18n.t("budget_categories.budget_category.rolled_over", amount: Money.new(75, @family.currency).format)
+    end
+  end
 end

@@ -3,42 +3,42 @@
 <div id="<%= dom_id(budget, :allocation_progress) %>" class="space-y-2 mb-6">
   <div class="flex items-center gap-2">
     <% if budget.over_allocated? %>
-      <div class="rounded-full w-1.5 h-1.5 bg-red-500"></div>
+      <div class="rounded-full w-1.5 h-1.5 bg-destructive"></div>
     <% else %>
-      <div class="rounded-full w-1.5 h-1.5 <%= budget.allocated_spending > 0 ? "bg-gray-900" : "bg-gray-100" %>"></div>
+      <div class="rounded-full w-1.5 h-1.5 <%= budget.allocated_spending > 0 ? "bg-inverse" : "bg-container-inset" %>"></div>
     <% end %>
 
     <% if budget.over_allocated? %>
-      <p class="text-primary text-sm">&gt; 100% set</p>
+      <p class="text-primary text-sm"><%= t("budget_categories.allocation_progress.over_set") %></p>
     <% else %>
       <p class="text-secondary text-sm">
-        <%= number_to_percentage(budget.allocated_percent, precision: 0) %> set
+        <%= t("budget_categories.allocation_progress.percent_set", percent: number_to_percentage(budget.allocated_percent, precision: 0)) %>
       </p>
     <% end %>
 
     <p class="ml-auto text-sm space-x-1">
-      <span class="<%= budget.over_allocated? ? "text-red-500" : "text-primary" %>"><%= format_money(budget.allocated_spending_money) %></span>
+      <span class="<%= budget.over_allocated? ? "text-destructive" : "text-primary" %>"><%= format_money(budget.allocated_spending_money) %></span>
       <span class="text-secondary"> / </span>
       <span class="text-secondary"><%= format_money(budget.budgeted_spending_money) %></span>
     </p>
   </div>
 
-  <div class="relative h-1.5 rounded-2xl bg-gray-100">
+  <div class="relative h-1.5 rounded-2xl bg-container-inset">
     <% if budget.over_allocated? %>
-      <div class="absolute inset-0 bg-red-500 rounded-2xl" style="width: 100%;"></div>
+      <div class="absolute inset-0 bg-destructive rounded-2xl" style="width: 100%;"></div>
     <% else %>
-      <div class="absolute inset-0 bg-gray-900 rounded-2xl" style="width: <%= budget.allocated_percent %>%;"></div>
+      <div class="absolute inset-0 bg-inverse rounded-2xl" style="width: <%= budget.allocated_percent %>%;"></div>
     <% end %>
   </div>
 
   <div class="text-sm">
     <% if budget.over_allocated? %>
       <p class="text-secondary">
-        Budget exceeded by <span class="text-red-500"><%= format_money(budget.available_to_allocate_money.abs) %></span>
+        <%= t("budget_categories.allocation_progress.exceeded_by_html", amount: tag.span(format_money(budget.available_to_allocate_money.abs), class: "text-destructive")) %>
       </p>
     <% else %>
       <span class="text-primary"><%= format_money(budget.available_to_allocate_money) %></span>
-      <span class="text-secondary">left to allocate</span>
+      <span class="text-secondary"><%= t("budget_categories.allocation_progress.left_to_allocate") %></span>
     <% end %>
   </div>
 </div>

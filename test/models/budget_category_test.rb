@@ -70,71 +70,28 @@ class BudgetCategoryTest < ActiveSupport::TestCase
     assert_equal 1000, @parent_budget_category.display_budgeted_spending
   end
 
-  test "inheriting subcategory shares parent available_to_spend" do
-    # Mock the actual spending values
+  test "parent available_to_spend is its budget less its total spending" do
     # Parent's actual_spending from income_statement includes all children
     @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(150)
     @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(100)
     @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(50)
 
-    # Parent available calculation:
-    # shared_pool = 1000 (parent budget) - 300 (subcategory with limit budget) = 700
-    # shared_pool_spending = 150 (total) - 100 (subcategory with limit spending) = 50
-    # available = 700 - 50 = 650
-    assert_equal 650, @parent_budget_category.available_to_spend
+    # The parent card shows 1000 budgeted and 150 spent, so 850 is left
+    assert_equal 850, @parent_budget_category.available_to_spend
 
-    # Inheriting subcategory shares parent's available (650)
+    # The inheriting subcategory uses the 700 the 300 ring-fenced sibling leaves,
+    # less the 50 spent from that pool (150 total - 100 ring-fenced)
     assert_equal 650, @subcategory_inheriting_bc.available_to_spend
 
     # Subcategory with limit: 300 (its budget) - 100 (its spending) = 200
     assert_equal 200, @subcategory_with_limit_bc.available_to_spend
   end
 
-  test "max_allocation excludes budgets of inheriting siblings" do
-    # Create another inheriting subcategory
-    another_inheriting = Category.create!(
-      name: "Test Coffee #{Time.now.to_f}",
-      parent: @parent_category,
-      family: @family,
-      classification: "expense"
-    )
-
-    another_inheriting_bc = BudgetCategory.create!(
-      budget: @budget,
-      category: another_inheriting,
-      budgeted_spending: 0,  # Inherits
-      currency: "USD"
-    )
-
-    # Max allocation for new subcategory should only account for the one with explicit limit (300)
-    # 1000 (parent) - 300 (subcategory_with_limit) = 700
-    assert_equal 700, another_inheriting_bc.max_allocation
-
-    # If we add a new subcategory with a limit
-    new_subcategory_cat = Category.create!(
-      name: "Test Fast Food #{Time.now.to_f}",
-      parent: @parent_category,
-      family: @family,
-      classification: "expense"
-    )
-
-    new_subcategory_bc = BudgetCategory.create!(
-      budget: @budget,
-      category: new_subcategory_cat,
-      budgeted_spending: 0,
-      currency: "USD"
-    )
-
-    # Max should still be 700 because both inheriting subcategories don't count
-    assert_equal 700, new_subcategory_bc.max_allocation
-  end
-
-  test "percent_of_budget_spent for inheriting subcategory uses parent budget" do
-    # Mock spending
+  test "percent_of_budget_spent for inheriting subcategory uses the shared part of the parent budget" do
     @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(100)
 
-    # 100 / 1000 (parent budget) = 10%
-    assert_equal 10.0, @subcategory_inheriting_bc.percent_of_budget_spent
+    # 100 / 700 (parent budget less the 300 ring-fenced sibling)
+    assert_in_delta 14.29, @subcategory_inheriting_bc.percent_of_budget_spent, 0.01
   end
 
   test "parent with no subcategories works as before" do
@@ -513,6 +470,242 @@ class BudgetCategoryTest < ActiveSupport::TestCase
     end
   end
 
+  # --- Bottom-up parent budgets (w3-envelope) --------------------------------
+
+  test "update_budgeted_spending! adds a subcategory's change to its parent" do
+    @subcategory_with_limit_bc.update_budgeted_spending!(450)
+
+    assert_equal 450, @subcategory_with_limit_bc.reload.budgeted_spending
+    assert_equal 1150, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "update_budgeted_spending! keeps the parent's reserve when a shared subcategory gets an amount" do
+    # Parent 1000 = 300 (ring-fenced) + 700 reserve; the reserve stays on top of the new 200
+    @subcategory_inheriting_bc.update_budgeted_spending!(200)
+
+    assert_equal 1200, @parent_budget_category.reload.budgeted_spending
+    refute @subcategory_inheriting_bc.reload.inherits_parent_budget?
+  end
+
+  test "update_budgeted_spending! lowers the parent when a subcategory goes back to shared" do
+    @subcategory_with_limit_bc.update_budgeted_spending!("")
+
+    assert_equal 0, @subcategory_with_limit_bc.reload.budgeted_spending
+    assert @subcategory_with_limit_bc.inherits_parent_budget?
+    assert_equal 700, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "update_budgeted_spending! does not carry a negative parent reserve" do
+    # A parent below its subcategories (50 < 300 + 50), as data from before bottom-up parents can be
+    @parent_budget_category.update!(budgeted_spending: 50)
+    @subcategory_inheriting_bc.update!(budgeted_spending: 50)
+
+    @subcategory_with_limit_bc.update_budgeted_spending!(20)
+
+    assert_equal 70, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "a parent set below the sum of its subcategories is raised to that sum" do
+    @subcategory_inheriting_bc.update_budgeted_spending!(200)
+
+    @parent_budget_category.reload.update_budgeted_spending!(100)
+
+    assert_equal 500, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "a parent set above its subcategories keeps the amount" do
+    @parent_budget_category.update_budgeted_spending!(1500)
+
+    assert_equal 1500, @parent_budget_category.reload.budgeted_spending
+    assert_equal 300, @subcategory_with_limit_bc.reload.budgeted_spending
+  end
+
+  test "update_budgeted_spending! leaves the parents of other budgets alone" do
+    other_budget = Budget.create!(family: @family, start_date: 6.months.ago.beginning_of_month.to_date, end_date: 6.months.ago.end_of_month.to_date, currency: "USD", budgeted_spending: 100)
+    other_parent = BudgetCategory.create!(budget: other_budget, category: @parent_category, budgeted_spending: 40, currency: "USD")
+
+    @subcategory_with_limit_bc.update_budgeted_spending!(400)
+
+    assert_equal 40, other_parent.reload.budgeted_spending
+    assert_equal 1100, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "update_budgeted_spending! refuses a negative amount and changes nothing" do
+    assert_raises(ActiveRecord::RecordInvalid) { @subcategory_with_limit_bc.update_budgeted_spending!(-5) }
+
+    assert_equal 300, @subcategory_with_limit_bc.reload.budgeted_spending
+    assert_equal 1000, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "a parent's amount left after a subcategory edit is its budget less its total spending" do
+    @subcategory_with_limit_bc.update_budgeted_spending!(500)
+    budget = Budget.find(@budget.id)
+    parent = budget.budget_categories.find { |bc| bc.id == @parent_budget_category.id }
+    budget.stubs(:budget_category_actual_spending).returns(0)
+    budget.stubs(:budget_category_actual_spending).with(parent).returns(260)
+
+    assert_equal 1200, parent.budgeted_spending
+    assert_equal 940, parent.available_to_spend
+  end
+
+  test "a shared subcategory with no spending is not over budget when its parent is" do
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(1050)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(300)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(0)
+
+    assert_equal(-50, @parent_budget_category.available_to_spend)
+    assert @parent_budget_category.over_budget?
+    assert_equal 0, @subcategory_inheriting_bc.available_to_spend
+    refute @subcategory_inheriting_bc.over_budget?
+    refute @subcategory_inheriting_bc.any_over_budget?
+  end
+
+  test "a shared subcategory is over budget by no more than it spent itself" do
+    # Shared pool 700; the parent spent 650 directly and the shared subcategory 100
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(1050)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(300)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(100)
+
+    assert_equal(-50, @subcategory_inheriting_bc.available_to_spend)
+    assert @subcategory_inheriting_bc.over_budget?
+  end
+
+  test "a shared subcategory cannot spend the ring-fenced siblings' money" do
+    @parent_budget_category.update!(budgeted_spending: 100)
+    @subcategory_with_limit_bc.update!(budgeted_spending: 80)
+
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(10)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(0)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(10)
+
+    assert_equal 90, @parent_budget_category.available_to_spend
+    assert_equal 10, @subcategory_inheriting_bc.available_to_spend
+    assert_equal 50.0, @subcategory_inheriting_bc.percent_of_budget_spent
+  end
+
+  # --- Rollover and move money (w3-envelope) ---------------------------------
+
+  test "a carry adds to what an envelope can spend and to its share spent" do
+    @subcategory_with_limit_bc.update!(rollover_enabled: true)
+    @subcategory_with_limit_bc.update_column(:rolled_over_amount, 100)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(200)
+
+    assert_equal 200, @subcategory_with_limit_bc.available_to_spend
+    assert_equal 50.0, @subcategory_with_limit_bc.percent_of_budget_spent
+  end
+
+  test "a stored carry does not count once rollover is off" do
+    @subcategory_with_limit_bc.update_column(:rolled_over_amount, 100)
+
+    assert_equal 0, @subcategory_with_limit_bc.rolled_over_amount
+    refute @subcategory_with_limit_bc.rolled_over?
+  end
+
+  test "an envelope funded only by its carry is budgeted, not unbudgeted spending" do
+    @parent_budget_category.update_columns(budgeted_spending: 0, rollover_enabled: true, rolled_over_amount: 80)
+    @subcategory_with_limit_bc.update_column(:budgeted_spending, 0)
+    @budget.stubs(:budget_category_actual_spending).returns(0)
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(30)
+
+    assert @parent_budget_category.budgeted?
+    refute @parent_budget_category.unbudgeted_with_spending?
+    assert_equal 50, @parent_budget_category.available_to_spend
+  end
+
+  test "a parent's available and carry include the carry of its ring-fenced subcategories" do
+    @parent_budget_category.update!(budgeted_spending: 100)
+    @subcategory_with_limit_bc.update!(budgeted_spending: 100, rollover_enabled: true)
+    @subcategory_with_limit_bc.update_column(:rolled_over_amount, 80)
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(150)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(150)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(0)
+
+    assert_equal 30, @parent_budget_category.available_to_spend
+    assert_equal 30, @subcategory_with_limit_bc.available_to_spend
+    assert_equal 0, @subcategory_inheriting_bc.available_to_spend
+    assert_equal 80, @parent_budget_category.display_rolled_over_amount
+    assert @parent_budget_category.rolled_over?
+    assert_in_delta 83.33, @parent_budget_category.percent_of_budget_spent, 0.01
+    refute @parent_budget_category.over_budget?
+  end
+
+  test "move_allocation! moves money between two envelopes" do
+    other = move_test_envelope("Move Travel", 200)
+
+    BudgetCategory.move_allocation!(from: other, to: @subcategory_with_limit_bc, amount: 50)
+
+    assert_equal 150, other.reload.budgeted_spending
+    assert_equal 350, @subcategory_with_limit_bc.reload.budgeted_spending
+    # The subcategory's parent grows with it; its reserve stays
+    assert_equal 1050, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "move_allocation! moves money back the other way" do
+    other = move_test_envelope("Move Travel", 200)
+
+    BudgetCategory.move_allocation!(from: @subcategory_with_limit_bc, to: other, amount: 100)
+
+    assert_equal 300, other.reload.budgeted_spending
+    assert_equal 200, @subcategory_with_limit_bc.reload.budgeted_spending
+    assert_equal 900, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "move_allocation! between sibling subcategories leaves their parent unchanged" do
+    BudgetCategory.move_allocation!(from: @subcategory_with_limit_bc, to: @subcategory_inheriting_bc, amount: 120)
+
+    assert_equal 180, @subcategory_with_limit_bc.reload.budgeted_spending
+    assert_equal 120, @subcategory_inheriting_bc.reload.budgeted_spending
+    assert_equal 1000, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "a parent can move only its reserve beyond its subcategories" do
+    other = move_test_envelope("Move Travel", 0)
+
+    assert_equal 700, @parent_budget_category.movable_amount
+    error = assert_raises(BudgetCategory::InvalidMove) do
+      BudgetCategory.move_allocation!(from: @parent_budget_category, to: other, amount: 701)
+    end
+    assert_equal :insufficient_funds, error.reason
+
+    BudgetCategory.move_allocation!(from: @parent_budget_category, to: other, amount: 700)
+    assert_equal 300, @parent_budget_category.reload.budgeted_spending
+    assert_equal 700, other.reload.budgeted_spending
+  end
+
+  test "move_allocation! refuses moves the budget cannot represent and changes nothing" do
+    other_budget = Budget.create!(family: @family, start_date: 6.months.ago.beginning_of_month.to_date, end_date: 6.months.ago.end_of_month.to_date, currency: "USD", budgeted_spending: 100)
+    elsewhere = BudgetCategory.create!(budget: other_budget, category: @parent_category, budgeted_spending: 50, currency: "USD")
+
+    {
+      non_positive_amount: [ @subcategory_with_limit_bc, move_test_envelope("Move Travel", 0), 0 ],
+      uncategorized: [ @subcategory_with_limit_bc, @budget.uncategorized_budget_category, 10 ],
+      different_budgets: [ @subcategory_with_limit_bc, elsewhere, 10 ],
+      same_category: [ @subcategory_with_limit_bc, @subcategory_with_limit_bc, 10 ],
+      parent_child: [ @parent_budget_category, @subcategory_inheriting_bc, 10 ],
+      insufficient_funds: [ @subcategory_with_limit_bc, move_test_envelope("Move Rent", 0), 301 ]
+    }.each do |reason, (from, to, amount)|
+      error = assert_raises(BudgetCategory::InvalidMove, reason.to_s) { BudgetCategory.move_allocation!(from: from, to: to, amount: amount) }
+      assert_equal reason, error.reason
+      assert_equal I18n.t("budget_categories.move.errors.#{reason}"), error.message
+    end
+
+    assert_equal 300, @subcategory_with_limit_bc.reload.budgeted_spending
+    assert_equal 1000, @parent_budget_category.reload.budgeted_spending
+  end
+
+  test "move_allocation! changes both sides in one transaction" do
+    other = move_test_envelope("Move Travel", 200)
+    # The receiving side fails after the sending side was written
+    @subcategory_with_limit_bc.stubs(:update_budgeted_spending!).raises(ActiveRecord::RecordInvalid.new(@subcategory_with_limit_bc))
+
+    assert_raises(ActiveRecord::RecordInvalid) do
+      BudgetCategory.move_allocation!(from: other, to: @subcategory_with_limit_bc, amount: 50)
+    end
+
+    assert_equal 200, other.reload.budgeted_spending
+    assert_equal 1000, @parent_budget_category.reload.budgeted_spending
+  end
+
   private
     # A budget of the dylan family (currency USD unless changed) for March 2030 by
     # default, with rows for the test categories. Returns it and the parent row.
@@ -547,5 +740,10 @@ class BudgetCategoryTest < ActiveSupport::TestCase
         account: accounts(:depository), date: date, name: row.name, amount: row.amount, currency: "USD", source: source,
         entryable: Transaction.new(category: row.category, recurring_transaction: row)
       )
+    end
+
+    def move_test_envelope(name, amount)
+      category = Category.create!(name: "#{name} #{SecureRandom.hex(3)}", family: @family, classification: "expense")
+      BudgetCategory.create!(budget: @budget, category: category, budgeted_spending: amount, currency: "USD")
     end
 end

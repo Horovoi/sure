@@ -634,4 +634,55 @@ class BudgetTest < ActiveSupport::TestCase
     past = Budget.find_or_bootstrap(@family, start_date: @family.budget_period_start_for(Date.current) - 1.month)
     assert_not past.shows_available_cash?
   end
+
+  # w3-envelope envelope-budgeting
+  test "copy_from! writes the rows as they are, so copied totals equal the source" do
+    food = budget_test_category("Food")
+    restaurants = budget_test_category("Restaurants", parent: food)
+    groceries = budget_test_category("Groceries", parent: food)
+    source = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    source.update!(budgeted_spending: 2000)
+    source_rows = Budget.find(source.id).budget_categories
+    source_rows.find { |bc| bc.category_id == restaurants.id }.update_budgeted_spending!(200)
+    source_rows.find { |bc| bc.category_id == groceries.id }.update_budgeted_spending!(150)
+    source = Budget.find(source.id)
+    target = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+    BudgetCategory.any_instance.expects(:update_budgeted_spending!).never
+    target.copy_from!(source)
+    target = Budget.find(target.id)
+
+    assert_equal 350, target.budget_categories.find_by!(category: food).budgeted_spending
+    assert_equal source.allocated_spending, target.allocated_spending
+    assert_equal source.budget_categories.to_h { |bc| [ bc.category_id, bc.budgeted_spending ] },
+                 target.budget_categories.to_h { |bc| [ bc.category_id, bc.budgeted_spending ] }
+  end
+
+  # w3-envelope budget-rollover-moves
+  test "copy_from! copies the rollover choice and never the carry" do
+    food = budget_test_category("Food")
+    source = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    source.update!(budgeted_spending: 1000)
+    source.budget_categories.find_by!(category: food).update_columns(budgeted_spending: 200, rollover_enabled: true, rolled_over_amount: 55)
+    target = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    target.budget_categories.find_by!(category: food).update_columns(rollover_enabled: false)
+
+    target.copy_from!(Budget.find(source.id))
+    row = target.all_budget_categories.find_by!(category: food)
+
+    assert row.rollover_enabled?
+    assert_equal 0, row[:rolled_over_amount]
+  end
+
+  test "total_rolled_over sums the carry of every envelope once" do
+    food = budget_test_category("Food")
+    restaurants = budget_test_category("Restaurants", parent: food)
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 1000)
+    budget.budget_categories.find_by!(category: food).update_columns(budgeted_spending: 300, rollover_enabled: true, rolled_over_amount: 40)
+    budget.budget_categories.find_by!(category: restaurants).update_columns(budgeted_spending: 100, rollover_enabled: true, rolled_over_amount: 15)
+
+    assert_equal 55, Budget.find(budget.id).total_rolled_over
+    assert_equal 1000 - 300, Budget.find(budget.id).available_to_allocate, "the carry is not part of the allocation"
+  end
 end
