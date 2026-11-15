@@ -1,0 +1,92 @@
+<%= content_for :page_title, t(".page_title") %>
+
+<% record_paths = ai_tool_audit_record_paths(@audits) %>
+
+<%= settings_section title: t(".page_title"), subtitle: t(".subtitle") do %>
+  <%= form_with url: settings_ai_tool_audits_path, method: :get, class: "flex flex-wrap items-end gap-4", id: "ai-tool-audit-filters" do |form| %>
+    <div class="w-full md:w-auto">
+      <%= form.label :tool, t(".tool_filter"), class: "block text-sm font-medium text-primary mb-1" %>
+      <%= form.select :tool,
+            options_for_select(@tool_names, @tool),
+            { include_blank: t(".all_tools") },
+            class: "rounded-lg border border-secondary px-3 py-2 text-sm bg-container-inset text-primary w-full" %>
+    </div>
+    <label class="flex items-center gap-2 text-sm text-primary">
+      <%= form.check_box :writes, { checked: @writes_only, class: "checkbox checkbox--light" }, "1", nil %>
+      <%= t(".writes_only") %>
+    </label>
+    <%= render DS::Button.new(variant: :secondary, size: :md, type: :submit, text: t(".filter")) %>
+  <% end %>
+
+  <% if @audits.any? %>
+    <ul class="divide-y divide-alpha-black-100 border border-secondary rounded-lg" id="ai-tool-audits">
+      <% @audits.each do |audit| %>
+        <% status = audit.display_status %>
+        <li class="p-3 space-y-2" id="<%= dom_id(audit) %>">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span class="text-secondary whitespace-nowrap font-mono"><%= audit.created_at.strftime("%Y-%m-%d %H:%M:%S") %></span>
+            <span class="font-medium text-primary font-mono"><%= audit.tool_name %></span>
+            <% if audit.write? %>
+              <span class="text-xs rounded-md px-1.5 py-0.5 bg-surface-inset text-secondary"><%= t(".scope_tags.#{audit.scope_tag}") %></span>
+            <% end %>
+            <span class="font-medium <%= ai_tool_audit_status_classes(status) %>"><%= t(".statuses.#{status}") %></span>
+            <% if audit.duration_ms %>
+              <span class="text-secondary"><%= t(".duration", ms: number_with_delimiter(audit.duration_ms)) %></span>
+            <% end %>
+          </div>
+
+          <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary">
+            <span><%= t(".sources.#{audit.source}") %><% if audit.client_name.present? %> (<%= audit.client_name %>)<% end %></span>
+            <span><%= audit.user&.display_name || t(".deleted_user") %></span>
+            <% if audit.assistant_message_id %>
+              <span class="font-mono"><%= t(".message", id: audit.assistant_message_id) %></span>
+            <% end %>
+          </div>
+
+          <% if audit.error_message.present? %>
+            <p class="text-xs text-destructive break-words"><%= audit.error_message %></p>
+          <% end %>
+
+          <% if audit.result_record_ids.any? %>
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="text-secondary"><%= t(".touched", type: audit.result_record_type || t(".record")) %></span>
+              <% audit.result_record_ids.each do |id| %>
+                <% path = record_paths[[ audit.result_record_type, id ]] %>
+                <% if path %>
+                  <%= link_to id, path, class: "font-mono text-primary underline", data: (audit.result_record_type == "Transaction" ? { turbo_frame: "drawer", turbo_prefetch: false } : {}) %>
+                <% else %>
+                  <span class="font-mono text-secondary" title="<%= t(".record_gone") %>"><%= id %></span>
+                <% end %>
+              <% end %>
+            </div>
+          <% end %>
+
+          <details class="text-xs">
+            <summary class="cursor-pointer text-secondary"><%= t(".details") %></summary>
+            <div class="mt-2 grid gap-2 md:grid-cols-2">
+              <div>
+                <p class="text-secondary mb-1">
+                  <%= t(".arguments") %>
+                  <% if audit.truncated_arguments? %>(<%= t(".truncated") %>)<% end %>
+                </p>
+                <pre class="bg-surface-inset rounded-md p-2 overflow-x-auto whitespace-pre-wrap break-all text-primary"><%= ai_tool_audit_json(audit.arguments) || t(".none") %></pre>
+              </div>
+              <% if audit.write? %>
+                <div>
+                  <p class="text-secondary mb-1"><%= t(".before") %></p>
+                  <pre class="bg-surface-inset rounded-md p-2 overflow-x-auto whitespace-pre-wrap break-all text-primary"><%= ai_tool_audit_json(audit.audit_before) || t(".no_before") %></pre>
+                </div>
+              <% end %>
+            </div>
+          </details>
+        </li>
+      <% end %>
+    </ul>
+
+    <%= render "shared/pagination", pagy: @pagy %>
+  <% else %>
+    <p class="text-sm text-secondary py-6 text-center"><%= t(".empty") %></p>
+  <% end %>
+
+  <p class="text-xs text-secondary"><%= t(".revert_hint") %></p>
+<% end %>

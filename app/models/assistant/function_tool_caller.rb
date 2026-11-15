@@ -71,10 +71,13 @@ class Assistant::FunctionToolCaller
       end
   end
 
-  attr_reader :functions
+  attr_reader :functions, :actor
 
-  def initialize(functions = [])
+  # actor (Assistant::ToolInvocation::Actor) is who the audit names; Assistant passes the turn's assistant message.
+  # Without one, a call is audited as the built-in chat of the function's user, with no message.
+  def initialize(functions = [], actor: nil)
     @functions = functions
+    @actor = actor
   end
 
   def fulfill_requests(function_requests)
@@ -91,14 +94,19 @@ class Assistant::FunctionToolCaller
 
   private
     # The single entry point for every chat tool call. Tool failures come back as data instead of raising, so one
-    # bad call never aborts the turn; the per-call audit log wraps this method.
+    # bad call never aborts the turn. Assistant::ToolInvocation runs and audits the call; a name that is not a tool
+    # runs nothing, so it is not audited.
     def execute(function_request)
       fn = find_function(function_request)
       return self.class.unknown_tool_result(function_request.function_name) if fn.nil?
 
-      fn.call(self.class.parse_arguments(function_request.function_args))
+      Assistant::ToolInvocation.call(fn, function_request.function_args, actor: actor_for(fn))
     rescue => e
       self.class.error_result(function_request.function_name, e)
+    end
+
+    def actor_for(function)
+      actor || Assistant::ToolInvocation::Actor.new(user: function.user, source: "builtin_chat")
     end
 
     def find_function(function_request)

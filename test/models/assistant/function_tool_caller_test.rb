@@ -141,6 +141,47 @@ class Assistant::FunctionToolCallerTest < ActiveSupport::TestCase
     assert_equal "invalid date", tool_calls.first.function_result[:error]
   end
 
+  test "every call is audited with the caller's actor" do
+    message = messages(:chat1_assistant_response)
+    caller = Assistant::FunctionToolCaller.new([ @function ], actor: Assistant::ToolInvocation::Actor.builtin_chat(message))
+
+    assert_difference -> { AiToolAudit.count }, 1 do
+      caller.fulfill_requests([ request(name: "probe", args: '{"page": 2}') ])
+    end
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "builtin_chat", audit.source
+    assert_equal "probe", audit.tool_name
+    assert_equal message.id, audit.assistant_message_id
+    assert_equal message.chat_id, audit.chat_id
+    assert_equal({ "page" => 2 }, audit.arguments)
+  end
+
+  test "without an actor a call is audited as the built-in chat of the function's user" do
+    call_tool
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "builtin_chat", audit.source
+    assert_equal users(:family_admin), audit.user
+    assert_nil audit.assistant_message_id
+  end
+
+  test "a failing call is audited as an error" do
+    @function.to_raise = Date::Error.new("invalid date")
+
+    call_tool
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "error", audit.status
+    assert_equal "invalid date", audit.error_message
+  end
+
+  test "an unknown tool runs nothing and is not audited" do
+    assert_no_difference -> { AiToolAudit.count } do
+      call_tool(name: "drop_tables")
+    end
+  end
+
   private
     def call_tool(name: "probe", args: "{}")
       @caller.send(:execute, request(name: name, args: args))

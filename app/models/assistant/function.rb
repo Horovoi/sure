@@ -8,12 +8,13 @@
 # :read. Chat and the static and turn MCP tokens all get scope :full, every tool with no approval prompt (owner
 # answer 2); every call is audited instead.
 #
-# Write-tool contract, for every :write or :destructive tool (the tool-call audit reads both):
+# Write-tool contract, for every :write or :destructive tool (Assistant::ToolInvocation reads all three):
 # - The result names the record or records it changed: `id` for one, `ids` for several (alongside `entry_id`
 #   and the like where the tool speaks in entries), so a wrong call can be found and reverted. `record_type`
-#   names their class.
+#   names their class, and `audit_refs(result)` picks the ids out (override it for another result shape).
 # - `audit_before(params)` returns the current state of the record the call will change or delete (a Hash of
 #   its attributes, or nil when the call only creates). It runs before `call`.
+# Tools run only through Assistant::ToolInvocation, which audits every call, reads included.
 class Assistant::Function
   SCOPE_TAGS = %i[read write destructive].freeze
 
@@ -44,6 +45,8 @@ class Assistant::Function
   MAX_PAGE_SIZE = 100
 
   UUID_FORMAT = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+
+  attr_reader :user
 
   def initialize(user)
     @user = user
@@ -122,6 +125,14 @@ class Assistant::Function
     nil
   end
 
+  # The ids a call touched, for the tool-call audit: the `id` and `ids` keys of a Hash result. Read for :write and
+  # :destructive tools only.
+  def audit_refs(result)
+    return [] unless result.is_a?(Hash)
+
+    [ result[:id] || result["id"], *Array(result[:ids] || result["ids"]) ].compact.map(&:to_s).uniq
+  end
+
   # The input schema served over MCP. MCP validates arguments against it, so a property whose type allows null
   # is optional there (a client may leave it out instead of sending null), and empty enums are pruned.
   def mcp_input_schema
@@ -134,8 +145,6 @@ class Assistant::Function
   end
 
   private
-    attr_reader :user
-
     def build_schema(properties: {}, required: [])
       {
         type: "object",

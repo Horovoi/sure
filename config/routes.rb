@@ -373,6 +373,12 @@ Rails.application.routes.draw do
   match "mcp", to: "mcp#handle", via: %i[post get delete]
   # --- end MCP ---
 
+  # --- AI tool-call audit (w1-mcp): Settings > Advanced > AI tool calls, read-only, admins only ---
+  namespace :settings do
+    resources :ai_tool_audits, only: :index
+  end
+  # --- end AI tool-call audit ---
+
 
 
   resources :currencies, only: %i[show]

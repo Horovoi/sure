@@ -39,6 +39,9 @@ class Family < ApplicationRecord
   has_many :llm_usages, dependent: :destroy
   has_many :recurring_transactions, dependent: :destroy
 
+  # AI tool-call audit: one row per tool call from the chat and /mcp (Assistant::ToolInvocation)
+  has_many :ai_tool_audits, dependent: :delete_all
+
   validates :locale, inclusion: { in: I18n.available_locales.map(&:to_s) }
   validates :date_format, inclusion: { in: DATE_FORMATS.map(&:last) }
   validates :fiscal_month_start_day, inclusion: { in: 1..31 }, allow_nil: true

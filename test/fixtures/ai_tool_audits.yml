@@ -1,0 +1,42 @@
+read_call:
+  family: dylan_family
+  user: family_admin
+  source: mcp
+  client_name: claude-code
+  tool_name: get_accounts
+  scope_tag: read
+  arguments: {}
+  status: ok
+  duration_ms: 12
+  finished_at: <%= 2.hours.ago %>
+  created_at: <%= 2.hours.ago %>
+
+write_call:
+  family: dylan_family
+  user: family_admin
+  source: builtin_chat
+  chat_id: <%= ActiveRecord::FixtureSet.identify(:one, :uuid) %>
+  assistant_message_id: <%= ActiveRecord::FixtureSet.identify(:chat1_assistant_response, :uuid) %>
+  tool_name: update_category
+  scope_tag: write
+  arguments: { "id": "<%= ActiveRecord::FixtureSet.identify(:food_and_drink, :uuid) %>", "name": "Dining" }
+  audit_before: { "id": "<%= ActiveRecord::FixtureSet.identify(:food_and_drink, :uuid) %>", "name": "Food & Drink" }
+  status: ok
+  result_record_type: Category
+  result_record_ids: [ "<%= ActiveRecord::FixtureSet.identify(:food_and_drink, :uuid) %>" ]
+  duration_ms: 40
+  finished_at: <%= 1.hour.ago %>
+  created_at: <%= 1.hour.ago %>
+
+other_family_call:
+  family: empty
+  user: empty
+  source: mcp
+  client_name: claude-code
+  tool_name: get_transactions
+  scope_tag: read
+  arguments: {}
+  status: ok
+  duration_ms: 8
+  finished_at: <%= 30.minutes.ago %>
+  created_at: <%= 30.minutes.ago %>

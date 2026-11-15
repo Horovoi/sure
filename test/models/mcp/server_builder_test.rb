@@ -151,6 +151,33 @@ class Mcp::ServerBuilderTest < ActiveSupport::TestCase
     assert_equal "invalid_date", response.structured_content["error"]
   end
 
+  test "call_tool audits a static-token call as mcp with the client name" do
+    credential = Mcp::Credential.static(@user, client_name: "claude-code")
+
+    assert_difference -> { AiToolAudit.count }, 1 do
+      Mcp::ServerBuilder.new(credential).call_tool(NullableFunction, { query: "x" })
+    end
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "mcp", audit.source
+    assert_equal "claude-code", audit.client_name
+    assert_equal "nullable_function", audit.tool_name
+    assert_nil audit.chat_id
+  end
+
+  test "call_tool audits a turn-token call as the Claude chat with its message" do
+    message = messages(:chat1_assistant_response)
+    credential = Mcp::Credential.turn(message.chat.user, assistant_message: message, client_name: "sure-claude-chat")
+
+    Mcp::ServerBuilder.new(credential).call_tool(NullableFunction, { query: "x" })
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "claude_chat", audit.source
+    assert_equal message.id, audit.assistant_message_id
+    assert_equal message.chat_id, audit.chat_id
+    assert_equal message.chat.user, audit.user
+  end
+
   private
     def sample_value(property)
       property ||= {}

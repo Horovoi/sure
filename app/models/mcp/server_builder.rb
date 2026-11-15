@@ -37,12 +37,13 @@ class Mcp::ServerBuilder
     function_classes.map { |function_class| tool_for(function_class) }
   end
 
-  # The one place an MCP tool call runs. A tool error is a result with isError (the model reads it and can
-  # retry); protocol problems (unknown tool, arguments that break the schema) are refused by the SDK before
-  # this runs.
+  # The one place an MCP tool call runs, through Assistant::ToolInvocation, which audits it under the credential's
+  # channel (mcp for the static token, claude_chat for the Claude chat's turn token). A tool error is a result with
+  # isError (the model reads it and can retry); protocol problems (unknown tool, arguments that break the schema)
+  # are refused by the SDK before this runs, so they are not audited.
   def call_tool(function_class, arguments)
     function = function_class.new(user)
-    result = function.call(Assistant::FunctionToolCaller.parse_arguments(arguments))
+    result = Assistant::ToolInvocation.call(function, arguments, actor: credential.audit_actor)
 
     # A tool that refuses the arguments answers {error, hint} without raising; that is a tool error too
     tool_response(result, error: result.is_a?(Hash) && result.key?(:error))

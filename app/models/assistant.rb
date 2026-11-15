@@ -66,7 +66,7 @@ class Assistant
     responder = Assistant::Responder.new(
       message: prompt,
       instructions: instructions,
-      function_tool_caller: function_tool_caller,
+      function_tool_caller: function_tool_caller(assistant_message),
       llm: llm_provider
     )
 
@@ -88,12 +88,13 @@ class Assistant
   private
     attr_reader :functions
 
-    def function_tool_caller
+    # Built per turn, so every tool call is audited with the assistant message it answers
+    def function_tool_caller(assistant_message)
       function_instances = functions.map do |fn|
         fn.new(chat.user)
       end
 
-      @function_tool_caller ||= FunctionToolCaller.new(function_instances)
+      FunctionToolCaller.new(function_instances, actor: ToolInvocation::Actor.builtin_chat(assistant_message))
     end
 
     def build_no_provider_error_message(requested_model)

@@ -38,6 +38,22 @@ class Mcp::Credential
     Assistant.function_classes_for(scope)
   end
 
+  # Who the tool-call audit names: the static token is the mcp channel with the MCP clientInfo name; the turn token
+  # is the Claude chat, tied to the assistant message it answers.
+  def audit_actor
+    if turn?
+      Assistant::ToolInvocation::Actor.new(
+        user: user,
+        source: "claude_chat",
+        client_name: client_name,
+        chat_id: assistant_message&.chat_id,
+        assistant_message_id: assistant_message&.id
+      )
+    else
+      Assistant::ToolInvocation::Actor.new(user: user, source: "mcp", client_name: client_name)
+    end
+  end
+
   def family
     user.family
   end

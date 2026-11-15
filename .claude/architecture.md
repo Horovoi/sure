@@ -103,8 +103,20 @@ through the official `mcp` gem (`MCP::Server::Transports::StreamableHTTPTranspor
   MCP tokens use `:full`: every tool, writes and deletes included, no approval prompt.
 - `Mcp::Credential`: who is calling (user, kind `:static` or `:turn`, scope, assistant message). The scope
   picks the tools the server registers, so a tool outside it is an unknown tool (-32602). The credential
-  also feeds the tool-call audit.
+  also feeds the tool-call audit (`#audit_actor`).
 - Rack::Attack throttles `/mcp` at 300 requests a minute per IP.
+
+**Tool-call audit.** `Assistant::ToolInvocation.call(function, args, actor:)` is the one place a tool runs:
+the chat (`Assistant::FunctionToolCaller`, source `builtin_chat`) and `/mcp` (`Mcp::ServerBuilder#call_tool`;
+static token `mcp` with the clientInfo name, turn token `claude_chat` with its assistant message) both call
+it. Every call, reads included, gets one `ai_tool_audits` row: inserted as `running` before the call, then
+for a write `audit_before` is stored, and the row is finished in `ensure` (status `ok`/`error`, sanitised
+error, `result_record_type`/`result_record_ids` for writes, duration). Arguments are redacted with
+`filter_parameters` and capped at 16 KB; no result body, prompt or answer is stored. `chat_id` and
+`assistant_message_id` have no foreign key, so rows survive a requeue (`reset_attempt` deletes tool_calls)
+and a deleted chat. Never call a tool inside an outer DB transaction, or a rollback takes its audit row
+too. Settings > Advanced > AI tool calls (`Settings::AiToolAuditsController`, admins only, 404 for others)
+lists the rows with the before state and links to the touched records; reverting is manual.
 
 **Clients.** Claude Code 2.1.325 or newer is the minimum CLI version: it is the first version found to
 carry the 2026-07-28 client (`server/discover`, the `_meta` envelope); older CLIs speak only the

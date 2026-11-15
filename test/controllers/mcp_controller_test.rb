@@ -414,6 +414,47 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # --- Tool-call audit -------------------------------------------------------------------------------------
+
+  test "tools/call writes an mcp audit row with the clientInfo name" do
+    with_mcp_env do
+      assert_difference -> { AiToolAudit.count }, 1 do
+        mcp_post "tools/call", params: { name: "get_accounts", arguments: {} }
+      end
+    end
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "mcp", audit.source
+    assert_equal "claude-code", audit.client_name
+    assert_equal "get_accounts", audit.tool_name
+    assert_equal @user, audit.user
+    assert_equal @user.family, audit.family
+    assert_nil audit.assistant_message_id
+    assert_equal "ok", audit.status
+  end
+
+  test "a failing tools/call is audited as an error" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).raises(RuntimeError, "boom")
+
+    with_mcp_env do
+      mcp_post "tools/call", params: { name: "get_accounts", arguments: {} }
+    end
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "error", audit.status
+    assert_equal "get_accounts failed unexpectedly", audit.error_message
+  end
+
+  test "tools/list, discover and refused calls write no audit row" do
+    with_mcp_env do
+      assert_no_difference -> { AiToolAudit.count } do
+        mcp_post "tools/list"
+        mcp_post "server/discover"
+        mcp_post "tools/call", params: { name: "drop_everything", arguments: {} }
+      end
+    end
+  end
+
   private
     def with_mcp_env(&block)
       with_env_overrides(MCP_API_TOKEN: TOKEN, MCP_USER_EMAIL: @user.email, &block)
