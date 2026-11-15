@@ -56,7 +56,7 @@
 
       <%= fields_for_types.call(%w[buy sell]) do %>
         <%= form.number_field :qty, label: t(".qty"), placeholder: "10", min: 0.000000000000000001, step: "any", required: true %>
-        <%= form.money_field :price, label: t(".price"), step: "any", precision: 10, required: true %>
+        <%= form.money_field :price, label: t(".price"), step: "any", precision: 10, required: true, currency_id: form.field_id(:currency, :price) %>
       <% end %>
     </div>
 
