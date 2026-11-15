@@ -22,9 +22,28 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     create_transaction(account: @family.accounts.first, name: "General shopping", amount: 100, category: parent_category)
     create_transaction(account: @family.accounts.first, name: "Grocery store", amount: 50, category: subcategory)
 
-    get root_path
+    get root_path(cashflow_show_subcategories: "1")
     assert_response :ok
     assert_select "[data-controller='sankey-chart']"
+
+    # One payload for both modes: the chart drops the subcategory column itself
+    chart = css_select("#cashflowSankeyChart").sole
+    data = JSON.parse(chart["data-sankey-chart-data-value"])
+    ids = data["nodes"].map { |node| node["id"] }
+    assert_includes ids, "expense_#{parent_category.id}"
+    assert_includes ids, "expense_sub_#{subcategory.id}"
+    assert_includes ids, "expense_sub_#{parent_category.id}_other"
+    assert_equal "true", chart["data-sankey-chart-show-subcategories-value"]
+    assert_equal subcategory.name, data["nodes"].find { |node| node["id"] == "expense_sub_#{subcategory.id}" }["filter_value"]
+    assert_select "#cashflowSankeyChartFullscreen"
+  end
+
+  test "the subcategory toggle is off by default" do
+    create_transaction(account: @family.accounts.first, amount: 100, category: categories(:food_and_drink))
+
+    get root_path
+    assert_response :ok
+    assert_equal "false", css_select("#cashflowSankeyChart").sole["data-sankey-chart-show-subcategories-value"]
   end
 
   test "the upstream changelog and feedback pages are gone" do

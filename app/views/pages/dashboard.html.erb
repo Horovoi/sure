@@ -86,10 +86,8 @@
     <%# Fullscreen dialog for cashflow moved outside the frame so it stays open during frame updates %>
     <%= render partial: "pages/dashboard/cashflow_sankey_dialog", locals: {
       sankey_data: @cashflow_sankey_data,
-      sankey_data_with_subcategories: @cashflow_sankey_data_with_subcategories,
-      sankey_data_without_subcategories: @cashflow_sankey_data_without_subcategories,
       period: @cashflow_period,
-      cashflow_show_subcategories: @cashflow_show_subcategories
+      show_subcategories: @cashflow_show_subcategories
     } %>
 
     <%# Fullscreen dialog for net worth moved outside its frame so it stays open during frame updates %>

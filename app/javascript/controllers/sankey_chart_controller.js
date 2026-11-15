@@ -1,23 +1,32 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
-import { sankey } from "d3-sankey";
+import { sankey, sankeyCenter } from "d3-sankey";
+import { sankeyLabelOnRight } from "utils/sankey_align";
+import { hiddenSankeyLabels } from "utils/sankey_labels";
+import { withoutSankeySubcategories } from "utils/sankey_subcategories";
 
 // Connects to data-controller="sankey-chart"
+//
+// The data is one IncomeStatement::Sankey payload with subcategories. With the
+// subcategory toggle off, or on a narrow chart, the subcategory column is
+// dropped here; a category's value already includes its subcategories, so no
+// total changes.
 export default class extends Controller {
   static values = {
     data: Object,
-    withSubcategories: Object,
-    withoutSubcategories: Object,
+    showSubcategories: { type: Boolean, default: false },
     nodeWidth: { type: Number, default: 15 },
     nodePadding: { type: Number, default: 20 },
     currencySymbol: { type: String, default: "$" },
-    innerPadding: { type: Number, default: 16 }
   };
 
   // Visual constants
   static HOVER_OPACITY = 0.4;
   static HOVER_FILTER = "saturate(1.3) brightness(1.1)";
   static EXTENT_MARGIN = 16;
+  // Below this chart width the subcategory column is dropped: five columns
+  // leave about 60px between bars, too little for most labels.
+  static SUBCATEGORY_MIN_WIDTH = 640;
   static MIN_NODE_PADDING = 4;
   static MAX_PADDING_RATIO = 0.4;
   static CORNER_RADIUS = 8;
@@ -26,67 +35,132 @@ export default class extends Controller {
     "var(--color-success)": "#10A861",
     "var(--color-destructive)": "#EC2222",
     "var(--color-gray-400)": "#9E9E9E",
-    "var(--color-gray-500)": "#737373"
+    "var(--color-gray-500)": "#737373",
   };
   static MIN_LABEL_SPACING = 28; // Minimum vertical space needed for labels (2 lines)
 
   connect() {
-    this.resizeObserver = new ResizeObserver(() => this.#draw());
-    this.resizeObserver.observe(this.element);
-    this.tooltip = null;
-    this.#createTooltip();
-    // Ensure each controller instance has a unique id to scope SVG defs
+    this.connected = true;
+    // Each controller instance has a unique id to scope its SVG defs: the
+    // inline chart and the fullscreen one are on the same page
     if (!this.element.id) {
       this.element.id = `sankey-${Math.random().toString(36).slice(2, 10)}`;
     }
     this._instanceId = this.element.id;
-    
-    // Initialize data if not explicitly set
-    // Prefer the dataset without subcategories to align with the default UI state
-    if (!this.dataValue) {
-      this.dataValue = this.withoutSubcategoriesValue || this.withSubcategoriesValue || {};
-    }
 
-    // Listen for subcategory toggle events targeted at this element
+    this.resizeObserver = new ResizeObserver(() => this.#draw());
+    this.resizeObserver.observe(this.#chartElement());
+    this.tooltip = null;
+    this.#createTooltip();
+
+    // Subcategory toggle, sent to this element by the toggles
     this._onSubcategoryEvent = (e) => {
       const { showSubcategories } = e.detail || {};
       this.setSubcategoryMode(showSubcategories);
     };
     this.element.addEventListener("sankey:set-subcategories", this._onSubcategoryEvent);
 
-    // Handle dataset replacement from compact card
-    this._onDatasetsEvent = (e) => {
-      const { withSubcategories, withoutSubcategories, showSubcategories, currencySymbol } = e.detail || {};
-      this.setDatasets({ withSubcategories, withoutSubcategories, showSubcategories, currencySymbol });
-    };
+    // New data from the inline card (a period change), sent to the fullscreen chart
+    this._onDatasetsEvent = (e) => this.setDatasets(e.detail || {});
     this.element.addEventListener("sankey:set-datasets", this._onDatasetsEvent);
+
+    // A Turbo morph refresh (the sync toast's auto-refresh) keeps this element
+    // and its controller but can drop the drawing and the tooltip
+    this._onMorph = () => this.#restoreAfterMorph();
+    document.addEventListener("turbo:morph", this._onMorph);
+
     this.#draw();
+
+    // Labels are measured to keep them off neighbouring bars; measure again
+    // once the page font has replaced the fallback.
+    if (document.fonts?.status === "loading") {
+      document.fonts.ready.then(() => {
+        if (this.connected) this.#draw();
+      });
+    }
   }
 
   disconnect() {
+    this.connected = false;
+    document.removeEventListener("turbo:morph", this._onMorph);
     this.resizeObserver?.disconnect();
     this.tooltip?.remove();
     this.tooltip = null;
-    if (this._onSubcategoryEvent) {
-      this.element.removeEventListener("sankey:set-subcategories", this._onSubcategoryEvent);
-      this._onSubcategoryEvent = null;
+    this.element.removeEventListener("sankey:set-subcategories", this._onSubcategoryEvent);
+    this.element.removeEventListener("sankey:set-datasets", this._onDatasetsEvent);
+  }
+
+  dataValueChanged() {
+    if (this.connected) this.#draw();
+  }
+
+  showSubcategoriesValueChanged() {
+    if (this.connected) this.#draw();
+  }
+
+  // Public: switch the subcategory column on or off
+  setSubcategoryMode(show) {
+    if (typeof show !== "boolean") return;
+    this.showSubcategoriesValue = show;
+  }
+
+  // Public: replace the data (the period changed) and the mode
+  setDatasets({ data, showSubcategories, currencySymbol }) {
+    if (typeof currencySymbol === "string" && currencySymbol.length) {
+      this.currencySymbolValue = currencySymbol;
     }
-    if (this._onDatasetsEvent) {
-      this.element.removeEventListener("sankey:set-datasets", this._onDatasetsEvent);
-      this._onDatasetsEvent = null;
+    // Stimulus Object values are parsed from JSON on every read, so compare contents
+    if (data && JSON.stringify(data) !== JSON.stringify(this.dataValue)) {
+      this.dataValue = data;
     }
+    this.setSubcategoryMode(showSubcategories);
+  }
+
+  #restoreAfterMorph() {
+    if (!this.connected) return;
+
+    this.tooltip?.remove();
+    this.#createTooltip();
+    if (!this.#chartElement().querySelector("svg")) this.#draw();
+  }
+
+  #chartElement() {
+    return this.element;
+  }
+
+  // A container with no size yet (the fullscreen dialog before it opens) gets
+  // the same fallback for the filter and the layout; the ResizeObserver
+  // redraws once it has one.
+  #chartWidth() {
+    return this.#chartElement().clientWidth || 600;
+  }
+
+  #visibleData(width) {
+    const data = this.dataValue || {};
+    const subcategories =
+      this.showSubcategoriesValue && width >= this.constructor.SUBCATEGORY_MIN_WIDTH;
+
+    return subcategories ? data : withoutSankeySubcategories(data);
   }
 
   #draw() {
-    const { nodes = [], links = [] } = this.dataValue || {};
+    const width = this.#chartWidth();
+    const { nodes = [], links = [] } = this.#visibleData(width) || {};
+
+    const chart = d3.select(this.#chartElement());
+    chart.selectAll("svg").remove();
     if (!nodes.length || !links.length) return;
 
-    d3.select(this.element).selectAll("svg").remove();
+    this.#hideTooltip();
+    this.#render(nodes, links, width);
+  }
 
-    const width = this.element.clientWidth || 600;
-    const height = this.element.clientHeight || 400;
+  #render(nodes, links, width) {
+    const chartElement = this.#chartElement();
+    const height = chartElement.clientHeight || 400;
 
-    const svg = d3.select(this.element)
+    const svg = d3
+      .select(chartElement)
       .append("svg")
       .attr("width", width)
       .attr("height", height);
@@ -97,15 +171,16 @@ export default class extends Controller {
     this.#createGradients(svg, sankeyData.links);
 
     const linkPaths = this.#drawLinks(svg, sankeyData.links);
-    const { nodeGroups, hiddenLabels } = this.#drawNodes(svg, sankeyData.nodes, width);
+    const { nodeGroups, hiddenLabels } = this.#drawNodes(svg, sankeyData.nodes, width, height);
 
     this.#attachHoverEvents(linkPaths, nodeGroups, sankeyData, hiddenLabels);
+    return svg;
   }
 
   // Dynamic padding prevents padding from dominating when there are many nodes
   #calculateNodePadding(nodeCount, height) {
     const margin = this.constructor.EXTENT_MARGIN;
-    const availableHeight = height - (margin * 2);
+    const availableHeight = height - margin * 2;
     const maxPaddingTotal = availableHeight * this.constructor.MAX_PADDING_RATIO;
     const gaps = Math.max(nodeCount - 1, 1);
     const dynamicPadding = Math.min(this.nodePaddingValue, Math.floor(maxPaddingTotal / gaps));
@@ -115,13 +190,22 @@ export default class extends Controller {
   #generateSankeyData(nodes, links, width, height, nodePadding) {
     const margin = this.constructor.EXTENT_MARGIN;
     const sankeyGenerator = sankey()
+      // Centre alignment: a sink sits at its depth, a source one column before
+      // the nearest node it feeds. The default pushes every sink to the last
+      // column, which is the subcategories' once a family has any, so a
+      // category without subcategories would cross every parent-to-child link.
+      .nodeAlign(sankeyCenter)
       .nodeWidth(this.nodeWidthValue)
       .nodePadding(nodePadding)
-      .extent([[margin, margin], [width - margin, height - margin]]);
+      .extent([
+        [margin, margin],
+        [width - margin, height - margin],
+      ]);
 
+    // The server sends amounts as decimal strings, so no precision is lost on the way
     return sankeyGenerator({
-      nodes: nodes.map(d => ({ ...d })),
-      links: links.map(d => ({ ...d })),
+      nodes: nodes.map((d) => ({ ...d, value: Number(d.value) })),
+      links: links.map((d) => ({ ...d, value: Number(d.value) })),
     });
   }
 
@@ -129,18 +213,20 @@ export default class extends Controller {
     const defs = svg.append("defs");
 
     links.forEach((link, i) => {
-      const gradientId = this.#gradientId(link, i);
-      const gradient = defs.append("linearGradient")
-        .attr("id", gradientId)
+      const gradient = defs
+        .append("linearGradient")
+        .attr("id", this.#gradientId(link, i))
         .attr("gradientUnits", "userSpaceOnUse")
         .attr("x1", link.source.x1)
         .attr("x2", link.target.x0);
 
-      gradient.append("stop")
+      gradient
+        .append("stop")
         .attr("offset", "0%")
         .attr("stop-color", this.#colorWithOpacity(link.source.color));
 
-      gradient.append("stop")
+      gradient
+        .append("stop")
         .attr("offset", "100%")
         .attr("stop-color", this.#colorWithOpacity(link.target.color));
     });
@@ -151,8 +237,7 @@ export default class extends Controller {
   }
 
   #colorWithOpacity(nodeColor, opacity = 0.1) {
-    const defaultColor = this.constructor.DEFAULT_COLOR;
-    let colorStr = nodeColor || defaultColor;
+    let colorStr = nodeColor || this.constructor.DEFAULT_COLOR;
 
     // Map CSS variables to hex values for d3 color manipulation
     colorStr = this.constructor.CSS_VAR_MAP[colorStr] || colorStr;
@@ -165,34 +250,41 @@ export default class extends Controller {
   }
 
   #drawLinks(svg, links) {
-    return svg.append("g")
+    return svg
+      .append("g")
       .attr("fill", "none")
       .selectAll("path")
       .data(links)
       .join("path")
       .attr("class", "sankey-link")
-      .attr("d", d => d3.linkHorizontal()({
-        source: [d.source.x1, d.y0],
-        target: [d.target.x0, d.y1]
-      }))
+      .attr("d", (d) =>
+        d3.linkHorizontal()({
+          source: [d.source.x1, d.y0],
+          target: [d.target.x0, d.y1],
+        }),
+      )
       .attr("stroke", (d, i) => `url(#${this.#gradientId(d, i)})`)
-      .attr("stroke-width", d => Math.max(1, d.width))
+      .attr("stroke-width", (d) => Math.max(1, d.width))
       .style("transition", "opacity 0.3s ease");
   }
 
-  #drawNodes(svg, nodes, width) {
-    const nodeGroups = svg.append("g")
+  #drawNodes(svg, nodes, width, height) {
+    const nodeGroups = svg
+      .append("g")
       .selectAll("g")
       .data(nodes)
       .join("g")
+      .attr("data-node-id", (d) => d.id)
+      .attr("data-node-kind", (d) => d.kind)
       .style("transition", "opacity 0.3s ease");
 
-    nodeGroups.append("path")
-      .attr("d", d => this.#nodePath(d))
-      .attr("fill", d => d.color || this.constructor.DEFAULT_COLOR)
-      .attr("stroke", d => d.color ? "none" : "var(--color-gray-500)");
+    nodeGroups
+      .append("path")
+      .attr("d", (d) => this.#nodePath(d))
+      .attr("fill", (d) => d.color || this.constructor.DEFAULT_COLOR)
+      .attr("stroke", (d) => (d.color ? "none" : "var(--color-gray-500)"));
 
-    const hiddenLabels = this.#addNodeLabels(nodeGroups, width, nodes);
+    const hiddenLabels = this.#addNodeLabels(svg, nodeGroups, sankeyLabelOnRight(nodes, width), nodes, height);
 
     return { nodeGroups, hiddenLabels };
   }
@@ -244,127 +336,119 @@ export default class extends Controller {
             L ${x0},${y1} Z`;
   }
 
-  #addNodeLabels(nodeGroups, width, nodes) {
+  #addNodeLabels(svg, nodeGroups, labelOnRight, nodes, height) {
     const controller = this;
-    const hiddenLabels = this.#calculateHiddenLabels(nodes);
+    const hiddenLabels = hiddenSankeyLabels(nodes, {
+      height,
+      minSpacing: this.constructor.MIN_LABEL_SPACING,
+      labelBoxes: this.#measureLabels(svg, nodes, labelOnRight),
+    });
 
-    nodeGroups.append("text")
-      .attr("x", d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
-      .attr("y", d => (d.y1 + d.y0) / 2)
-      .attr("dy", "-0.2em")
-      .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
+    nodeGroups
+      .append("text")
       .attr("class", "text-xs font-medium text-primary fill-current select-none")
       .style("cursor", "default")
-      .style("opacity", d => hiddenLabels.has(d.index) ? 0 : 1)
+      .style("opacity", (d) => (hiddenLabels.has(d.index) ? 0 : 1))
+      // A hidden label can sit over another node's bar; it must not take that
+      // bar's hovers and clicks, even while hover reveals it.
+      .style("pointer-events", (d) => (hiddenLabels.has(d.index) ? "none" : null))
       .style("transition", "opacity 0.2s ease")
-      .each(function(d) {
-        const textEl = d3.select(this);
-        textEl.selectAll("tspan").remove();
-
-        textEl.append("tspan").text(d.name);
-
-        textEl.append("tspan")
-          .attr("x", textEl.attr("x"))
-          .attr("dy", "1.2em")
-          .attr("class", "font-mono text-secondary")
-          .style("font-size", "0.65rem")
-          .text(controller.#formatCurrency(d.value));
+      .each(function (d) {
+        controller.#writeLabel(d3.select(this), d, labelOnRight);
       });
 
     return hiddenLabels;
   }
 
-  // Calculate which labels should be hidden to prevent overlap
-  #calculateHiddenLabels(nodes) {
-    const hiddenLabels = new Set();
-    const minSpacing = this.constructor.MIN_LABEL_SPACING;
+  // Name above amount, beside the bar on the side the label rule picks.
+  #writeLabel(textEl, d, labelOnRight) {
+    const right = labelOnRight(d);
+    const x = right ? d.x1 + 6 : d.x0 - 6;
 
-    // Group nodes by column (using depth which d3-sankey assigns)
-    const columns = new Map();
-    nodes.forEach(node => {
-      const depth = node.depth;
-      if (!columns.has(depth)) columns.set(depth, []);
-      columns.get(depth).push(node);
+    textEl
+      .attr("x", x)
+      .attr("y", (d.y1 + d.y0) / 2)
+      .attr("dy", "-0.2em")
+      .attr("text-anchor", right ? "start" : "end");
+
+    textEl.selectAll("tspan").remove();
+    textEl.append("tspan").text(d.name);
+    textEl
+      .append("tspan")
+      .attr("x", x)
+      .attr("dy", "1.2em")
+      .attr("class", "font-mono text-secondary")
+      .style("font-size", "0.65rem")
+      .text(this.#formatCurrency(d.value));
+  }
+
+  // Where each label lands at this width, measured with an invisible probe
+  // before the real labels are drawn, so the overlap rule can see a label
+  // that reaches into the next column.
+  #measureLabels(svg, nodes, labelOnRight) {
+    const probe = svg
+      .append("text")
+      .attr("class", "text-xs font-medium select-none")
+      .style("visibility", "hidden");
+
+    const boxes = new Map();
+    nodes.forEach((d) => {
+      this.#writeLabel(probe, d, labelOnRight);
+      const { x, y, width, height } = probe.node().getBBox();
+      boxes.set(d.index, { x, y, width, height });
     });
 
-    // For each column, check for overlapping labels
-    columns.forEach(columnNodes => {
-      // Sort by vertical position
-      columnNodes.sort((a, b) => ((a.y0 + a.y1) / 2) - ((b.y0 + b.y1) / 2));
-
-      let lastVisibleY = Number.NEGATIVE_INFINITY;
-
-      columnNodes.forEach(node => {
-        const nodeY = (node.y0 + node.y1) / 2;
-
-        if (nodeY - lastVisibleY < minSpacing) {
-          // Too close to previous visible label, hide this one
-          hiddenLabels.add(node.index);
-        } else {
-          lastVisibleY = nodeY;
-        }
-      });
-    });
-
-    return hiddenLabels;
+    probe.remove();
+    return boxes;
   }
 
   #attachHoverEvents(linkPaths, nodeGroups, sankeyData, hiddenLabels) {
     const applyHover = (targetLinks) => {
       const targetSet = new Set(targetLinks);
-      const connectedNodes = new Set(targetLinks.flatMap(l => [l.source, l.target]));
+      const connectedNodes = new Set(targetLinks.flatMap((l) => [l.source, l.target]));
 
       linkPaths
-        .style("opacity", d => targetSet.has(d) ? 1 : this.constructor.HOVER_OPACITY)
-        .style("filter", d => targetSet.has(d) ? this.constructor.HOVER_FILTER : "none");
+        .style("opacity", (d) => (targetSet.has(d) ? 1 : this.constructor.HOVER_OPACITY))
+        .style("filter", (d) => (targetSet.has(d) ? this.constructor.HOVER_FILTER : "none"));
 
-      nodeGroups.style("opacity", d => connectedNodes.has(d) ? 1 : this.constructor.HOVER_OPACITY);
+      nodeGroups.style("opacity", (d) => (connectedNodes.has(d) ? 1 : this.constructor.HOVER_OPACITY));
 
       // Show labels for connected nodes (even if normally hidden)
-      nodeGroups.selectAll("text")
-        .style("opacity", d => connectedNodes.has(d) ? 1 : (hiddenLabels.has(d.index) ? 0 : this.constructor.HOVER_OPACITY));
+      nodeGroups
+        .selectAll("text")
+        .style("opacity", (d) =>
+          connectedNodes.has(d) ? 1 : hiddenLabels.has(d.index) ? 0 : this.constructor.HOVER_OPACITY,
+        );
     };
 
     const resetHover = () => {
       linkPaths.style("opacity", 1).style("filter", "none");
       nodeGroups.style("opacity", 1);
       // Restore hidden labels to hidden state
-      nodeGroups.selectAll("text")
-        .style("opacity", d => hiddenLabels.has(d.index) ? 0 : 1);
+      nodeGroups.selectAll("text").style("opacity", (d) => (hiddenLabels.has(d.index) ? 0 : 1));
     };
+
+    const connectedLinks = (d) => sankeyData.links.filter((l) => l.source === d || l.target === d);
 
     linkPaths
       .on("mouseenter", (event, d) => {
         applyHover([d]);
-        this.#showTooltip(event, d.value, d.percentage);
+        // A link is a flow between two named nodes; name both
+        this.#showTooltip(event, d.value, d.percentage, `${d.source.name} → ${d.target.name}`);
       })
-      .on("mousemove", event => this.#updateTooltipPosition(event))
+      .on("mousemove", (event) => this.#updateTooltipPosition(event))
       .on("mouseleave", () => {
         resetHover();
         this.#hideTooltip();
       });
 
-    // Hover on node rectangles (not just text)
-    nodeGroups.selectAll("path")
-      .style("cursor", "default")
+    nodeGroups
+      .selectAll("path, text")
       .on("mouseenter", (event, d) => {
-        const connectedLinks = sankeyData.links.filter(l => l.source === d || l.target === d);
-        applyHover(connectedLinks);
+        applyHover(connectedLinks(d));
         this.#showTooltip(event, d.value, d.percentage, d.name);
       })
-      .on("mousemove", event => this.#updateTooltipPosition(event))
-      .on("mouseleave", () => {
-        resetHover();
-        this.#hideTooltip();
-      });
-
-    nodeGroups.selectAll("text")
-      .on("mouseenter", (event, d) => {
-        const connectedLinks = sankeyData.links.filter(l => l.source === d || l.target === d);
-        applyHover(connectedLinks);
-        this.#showTooltip(event, d.value, d.percentage, d.name);
-      })
-      .on("mousemove", event => this.#updateTooltipPosition(event))
+      .on("mousemove", (event) => this.#updateTooltipPosition(event))
       .on("mouseleave", () => {
         resetHover();
         this.#hideTooltip();
@@ -373,12 +457,24 @@ export default class extends Controller {
 
   // Tooltip methods
 
+  // A modal dialog is in the top layer, so the fullscreen chart's tooltip
+  // lives inside the dialog, positioned against the viewport
   #createTooltip() {
-    this.tooltip = d3.select("body")
+    const dialog = this.element.closest("dialog");
+    this.tooltip = d3
+      .select(dialog || document.body)
       .append("div")
       .attr("class", "bg-gray-700 text-white text-sm p-2 rounded pointer-events-none absolute z-50 top-0")
       .style("opacity", 0)
       .style("pointer-events", "none");
+  }
+
+  // Node names are user-named categories; escape anything put into .html()
+  #esc(s) {
+    return String(s).replace(
+      /[&<>"']/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+    );
   }
 
   #showTooltip(event, value, percentage, title = null) {
@@ -386,82 +482,36 @@ export default class extends Controller {
 
     const formattedValue = this.#formatCurrency(value);
     const percentageText = percentage ? `${percentage}%` : "0%";
-    const content = title
-      ? `${title}<br/>${formattedValue} (${percentageText})`
-      : `${formattedValue} (${percentageText})`;
+    const valueLine = `${this.#esc(formattedValue)} (${this.#esc(percentageText)})`;
+    const content = title ? `${this.#esc(title)}<br/>${valueLine}` : valueLine;
 
-    this.tooltip
-      .html(content)
-      .style("left", `${event.pageX + 10}px`)
-      .style("top", `${event.pageY - 10}px`)
-      .transition()
-      .duration(100)
-      .style("opacity", 1);
+    this.tooltip.html(content);
+    this.#updateTooltipPosition(event);
+    this.tooltip.transition().duration(100).style("opacity", 1);
   }
 
   #updateTooltipPosition(event) {
+    if (!this.tooltip) return;
+
+    const isInDialog = !!this.element.closest("dialog");
+    const x = isInDialog ? event.clientX : event.pageX;
+    const y = isInDialog ? event.clientY : event.pageY;
+
     this.tooltip
-      ?.style("left", `${event.pageX + 10}px`)
-      .style("top", `${event.pageY - 10}px`);
+      .style("position", isInDialog ? "fixed" : "absolute")
+      .style("left", `${x + 10}px`)
+      .style("top", `${y - 10}px`);
   }
 
   #hideTooltip() {
-    this.tooltip
-      ?.transition()
-      .duration(100)
-      .style("opacity", 0);
+    this.tooltip?.transition().duration(100).style("opacity", 0);
   }
 
   #formatCurrency(value) {
     const formatted = Number.parseFloat(value).toLocaleString(undefined, {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     });
     return this.currencySymbolValue + formatted;
-  }
-
-  // Stimulus Object values are parsed from JSON on every read, so two reads
-  // are never the same object; compare their contents instead
-  #sameData(a, b) {
-    return JSON.stringify(a) === JSON.stringify(b);
-  }
-
-  // Public: switch dataset according to toggle
-  setSubcategoryMode(show) {
-    const desired = show ? this.withSubcategoriesValue : this.withoutSubcategoriesValue;
-    if (desired && !this.#sameData(desired, this.dataValue)) {
-      this.dataValue = desired;
-      this.#draw();
-    }
-  }
-
-  // Public: replace datasets (e.g., when period changes) and re-render
-  setDatasets({ withSubcategories, withoutSubcategories, showSubcategories, currencySymbol }) {
-    let updated = false;
-
-    if (withSubcategories && !this.#sameData(withSubcategories, this.withSubcategoriesValue)) {
-      this.withSubcategoriesValue = withSubcategories;
-      updated = true;
-    }
-    if (withoutSubcategories && !this.#sameData(withoutSubcategories, this.withoutSubcategoriesValue)) {
-      this.withoutSubcategoriesValue = withoutSubcategories;
-      updated = true;
-    }
-    if (typeof currencySymbol === "string" && currencySymbol.length) {
-      this.currencySymbolValue = currencySymbol;
-    }
-
-    // If we replaced datasets, pick the correct one based on requested mode
-    if (updated) {
-      const show = !!showSubcategories;
-      const desired = show ? this.withSubcategoriesValue : this.withoutSubcategoriesValue;
-      if (desired) {
-        this.dataValue = desired;
-        this.#draw();
-      }
-    } else if (typeof showSubcategories === "boolean") {
-      // If only mode changed, still update
-      this.setSubcategoryMode(showSubcategories);
-    }
   }
 }

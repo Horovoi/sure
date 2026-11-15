@@ -12,6 +12,7 @@ class Category < ApplicationRecord
   # Checked only when the colour changes, so an old row with another colour can still be renamed
   validates :color, format: { with: /\A#[0-9A-Fa-f]{6}\z/ }, if: :will_save_change_to_color?
   validates :name, uniqueness: { scope: :family_id }
+  validates :name, exclusion: { in: ->(_) { [ UNCATEGORIZED_FILTER_VALUE ] } }
   # "Income" from a CSV import or an API caller means income; anything else is rejected,
   # since a category that is neither shows up in no income or expense list.
   normalizes :classification, with: ->(value) { value.to_s.strip.downcase }
@@ -49,6 +50,12 @@ class Category < ApplicationRecord
   UNCATEGORIZED_NAME_KEY = "models.category.uncategorized"
   OTHER_INVESTMENTS_NAME_KEY = "models.category.other_investments"
   INVESTMENT_CONTRIBUTIONS_NAME_KEY = "models.category.investment_contributions"
+
+  # Stable, non-localized transactions filter value of the synthetic Uncategorized
+  # category. A real category cannot take this name, so it never collides with one.
+  UNCATEGORIZED_FILTER_VALUE = "__uncategorized__"
+  # Links and saved filters made before the sentinel used the display name.
+  LEGACY_UNCATEGORIZED_FILTER_VALUE = "Uncategorized"
 
   class Group
     attr_reader :category, :subcategories
@@ -165,6 +172,14 @@ class Category < ApplicationRecord
       I18n.t(UNCATEGORIZED_NAME_KEY)
     end
 
+    # True for a transactions filter value that means "no category": the sentinel, or
+    # the display name that older links and the assistant still send.
+    def uncategorized_filter_value?(value)
+      value.to_s == UNCATEGORIZED_FILTER_VALUE ||
+        value.to_s == LEGACY_UNCATEGORIZED_FILTER_VALUE ||
+        value.to_s == uncategorized_name
+    end
+
     # Helper to get the localized name for other investments
     def other_investments_name
       I18n.t(OTHER_INVESTMENTS_NAME_KEY)
@@ -232,6 +247,12 @@ class Category < ApplicationRecord
   # Predicate: is this the synthetic "Uncategorized" category?
   def uncategorized?
     !persisted? && name == I18n.t(UNCATEGORIZED_NAME_KEY)
+  end
+
+  # The value a transactions filter (q[categories][]) takes for this category: the
+  # name of a real one, the sentinel for the synthetic Uncategorized.
+  def filter_value
+    uncategorized? ? UNCATEGORIZED_FILTER_VALUE : name
   end
 
   # Predicate: is this the synthetic "Other Investments" category?

@@ -38,6 +38,13 @@ class IncomeStatement
     period_total(classification: "income", period: period)
   end
 
+  # Investment contributions count as spending (decision 29), so nothing leaves Cash
+  # Flow as a separate Invested outflow. Kept so the Sankey reads one interface if a
+  # family setting for this ever comes back.
+  def invested_total(period: Period.current_month)
+    Money.new(0, family.currency)
+  end
+
   def median_expense(interval: "month", category: nil, exclude_current_period: false)
     if category.present?
       category_stats(interval: interval, exclude_current_period: exclude_current_period)

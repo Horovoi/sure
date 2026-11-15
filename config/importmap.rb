@@ -8,6 +8,11 @@ pin_all_from "app/javascript/controllers", under: "controllers"
 pin_all_from "app/components", under: "controllers", to: ""
 pin_all_from "app/javascript/services", under: "services", to: "services"
 pin_all_from "app/javascript/utils", under: "utils", to: "utils"
+# pin_all_from skips .mjs, so each .mjs helper gets its own pin (test/config/importmap_test.rb)
+pin "utils/sankey_align", to: "utils/sankey_align.mjs"
+pin "utils/sankey_labels", to: "utils/sankey_labels.mjs"
+pin "utils/sankey_subcategories", to: "utils/sankey_subcategories.mjs"
+pin "utils/sankey_zoom", to: "utils/sankey_zoom.mjs"
 pin "@github/hotkey", to: "@github--hotkey.js" # @3.1.1
 pin "@simonwep/pickr", to: "@simonwep--pickr.js" # @1.9.1
 
