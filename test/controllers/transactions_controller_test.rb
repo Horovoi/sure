@@ -447,4 +447,54 @@ end
     end
     assert_response :unprocessable_entity
   end
+
+  test "a category-only edit skips the sync and asks for recurring detection" do
+    assert_no_enqueued_jobs only: SyncJob do
+      assert_enqueued_with(job: IdentifyRecurringTransactionsJob) do
+        patch transaction_url(@entry), params: {
+          entry: { entryable_attributes: { id: @entry.entryable_id, category_id: categories(:subscriptions).id } }
+        }
+      end
+    end
+
+    assert_equal categories(:subscriptions), @entry.reload.transaction.category
+  end
+
+  test "a notes-only edit neither syncs nor asks for recurring detection" do
+    assert_no_enqueued_jobs only: [ SyncJob, IdentifyRecurringTransactionsJob ] do
+      patch transaction_url(@entry), params: { entry: { notes: "Only a note" } }
+    end
+
+    assert_equal "Only a note", @entry.reload.notes
+  end
+
+  test "an amount edit syncs" do
+    assert_enqueued_with(job: SyncJob) do
+      patch transaction_url(@entry), params: { entry: { amount: @entry.amount + 5 } }
+    end
+  end
+
+  test "a date edit syncs" do
+    assert_enqueued_with(job: SyncJob) do
+      patch transaction_url(@entry), params: { entry: { date: @entry.date - 3.days } }
+    end
+  end
+
+  test "a descriptive edit together with an amount edit still syncs" do
+    assert_enqueued_with(job: SyncJob) do
+      patch transaction_url(@entry), params: { entry: { notes: "With amount", amount: @entry.amount + 1 } }
+    end
+  end
+
+  test "a category-only edit changes the family's entries cache version" do
+    before = Family.find(@entry.account.family_id).entries_cache_version
+
+    travel 1.second do
+      patch transaction_url(@entry), params: {
+        entry: { entryable_attributes: { id: @entry.entryable_id, category_id: categories(:subscriptions).id } }
+      }
+    end
+
+    assert_not_equal before, Family.find(@entry.account.family_id).entries_cache_version
+  end
 end

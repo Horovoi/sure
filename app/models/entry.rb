@@ -1,6 +1,13 @@
 class Entry < ApplicationRecord
   include Monetizable, Enrichable
 
+  # Attributes that only describe an entry. Balance materialization and transfer
+  # matching never read them, so an edit limited to them needs no account sync.
+  # Reports and budgets pick such an edit up through Family#entries_cache_version:
+  # the save bumps the entry's updated_at (a transaction's save touches its entry).
+  DESCRIPTIVE_ATTRIBUTES = %w[name notes updated_at].freeze
+  DESCRIPTIVE_TRANSACTION_ATTRIBUTES = %w[category_id merchant_id updated_at].freeze
+
   monetize :amount
 
   belongs_to :account
@@ -86,6 +93,24 @@ class Entry < ApplicationRecord
     account.sync_later(window_start_date: sync_start_date)
   end
 
+  # Whether the last save changed anything a sync depends on. Call it right after
+  # the save, before a follow-up write (lock_saved_attributes!, mark_user_modified!)
+  # resets saved_changes.
+  def saved_changes_affect_balances?
+    return true if (saved_changes.keys - DESCRIPTIVE_ATTRIBUTES).any?
+
+    descriptive = transaction? ? DESCRIPTIVE_TRANSACTION_ATTRIBUTES : %w[updated_at]
+    (entryable.saved_changes.keys - descriptive).any?
+  end
+
+  # Whether the last save changed what recurring-pattern detection groups by. A sync
+  # runs the detection when it finishes; an edit that skips the sync asks for it here.
+  def saved_changes_affect_recurring_patterns?
+    return true if saved_change_to_name?
+
+    transaction? && (entryable.saved_change_to_category_id? || entryable.saved_change_to_merchant_id?)
+  end
+
   def entryable_name_short
     entryable_type.demodulize.underscore
   end
@@ -139,6 +164,7 @@ class Entry < ApplicationRecord
       # A date change moves the entry in the balance history, so its account must
       # resync from the earlier of the two dates, as a single update does.
       sync_windows = {}
+      recurring_account_ids = Set.new
 
       transaction do
         all.each do |entry|
@@ -148,6 +174,10 @@ class Entry < ApplicationRecord
 
           if attrs.present?
             entry.update! attrs
+
+            # A category or merchant change skips the sync, which is what runs the
+            # recurring-pattern detection; ask for it once per family instead.
+            recurring_account_ids << entry.account_id if entry.saved_changes_affect_recurring_patterns?
 
             if entry.saved_change_to_date?
               start_date = [ entry.date_previously_was, entry.date ].compact.min
@@ -169,6 +199,13 @@ class Entry < ApplicationRecord
 
       sync_windows.each_value do |account, start_date|
         account.sync_later(window_start_date: start_date)
+      end
+
+      # Debounced, so one call per family; a date-change sync above runs it again when it finishes
+      if recurring_account_ids.any?
+        Family.where(id: Account.where(id: recurring_account_ids.to_a).select(:family_id)).find_each do |family|
+          RecurringTransaction.identify_patterns_for(family)
+        end
       end
 
       all.size

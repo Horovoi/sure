@@ -27,6 +27,51 @@ class EntryTest < ActiveSupport::TestCase
     end
   end
 
+  test "saved_changes_affect_balances? is false only for descriptive edits" do
+    category = categories(:subscriptions)
+    merchant = merchants(:netflix)
+
+    {
+      { name: "Renamed" } => false,
+      { notes: "A note" } => false,
+      { entryable_attributes: { id: @entry.entryable_id, category_id: category.id } } => false,
+      { entryable_attributes: { id: @entry.entryable_id, merchant_id: merchant.id } } => false,
+      { amount: @entry.amount + 1 } => true,
+      { date: @entry.date - 1.day } => true,
+      { excluded: !@entry.excluded } => true,
+      { notes: "With amount", amount: @entry.amount + 2 } => true
+    }.each do |attributes, expected|
+      entry = Entry.find(@entry.id)
+      entry.update!(attributes)
+
+      assert_equal expected, entry.saved_changes_affect_balances?, "for #{attributes.inspect}"
+    end
+  end
+
+  test "saved_changes_affect_recurring_patterns? follows name, category and merchant" do
+    entry = Entry.find(@entry.id)
+    entry.update!(notes: "Only notes")
+    assert_not entry.saved_changes_affect_recurring_patterns?
+
+    entry = Entry.find(@entry.id)
+    entry.update!(name: "New name")
+    assert entry.saved_changes_affect_recurring_patterns?
+
+    entry = Entry.find(@entry.id)
+    entry.update!(entryable_attributes: { id: entry.entryable_id, category_id: categories(:subscriptions).id })
+    assert entry.saved_changes_affect_recurring_patterns?
+  end
+
+  test "a category-only save touches the entry" do
+    entry = Entry.find(@entry.id)
+
+    travel 1.second do
+      assert_changes -> { entry.reload.updated_at } do
+        entry.update!(entryable_attributes: { id: entry.entryable_id, category_id: categories(:subscriptions).id })
+      end
+    end
+  end
+
   test "an opening anchor cannot be destroyed on its own, but goes with its account" do
     account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
     anchor = account.entries.create!(date: 1.year.ago.to_date, name: "Opening", amount: 100, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))

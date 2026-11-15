@@ -113,6 +113,29 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     assert_equal 9.days.ago.to_date, second.reload.date
   end
 
+  test "a category-only bulk edit skips the sync and asks for recurring detection once" do
+    account = accounts(:depository)
+    entries = 3.times.map { |i| create_bulk_test_transaction(account, "Category #{i}") }
+
+    assert_no_enqueued_jobs only: SyncJob do
+      assert_enqueued_jobs 1, only: IdentifyRecurringTransactionsJob do
+        post transactions_bulk_update_url, params: {
+          bulk_update: { entry_ids: entries.map(&:id), category_id: categories(:subscriptions).id }
+        }
+      end
+    end
+
+    assert entries.all? { |entry| entry.reload.transaction.category == categories(:subscriptions) }
+  end
+
+  test "a notes-only bulk edit asks for no recurring detection" do
+    entry = entries(:transaction)
+
+    assert_no_enqueued_jobs only: [ SyncJob, IdentifyRecurringTransactionsJob ] do
+      post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], notes: "Bulk note" } }
+    end
+  end
+
   private
     def create_bulk_test_transaction(account, name)
       account.entries.create!(
