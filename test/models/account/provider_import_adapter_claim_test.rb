@@ -171,6 +171,21 @@ class Account::ProviderImportAdapterClaimTest < ActiveSupport::TestCase
     assert_equal 1300, @account.cash_balance
   end
 
+  test "update_balance turns a reconciliation dated today into the current anchor" do
+    item = LunchflowItem.create!(family: @family, name: "Bank", api_key: "key")
+    @account.entries.create!(date: 3.days.ago, amount: 900, currency: "UAH", name: "Old anchor", entryable: Valuation.new(kind: "current_anchor"))
+    reconciliation = @account.entries.create!(date: Date.current, amount: 1000, currency: "UAH", name: "Counted", entryable: Valuation.new(kind: "reconciliation"))
+    Account::ProviderLink.link!(account: @account, provider_account: item.lunchflow_accounts.create!(name: "C", currency: "UAH", account_id: "c"))
+
+    result = Account::ProviderImportAdapter.new(@account.reload).update_balance(balance: 1100, source: "monobank")
+
+    assert result.success?, result.error
+    anchors = @account.reload.valuations.current_anchor.map(&:entry)
+    assert_equal [ [ reconciliation.id, Date.current, 1100 ] ], anchors.map { |anchor| [ anchor.id, anchor.date, anchor.amount ] }
+    assert_equal [ [ 3.days.ago.to_date, 900 ] ], @account.valuations.reconciliation.map { |valuation| [ valuation.entry.date, valuation.entry.amount ] }
+    assert_equal 1100, @account.balance
+  end
+
   private
     def import(external_id, date, amount, **options)
       @adapter.import_transaction(external_id: external_id, amount: amount, currency: "UAH", date: date.to_date,
