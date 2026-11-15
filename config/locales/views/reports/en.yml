@@ -143,6 +143,9 @@ en:
       net_worth_total: Net Worth
       no_assets: No assets
       no_liabilities: No liabilities
+      chart:
+        title: Net worth over time
+        aria_label: Monthly net worth chart. Hover a month to see each account group.
     investment_performance:
       title: Investment Performance
       portfolio_value: Portfolio Value

@@ -41,6 +41,11 @@ class BalanceSheet
     net_worth_series_builder.net_worth_series(period: period)
   end
 
+  # Monthly net worth with each account group's balance, for the Reports chart
+  def net_worth_breakdown_series(period:)
+    NetWorthBreakdownSeriesBuilder.new(family).breakdown_series(period: period)
+  end
+
   def currency
     family.currency
   end

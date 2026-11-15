@@ -2,6 +2,7 @@ require "test_helper"
 
 class ReportsControllerTest < ActionDispatch::IntegrationTest
   include EntriesTestHelper
+  include BalanceTestHelper
 
   setup do
     sign_in @user = users(:family_admin)
@@ -533,6 +534,32 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
       assert_response :ok
 
       assert_select "a[href*='sort_by=amount'][href*='period_offset=-2']"
+    end
+  end
+
+  test "the net worth section shows the monthly chart with the account groups" do
+    travel_to Date.new(2026, 9, 20) do
+      create_balance(account: accounts(:depository), date: Date.new(2026, 7, 1), balance: 4_000)
+      create_balance(account: accounts(:credit_card), date: Date.new(2026, 7, 1), balance: 900)
+
+      get reports_path(period_type: :custom, start_date: "2026-03-20", end_date: "2026-09-20")
+      assert_response :ok
+
+      assert_select "section[data-section-key='net_worth'] [data-testid='net-worth-over-time']" do
+        assert_select "p", text: I18n.t("reports.net_worth.chart.title")
+        assert_select "#reportsNetWorthChart[data-controller='net-worth-chart']" \
+          "[data-net-worth-chart-assets-label-value='#{I18n.t("reports.net_worth.total_assets")}']" \
+          "[data-net-worth-chart-liabilities-label-value='#{I18n.t("reports.net_worth.total_liabilities")}']"
+      end
+
+      data = JSON.parse(css_select("#reportsNetWorthChart").first["data-net-worth-chart-data-value"])
+      assert_equal "1 month", data["interval"]
+      assert_equal 7, data["values"].size
+      assert_equal "2026-09-20", data["values"].last["date"]
+
+      last_groups = data["values"].last["groups"].to_h { |g| [ g["name"], g["value"]["amount"].to_d ] }
+      assert_equal 4_000, last_groups.fetch(I18n.t("accounts.types.depository"))
+      assert_equal 900, last_groups.fetch(I18n.t("accounts.types.credit_card"))
     end
   end
 

@@ -1,6 +1,8 @@
 require "application_system_test_case"
 
 class ReportsTest < ApplicationSystemTestCase
+  include BalanceTestHelper
+
   setup do
     sign_in users(:family_admin)
   end
@@ -75,6 +77,28 @@ class ReportsTest < ApplicationSystemTestCase
     JS
 
     assert_equal %w[ArrowLeft], clicked_hotkeys
+  end
+
+  test "the net worth chart lists each account group in its tooltip" do
+    create_balance(account: accounts(:depository), date: 4.months.ago.to_date, balance: 4_000)
+    create_balance(account: accounts(:credit_card), date: 4.months.ago.to_date, balance: 900)
+
+    visit reports_path(period_type: :custom, start_date: 6.months.ago.to_date.iso8601, end_date: Date.current.iso8601)
+
+    within "[data-testid='net-worth-over-time']" do
+      assert_text I18n.t("reports.net_worth.chart.title")
+      assert_selector "#reportsNetWorthChart svg"
+    end
+
+    # The middle of the chart is three months back, after the balances above
+    find("#reportsNetWorthChart svg").hover
+
+    within "#reportsNetWorthChart [data-testid='net-worth-breakdown']" do
+      assert_text(/#{Regexp.escape(I18n.t("reports.net_worth.total_assets"))}/i)
+      assert_text(/#{Regexp.escape(I18n.t("reports.net_worth.total_liabilities"))}/i)
+      assert_text I18n.t("accounts.types.depository")
+      assert_text I18n.t("accounts.types.credit_card")
+    end
   end
 
   private
