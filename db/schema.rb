@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_16_100003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -979,6 +979,66 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
     t.index ["user_id"], name: "index_mobile_devices_on_user_id"
   end
 
+  create_table "monobank_accounts", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "monobank_item_id", null: false
+    t.string "account_id", null: false
+    t.string "name", null: false
+    t.string "currency", null: false
+    t.string "account_kind", null: false
+    t.string "account_type"
+    t.decimal "current_balance", precision: 19, scale: 4
+    t.decimal "credit_limit", precision: 19, scale: 4
+    t.bigint "raw_balance_minor"
+    t.decimal "goal", precision: 19, scale: 4
+    t.string "last4"
+    t.boolean "ignored", default: false, null: false
+    t.date "sync_start_date"
+    t.jsonb "raw_payload"
+    t.jsonb "raw_transactions_payload", default: [], null: false
+    t.datetime "history_synced_from"
+    t.datetime "statement_synced_through"
+    t.datetime "page_from"
+    t.datetime "page_to"
+    t.string "page_kind"
+    t.jsonb "page_seen_ids", default: [], null: false
+    t.bigint "balance_at_forward_fetch"
+    t.datetime "forward_fetched_at"
+    t.boolean "history_complete", default: false, null: false
+    t.integer "fetch_failures", default: 0, null: false
+    t.datetime "next_fetch_after"
+    t.datetime "opening_anchor_set_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["monobank_item_id", "account_id"], name: "index_monobank_accounts_on_monobank_item_id_and_account_id", unique: true
+    t.index ["monobank_item_id"], name: "index_monobank_accounts_on_monobank_item_id"
+  end
+
+  create_table "monobank_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "name", null: false
+    t.string "status", default: "good", null: false
+    t.boolean "scheduled_for_deletion", default: false, null: false
+    t.boolean "pending_account_setup", default: false, null: false
+    t.date "sync_start_date"
+    t.text "access_token"
+    t.string "client_id"
+    t.jsonb "raw_payload"
+    t.string "institution_name"
+    t.string "institution_domain"
+    t.string "institution_url"
+    t.string "institution_color"
+    t.boolean "include_pending", default: true, null: false
+    t.boolean "apply_mcc_categories", default: true, null: false
+    t.uuid "fetch_chain_token"
+    t.datetime "fetch_chain_heartbeat_at"
+    t.datetime "force_forward_until"
+    t.datetime "last_client_info_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id"], name: "index_monobank_items_on_family_id"
+    t.index ["status"], name: "index_monobank_items_on_status"
+  end
+
   create_table "oauth_access_grants", force: :cascade do |t|
     t.string "resource_owner_id", null: false
     t.bigint "application_id", null: false
@@ -1542,6 +1602,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
   add_foreign_key "merchants", "families"
   add_foreign_key "messages", "chats"
   add_foreign_key "mobile_devices", "users"
+  add_foreign_key "monobank_accounts", "monobank_items"
+  add_foreign_key "monobank_items", "families"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "oidc_identities", "users"
