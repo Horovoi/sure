@@ -129,4 +129,93 @@ class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
     fragment = Nokogiri::HTML.fragment(response.body)
     assert_equal 300, fragment.at_css("input##{dom_id(parent, :budgeted_spending)}")["value"].to_d
   end
+
+  # w3-envelope budget-rollover-moves
+  test "the rollover toggle is saved and reaches the later periods that exist already" do
+    budget = budgets(:one)
+    Budget.find_or_bootstrap(@family, start_date: budget.start_date)
+    later = Budget.find_or_bootstrap(@family, start_date: budget.start_date.next_month)
+    row = budget.reload.budget_categories.find_by!(category: categories(:subscriptions))
+    later_row = later.budget_categories.find_by!(category: categories(:subscriptions))
+
+    patch budget_budget_category_path(budget, row),
+          params: { budget_category: { budgeted_spending: 40, rollover_enabled: "1" } }, as: :turbo_stream
+
+    assert_response :success
+    assert row.reload.rollover_enabled?
+    assert_equal 40, row.budgeted_spending
+    assert later_row.reload.rollover_enabled?
+
+    patch budget_budget_category_path(budget, row),
+          params: { budget_category: { budgeted_spending: 40, rollover_enabled: "0" } }, as: :turbo_stream
+
+    refute row.reload.rollover_enabled?
+    refute later_row.reload.rollover_enabled?
+  end
+
+  test "the budget page stores the carry of an envelope with rollover on" do
+    budget = budgets(:one)
+    previous = Budget.find_or_bootstrap(@family, start_date: budget.start_date.prev_month)
+    previous.update!(budgeted_spending: 1000, expected_income: 0)
+    previous.budget_categories.find_by!(category: categories(:subscriptions)).update!(budgeted_spending: 100, rollover_enabled: true)
+    Budget.find_or_bootstrap(@family, start_date: budget.start_date)
+    row = budget.reload.budget_categories.find_by!(category: categories(:subscriptions))
+    row.update!(rollover_enabled: true, budgeted_spending: 50)
+    spent = previous.budget_category_actual_spending(previous.budget_categories.find_by!(category: categories(:subscriptions)))
+
+    get budget_path(budget)
+
+    assert_response :ok
+    assert_equal [ 100 - spent, 0 ].max, row.reload[:rolled_over_amount]
+  end
+
+  test "moving money changes both envelopes and streams their rows" do
+    budget, from, to = move_test_rows
+
+    post move_budget_budget_categories_path(budget),
+         params: { from_id: from.id, to_id: to.id, budget_category_move: { amount: 30 } }, as: :turbo_stream
+
+    assert_response :success
+    assert_equal 70, from.reload.budgeted_spending
+    assert_equal 80, to.reload.budgeted_spending
+    assert_includes response.body, dom_id(from, :form)
+    assert_includes response.body, dom_id(to, :form)
+    assert_includes response.body, I18n.t("budget_categories.move.success")
+  end
+
+  test "a refused move changes nothing and shows the reason" do
+    budget, from, to = move_test_rows
+
+    post move_budget_budget_categories_path(budget),
+         params: { from_id: from.id, to_id: to.id, budget_category_move: { amount: 500 } }, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+    assert_includes response.body, I18n.t("budget_categories.move.errors.insufficient_funds")
+    assert_equal 100, from.reload.budgeted_spending
+    assert_equal 50, to.reload.budgeted_spending
+  end
+
+  test "a move only reaches the categories of the budget in the URL" do
+    budget, from, = move_test_rows
+    other = Budget.find_or_bootstrap(@family, start_date: budget.start_date.prev_month)
+    other_row = other.budget_categories.first
+
+    post move_budget_budget_categories_path(budget),
+         params: { from_id: from.id, to_id: other_row.id, budget_category_move: { amount: 10 } }, as: :turbo_stream
+
+    assert_response :not_found
+    assert_equal 100, from.reload.budgeted_spending
+  end
+
+  private
+    def move_test_rows
+      budget = budgets(:one)
+      Budget.find_or_bootstrap(@family, start_date: budget.start_date)
+      budget.reload
+      from = budget.budget_categories.find_by!(category: categories(:food_and_drink))
+      to = budget.budget_categories.find_by!(category: categories(:subscriptions))
+      from.update!(budgeted_spending: 100)
+      to.update!(budgeted_spending: 50)
+      [ budget, from, to ]
+    end
 end

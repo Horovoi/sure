@@ -28,6 +28,14 @@ class Assistant::Function::GetBudget < Assistant::Function
         initialized: false means no total is set yet. A subcategory with
         inherits_parent_budget: true has no amount of its own and spends from
         its parent's amount. Change amounts with update_budget.
+
+        rollover_enabled: true means the category keeps its unspent money from
+        one period to the next; rolled_over_amount is what it carried in from
+        the period before (never below 0: an overspend carries nothing). It is
+        added to what the category can spend (available counts it), not to
+        budgeted. A parent's rolled_over_amount includes its subcategories'.
+        totals.rolled_over is the carry of all categories. The carry is as of
+        the last visit of the budget page.
       INSTRUCTIONS
     end
   end
@@ -70,7 +78,8 @@ class Assistant::Function::GetBudget < Assistant::Function
           available_to_allocate: budget_amount(budget.available_to_allocate),
           actual_spending: budget_amount(budget.actual_spending),
           available_to_spend: budget_amount(budget.available_to_spend),
-          percent_spent: budget_percent(budget.initialized? ? budget.percent_of_budget_spent : 0)
+          percent_spent: budget_percent(budget.initialized? ? budget.percent_of_budget_spent : 0),
+          rolled_over: budget_amount(budget.total_rolled_over)
         },
         income: {
           expected_income: budget.expected_income && budget_amount(budget.expected_income),
@@ -99,7 +108,9 @@ class Assistant::Function::GetBudget < Assistant::Function
         actual: budget_amount(budget_category.actual_spending),
         available: budget_amount(budget_category.available_to_spend),
         percent_spent: budget_percent(budget_category.percent_of_budget_spent || 0),
-        status: category_status(budget_category)
+        status: category_status(budget_category),
+        rollover_enabled: budget_category.rollover_enabled?,
+        rolled_over_amount: budget_amount(budget_category.display_rolled_over_amount)
       }
     end
 

@@ -77,6 +77,11 @@
               <% end %>
             </span>
           </div>
+          <% if budget_category.rolled_over? %>
+            <div class="whitespace-nowrap w-full sm:w-auto text-xs text-secondary" data-testid="budget-category-rolled-over">
+              <%= t("budget_categories.budget_category.rolled_over", amount: format_money(budget_category.display_rolled_over_amount_money)) %>
+            </div>
+          <% end %>
           <% if (daily_info = budget_category.suggested_daily_spending).present? %>
             <div class="w-full sm:w-auto text-xs text-subdued">
               <%= t("reports.budget_performance.suggested_daily",

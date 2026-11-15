@@ -180,6 +180,11 @@ Rails.application.routes.draw do
     post :copy_previous, on: :member
 
     resources :budget_categories, only: %i[index show update]
+
+    # w3-envelope: move money between envelopes of one budget
+    resources :budget_categories, only: [] do
+      post :move, on: :collection
+    end
   end
 
   # --- Savings goals (w2-goals): goals, their lifecycle, spending and pledges ---

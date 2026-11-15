@@ -128,6 +128,25 @@ class Assistant::Function::GetBudgetTest < ActiveSupport::TestCase
     end
   end
 
+  # w3-envelope budget-rollover-moves
+  test "returns each category's rollover choice and carried amount" do
+    travel_to Date.new(2026, 11, 15) do
+      budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+      budget.update!(budgeted_spending: 1000, expected_income: 0)
+      budget.budget_categories.find_by!(category: @groceries).update_columns(budgeted_spending: 400, rollover_enabled: true, rolled_over_amount: 60)
+
+      result = @tool.call({})
+      groceries = result[:categories].find { |row| row[:category_id] == @groceries.id }
+
+      assert groceries[:rollover_enabled]
+      assert_equal 60.0, groceries[:rolled_over_amount]
+      assert_equal 460.0, groceries[:available]
+      assert_equal 400.0, groceries[:budgeted]
+      assert_equal 60.0, result[:totals][:rolled_over]
+      assert_equal false, groceries[:subcategories].first[:rollover_enabled]
+    end
+  end
+
   private
     def groceries_row(result)
       result[:categories].find { |category| category[:category_id] == @groceries.id }

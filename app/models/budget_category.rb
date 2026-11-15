@@ -7,7 +7,8 @@ class BudgetCategory < ApplicationRecord
   validates :budget_id, uniqueness: { scope: :category_id }
   validates :budgeted_spending, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
 
-  monetize :budgeted_spending, :available_to_spend, :avg_monthly_expense, :median_monthly_expense, :actual_spending
+  monetize :budgeted_spending, :available_to_spend, :avg_monthly_expense, :median_monthly_expense, :actual_spending,
+           :rolled_over_amount
 
   class Group
     attr_reader :budget_category, :budget_subcategories
@@ -39,6 +40,17 @@ class BudgetCategory < ApplicationRecord
     end
   end
 
+  # Raised by move_allocation! for a move the budget cannot represent. Carries an i18n
+  # key, so the controller shows the reason in the UI language.
+  class InvalidMove < StandardError
+    attr_reader :reason
+
+    def initialize(reason)
+      @reason = reason
+      super(I18n.t("budget_categories.move.errors.#{reason}"))
+    end
+  end
+
   class << self
     def uncategorized
       new(
@@ -46,6 +58,62 @@ class BudgetCategory < ApplicationRecord
         category: nil,
       )
     end
+
+    # Moves an amount of allocation from one envelope to another of the same budget in
+    # one transaction (upstream 3d6a8d8b6). Both sides change through
+    # update_budgeted_spending!, so parents stay the sum of their subcategories plus
+    # their reserve. No history is kept: only the resulting amounts.
+    #
+    # The caller recomputes the rollover chain after this returns, never inside it: the
+    # calculator takes an advisory lock, and taking it while these row locks are held
+    # would invert the order every other caller uses and could deadlock two moves.
+    def move_allocation!(from:, to:, amount:)
+      amount = amount.to_d
+      validate_move!(from: from, to: to, amount: amount)
+
+      transaction do
+        # update_budgeted_spending! locks its row and, for a subcategory, the parent.
+        # Two moves in opposite directions would each hold what the other wants, so
+        # every row this touches is locked first, by ascending id.
+        where(id: lock_ids_for_move(from, to)).order(:id).lock.to_a
+
+        from.reload
+        to.reload
+
+        # Checked again under the lock: the amount read before it may be stale
+        raise InvalidMove.new(:insufficient_funds) if amount > from.movable_amount
+
+        from.update_budgeted_spending!((from[:budgeted_spending] || 0) - amount)
+        to.update_budgeted_spending!((to[:budgeted_spending] || 0) + amount)
+      end
+
+      [ from.reload, to.reload ]
+    end
+
+    private
+      def validate_move!(from:, to:, amount:)
+        raise InvalidMove.new(:non_positive_amount) unless amount.positive?
+        # Before the budget check: the synthetic uncategorized row has no budget row
+        raise InvalidMove.new(:uncategorized) if [ from, to ].any? { |bc| bc[:category_id].nil? || !bc.persisted? }
+        raise InvalidMove.new(:different_budgets) unless from.budget_id == to.budget_id
+        raise InvalidMove.new(:same_category) if from.id == to.id
+        raise InvalidMove.new(:parent_child) if direct_lineage?(from, to)
+        raise InvalidMove.new(:insufficient_funds) if amount > from.movable_amount
+      end
+
+      # A parent is rebuilt from its subcategories plus its reserve, so money moved
+      # between a parent and its own subcategory would be derived away again. Refused.
+      def direct_lineage?(from, to)
+        from[:category_id] == to.category.parent_id || to[:category_id] == from.category.parent_id
+      end
+
+      # from, to, and the parents update_budgeted_spending! will touch
+      def lock_ids_for_move(from, to)
+        parent_category_ids = [ from, to ].filter_map { |bc| bc.category.parent_id }
+        parent_ids = parent_category_ids.any? ? where(budget_id: from.budget_id, category_id: parent_category_ids).pluck(:id) : []
+
+        ([ from.id, to.id ] + parent_ids).uniq
+      end
   end
 
   def initialized?
@@ -91,6 +159,66 @@ class BudgetCategory < ApplicationRecord
     budget.budget_categories.reset
     @parent_budget_category = nil
     self
+  end
+
+  # =============================================================================
+  # Rollover (w3-envelope, see Budget::RolloverCalculator)
+  # =============================================================================
+
+  # Stored by Budget::RolloverCalculator, never derived on read. Read through the toggle
+  # (and 0 for a subcategory sharing its parent's amount), so a stale amount left by a
+  # toggle switched off never counts.
+  def rolled_over_amount
+    return 0 unless rollover_enabled?
+    return 0 if inherits_parent_budget?
+
+    super || 0
+  end
+
+  def rolled_over?
+    display_rolled_over_amount.positive?
+  end
+
+  # The carry a card shows: a shared subcategory shows its parent's, a parent adds the
+  # carry of its ring-fenced subcategories (the parent's own carry is net of theirs), so
+  # its budget, carry, spending and amount left reconcile.
+  def display_rolled_over_amount
+    return parent_budget_category&.rolled_over_amount || 0 if inherits_parent_budget?
+    return rolled_over_amount if subcategory?
+
+    rolled_over_amount + ring_fenced_subcategories_rollover
+  end
+
+  def display_rolled_over_amount_money
+    Money.new(display_rolled_over_amount, budget.currency)
+  end
+
+  # Rollover is a standing choice about the envelope: the later periods that exist
+  # already take the choice just made. Periods created later inherit it from the last
+  # set-up budget (Budget#inherited_rollover_flags).
+  def propagate_rollover_choice_forward!
+    BudgetCategory
+      .joins(:budget)
+      .where(category_id: category_id)
+      .where(budgets: { family_id: budget.family_id })
+      .where("budgets.start_date > ?", budget.start_date)
+      .where.not(rollover_enabled: rollover_enabled)
+      .update_all(rollover_enabled: rollover_enabled, updated_at: Time.current)
+  end
+
+  # What a move can send away from this row. A subcategory, its whole amount. A parent,
+  # only its reserve: its amount already holds its subcategories' amounts, and moving
+  # those would leave it below their sum (the next subcategory edit would put the money
+  # back).
+  def movable_amount
+    gross = self[:budgeted_spending] || 0
+    return gross if subcategory?
+
+    [ gross - subcategories.sum { |child| child[:budgeted_spending] || 0 }, 0 ].max
+  end
+
+  def movable_amount_money
+    Money.new(movable_amount, budget.currency)
   end
 
   def avg_monthly_expense
@@ -144,8 +272,11 @@ class BudgetCategory < ApplicationRecord
       return 0 unless parent
 
       [ parent.shared_pool_budget - parent.shared_pool_spending, -actual_spending ].max
+    elsif subcategory?
+      (self[:budgeted_spending] || 0) + rolled_over_amount - actual_spending
     else
-      (self[:budgeted_spending] || 0) - actual_spending
+      # The ring-fenced subcategories' amounts are in the parent's, their carry is not
+      (self[:budgeted_spending] || 0) + rolled_over_amount + ring_fenced_subcategories_rollover - actual_spending
     end
   end
 
@@ -160,7 +291,9 @@ class BudgetCategory < ApplicationRecord
       return 100 if shared_budget == 0 && actual_spending > 0
       (actual_spending.to_f / shared_budget) * 100
     else
-      budget_amount = self[:budgeted_spending] || 0
+      # Everything there is to spend, the carry included: a category funded only by
+      # its carry has money to spend
+      budget_amount = (self[:budgeted_spending] || 0) + display_rolled_over_amount
       return 0 if budget_amount == 0 && actual_spending == 0
       return 0 if budget_amount > 0 && actual_spending == 0
       return 100 if budget_amount == 0 && actual_spending > 0
@@ -169,9 +302,10 @@ class BudgetCategory < ApplicationRecord
   end
 
   # The part of a parent's amount that its sharing subcategories (and the parent's
-  # own transactions) spend from: the amount less the ring-fenced subcategories'.
+  # own transactions) spend from: the amount and its own carry, less the ring-fenced
+  # subcategories' amounts.
   def shared_pool_budget
-    (self[:budgeted_spending] || 0) - ring_fenced_subcategories.sum { |child| child[:budgeted_spending] || 0 }
+    (self[:budgeted_spending] || 0) + rolled_over_amount - ring_fenced_subcategories.sum { |child| child[:budgeted_spending] || 0 }
   end
 
   # A parent's spending that does not come from a ring-fenced subcategory.
@@ -181,6 +315,10 @@ class BudgetCategory < ApplicationRecord
 
   def ring_fenced_subcategories
     subcategories.reject(&:inherits_parent_budget?)
+  end
+
+  def ring_fenced_subcategories_rollover
+    ring_fenced_subcategories.sum(&:rolled_over_amount)
   end
 
   def bar_width_percent
@@ -195,8 +333,10 @@ class BudgetCategory < ApplicationRecord
   # Budget page filter (All / Over budget / On track)
   # =============================================================================
 
+  # Counts the carry too: a category funded only by its carry is budgeted, not
+  # unbudgeted spending.
   def budgeted?
-    display_budgeted_spending.to_d.positive?
+    (display_budgeted_spending.to_d + display_rolled_over_amount.to_d).positive?
   end
 
   def unbudgeted_with_spending?

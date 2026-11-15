@@ -4,8 +4,8 @@
 
 <%= turbo_stream.replace dom_id(@budget, :confirm_button), partial: "budget_categories/confirm_button", locals: { budget: @budget } %>
 
-<%# A parent set below its subcategories was raised to their sum: show the stored amount %>
-<% if @budget_category_adjusted %>
+<%# The stored amount differs from the typed one, or the move button comes or goes %>
+<% if @refresh_budget_category_row %>
   <%= turbo_stream.replace dom_id(@budget_category, :form), partial: "budget_categories/budget_category_form", locals: { budget_category: @budget_category } %>
 <% end %>
 
