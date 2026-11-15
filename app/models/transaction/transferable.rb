@@ -2,8 +2,11 @@ module Transaction::Transferable
   extend ActiveSupport::Concern
 
   included do
-    has_one :transfer_as_inflow, class_name: "Transfer", foreign_key: "inflow_transaction_id", dependent: :destroy
-    has_one :transfer_as_outflow, class_name: "Transfer", foreign_key: "outflow_transaction_id", dependent: :destroy
+    # inverse_of is load-bearing: Transfer#categorizable? reads both legs' accounts on every
+    # transfer row, and the inverse makes the row's own leg the already-loaded transaction
+    # (ROW_ASSOCIATIONS preloads only the counterpart).
+    has_one :transfer_as_inflow, class_name: "Transfer", foreign_key: "inflow_transaction_id", inverse_of: :inflow_transaction, dependent: :destroy
+    has_one :transfer_as_outflow, class_name: "Transfer", foreign_key: "outflow_transaction_id", inverse_of: :outflow_transaction, dependent: :destroy
 
     # We keep track of rejected transfers to avoid auto-matching them again
     has_one :rejected_transfer_as_inflow, class_name: "RejectedTransfer", foreign_key: "inflow_transaction_id", dependent: :destroy
@@ -12,6 +15,37 @@ module Transaction::Transferable
 
   def transfer
     transfer_as_inflow || transfer_as_outflow
+  end
+
+  # --- Category ownership (w2-transfers transfer-form-fixes) ---
+
+  # Whether the user picks this transaction's category. A transaction outside a transfer,
+  # or a leg of a pending match (it keeps its own kind and still counts as income or
+  # spending), always can. In a confirmed transfer the category belongs to the outflow leg,
+  # the one budgets count, and only when the transfer is categorizable (a loan payment or an
+  # investment contribution); the other transfers show the Transfer or Payment badge.
+  def category_editable?
+    return false if category_set_on_transfer_outflow?
+
+    matched = transfer
+    return true if matched.nil? || !matched.confirmed?
+
+    matched.categorizable? && matched.outflow_transaction_id == id
+  end
+
+  # The inflow leg of a confirmed, categorizable transfer: it shows the outflow's category
+  # read-only. A category picked here would look saved but never reach a budget. Decided by
+  # the Transfer record, not this leg's kind.
+  def category_set_on_transfer_outflow?
+    matched = transfer_as_inflow
+    matched.present? && matched.confirmed? && matched.categorizable?
+  end
+
+  # Whether a non-editable leg shows the Payment badge instead of Transfer. The transfer
+  # decides when there is one; a leg without one falls back to its own kind.
+  def payment?
+    matched = transfer
+    matched ? matched.payment? : kind == "cc_payment"
   end
 
   def transfer_match_candidates(date_window: 30)

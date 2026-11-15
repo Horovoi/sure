@@ -2,10 +2,16 @@ class TransfersController < ApplicationController
   include StreamExtensions
 
   before_action :set_transfer, only: %i[show destroy update]
+  before_action :set_form_options, only: %i[new create]
 
+  # The form opens with what the user typed on another tab (draft[...], see
+  # transaction_type_tabs_controller.js) and the accounts it was opened for.
   def new
     @transfer = Transfer.new
-    @from_account_id = params[:from_account_id]
+    @from_account_id = params[:from_account_id].presence
+    @to_account_id = params[:to_account_id].presence
+    @amount = UserDecimal.parse(draft_params[:amount])&.abs
+    @date = parse_form_date(draft_params[:date])
   end
 
   def show
@@ -18,7 +24,8 @@ class TransfersController < ApplicationController
   end
 
   def create
-    date = parse_transfer_date
+    keep_entered_values
+    date = @date
 
     if date.nil?
       # Without a date the creator cannot convert the amount or compare the legs' dates,
@@ -29,12 +36,22 @@ class TransfersController < ApplicationController
       return
     end
 
+    # The account pickers are design-system listboxes, which the browser does not check
+    # for `required`: a missing account is a form error, not a 404 from the creator.
+    unless Current.family.accounts.exists?(id: @from_account_id) && Current.family.accounts.exists?(id: @to_account_id)
+      @transfer = Transfer.new
+      @transfer.errors.add(:base, :accounts_required)
+      render :new, status: :unprocessable_entity
+      return
+    end
+
     @transfer = Transfer::Creator.new(
       family: Current.family,
-      source_account_id: transfer_params[:from_account_id],
-      destination_account_id: transfer_params[:to_account_id],
+      source_account_id: @from_account_id,
+      destination_account_id: @to_account_id,
       date: date,
-      amount: transfer_params[:amount].to_d,
+      # A blank or unreadable amount is 0, which the creator refuses with a form error
+      amount: @amount || 0,
       exchange_rate: transfer_params[:exchange_rate].presence,
       destination_amount: transfer_params[:destination_amount].presence,
       source_fee: transfer_params[:source_fee].presence,
@@ -130,9 +147,28 @@ class TransfersController < ApplicationController
       params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate, :destination_amount, :source_fee, :destination_fee ])
     end
 
+    # w2-transfers transfer-form-fixes: the form's account pickers (with their logos) and
+    # what it shows again after an error
+    def set_form_options
+      @accounts = Current.family.accounts.visible.alphabetically.includes(:account_providers, :plaid_account).to_a
+    end
+
+    # A form shown again after an error keeps the accounts, amount and date the user entered
+    def keep_entered_values
+      @from_account_id = transfer_params[:from_account_id].presence
+      @to_account_id = transfer_params[:to_account_id].presence
+      @amount = UserDecimal.parse(transfer_params[:amount])&.abs
+      @date = parse_form_date(transfer_params[:date])
+    end
+
+    # The values another tab of the new-entry modal carried over (transaction_type_tabs_controller.js)
+    def draft_params
+      draft = params[:draft]
+      draft.is_a?(ActionController::Parameters) ? draft.permit(:amount, :date) : {}
+    end
+
     # Parsing raises on a bad value, which would be a 500; a blank or bad date is nil.
-    def parse_transfer_date
-      value = transfer_params[:date]
+    def parse_form_date(value)
       return if value.blank?
 
       Date.iso8601(value.to_s)
@@ -155,7 +191,8 @@ class TransfersController < ApplicationController
     # Only the fields the request sent: the row's "Confirm" button sends just
     # the status, and must not wipe the category and notes.
     def update_transfer_details
-      if transfer_update_params.key?(:category_id)
+      # Only a categorizable transfer (loan payment, investment contribution) has a category
+      if transfer_update_params.key?(:category_id) && @transfer.categorizable?
         @transfer.outflow_transaction.update!(category_id: transfer_update_params[:category_id])
         @transfer.outflow_transaction.record_category_usage!
       end

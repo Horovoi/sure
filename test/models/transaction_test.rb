@@ -178,4 +178,71 @@ class TransactionTest < ActiveSupport::TestCase
     assert foreign.transaction.custom_exchange_rate_applies?
     assert_not local.transaction.custom_exchange_rate_applies?
   end
+
+  # --- Category ownership (w2-transfers transfer-form-fixes) ---
+
+  test "a confirmed investment contribution's category belongs to its outflow leg" do
+    outflow, inflow = transfer_legs(from: accounts(:depository), to: accounts(:investment), status: "confirmed")
+
+    assert outflow.reload.investment_contribution?
+    assert outflow.category_editable?
+    assert_not outflow.category_set_on_transfer_outflow?
+    assert_not inflow.reload.category_editable?
+    assert inflow.category_set_on_transfer_outflow?
+  end
+
+  test "a confirmed loan payment's category belongs to its outflow leg" do
+    outflow, inflow = transfer_legs(from: accounts(:depository), to: accounts(:loan), status: "confirmed")
+
+    assert outflow.reload.category_editable?
+    assert_not inflow.reload.category_editable?
+    assert inflow.category_set_on_transfer_outflow?
+  end
+
+  test "a plain confirmed transfer takes no category on either leg" do
+    outflow, inflow = transfer_legs(from: accounts(:depository), to: accounts(:connected), status: "confirmed")
+
+    assert_not outflow.reload.category_editable?
+    assert_not inflow.reload.category_editable?
+    assert_not inflow.category_set_on_transfer_outflow?
+  end
+
+  test "both legs of a pending match keep their own category" do
+    outflow, inflow = transfer_legs(from: accounts(:depository), to: accounts(:investment), status: "pending")
+
+    assert outflow.reload.category_editable?
+    assert inflow.reload.category_editable?
+    assert_not inflow.category_set_on_transfer_outflow?
+  end
+
+  test "a matched inflow leg stays read-only after its kind is set to standard" do
+    _outflow, inflow = transfer_legs(from: accounts(:depository), to: accounts(:investment), status: "confirmed")
+    inflow.update_columns(kind: "standard")
+
+    assert inflow.reload.category_set_on_transfer_outflow?
+    assert_not inflow.category_editable?
+  end
+
+  test "a transfer kind without a transfer stays editable and payment? falls back to the kind" do
+    assert Transaction.new(kind: "funds_movement").category_editable?
+    assert Transaction.new(kind: "cc_payment").payment?
+    assert_not Transaction.new(kind: "funds_movement").payment?
+  end
+
+  test "payment? follows the transfer over a stale leg kind" do
+    outflow, _inflow = transfer_legs(from: accounts(:depository), to: accounts(:connected), status: "confirmed")
+    outflow.update_columns(kind: "cc_payment")
+
+    assert_not outflow.reload.payment?
+  end
+
+  private
+    def transfer_legs(from:, to:, status:)
+      outflow = Transaction.new
+      from.entries.create!(name: "Out", date: Date.current, amount: 500, currency: from.currency, entryable: outflow)
+      inflow = Transaction.new
+      to.entries.create!(name: "In", date: Date.current, amount: -500, currency: to.currency, entryable: inflow)
+      Transfer.create!(inflow_transaction: inflow, outflow_transaction: outflow, status: status)
+      [ outflow, inflow ]
+    end
 end

@@ -911,4 +911,66 @@ end
     assert_select "p", text: "Inflow"
     assert_select "p", text: "Outflow"
   end
+
+  # --- w2-transfers transfer-form-fixes ---
+
+  test "new takes the values another tab carried over" do
+    tag = tags(:one)
+    date = 4.days.ago.to_date
+
+    get new_transaction_url(nature: "inflow", draft: {
+      name: "Carried", amount: "12,5", date: date.iso8601, account_id: accounts(:depository).id, tag_ids: [ tag.id ]
+    })
+
+    assert_response :success
+    assert_select "input[name='entry[name]'][value='Carried']"
+    assert_select "input[name='entry[amount]'][value='12.50']"
+    assert_select "input[name='entry[date]'][value='#{date.iso8601}']"
+    assert_select "select[name='entry[account_id]'] option[selected][value='#{accounts(:depository).id}']"
+    assert_select "input[type=hidden][name='entry[entryable_attributes][tag_ids][]'][value='#{tag.id}']"
+  end
+
+  test "update drops a category sent for a confirmed transfer's inflow leg" do
+    outflow = Transaction.new
+    accounts(:depository).entries.create!(name: "Contribution", amount: 500, currency: "USD", date: Date.current, entryable: outflow)
+    inflow = Transaction.new
+    inflow_entry = accounts(:investment).entries.create!(name: "Contribution", amount: -500, currency: "USD", date: Date.current, entryable: inflow)
+    Transfer.create!(inflow_transaction: inflow, outflow_transaction: outflow, status: "confirmed")
+
+    patch transaction_url(inflow_entry), params: {
+      entry: { notes: "Monthly savings", entryable_type: "Transaction", entryable_attributes: { id: inflow.id, category_id: categories(:food_and_drink).id } }
+    }
+
+    assert_nil inflow.reload.category_id
+    assert_equal "Monthly savings", inflow_entry.reload.notes
+  end
+
+  test "the drawer shows a confirmed transfer's inflow leg with the outflow's category, disabled" do
+    outflow = Transaction.new(category: categories(:food_and_drink))
+    accounts(:depository).entries.create!(name: "Contribution", amount: 500, currency: "USD", date: Date.current, entryable: outflow)
+    inflow = Transaction.new
+    inflow_entry = accounts(:investment).entries.create!(name: "Contribution", amount: -500, currency: "USD", date: Date.current, entryable: inflow)
+    Transfer.create!(inflow_transaction: inflow, outflow_transaction: outflow, status: "confirmed")
+
+    get transaction_url(inflow_entry), headers: { "Turbo-Frame" => "drawer" }
+
+    assert_response :success
+    assert_select "button[disabled]", text: /#{categories(:food_and_drink).name}/
+    assert_select "input[type=hidden][name='entry[entryable_attributes][category_id]'][disabled]"
+    assert_includes response.body, I18n.t("transactions.show.category_set_on_outflow")
+  end
+
+  test "an investment contribution's outflow row has a category menu and its inflow row a read-only badge" do
+    outflow = Transaction.new(category: categories(:food_and_drink))
+    accounts(:depository).entries.create!(name: "Contribution out", amount: 500, currency: "USD", date: Date.current, entryable: outflow)
+    inflow = Transaction.new
+    accounts(:investment).entries.create!(name: "Contribution in", amount: -500, currency: "USD", date: Date.current, entryable: inflow)
+    Transfer.create!(inflow_transaction: inflow, outflow_transaction: outflow, status: "confirmed")
+
+    get transactions_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(outflow, :category_menu_desktop)} turbo-frame#category_dropdown"
+    assert_select "##{ActionView::RecordIdentifier.dom_id(inflow, :category_menu_desktop)} turbo-frame#category_dropdown", count: 0
+  end
 end

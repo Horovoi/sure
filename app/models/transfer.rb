@@ -15,8 +15,11 @@
 class Transfer < ApplicationRecord
   include AASM
 
-  belongs_to :inflow_transaction, class_name: "Transaction"
-  belongs_to :outflow_transaction, class_name: "Transaction"
+  # inverse_of (both sides, see Transaction::Transferable): a row asks its transfer
+  # whether it is categorizable, which reads both legs' accounts. With the inverse the
+  # row's own leg is the loaded transaction, so only the counterpart needs preloading.
+  belongs_to :inflow_transaction, class_name: "Transaction", inverse_of: :transfer_as_inflow
+  belongs_to :outflow_transaction, class_name: "Transaction", inverse_of: :transfer_as_outflow
 
   # w2-transfers transfer-fees (decision 21): what the bank charged for the transfer, as
   # ordinary expenses in the 'Fees' category on the source or destination account. The
@@ -37,6 +40,11 @@ class Transfer < ApplicationRecord
 
   # The kinds a leg takes from a transfer (apply_transaction_kinds)
   LEG_KINDS = (Transaction::TRANSFER_KINDS + %w[investment_contribution]).freeze
+
+  # w2-transfers transfer-form-fixes: outflow kinds that budgets count as spending (a loan
+  # payment, and an investment contribution under decision 29), so the transfer takes a
+  # category. It lives on the outflow leg, the one budgets count.
+  CATEGORIZABLE_KINDS = %w[loan_payment investment_contribution].freeze
 
   validates :inflow_transaction_id, uniqueness: true
   validates :outflow_transaction_id, uniqueness: true
@@ -216,8 +224,12 @@ class Transfer < ApplicationRecord
     "transfer"
   end
 
+  # Decided by the two accounts rather than the outflow's stored kind, so a pending match
+  # (whose legs keep their own kinds until confirmed) answers the same as a confirmed one.
   def categorizable?
-    to_account&.accountable_type == "Loan"
+    return false unless from_account && to_account
+
+    self.class.outflow_kind_for(source_account: from_account, destination_account: to_account).in?(CATEGORIZABLE_KINDS)
   end
 
   private

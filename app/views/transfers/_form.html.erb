@@ -1,4 +1,6 @@
-<% accounts = Current.family.accounts.visible.alphabetically.to_a %>
+<%# @accounts, and the values entered so far (@from_account_id, @to_account_id, @amount, @date),
+    come from TransfersController#new and #create %>
+<% accounts = @accounts %>
 <%= styled_form_with model: transfer, class: "space-y-4", data: {
       turbo_frame: "_top",
       controller: "exchange-rate-form",
@@ -17,16 +19,20 @@
   </section>
 
   <section class="space-y-2">
-    <%= f.collection_select :from_account_id, accounts, :id, :name, { prompt: t(".select_account"), label: t(".from"), selected: @from_account_id },
-          required: true, data: { exchange_rate_form_target: "fromAccount", action: "change->exchange-rate-form#refresh" } %>
-    <%= f.collection_select :to_account_id, accounts, :id, :name, { prompt: t(".select_account"), label: t(".to") },
-          required: true, data: { exchange_rate_form_target: "toAccount", action: "change->exchange-rate-form#refresh" } %>
+    <%# w2-transfers transfer-form-fixes: design-system pickers with each account's logo
+        (a lettermark for a manual account). The server checks that both are chosen. %>
+    <%= f.collection_select :from_account_id, accounts, :id, :name, { prompt: t(".select_account"), label: t(".from"), selected: @from_account_id, variant: :logo },
+          { required: true, data: { exchange_rate_form_target: "fromAccount", action: "change->exchange-rate-form#refresh" } } %>
+    <%= f.collection_select :to_account_id, accounts, :id, :name, { prompt: t(".select_account"), label: t(".to"), selected: @to_account_id, variant: :logo },
+          { required: true, data: { exchange_rate_form_target: "toAccount", action: "change->exchange-rate-form#refresh" } } %>
     <%# The amount is in the source account's currency, which the transfer takes
         from it, so no currency picker or symbol is shown. step "any" keeps a
-        crypto amount's eight decimals without padding every amount to them. %>
+        crypto amount's eight decimals without padding every amount to them; an
+        amount shown again keeps the decimals it was entered with. %>
     <%= f.money_field :amount, label: t(".amount"), required: true, min: 0, hide_currency: true, hide_symbol: true, step: "any",
+          value: @amount, precision: (@amount.scale.clamp(2, 8) if @amount),
           amount_data: { exchange_rate_form_target: "amount", action: "input->exchange-rate-form#recalculate" } %>
-    <%= f.date_field :date, value: transfer.inflow_transaction&.entry&.date || Date.current, label: t(".date"), required: true, max: Date.current,
+    <%= f.date_field :date, value: @date || transfer.inflow_transaction&.entry&.date || Date.current, label: t(".date"), required: true, max: Date.current,
           data: { exchange_rate_form_target: "date", action: "change->exchange-rate-form#refresh" } %>
 
     <%# w2-transfers custom-exchange-rate: shown only when the two accounts differ in currency %>

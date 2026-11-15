@@ -6,6 +6,8 @@ en:
         transfer:
           attributes:
             base:
+              accounts_required: Choose the account the money leaves and the account
+                it goes to
               inflow_cannot_be_in_multiple_transfers: Inflow transaction cannot be
                 part of multiple transfers
               must_be_from_different_accounts: Transfer must have different accounts

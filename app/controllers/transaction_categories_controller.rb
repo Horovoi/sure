@@ -4,6 +4,10 @@ class TransactionCategoriesController < ApplicationController
 
   def update
     @entry = Current.family.entries.transactions.find(params[:transaction_id])
+    # w2-transfers transfer-form-fixes: a confirmed transfer's category belongs to its
+    # outflow leg (Transaction#category_editable?); the other legs show it read-only.
+    return head(:unprocessable_entity) unless @entry.transaction.category_editable?
+
     @entry.update!(entry_params)
 
     transaction = @entry.transaction

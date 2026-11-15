@@ -79,7 +79,7 @@
       <%= styled_form_with model: @transfer,
               data: { controller: "auto-submit-form" }, class: "space-y-2" do |f| %>
         <% if @transfer.categorizable? %>
-          <%# A loan payment is spending, so its picker lists (and creates) expense categories. %>
+          <%# A loan payment or an investment contribution is spending, so its picker lists (and creates) expense categories. %>
           <%= render DS::CategorySelect.new(
                 form: f,
                 categories: @categories,

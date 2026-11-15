@@ -10,6 +10,7 @@ class TransactionsController < ApplicationController
 
   def new
     super
+    apply_new_form_draft
   end
 
   def index
@@ -411,6 +412,8 @@ class TransactionsController < ApplicationController
         entry_params[:entryable_attributes].delete(:kind) if transfer_leg || !kind.in?(USER_SETTABLE_KINDS)
       end
 
+      drop_category_not_owned!(entry_params)
+
       if nature.present? && entry_params[:amount].present?
         signed_amount = nature == "inflow" ? -entry_params[:amount].to_d : entry_params[:amount].to_d
         entry_params = entry_params.merge(amount: signed_amount)
@@ -491,6 +494,50 @@ class TransactionsController < ApplicationController
     # A plain hash: the user model merges nested hashes, and it only recognises real ones
     def preferences_params
       params.expect(preferences: [ collapsed_sections: {} ]).to_h
+    end
+
+    # w2-transfers transfer-form-fixes: a confirmed transfer's category belongs to its
+    # outflow leg. A category sent for another leg (the read-only inflow) would look saved
+    # but never reach a budget, so it is dropped; the rest of the edit goes through.
+    def drop_category_not_owned!(entry_params)
+      return unless entry_params[:entryable_attributes]&.key?(:category_id)
+      return unless @entry&.persisted? && @entry.transaction?
+      return if @entry.transaction.category_editable?
+
+      entry_params[:entryable_attributes].delete(:category_id)
+    end
+
+    # w2-transfers transfer-form-fixes: what the user typed on another tab of the new-entry
+    # modal (draft[...], see transaction_type_tabs_controller.js). Each value is checked
+    # against the family, and a category only comes along between tabs of the same nature
+    # (the list follows the nature).
+    def apply_new_form_draft
+      draft = params[:draft]
+      return unless draft.is_a?(ActionController::Parameters)
+
+      draft = draft.permit(:account_id, :name, :amount, :date, :currency, :notes, :merchant_id, :category_id, tag_ids: [])
+
+      @entry.name = draft[:name].to_s.strip.first(255) if draft[:name].present?
+      @entry.notes = draft[:notes] if draft[:notes].present?
+      @entry.amount = UserDecimal.parse(draft[:amount])&.abs
+      @entry.date = draft_date(draft[:date])
+
+      # An account picked on the other tab is preselected, not fixed like one the form was opened for
+      draft_account = @entry.account_id ? nil : Current.family.accounts.manual.active.find_by(id: draft[:account_id])
+      @selected_account_id = draft_account&.id
+      @entry.currency = draft_account.currency if draft_account
+      @entry.currency = draft[:currency] if draft[:currency].present? && Current.family.enabled_currency_codes(extra: []).include?(draft[:currency])
+
+      transaction = @entry.entryable
+      transaction.merchant = Current.family.available_merchants.find_by(id: draft[:merchant_id]) if draft[:merchant_id].present?
+      transaction.category = @categories.find { |category| category.id == draft[:category_id] } if draft[:category_id].present?
+      transaction.tag_ids = Current.family.tags.where(id: Array(draft[:tag_ids])).pluck(:id) if draft[:tag_ids].present?
+    end
+
+    def draft_date(value)
+      Date.iso8601(value.to_s) if value.present?
+    rescue ArgumentError
+      nil
     end
 
     # The new-transaction form's pickers. The category list follows the form's

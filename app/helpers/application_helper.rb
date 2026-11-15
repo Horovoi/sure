@@ -154,7 +154,9 @@ module ApplicationHelper
         i.entryable.is_a?(Transaction) &&
         i.entryable.transfer?
       end
-      total = items.sum(&money_method)
+      # Seeded in the group's currency: a day with only transfers sums to zero in that
+      # currency, not to a bare 0 that format_money shows in the default currency
+      total = items.sum(Money.new(0, item.first.currency), &money_method)
       negate ? -total : total
     end
 end

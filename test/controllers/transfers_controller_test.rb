@@ -307,4 +307,70 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href='#{transfer_path(transfer)}'][data-testid=transfer-match-pill]"
     assert_includes response.body, accounts(:credit_card).name
   end
+
+  # --- w2-transfers transfer-form-fixes ---
+
+  test "a failed create shows the form again with the entered accounts, amount and date" do
+    date = 3.days.ago.to_date
+
+    assert_no_difference "Transfer.count" do
+      post transfers_url, params: {
+        transfer: { from_account_id: accounts(:depository).id, to_account_id: accounts(:depository).id, date: date, amount: "250" }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_select "input[type=hidden][name='transfer[from_account_id]'][value='#{accounts(:depository).id}']"
+    assert_select "input[type=hidden][name='transfer[to_account_id]'][value='#{accounts(:depository).id}']"
+    assert_select "input[name='transfer[amount]'][value='250.00']"
+    assert_select "input[name='transfer[date]'][value='#{date.iso8601}']"
+  end
+
+  test "a create without a destination account is a form error, not a 404" do
+    assert_no_difference "Transfer.count" do
+      post transfers_url, params: {
+        transfer: { from_account_id: accounts(:depository).id, to_account_id: "", date: Date.current, amount: "100" }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_includes response.body, I18n.t("activerecord.errors.models.transfer.attributes.base.accounts_required")
+    assert_select "input[name='transfer[amount]'][value='100.00']"
+  end
+
+  test "a comma decimal amount is read, not cut at the comma" do
+    post transfers_url, params: {
+      transfer: { from_account_id: accounts(:depository).id, to_account_id: accounts(:credit_card).id, date: Date.current, amount: "41,5" }
+    }
+
+    assert_equal 41.5, Transfer.order(:created_at).last.outflow_transaction.entry.amount
+  end
+
+  test "new takes the values another tab carried over" do
+    date = 2.days.ago.to_date
+
+    get new_transfer_url(from_account_id: accounts(:depository).id, draft: { amount: "41,5", date: date.iso8601 })
+
+    assert_response :success
+    assert_select "input[type=hidden][name='transfer[from_account_id]'][value='#{accounts(:depository).id}']"
+    assert_select "input[name='transfer[amount]'][value='41.50']"
+    assert_select "input[name='transfer[date]'][value='#{date.iso8601}']"
+  end
+
+  test "the account pickers show each account's logo" do
+    get new_transfer_url
+
+    assert_select "[role=option][data-value='#{accounts(:depository).id}'] [data-select-logo]"
+  end
+
+  test "the drawer does not set a category on a transfer that takes none" do
+    transfer = Transfer::Creator.new(
+      family: families(:dylan_family), source_account_id: accounts(:depository).id,
+      destination_account_id: accounts(:connected).id, date: Date.current, amount: 10
+    ).create
+
+    patch transfer_url(transfer), params: { transfer: { category_id: categories(:food_and_drink).id } }
+
+    assert_nil transfer.outflow_transaction.reload.category_id
+  end
 end

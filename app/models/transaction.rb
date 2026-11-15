@@ -13,13 +13,16 @@ class Transaction < ApplicationRecord
   accepts_nested_attributes_for :taggings, allow_destroy: true
 
   # What a transaction row reads besides the transaction itself (see transactions/_transaction):
-  # category, merchant, tags, and for transfers the account the money went to.
-  # Preload these when rendering a list, so rows do not look them up one by one.
+  # category, merchant, tags, and for transfers both legs' accounts (the counterpart name,
+  # the pending pill, Transfer#categorizable?) plus, on an inflow row, the outflow's
+  # category that the row shows read-only. Preload these when rendering a list, so rows do
+  # not look them up one by one. The row's own leg is set by inverse_of; it is listed too
+  # so a preload that skips the inverse still finds it loaded.
   ROW_ASSOCIATIONS = [
     :category, :merchant, :tags,
     {
-      transfer_as_inflow: { inflow_transaction: { entry: :account } },
-      transfer_as_outflow: { inflow_transaction: { entry: :account } }
+      transfer_as_inflow: { inflow_transaction: { entry: :account }, outflow_transaction: [ :category, { entry: :account } ] },
+      transfer_as_outflow: { inflow_transaction: { entry: :account }, outflow_transaction: { entry: :account } }
     }
   ].freeze
 

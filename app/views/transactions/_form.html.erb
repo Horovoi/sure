@@ -25,7 +25,8 @@
     <% if @entry.account_id %>
       <%= f.hidden_field :account_id, data: { exchange_rate_form_target: "account" } %>
     <% else %>
-      <%= f.collection_select :account_id, Current.family.accounts.manual.active.alphabetically, :id, :name, { prompt: t(".account_prompt"), label: t(".account") }, required: true, class: "form-field__input text-ellipsis",
+      <%# @selected_account_id: an account carried over from another tab of the modal %>
+      <%= f.collection_select :account_id, Current.family.accounts.manual.active.alphabetically, :id, :name, { prompt: t(".account_prompt"), label: t(".account"), selected: @selected_account_id || f.object.account_id }, required: true, class: "form-field__input text-ellipsis",
             data: { exchange_rate_form_target: "account", action: "change->exchange-rate-form#refresh" } %>
     <% end %>
 
