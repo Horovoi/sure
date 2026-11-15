@@ -1,0 +1,20 @@
+---
+en:
+  settings:
+    mcc_mappings:
+      section:
+        automatic: Automatic (%{category})
+        automatic_no_match: Automatic (no matching category)
+        automatic_skip: Automatic (not categorised)
+        description: Card payments come with a merchant code (MCC) that tells what
+          kind of shop it is. New transactions without a category get the category
+          set here. Your rules run afterwards and can change it. Transfers between
+          your own accounts are never categorised.
+        none: Don't categorise
+        save: Save categories
+        title: Categories from merchant codes
+        toggle:
+          one: "%{count} group, %{changed} changed from automatic"
+          other: "%{count} groups, %{changed} changed from automatic"
+      update:
+        saved: Merchant code categories saved
