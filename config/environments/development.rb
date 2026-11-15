@@ -35,6 +35,15 @@ Rails.application.configure do
 
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = ENV.fetch("ACTIVE_STORAGE_SERVICE", "local").to_sym
+
+  # Variants use libvips (the production image has it). Without libvips on this machine
+  # a variant is served unresized instead of failing with no transformer.
+  config.active_storage.variant_processor = begin
+    require "vips"
+    :vips
+  rescue LoadError
+    :disabled
+  end
   config.after_initialize do
     ActiveStorage::Current.url_options = { host: "localhost", port: 3000 }
   end

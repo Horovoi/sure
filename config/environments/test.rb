@@ -40,6 +40,15 @@ Rails.application.configure do
   # Store uploaded files on the local file system in a temporary directory.
   config.active_storage.service = :test
 
+  # Variants use libvips (the production image has it). Without libvips on this machine
+  # a variant is served unresized instead of failing with no transformer.
+  config.active_storage.variant_processor = begin
+    require "vips"
+    :vips
+  rescue LoadError
+    :disabled
+  end
+
   config.action_mailer.perform_caching = false
 
   # Tell Action Mailer not to deliver emails to the real world.
