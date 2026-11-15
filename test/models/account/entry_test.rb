@@ -7,6 +7,26 @@ class EntryTest < ActiveSupport::TestCase
     @entry = entries :transaction
   end
 
+  test "an entryable preloaded from its entry reads that entry without a query" do
+    entry = create_transaction(account: accounts(:depository), name: "Preloaded", date: 1.month.ago.to_date)
+
+    loaded = Entry.where(id: entry.id).includes(:entryable).first
+
+    assert_queries_count(0) do
+      assert_same loaded, loaded.entryable.entry
+    end
+  end
+
+  test "an entry loaded from its entryable reads that entryable without a query" do
+    entry = create_transaction(account: accounts(:depository), name: "Inverse", date: 1.month.ago.to_date)
+
+    transaction = Transaction.includes(:entry).find(entry.entryable_id)
+
+    assert_queries_count(0) do
+      assert_same transaction, transaction.entry.entryable
+    end
+  end
+
   test "an opening anchor cannot be destroyed on its own, but goes with its account" do
     account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
     anchor = account.entries.create!(date: 1.year.ago.to_date, name: "Opening", amount: 100, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))

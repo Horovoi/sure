@@ -33,6 +33,20 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "bulk update preloads the transactions instead of loading each one" do
+    account = accounts(:depository)
+    entries = 4.times.map { |i| create_bulk_test_transaction(account, "Preload #{i}") }
+
+    assert_no_queries_match(/SELECT "transactions"\.\* FROM "transactions" WHERE "transactions"\."id" = /) do
+      post transactions_bulk_update_url, params: {
+        bulk_update: { entry_ids: entries.map(&:id), notes: "Updated in bulk" }
+      }
+    end
+
+    assert_redirected_to transactions_url
+    assert entries.all? { |entry| entry.reload.notes == "Updated in bulk" }
+  end
+
   test "bulk update preserves tags when tag_ids are omitted" do
     entry = entries(:transaction)
     original_tag_ids = entry.entryable.tag_ids.sort
@@ -98,4 +112,12 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     assert_equal 8.days.ago.to_date, first.date
     assert_equal 9.days.ago.to_date, second.reload.date
   end
+
+  private
+    def create_bulk_test_transaction(account, name)
+      account.entries.create!(
+        date: 3.days.ago.to_date, name: name, amount: 10, currency: "USD",
+        entryable: Transaction.new
+      )
+    end
 end

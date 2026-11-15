@@ -6,7 +6,9 @@ class Entry < ApplicationRecord
   belongs_to :account
   belongs_to :import, optional: true
 
-  delegated_type :entryable, types: Entryable::TYPES, dependent: :destroy
+  # inverse_of: an entryable preloaded with `includes(:entryable)` knows its entry, so
+  # entryable.entry (Transfer legs, category checks) runs no query per row
+  delegated_type :entryable, types: Entryable::TYPES, dependent: :destroy, inverse_of: :entry
   accepts_nested_attributes_for :entryable
 
   validates :date, :name, :amount, :currency, presence: true
