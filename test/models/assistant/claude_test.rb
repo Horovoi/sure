@@ -2,6 +2,8 @@ require "test_helper"
 
 # The Claude chat adapter against a stubbed bridge (WebMock, NDJSON bodies as claude_bridge/server.ts sends them)
 class Assistant::ClaudeTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   BRIDGE_URL = "http://claude-bridge.test:3339".freeze
   BRIDGE_TOKEN = ("b" * 40).freeze
   TURN_URL = "#{BRIDGE_URL}/turn".freeze
@@ -327,10 +329,11 @@ class Assistant::ClaudeTest < ActiveSupport::TestCase
   test "a session the bridge no longer has is retried once as a fresh session with a transcript" do
     earlier_claude_turn(provider_id: "sess_gone")
     bodies = []
+    # Record the bodies in the responses: WebMock can run a `with` block more than once per request
+    respond = ->(body) { ->(request) { bodies << JSON.parse(request.body); { status: 200, body: body } } }
     stub_request(:post, TURN_URL)
-      .with { |request| bodies << JSON.parse(request.body) }
-      .to_return(status: 200, body: ndjson({ type: "error", code: "session_not_found", message: "not found", retryable: false })).then
-      .to_return(status: 200, body: ndjson({ type: "text", delta: "Fresh answer" }, result_event(session_id: "sess_fresh")))
+      .to_return(respond.call(ndjson({ type: "error", code: "session_not_found", message: "not found", retryable: false }))).then
+      .to_return(respond.call(ndjson({ type: "text", delta: "Fresh answer" }, result_event(session_id: "sess_fresh"))))
 
     with_bridge { @turn.generate_response }
 

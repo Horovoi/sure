@@ -264,7 +264,8 @@ class AssistantTest < ActiveSupport::TestCase
     assert_equal "2", @chat.reload.latest_assistant_response_id
 
     output = llm.calls.last[:function_results].first[:output]
-    assert_equal "get_accounts failed unexpectedly", output[:error]
+    # function_result is jsonb, so the stored result has string keys
+    assert_equal "get_accounts failed unexpectedly", output["error"]
     refute_match "internals", output.to_json
   end
 

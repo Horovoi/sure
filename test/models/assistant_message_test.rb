@@ -1,6 +1,8 @@
 require "test_helper"
 
 class AssistantMessageTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @chat = chats(:one)
     @chat.update!(latest_assistant_response_id: "resp_previous")

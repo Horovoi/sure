@@ -21,8 +21,15 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_equal "outflow", row[:direction]
   end
 
+  test "a tagged transaction lists its tag names" do
+    row = find_row(@function.call("search" => @transaction.entry.name), @transaction)
+
+    assert_equal [ "Emergency fund", "Trips" ], row[:tags].sort
+  end
+
   test "rows are compact: unset and false keys are left out" do
-    @transaction.update!(merchant: nil, category: nil)
+    # The fixture transaction is tagged (taggings.yml), so clear its tags too
+    @transaction.update!(merchant: nil, category: nil, tags: [])
 
     row = find_row(@function.call("search" => @transaction.entry.name), @transaction)
 
