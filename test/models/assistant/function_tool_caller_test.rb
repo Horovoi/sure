@@ -138,7 +138,7 @@ class Assistant::FunctionToolCallerTest < ActiveSupport::TestCase
     tool_calls = @caller.fulfill_requests([ request(name: "probe", args: "{}") ])
 
     assert_equal 1, tool_calls.size
-    assert_equal "invalid date", tool_calls.first.function_result[:error]
+    assert_equal "invalid date", tool_calls.first.function_result["error"]
   end
 
   test "every call is audited with the caller's actor" do

@@ -133,7 +133,9 @@ class FamilyResetJobTest < ActiveJob::TestCase
                   .with { |*args| args == [ { kind: :pre_reset, parts: %i[db storage] } ] && @family.accounts.count == accounts_before }
                   .in_sequence(reset)
                   .returns(Pathname("/backups/bundles/pre-reset/20261115T040000Z_test"))
-    @family.expects(:lock!).in_sequence(reset)
+    @family.expects(:lock!).with().in_sequence(reset)
+    # The sync_later after the reset takes its own row lock (with_lock calls lock!(true))
+    @family.stubs(:lock!).with(true)
 
     FamilyResetJob.perform_now(@family)
 

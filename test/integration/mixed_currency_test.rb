@@ -34,15 +34,16 @@ class MixedCurrencyTest < ActionDispatch::IntegrationTest
     end
     ExchangeRate.upsert_all(rows, unique_by: %i[from_currency to_currency date])
 
-    @family.recurring_transactions.create!(
-      merchant: merchants(:netflix), amount: 15.99, currency: "USD", expected_day_of_month: 5,
-      last_occurrence_date: Date.current, next_expected_date: 1.month.from_now, status: "active",
-      subscription_state: "subscription", billing_cycle: "monthly", default_account: accounts(:depository)
+    # The family already has a USD Netflix subscription (fixture); a second one with the same merchant,
+    # amount and currency would break idx_recurring_txns_merchant
+    recurring_transactions(:netflix_subscription).update!(
+      expected_day_of_month: 5, last_occurrence_date: Date.current, next_expected_date: 1.month.from_now,
+      status: "active", subscription_state: "subscription", billing_cycle: "monthly", default_account: accounts(:depository)
     )
     @family.recurring_transactions.create!(
       merchant: merchants(:amazon), amount: 120, currency: "EUR", expected_day_of_month: 10,
       last_occurrence_date: Date.current, next_expected_date: 1.year.from_now, status: "active",
-      subscription_state: "subscription", billing_cycle: "yearly"
+      subscription_state: "subscription", billing_cycle: "yearly", expected_month: 1.year.from_now.month
     )
   end
 
@@ -66,18 +67,42 @@ class MixedCurrencyTest < ActionDispatch::IntegrationTest
   end
 
   test "assistant read functions convert before combining amounts" do
+    uah_spend = create_transaction(account: accounts(:depository), amount: 4150, currency: "UAH", date: 2.days.ago.to_date)
+    create_transaction(account: accounts(:investment), amount: -100, currency: "USD", date: 2.days.ago.to_date)
+    period = { "start_date" => 1.year.ago.to_date.iso8601, "end_date" => Date.current.iso8601 }
+
+    # Every read tool the chat and MCP serve (Assistant.function_classes_for(:read)), with arguments that make it
+    # combine amounts. A new read tool must be added here, so it is checked too.
     calls = {
-      Assistant::Function::GetAccounts => {},
+      Assistant::Function::GetAccounts => { "include_balance_series" => true },
       Assistant::Function::GetBalanceSheet => {},
+      Assistant::Function::GetIncomeStatement => period.merge("group_by" => "month", "compare_previous_period" => true),
+      Assistant::Function::GetTransactions => { "page" => 1 },
       Assistant::Function::GetHoldings => { "page" => 1 },
-      Assistant::Function::GetIncomeStatement => { "start_date" => 1.year.ago.to_date.iso8601, "end_date" => Date.current.iso8601 },
-      Assistant::Function::GetTransactions => { "page" => 1 }
+      Assistant::Function::GetValuations => {},
+      Assistant::Function::GetCategories => {},
+      Assistant::Function::GetTags => {},
+      Assistant::Function::GetMerchants => {},
+      Assistant::Function::GetUncategorizedTransactions => period,
+      Assistant::Function::GetSubscriptions => { "filter" => "all" },
+      Assistant::Function::GetBudget => {},
+      Assistant::Function::GetRules => {},
+      Assistant::Function::GetRuleOptions => {},
+      Assistant::Function::PreviewRule => {
+        "conditions" => [ { "condition_type" => "transaction_amount", "operator" => ">", "value" => "0" } ],
+        "actions" => [ { "action_type" => "set_transaction_category", "value" => categories(:food_and_drink).id } ]
+      },
+      Assistant::Function::GetTransferMatchCandidates => { "transaction_id" => uah_spend.entryable.id }
     }
+    # search_family_files reads the vector store of the AI provider and sums no amounts
+    not_checked = [ Assistant::Function::SearchFamilyFiles ]
+
+    assert_equal (Assistant.function_classes_for(:read) - not_checked).map(&:name).sort, calls.keys.map(&:name).sort
 
     assert_no_currency_mismatch do
       calls.each do |function, params|
         result = function.new(@user).call(params)
-        assert_not result.is_a?(Hash) && result.with_indifferent_access[:error].present?, "#{function.name.demodulize} returned an error"
+        assert_not result.is_a?(Hash) && result.with_indifferent_access[:error].present?, "#{function.name.demodulize} returned an error: #{result.inspect.truncate(300)}"
       end
     end
   end

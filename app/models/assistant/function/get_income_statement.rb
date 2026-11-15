@@ -80,6 +80,9 @@ class Assistant::Function::GetIncomeStatement < Assistant::Function
   end
 
   def call(params = {})
+    # A fresh report per call: one chat turn reuses this function and its user, and a write tool earlier in the
+    # turn must show in the numbers. Family#income_statement is memoized on the family, so it is not used here.
+    @income_statement = IncomeStatement.new(family)
     period = Period.custom(start_date: Date.iso8601(params["start_date"].to_s), end_date: Date.iso8601(params["end_date"].to_s))
 
     account_ids = Array(params["account_ids"]).presence
@@ -115,7 +118,7 @@ class Assistant::Function::GetIncomeStatement < Assistant::Function
 
   private
     def income_statement
-      @income_statement ||= family.income_statement
+      @income_statement ||= IncomeStatement.new(family)
     end
 
     # The accounts IncomeStatement counts: the family's visible ones not excluded from reports

@@ -1,6 +1,8 @@
 require "test_helper"
 
 class Family::SyncerTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @family = families(:dylan_family)
   end

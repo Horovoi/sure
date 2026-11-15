@@ -1,4 +1,6 @@
 require "test_helper"
+# The mcp gem loads json_schemer only when an MCP schema class loads; this test can run first
+require "json_schemer"
 
 class Mcp::ServerBuilderTest < ActiveSupport::TestCase
   class NullableFunction < Assistant::Function
@@ -71,7 +73,12 @@ class Mcp::ServerBuilderTest < ActiveSupport::TestCase
       arguments = Array(schema[:required]).index_with { |key| sample_value(schema.dig(:properties, key.to_sym)) }
 
       refute tool.input_schema.missing_required_arguments?(arguments), "#{tool.name_value} requires more than its required list"
-      assert_nothing_raised("#{tool.name_value} rejects #{arguments}") { tool.input_schema.validate_arguments(arguments) }
+      # ActiveSupport's assert_nothing_raised takes no message, so the failure names the tool by hand
+      begin
+        tool.input_schema.validate_arguments(arguments)
+      rescue MCP::Tool::InputSchema::ValidationError => e
+        flunk "#{tool.name_value} rejects #{arguments}: #{e.message}"
+      end
     end
   end
 
