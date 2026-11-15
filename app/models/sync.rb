@@ -248,8 +248,8 @@ class Sync < ApplicationRecord
     end
 
     def family_time_zone
-      family&.timezone.presence || "UTC"
-    rescue
+      family&.resolved_time_zone || "UTC"
+    rescue StandardError
       "UTC"
     end
 

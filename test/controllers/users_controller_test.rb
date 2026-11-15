@@ -242,4 +242,21 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal "New Name", @user.family.reload.name
   end
+
+  test "rejects an unknown family currency with a message instead of an error page" do
+    original = @user.family.currency
+
+    patch user_url(@user), params: { user: { family_attributes: { id: @user.family.id, currency: "XYZ" } } }
+
+    assert_redirected_to settings_profile_url
+    assert_match "currency is invalid", flash[:alert]
+    assert_equal original, @user.family.reload.currency
+  end
+
+  test "rejects an unknown family time zone from the preferences page" do
+    patch user_url(@user), params: { user: { redirect_to: "preferences", family_attributes: { id: @user.family.id, timezone: "Invalid/Timezone" } } }
+
+    assert_redirected_to settings_preferences_url
+    assert_match "is invalid", flash[:alert]
+  end
 end

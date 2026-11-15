@@ -43,6 +43,12 @@ class Family < ApplicationRecord
   validates :date_format, inclusion: { in: DATE_FORMATS.map(&:last) }
   validates :fiscal_month_start_day, inclusion: { in: 1..31 }, allow_nil: true
 
+  # Time zone and currency (w1-fx family-tz-currency-validation). Both are checked only
+  # when they change, so a family with an old bad value can still save other changes.
+  validate :timezone_must_be_a_known_zone, if: :timezone_changed?
+  validate :currency_must_be_known, if: :currency_changed?
+  before_validation :normalize_currency
+
   def assigned_merchants
     merchant_ids = transactions.where.not(merchant_id: nil).pluck(:merchant_id).uniq
     Merchant.where(id: merchant_ids)
@@ -209,5 +215,67 @@ class Family < ApplicationRecord
 
   def self_hoster?
     Rails.application.config.app_mode.self_hosted?
+  end
+
+  # --- Time zone and currency (w1-fx family-tz-currency-validation) ---
+
+  # How often a stored time zone that cannot be resolved is written to the debug log.
+  # Requests and jobs resolve it all the time, so without this a bad value would write
+  # one entry per page view.
+  INVALID_TIME_ZONE_LOG_INTERVAL = 1.day
+
+  # The family's time zone for Time.use_zone: requests, jobs and syncs. A blank zone, or
+  # one ActiveSupport does not know (a renamed zone, a value written past validation),
+  # gives UTC instead of raising, so a bad value can never take down every page.
+  def resolved_time_zone
+    return @resolved_time_zone if defined?(@resolved_time_zone_for) && @resolved_time_zone_for == timezone
+
+    @resolved_time_zone_for = timezone
+    @resolved_time_zone = (ActiveSupport::TimeZone[timezone] if timezone.present?) || begin
+      log_invalid_time_zone if timezone.present?
+      ActiveSupport::TimeZone["UTC"]
+    end
+  end
+
+  # Upper-case ISO code for a known currency ("uah" gives "UAH"), nil for anything else
+  def self.normalize_currency_code(value)
+    return if value.blank?
+
+    Money::Currency.new(value.to_s.strip).iso_code
+  rescue Money::Currency::UnknownCurrencyError, ArgumentError
+    nil
+  end
+
+  private def log_invalid_time_zone
+    # write(unless_exist:) is an atomic SET NX on Redis: one writer a day per bad value
+    cache_key = [ "invalid_family_time_zone", id, timezone ]
+    return unless Rails.cache.write(cache_key, true, expires_in: INVALID_TIME_ZONE_LOG_INTERVAL, unless_exist: true)
+
+    DebugLogEntry.capture(
+      category: "time_zone",
+      level: "warn",
+      message: "Family time zone #{timezone.inspect} is not a known zone; using UTC",
+      source: "Family#resolved_time_zone",
+      family: self,
+      metadata: { timezone: timezone }
+    )
+  rescue StandardError
+    nil
+  end
+
+  # ActiveSupport::TimeZone[] resolves both the identifier the preferences form submits
+  # ("Europe/Kyiv") and a Rails zone name ("Kyiv"), the same lookup resolved_time_zone uses
+  private def timezone_must_be_a_known_zone
+    return if timezone.blank?
+
+    errors.add(:timezone, :invalid) if ActiveSupport::TimeZone[timezone].nil?
+  end
+
+  private def normalize_currency
+    self.currency = self.class.normalize_currency_code(currency) || currency
+  end
+
+  private def currency_must_be_known
+    errors.add(:currency, :invalid) if self.class.normalize_currency_code(currency).nil?
   end
 end

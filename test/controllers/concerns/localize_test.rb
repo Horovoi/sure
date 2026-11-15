@@ -22,4 +22,20 @@ class LocalizeTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "h1", text: /Configure your preferences/i
   end
+
+  test "a bad family time zone renders in UTC and writes one debug entry" do
+    family = users(:family_admin).family
+    family.update_column(:timezone, "Invalid/Timezone")
+    original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
+    assert_difference -> { DebugLogEntry.where(category: "time_zone", family: family).count }, 1 do
+      get root_url
+      assert_response :success
+      get root_url
+      assert_response :success
+    end
+  ensure
+    Rails.cache = original_cache
+  end
 end

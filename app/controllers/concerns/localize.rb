@@ -63,8 +63,9 @@ module Localize
       locale if I18n.available_locales.include?(locale)
     end
 
+    # A family time zone that cannot be resolved gives UTC (Family#resolved_time_zone)
+    # instead of raising on every request, the sign-in page included
     def switch_timezone(&action)
-      timezone = Current.family.try(:timezone) || Time.zone
-      Time.use_zone(timezone, &action)
+      Time.use_zone(Current.family&.resolved_time_zone || Time.zone, &action)
     end
 end
