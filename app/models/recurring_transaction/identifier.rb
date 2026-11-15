@@ -106,7 +106,14 @@ class RecurringTransaction
       claimed_ids = []
       recurring_patterns.each do |pattern|
         begin
-          recurring_transaction = find_existing(pattern, excluding: claimed_ids)
+          recurring_transaction = RecurringTransaction.find_for_identity(
+            family: family,
+            merchant_id: pattern[:merchant_id],
+            name: pattern[:name],
+            currency: pattern[:currency],
+            amount: pattern[:amount],
+            excluding: claimed_ids
+          )
 
           if recurring_transaction
             claimed_ids << recurring_transaction.id
@@ -144,19 +151,6 @@ class RecurringTransaction
         .where("ABS(entries.amount) >= ?", MINIMUM_AMOUNT)
         .where("entries.date >= ?", since)
         .includes(:entryable, :account)
-    end
-
-    # Existing row with the pattern's identity whose amount is within the
-    # tolerance; the closest one when several match.
-    def find_existing(pattern, excluding: [])
-      candidates = family.recurring_transactions
-        .with_identity(merchant_id: pattern[:merchant_id], name: pattern[:name], currency: pattern[:currency])
-        .where.not(id: excluding)
-        .to_a
-
-      candidates
-        .select { |recurring| amount_matches?(recurring, pattern[:amount]) }
-        .min_by { |recurring| [ (recurring.amount - pattern[:amount]).abs, recurring.subscription? ? 0 : 1 ] }
     end
 
     # Update variance for existing manual recurring transactions
@@ -205,16 +199,6 @@ class RecurringTransaction
     end
 
     private
-      def amount_matches?(recurring, amount)
-        reference = recurring.amount
-        tolerance = [ reference.abs, amount.abs ].max * AMOUNT_TOLERANCE
-        return true if (reference - amount).abs <= tolerance
-
-        # Manual rows track a range of observed amounts
-        recurring.has_amount_variance? &&
-          amount.between?(recurring.expected_amount_min - tolerance, recurring.expected_amount_max + tolerance)
-      end
-
       # next_expected_date only moves forward: moving it back would make an
       # already-handled period overdue again. A subscription may stay overdue
       # (the generation job handles it); any other manual row only projects

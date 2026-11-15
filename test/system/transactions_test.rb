@@ -284,6 +284,38 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "the drawer disables Mark as recurring for a transaction that is already recurring" do
+    entry = @user.family.entries.find_by!(name: "eleven")
+    @user.family.recurring_transactions.create!(
+      merchant: merchants(:amazon), amount: entry.amount, currency: entry.currency,
+      expected_day_of_month: entry.date.day, last_occurrence_date: entry.date,
+      next_expected_date: 1.month.from_now.to_date, status: "active", manual: true, occurrence_count: 1
+    )
+
+    open_settings_in_drawer(entry)
+
+    within_testid("mark-recurring") do
+      assert_selector "button[disabled]", text: I18n.t("transactions.mark_recurring.already_button")
+      assert_link I18n.t("transactions.mark_recurring.view"), href: recurring_transactions_path
+    end
+  end
+
+  test "the drawer offers Mark as recurring for a transaction with no recurring row" do
+    open_settings_in_drawer(@user.family.entries.find_by!(name: "ten"))
+
+    within_testid("mark-recurring") do
+      assert_selector "button:not([disabled])", text: I18n.t("transactions.mark_recurring.button")
+      assert_no_selector "[data-testid='mark-recurring-link']"
+    end
+  end
+
+  def open_settings_in_drawer(entry)
+    within "#" + dom_id(entry) do
+      click_link entry.name, exact: true
+    end
+    find("summary", text: I18n.t("transactions.show.settings")).click
+  end
+
   private
 
     def create_transaction(name, date, amount, category: nil, merchant: nil, tags: [], account: nil)

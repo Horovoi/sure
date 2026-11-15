@@ -1,0 +1,44 @@
+<%# locals: (transaction:) %>
+<%# The "Mark as recurring" row of the transaction drawer. When a row the user manages already
+    covers this transaction, the button is disabled and the row links to it. %>
+
+<% managed = RecurringTransaction.user_managed_for_transaction(transaction) %>
+
+<div class="flex items-center justify-between gap-2 p-3" data-testid="mark-recurring">
+  <div class="text-sm space-y-1">
+    <h4 class="text-primary"><%= t(".title") %></h4>
+    <% if managed %>
+      <p class="text-secondary">
+        <%= t(managed.subscription? ? ".already_subscription" : ".already_recurring", name: managed.display_name) %>
+        <%= link_to t(".view"),
+              managed.subscription? ? edit_subscription_path(managed) : recurring_transactions_path,
+              class: "text-primary underline hover:no-underline",
+              data: { turbo_frame: "_top", testid: "mark-recurring-link" } %>
+      </p>
+    <% else %>
+      <p class="text-secondary"><%= t(".subtitle") %></p>
+    <% end %>
+  </div>
+
+  <% if managed %>
+    <%= render DS::Button.new(
+          text: t(".already_button"),
+          variant: "outline",
+          icon: "repeat",
+          type: "button",
+          disabled: true,
+          class: "opacity-60 cursor-not-allowed",
+          data: { testid: "mark-recurring-button" }
+        ) %>
+  <% else %>
+    <%= render DS::Button.new(
+          text: t(".button"),
+          variant: "outline",
+          icon: "repeat",
+          href: mark_as_recurring_transaction_path(transaction),
+          method: :post,
+          frame: "_top",
+          data: { testid: "mark-recurring-button" }
+        ) %>
+  <% end %>
+</div>

@@ -265,111 +265,57 @@ class TransactionsController < ApplicationController
     redirect_back_or_to transactions_path, status: :see_other
   end
 
+  # Both actions land on the row that already has this transaction's identity
+  # (see RecurringTransaction.mark_from_transaction!), so they never add a
+  # second row next to a detected pattern or a suggestion.
   def mark_as_recurring
     transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
+    result = RecurringTransaction.mark_from_transaction!(transaction, as: :manual)
 
-    # Check if a recurring transaction already exists for this pattern
-    existing = Current.family.recurring_transactions.find_by(
-      merchant_id: transaction.merchant_id,
-      name: transaction.merchant_id.present? ? nil : transaction.entry.name,
-      currency: transaction.entry.currency,
-      manual: true
-    )
-
-    if existing
-      flash[:alert] = t("recurring_transactions.already_exists")
-      redirect_back_or_to transactions_path
-      return
+    if result.unchanged?
+      key = result.recurring_transaction.subscription? ? "already_subscription" : "already_recurring"
+      flash[:alert] = t("transactions.mark_as_recurring.#{key}")
+    else
+      flash[:notice] = t("transactions.mark_as_recurring.#{result.outcome == :converted ? "converted" : "success"}")
     end
-
-    begin
-      recurring_transaction = RecurringTransaction.create_from_transaction(transaction)
-
-      respond_to do |format|
-        format.html do
-          flash[:notice] = t("recurring_transactions.marked_as_recurring")
-          redirect_back_or_to transactions_path
-        end
-      end
-    rescue ActiveRecord::RecordInvalid => e
-      respond_to do |format|
-        format.html do
-          flash[:alert] = t("recurring_transactions.creation_failed")
-          redirect_back_or_to transactions_path
-        end
-      end
-    rescue StandardError => e
-      respond_to do |format|
-        format.html do
-          flash[:alert] = t("recurring_transactions.unexpected_error")
-          redirect_back_or_to transactions_path
-        end
-      end
-    end
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordNotUnique
+    flash[:alert] = t("transactions.mark_as_recurring.duplicate")
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordInvalid
+    flash[:alert] = t("transactions.mark_as_recurring.creation_failed")
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordNotFound
+    raise
+  rescue StandardError => e
+    Rails.logger.error("mark_as_recurring failed for transaction #{params[:id]}: #{e.class}: #{e.message}")
+    flash[:alert] = t("transactions.mark_as_recurring.unexpected_error")
+    redirect_back_or_to transactions_path
   end
 
   def mark_as_subscription
     transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
+    result = RecurringTransaction.mark_from_transaction!(transaction, as: :subscription)
 
-    # Check if a subscription already exists for this pattern
-    existing = Current.family.recurring_transactions.subscriptions.find_by(
-      merchant_id: transaction.merchant_id,
-      name: transaction.merchant_id.present? ? nil : transaction.entry.name,
-      currency: transaction.entry.currency
-    )
-
-    if existing
-      flash[:alert] = t("subscriptions.already_exists")
+    if result.unchanged?
+      flash[:alert] = t("transactions.mark_as_subscription.already_subscription")
       redirect_back_or_to transactions_path
-      return
+    else
+      flash[:notice] = t("transactions.mark_as_subscription.success")
+      redirect_to edit_subscription_path(result.recurring_transaction)
     end
-
-    begin
-      # Create recurring transaction first
-      recurring_transaction = RecurringTransaction.create_from_transaction(transaction)
-
-      # Detect billing cycle from transaction history
-      matching_entries = RecurringTransaction.find_matching_transaction_entries(
-        family: Current.family,
-        merchant_id: transaction.merchant_id,
-        name: transaction.merchant_id.present? ? nil : transaction.entry.name,
-        currency: transaction.entry.currency,
-        expected_day: recurring_transaction.expected_day_of_month,
-        lookback_months: 24
-      )
-
-      billing_cycle = RecurringTransaction::SubscriptionDetector.detect_billing_cycle(
-        matching_entries.map(&:date)
-      )
-
-      # Mark as subscription with detected billing cycle
-      recurring_transaction.assign_attributes(
-        billing_cycle: billing_cycle,
-        category_id: find_subscriptions_category&.id
-      )
-      recurring_transaction.approve!
-
-      respond_to do |format|
-        format.html do
-          flash[:notice] = t("subscriptions.marked_as_subscription")
-          redirect_to edit_subscription_path(recurring_transaction)
-        end
-      end
-    rescue ActiveRecord::RecordInvalid => e
-      respond_to do |format|
-        format.html do
-          flash[:alert] = t("subscriptions.creation_failed")
-          redirect_back_or_to transactions_path
-        end
-      end
-    rescue StandardError => e
-      respond_to do |format|
-        format.html do
-          flash[:alert] = t("subscriptions.unexpected_error")
-          redirect_back_or_to transactions_path
-        end
-      end
-    end
+  rescue ActiveRecord::RecordNotUnique
+    flash[:alert] = t("transactions.mark_as_subscription.duplicate")
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordInvalid, AASM::InvalidTransition
+    flash[:alert] = t("transactions.mark_as_subscription.creation_failed")
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordNotFound
+    raise
+  rescue StandardError => e
+    Rails.logger.error("mark_as_subscription failed for transaction #{params[:id]}: #{e.class}: #{e.message}")
+    flash[:alert] = t("transactions.mark_as_subscription.unexpected_error")
+    redirect_back_or_to transactions_path
   end
 
   def update_preferences
@@ -467,10 +413,6 @@ class TransactionsController < ApplicationController
       @expense_category_groups = Category.grouped_select_options(
         category_scope.expenses.roots.alphabetically
       )
-    end
-
-    def find_subscriptions_category
-      Current.family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")
     end
 
     # Helper methods for convert_to_trade

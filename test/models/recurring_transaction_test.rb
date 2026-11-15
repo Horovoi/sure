@@ -806,4 +806,71 @@ class RecurringTransactionTest < ActiveSupport::TestCase
     assert_equal [ rows[:manual].id, rows[:subscription].id ].sort, @family.recurring_transactions.user_managed.pluck(:id).sort
     rows.each_value { |row| assert_equal row.user_managed?, @family.recurring_transactions.user_managed.exists?(row.id) }
   end
+
+  def identity_test_row(**attrs)
+    @family.recurring_transactions.create!(
+      {
+        merchant: @merchant, amount: 15.99, currency: "USD", expected_day_of_month: 5,
+        last_occurrence_date: 1.month.ago.to_date, next_expected_date: 1.month.from_now.to_date,
+        status: "active", occurrence_count: 3
+      }.merge(attrs)
+    )
+  end
+
+  test "find_for_identity picks the closest amount within the tolerance" do
+    near = identity_test_row(amount: 16.50)
+    identity_test_row(amount: 30)
+
+    found = RecurringTransaction.find_for_identity(family: @family, merchant_id: @merchant.id, name: nil, currency: "USD", amount: 15.99)
+
+    assert_equal near, found
+    assert_nil RecurringTransaction.find_for_identity(family: @family, merchant_id: @merchant.id, name: nil, currency: "EUR", amount: 15.99)
+  end
+
+  test "find_for_transaction prefers the subscription that generated the transaction" do
+    subscription = identity_test_row(subscription_state: "subscription", manual: true, amount: 50)
+    entry = accounts(:depository).entries.create!(
+      date: Date.current, amount: 12, currency: "USD", name: "Renamed charge",
+      entryable: Transaction.new(recurring_transaction: subscription)
+    )
+
+    assert_equal subscription, RecurringTransaction.find_for_transaction(entry.transaction)
+    assert_equal subscription, RecurringTransaction.user_managed_for_transaction(entry.transaction)
+  end
+
+  test "user_managed_for_transaction ignores detected patterns" do
+    identity_test_row
+    entry = accounts(:depository).entries.create!(
+      date: Date.current, amount: 15.99, currency: "USD", name: "Netflix",
+      entryable: Transaction.new(merchant: @merchant)
+    )
+
+    assert_nil RecurringTransaction.user_managed_for_transaction(entry.transaction)
+  end
+
+  test "mark_from_transaction! converts a dismissed suggestion into the manual row" do
+    row = identity_test_row(subscription_state: "dismissed", dismissed_at: 1.week.ago)
+    entry = accounts(:depository).entries.create!(
+      date: Date.current, amount: 15.99, currency: "USD", name: "Netflix",
+      entryable: Transaction.new(merchant: @merchant)
+    )
+
+    result = nil
+    assert_no_difference "RecurringTransaction.count" do
+      result = RecurringTransaction.mark_from_transaction!(entry.transaction, as: :manual)
+    end
+
+    assert_equal :converted, result.outcome
+    assert_equal row, result.recurring_transaction
+    assert row.reload.manual?
+    assert_equal Date.current, row.last_occurrence_date
+  end
+
+  test "mark_from_transaction! rejects an unknown kind" do
+    entry = accounts(:depository).entries.create!(
+      date: Date.current, amount: 15.99, currency: "USD", name: "Netflix", entryable: Transaction.new
+    )
+
+    assert_raises(ArgumentError) { RecurringTransaction.mark_from_transaction!(entry.transaction, as: :bill) }
+  end
 end

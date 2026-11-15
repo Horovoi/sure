@@ -135,10 +135,6 @@ en:
     deleted: Subscription deleted successfully
     marked_inactive: Subscription marked as inactive
     marked_active: Subscription marked as active
-    marked_as_subscription: Transaction marked as subscription
-    already_exists: A subscription already exists for this pattern
-    creation_failed: Failed to create subscription
-    unexpected_error: An unexpected error occurred
     toggle_status:
       marked_inactive: Subscription marked as inactive
       marked_active: Subscription marked as active
