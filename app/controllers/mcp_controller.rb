@@ -17,6 +17,7 @@ class McpController < ApplicationController
   # server speaks. The time zone wraps only after authentication, when Current knows the family.
   before_action :authenticate_mcp_token!
   before_action :set_mcp_user
+  before_action :require_mcp_enabled!
   before_action :verify_origin!
   before_action :drop_session_headers
   before_action :require_modern_protocol!, if: -> { request.post? }
@@ -104,6 +105,15 @@ class McpController < ApplicationController
       end
 
       Current.session = Session.ephemeral_for(@mcp_user, request)
+    end
+
+    # Settings > Self-hosting can turn the static-token clients off (decision 13). It runs after authentication,
+    # so only a caller holding the token learns the endpoint is switched off. The in-app chat's per-turn token
+    # (Claude chat adapter) is gated by the user's ai_enabled instead and must skip this check.
+    def require_mcp_enabled!
+      return if !credential.static? || Setting.mcp_enabled
+
+      render_gate_error(:forbidden, "MCP is turned off in Settings > Self-Hosting")
     end
 
     # --- Transport rules ------------------------------------------------------------------------------------

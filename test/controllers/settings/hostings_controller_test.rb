@@ -230,4 +230,61 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "06:00", Setting.data_cleaner_time
     end
   end
+
+  test "an admin turns the MCP switch off and on" do
+    with_self_hosting do
+      patch settings_hosting_url, params: { setting: { mcp_enabled: "0" } }
+
+      assert_redirected_to settings_hosting_url
+      assert_equal false, Setting.mcp_enabled
+
+      patch settings_hosting_url, params: { setting: { mcp_enabled: "1" } }
+
+      assert_redirected_to settings_hosting_url
+      assert_equal true, Setting.mcp_enabled
+    end
+  ensure
+    Setting.mcp_enabled = true
+  end
+
+  test "a non-admin cannot change the MCP switch" do
+    with_self_hosting do
+      sign_in users(:family_member)
+
+      patch settings_hosting_url, params: { setting: { mcp_enabled: "0" } }
+
+      assert_redirected_to settings_hosting_url
+      assert_equal I18n.t("settings.hostings.not_authorized"), flash[:alert]
+      assert_equal true, Setting.mcp_enabled
+    end
+  end
+
+  test "the MCP section shows the switch and whether the env file opts in" do
+    with_self_hosting do
+      with_env_overrides(MCP_API_TOKEN: "secret-token", MCP_USER_EMAIL: users(:family_admin).email) do
+        get settings_hosting_url
+
+        assert_response :success
+        assert_select "input[name=?]", "setting[mcp_enabled]"
+        assert_select "#mcp-status", text: /#{I18n.t("settings.hostings.mcp_settings.token_set")}/
+        assert_select "#mcp-status", text: /#{Regexp.escape(users(:family_admin).email)}/
+        refute_match "secret-token", response.body
+      end
+
+      with_env_overrides(MCP_API_TOKEN: nil, MCP_USER_EMAIL: nil) do
+        get settings_hosting_url
+
+        assert_select "#mcp-status", text: /#{I18n.t("settings.hostings.mcp_settings.token_not_set")}/
+      end
+    end
+  end
+
+  test "a failed update renders the page with its provider sections" do
+    with_self_hosting do
+      patch settings_hosting_url, params: { setting: { openai_uri_base: "https://example.com/v1", openai_model: "" } }
+
+      assert_response :unprocessable_entity
+      assert_select "input[name=?]", "setting[mcp_enabled]"
+    end
+  end
 end

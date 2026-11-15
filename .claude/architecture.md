@@ -74,7 +74,8 @@ through the official `mcp` gem (`MCP::Server::Transports::StreamableHTTPTranspor
 
 - `McpController#handle`: one POST endpoint. GET and DELETE answer 405 (`Allow: POST`).
   Before-actions, in order: bearer `MCP_API_TOKEN` (SHA256-digest compare, 401 with
-  `WWW-Authenticate: Bearer realm="sure"`), the active user from `MCP_USER_EMAIL`, a foreign `Origin`
+  `WWW-Authenticate: Bearer realm="sure"`), the active user from `MCP_USER_EMAIL`, the
+  Settings > Self-Hosting switch `Setting.mcp_enabled` (403 when off; static token only), a foreign `Origin`
   gets 403 (no `Origin` and the same origin pass), `Mcp-Session-Id` and `Last-Event-ID` are dropped
   (never echoed), the version gate (`initialize` or a missing or other `MCP-Protocol-Version` gets 400
   with JSON-RPC -32022 and `data.supported`), then the family time zone wraps the request.

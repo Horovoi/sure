@@ -336,6 +336,46 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # --- Settings > Self-hosting switch (decision 13) ----------------------------------------------------------
+
+  test "the MCP switch turned off gives 403 even with the AI switch on" do
+    @user.update!(ai_enabled: true)
+    Setting.mcp_enabled = false
+
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      assert_response :forbidden
+      assert_equal McpController::JSON_RPC_INVALID_REQUEST, rpc_error["code"]
+    end
+  ensure
+    Setting.mcp_enabled = true
+  end
+
+  test "the MCP switch on serves the static token with the AI switch off" do
+    @user.update!(ai_enabled: false)
+    Setting.mcp_enabled = true
+
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      assert_response :success
+      assert rpc_result["tools"].any?
+    end
+  end
+
+  test "the MCP switch is checked after the token, so a caller without it learns nothing" do
+    Setting.mcp_enabled = false
+
+    with_mcp_env do
+      mcp_post "tools/list", headers: { "Authorization" => "Bearer wrong" }
+
+      assert_response :unauthorized
+    end
+  ensure
+    Setting.mcp_enabled = true
+  end
+
   private
     def with_mcp_env(&block)
       with_env_overrides(MCP_API_TOKEN: TOKEN, MCP_USER_EMAIL: @user.email, &block)

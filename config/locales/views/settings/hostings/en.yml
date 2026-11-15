@@ -117,6 +117,17 @@ en:
           import_market_data: "Market data import: Runs at 5 PM EST after market close"
           sync_hourly: "Hourly sync: Runs every hour (required for crypto sync)"
           sync_cleaner: "Sync cleaner: Runs every hour (maintenance)"
+      mcp_settings:
+        title: MCP Server
+        enabled_label: Allow MCP clients
+        enabled_description: Lets Claude Code read and change your data through the MCP endpoint at /mcp with the MCP_API_TOKEN. The in-app chat is not affected.
+        token_label: "MCP_API_TOKEN:"
+        token_set: Set
+        token_not_set: Not set
+        user_label: "MCP_USER_EMAIL:"
+        user_not_set: Not set
+        user_not_found: "%{email} (no active user with this email)"
+        setup_hint: The endpoint stays off until MCP_API_TOKEN and MCP_USER_EMAIL are set in the env file and the app is restarted.
       reset_scheduled_jobs:
         scheduled_jobs_reset: Scheduled job times have been reset to defaults.
         scheduler_sync_failed: Could not reset the scheduled job times. Please try again or check the server logs.

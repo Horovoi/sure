@@ -1,0 +1,43 @@
+<%# MCP endpoint (/mcp) for Claude Code. MCP_API_TOKEN and MCP_USER_EMAIL in the env file opt in; this switch turns the static-token clients off without editing it. %>
+<% state = mcp_status %>
+<div class="space-y-4">
+  <div class="flex items-center justify-between gap-4">
+    <div class="space-y-1">
+      <p class="text-sm"><%= t(".enabled_label") %></p>
+      <p class="text-secondary text-sm"><%= t(".enabled_description") %></p>
+    </div>
+
+    <%= styled_form_with model: Setting.new,
+                         url: settings_hosting_path,
+                         method: :patch,
+                         data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
+      <%= form.toggle :mcp_enabled,
+                      checked: Setting.mcp_enabled,
+                      disabled: !Current.user.admin?,
+                      data: { auto_submit_form_target: "auto" } %>
+    <% end %>
+  </div>
+
+  <dl class="text-sm space-y-1" id="mcp-status">
+    <div class="flex gap-2">
+      <dt class="text-secondary"><%= t(".token_label") %></dt>
+      <dd class="text-primary"><%= state[:token_configured] ? t(".token_set") : t(".token_not_set") %></dd>
+    </div>
+    <div class="flex gap-2">
+      <dt class="text-secondary"><%= t(".user_label") %></dt>
+      <dd class="text-primary">
+        <% if state[:user_email].blank? %>
+          <%= t(".user_not_set") %>
+        <% elsif state[:user_active] %>
+          <%= state[:user_email] %>
+        <% else %>
+          <%= t(".user_not_found", email: state[:user_email]) %>
+        <% end %>
+      </dd>
+    </div>
+  </dl>
+
+  <% unless state[:token_configured] && state[:user_active] %>
+    <p class="text-secondary text-sm"><%= t(".setup_hint") %></p>
+  <% end %>
+</div>
