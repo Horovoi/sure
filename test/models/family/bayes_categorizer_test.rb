@@ -28,7 +28,7 @@ class Family::BayesCategorizerTest < ActiveSupport::TestCase
     assert_equal @groceries, txn.category
     assert_equal "bayes", txn.lock_source(:category_id)
     assert txn.soft_locked?(:category_id)
-    enrichment = txn.data_enrichments.find_by!(attribute_name: "category_id")
+    enrichment = DataEnrichment.find_by!(enrichable: txn, attribute_name: "category_id")
     assert_equal "bayes", enrichment.source
     assert_operator enrichment.metadata["confidence"], :>=, Family::BayesCategorizer::CONFIDENCE_THRESHOLD
   end
