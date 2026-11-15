@@ -5,6 +5,9 @@ class DashboardTest < ApplicationSystemTestCase
 
   setup do
     @user = users(:family_admin)
+    # With the chat sidebar open the Sankey is narrower than its subcategory minimum
+    # (SUBCATEGORY_MIN_WIDTH) at the test window size, and the toggle draws nothing
+    @user.update!(show_ai_sidebar: false)
     @family = @user.family
     @start_date = Date.current.beginning_of_month
     @parent = @family.categories.create!(name: "Sankey Shopping", color: "#123456")
@@ -97,7 +100,8 @@ class DashboardTest < ApplicationSystemTestCase
         .filter(d => ["cash_flow_node", "deficit_node", "surplus_node"].includes(d.id))
         .map(d => d.filter_value ?? null)
     JS
-    assert nodes.any?
+    # The values are all nil, so not nodes.any?
+    assert_not_empty nodes
     assert nodes.all?(&:nil?), "structural nodes have no transactions filter"
 
     find("#cashflowSankeyChart g[data-node-id='cash_flow_node'] text").click

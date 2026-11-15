@@ -55,6 +55,8 @@
   </div>
 
   <% if series.any? %>
+    <%# The fullscreen header takes data-period-label after a frame refresh. A custom
+        range is formatted here, as the dialog formats it, not by the browser's locale. %>
     <div
     id="netWorthChart"
     class="w-full flex-1 min-h-52"
@@ -67,7 +69,7 @@
     data-time-series-chart-select-start-param-value="net_worth_start_date"
     data-time-series-chart-select-end-param-value="net_worth_end_date"
     draggable="false"
-    data-period-label="<%= period.key.present? ? period.label : nil %>"
+    data-period-label="<%= period.key.present? ? period.label : t("pages.dashboard.net_worth_chart_dialog.date_range", start: l(period.start_date, format: "%b %d, %Y"), end: l(period.end_date, format: "%b %d, %Y")) %>"
     data-period-start="<%= period.start_date %>"
     data-period-end="<%= period.end_date %>"></div>
   <% else %>
