@@ -186,5 +186,7 @@ class TradesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_entity
     assert_equal "text/html", response.media_type
+    # The header keeps the stored date while the form holds the blank one
+    assert_select "##{ActionView::RecordIdentifier.dom_id(@entry, :header)} span", text: I18n.l(@entry.reload.date, format: :long)
   end
 end
