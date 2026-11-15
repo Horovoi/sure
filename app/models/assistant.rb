@@ -52,7 +52,15 @@ class Assistant
 
         # Budgets: one period's amounts and spending, then one amount at a time
         Assistant::Function::GetBudget,
-        Assistant::Function::UpdateBudget
+        Assistant::Function::UpdateBudget,
+
+        # Rules: the list and its options, a preview, then saves (always inactive) and the apply that activates one
+        Assistant::Function::GetRules,
+        Assistant::Function::GetRuleOptions,
+        Assistant::Function::PreviewRule,
+        Assistant::Function::CreateRule,
+        Assistant::Function::UpdateRule,
+        Assistant::Function::ApplyRule
       ]
     end
 
