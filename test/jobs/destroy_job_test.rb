@@ -79,8 +79,9 @@ class DestroyJobTest < ActiveJob::TestCase
   end
 
   test "a deadlock after the row is gone is recorded instead of retried" do
+    # The real destroy (a bare delete would trip the goal_accounts foreign key), then a deadlock in a later step
     @account.define_singleton_method(:destroy) do
-      delete
+      super()
       raise ActiveRecord::Deadlocked, "deadlock detected"
     end
 
