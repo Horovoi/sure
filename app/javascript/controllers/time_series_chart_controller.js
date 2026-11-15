@@ -26,6 +26,9 @@ export default class extends Controller {
   connect() {
     this._install();
     document.addEventListener("turbo:load", this._reinstall);
+    // Colors that depend on the theme are baked into SVG attributes, so a
+    // theme switch needs a redraw (theme_controller dispatches the event).
+    document.documentElement.addEventListener("theme:change", this._reinstall);
     this._setupResizeObserver();
 
     // Allow external controllers to update the dataset dynamically (e.g., fullscreen sync)
@@ -42,6 +45,10 @@ export default class extends Controller {
   disconnect() {
     this._teardown();
     document.removeEventListener("turbo:load", this._reinstall);
+    document.documentElement.removeEventListener(
+      "theme:change",
+      this._reinstall,
+    );
     this._resizeObserver?.disconnect();
     if (this._onSetData) {
       this.element.removeEventListener("timeseries:set-data", this._onSetData);

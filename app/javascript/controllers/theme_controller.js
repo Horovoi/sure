@@ -39,14 +39,22 @@ export default class extends Controller {
     }
   }
 
-  // Sets or removes the data-theme attribute
+  // Sets the data-theme attribute and broadcasts a `theme:change` event so
+  // imperative consumers (D3/SVG/canvas) that bake colors into attributes can
+  // repaint. The event fires only when the theme actually flips: every page
+  // load re-applies the saved theme, and the page can hold two theme
+  // controllers (the <html> one and the preferences form), which must not
+  // trigger redundant chart redraws.
   setTheme(isDark) {
-    if (isDark) {
-      localStorage.theme = "dark";
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      localStorage.theme = "light";
-      document.documentElement.setAttribute("data-theme", "light");
+    const theme = isDark ? "dark" : "light";
+    const root = document.documentElement;
+    const changed = root.getAttribute("data-theme") !== theme;
+
+    localStorage.theme = theme;
+    root.setAttribute("data-theme", theme);
+
+    if (changed) {
+      root.dispatchEvent(new CustomEvent("theme:change", { detail: { theme } }));
     }
   }
 
