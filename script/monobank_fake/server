@@ -1,0 +1,32 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs the fake monobank API on 127.0.0.1 (never on another interface).
+#
+#   script/monobank_fake/server [--port 4599] [--fixture path.json] [--rate-limit-seconds 60]
+#
+# Then point the app at it:
+#   MONOBANK_API_BASE_URL=http://127.0.0.1:4599 MONOBANK_MIN_REQUEST_INTERVAL=60 bin/dev
+require "optparse"
+
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../../Gemfile", __dir__)
+require "bundler/setup"
+require "puma"
+require_relative "app"
+
+options = { port: 4599, fixture: File.expand_path("fixtures/sample.json", __dir__), rate_limit_seconds: nil }
+OptionParser.new do |parser|
+  parser.banner = "Usage: script/monobank_fake/server [options]"
+  parser.on("--port PORT", Integer, "port on 127.0.0.1 (default 4599)") { |value| options[:port] = value }
+  parser.on("--fixture FILE", "fixture JSON (default fixtures/sample.json)") { |value| options[:fixture] = value }
+  parser.on("--rate-limit-seconds N", Float, "seconds between requests per token and function") { |value| options[:rate_limit_seconds] = value }
+end.parse!
+
+app = MonobankFake::App.new(options[:fixture], rate_limit_seconds: options[:rate_limit_seconds])
+server = Puma::Server.new(app, nil, min_threads: 0, max_threads: 4)
+server.add_tcp_listener("127.0.0.1", options[:port])
+warn "monobank fake on http://127.0.0.1:#{options[:port]} (fixture #{options[:fixture]}, " \
+     "#{app.rate_limit_seconds}s between requests per token and function); Ctrl-C stops it"
+
+%w[INT TERM].each { |signal| trap(signal) { server.stop } }
+server.run.join
