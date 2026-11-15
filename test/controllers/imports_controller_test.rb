@@ -213,6 +213,35 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "1 transaction already recorded"
   end
 
+  test "a CSV import ready to publish counts only new rows and lists the entries it takes over" do
+    account = accounts(:depository)
+    same_name = account.entries.create!(date: Date.new(2024, 1, 1), amount: 100, currency: "USD", name: "Coffee Shop", entryable: Transaction.new)
+    nearby = account.entries.create!(date: Date.new(2024, 1, 2), amount: 40, currency: "USD", name: "Typed by hand", entryable: Transaction.new)
+
+    import = @user.family.imports.create!(
+      type: "TransactionImport",
+      account: account,
+      raw_file_str: "date,name,amount\n01/01/2024,Coffee Shop,100\n01/01/2024,CARD BAKERY,40\n01/03/2024,Books,25\n",
+      date_col_label: "date",
+      amount_col_label: "amount",
+      name_col_label: "name",
+      date_format: "%m/%d/%Y",
+      amount_type_strategy: "signed_amount",
+      signage_convention: "inflows_negative"
+    )
+    import.generate_rows_from_csv
+    import.reload.sync_mappings
+
+    get import_url(import)
+
+    assert_response :success
+    assert_select "#already_recorded a[href='#{entry_path(nearby)}']"
+    assert_select "#already_claimed a[href='#{entry_path(same_name)}']"
+    assert_includes response.body, "1 transaction already recorded under the same name"
+    # Only the Books row creates an entry
+    assert_equal({ transactions: 1, categories: 0, tags: 0 }, import.dry_run)
+  end
+
   test "a processing PDF offers a way out" do
     import = @user.family.imports.create!(type: "PdfImport")
     import.update_column(:status, "processing")

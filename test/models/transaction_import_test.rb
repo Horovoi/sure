@@ -238,6 +238,9 @@ class TransactionImportTest < ActiveSupport::TestCase
 
     # Row 1 claims the exact entry, row 2 is skipped against the nearby one, row 3 is new
     assert_equal [ nearby ], @import.already_recorded.values
+    assert_equal [ exact ], @import.already_claimed.values
+    # The summary counts only the row that creates an entry
+    assert_equal 1, @import.dry_run[:transactions]
 
     assert_difference -> { Entry.count } => 1 do
       @import.publish
