@@ -601,4 +601,30 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal Money.new(15.99 + 25, "USD"), controller.instance_variable_get(:@monthly_total)
   end
+
+  # w2-transfers custom-exchange-rate: the form prefills its hint from the rates it was
+  # given, keyed the way subscription_form_controller.js reads them, and asks the generic
+  # GET /exchange_rate for any other pair
+  test "the subscription form still prefills the conversion hint" do
+    ExchangeRate.create!(from_currency: "EUR", to_currency: @family.currency, date: 3.days.ago.to_date, rate: 1.08)
+
+    get new_subscription_url
+
+    assert_response :success
+    form = css_select("form[data-controller~='subscription-form']").first
+    assert form, "the subscription form is rendered"
+    rates = JSON.parse(form["data-subscription-form-exchange-rates-value"])
+    assert_in_delta 1.08, rates["EUR_to_#{@family.currency}"], 0.0001
+    assert_equal exchange_rate_path, form["data-subscription-form-exchange-rate-url-value"]
+  end
+
+  test "the old subscription rate route is gone" do
+    route = begin
+      Rails.application.routes.recognize_path("/subscriptions/fetch_exchange_rate", method: :get)
+    rescue ActionController::RoutingError
+      {}
+    end
+
+    assert_not_equal "fetch_exchange_rate", route[:action]
+  end
 end

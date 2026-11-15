@@ -198,6 +198,10 @@ Rails.application.routes.draw do
   end
   # --- end w2-transfers transfer-match-policy ---
 
+  # --- w2-transfers custom-exchange-rate: one rate lookup for every form (nearest-rate rule) ---
+  get :exchange_rate, to: "exchange_rates#show"
+  # --- end w2-transfers custom-exchange-rate ---
+
   resources :imports, only: %i[index new show create update destroy] do
     member do
       post :publish
@@ -257,7 +261,6 @@ Rails.application.routes.draw do
       post :detect
       post :approve_all_suggestions
       post :dismiss_all_suggestions
-      get :fetch_exchange_rate
     end
 
     member do

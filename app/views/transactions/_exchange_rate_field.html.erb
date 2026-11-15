@@ -1,0 +1,20 @@
+<%# locals: (form:, entry:) %>
+<%# The user's rate for an amount in a currency other than the account's. Blank means
+    the market rate (shown as the placeholder), which the balance then uses. %>
+<% account_currency = entry.account.currency %>
+<% if entry.currency != account_currency %>
+  <% market_rate = ExchangeRate.find_rate(from: entry.currency, to: account_currency, date: entry.date) %>
+  <%= form.fields_for :entryable do |ef| %>
+    <%= ef.text_field :exchange_rate,
+          label: t("transactions.exchange_rate_field.label", from: entry.currency, to: account_currency),
+          value: ef.object.exchange_rate&.to_s("F"),
+          placeholder: market_rate && ExchangeRate.valid_rate?(market_rate.rate) ? market_rate.rate.to_d.round(6).to_s("F") : nil,
+          inputmode: "decimal",
+          autocomplete: "off",
+          disabled: entry.linked?,
+          "data-auto-submit-form-target": "auto" %>
+  <% end %>
+  <p class="text-xs text-secondary px-1">
+    <%= market_rate ? t("transactions.exchange_rate_field.hint") : t("transactions.exchange_rate_field.no_market_rate", from: entry.currency, to: account_currency) %>
+  </p>
+<% end %>

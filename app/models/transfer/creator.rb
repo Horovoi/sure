@@ -1,10 +1,19 @@
 class Transfer::Creator
-  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:)
+  # exchange_rate and destination_amount apply only when the two accounts differ in
+  # currency, and the user gives at most one of them (the form's two tabs):
+  # - exchange_rate: the bank's rate from the source currency into the destination one;
+  #   the inflow is amount * rate.
+  # - destination_amount: what arrived, in the destination currency; the inflow is exactly
+  #   that amount.
+  # With neither, the inflow converts at the nearest-rate rule.
+  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:, exchange_rate: nil, destination_amount: nil)
     @family = family
     @source_account = family.accounts.find(source_account_id) # early throw if not found
     @destination_account = family.accounts.find(destination_account_id) # early throw if not found
     @date = date
     @amount = amount.to_d
+    @exchange_rate_input = exchange_rate
+    @destination_amount_input = destination_amount
   end
 
   # The legs' kinds (and the Investment Contributions category) are set by Transfer's after_create.
@@ -17,8 +26,8 @@ class Transfer::Creator
       status: "confirmed"
     )
 
-    if inflow_converted_money.nil?
-      transfer.errors.add(:base, :missing_exchange_rate, from: source_account.currency, to: destination_account.currency)
+    if (error = amount_error || conversion_error)
+      transfer.errors.add(:base, *error)
       return transfer
     end
 
@@ -62,18 +71,77 @@ class Transfer::Creator
       )
     end
 
-    # If destination account has different currency, its transaction shows up as converted at
-    # the nearest-rate rule. nil when the pair has no rate at all.
+    def cross_currency?
+      source_account.currency != destination_account.currency
+    end
+
+    # A zero amount (a blank or unreadable form value is 0 too) moves nothing
+    def amount_error
+      [ :invalid_amount ] if amount.zero?
+    end
+
+    # [error key, options] for Transfer#errors, or nil when the inflow can be converted
+    def conversion_error
+      return unless cross_currency?
+
+      if @exchange_rate_input.present? && @destination_amount_input.present?
+        [ :exchange_rate_and_destination_amount ]
+      elsif @exchange_rate_input.present? && custom_rate.nil?
+        [ :invalid_exchange_rate ]
+      elsif @destination_amount_input.present? && destination_amount.nil?
+        [ :invalid_destination_amount ]
+      elsif inflow_converted_money.nil?
+        [ :missing_exchange_rate, { from: source_account.currency, to: destination_account.currency } ]
+      end
+    end
+
+    # The money that arrives in the destination account. In another currency it is the
+    # user's destination amount, else the amount at the user's rate, else the amount at the
+    # nearest-rate rule. nil when none of these can convert it.
     def inflow_converted_money
       return @inflow_converted_money if defined?(@inflow_converted_money)
 
-      @inflow_converted_money = ExchangeRate.convert_or_leave_out(
-        Money.new(amount.abs, source_account.currency),
-        to: destination_account.currency,
-        date: date.presence || Date.current,
-        source: "Transfer::Creator",
-        family: family
-      )
+      source_money = Money.new(amount.abs, source_account.currency)
+
+      @inflow_converted_money = if !cross_currency?
+        source_money
+      elsif @exchange_rate_input.present? || @destination_amount_input.present?
+        user_converted_money(source_money)
+      else
+        ExchangeRate.convert_or_leave_out(
+          source_money,
+          to: destination_account.currency,
+          date: date.presence || Date.current,
+          source: "Transfer::Creator",
+          family: family
+        )
+      end
+    end
+
+    def user_converted_money(source_money)
+      return if @exchange_rate_input.present? && @destination_amount_input.present?
+
+      if @destination_amount_input.present?
+        destination_amount && Money.new(destination_amount, destination_account.currency)
+      else
+        source_money.exchange_to(destination_account.currency, date: date, custom_rate: custom_rate)
+      end
+    rescue Money::ConversionError
+      nil
+    end
+
+    def custom_rate
+      positive_decimal(@exchange_rate_input)
+    end
+
+    def destination_amount
+      positive_decimal(@destination_amount_input)
+    end
+
+    # A BigDecimal above zero, or nil for anything else
+    def positive_decimal(value)
+      number = UserDecimal.parse(value)
+      number if number&.positive?
     end
 
     def name_prefix

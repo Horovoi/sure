@@ -28,4 +28,43 @@ class TransfersTest < ApplicationSystemTestCase
       assert_text "Payment to"
     end
   end
+
+  # w2-transfers custom-exchange-rate
+  test "a UAH to USD transfer with the bank's rate" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    uah = @user.family.accounts.create!(name: "Hryvnia card", balance: 50_000, currency: "UAH", accountable: Depository.new)
+    usd = accounts(:depository)
+    ExchangeRate.create!(from_currency: "UAH", to_currency: "USD", date: Date.current, rate: 0.0241)
+
+    visit new_transfer_url
+
+    assert_no_selector "[data-testid=exchange-rate-tabs]", visible: true
+
+    select uah.name, from: "From"
+    select usd.name, from: "To"
+    fill_in "transfer[amount]", with: "4150"
+
+    within "[data-testid=exchange-rate-tabs]" do
+      assert_text "Market rate on #{Date.current.iso8601}"
+      click_on "Converted amount"
+      fill_in "transfer_converted_amount", with: "99.6"
+      assert_text "1 UAH = 0.024 USD"
+    end
+
+    click_button "Create transfer"
+
+    transfer = Transfer.order(:created_at).last
+    assert_equal uah, transfer.from_account
+    assert_equal(-99.6, transfer.inflow_transaction.entry.amount.to_f)
+    assert_equal 4_150, transfer.outflow_transaction.entry.amount
+  end
+
+  test "the rate tabs stay hidden for two accounts in one currency" do
+    visit new_transfer_url
+
+    select accounts(:depository).name, from: "From"
+    select accounts(:credit_card).name, from: "To"
+
+    assert_no_selector "[data-testid=exchange-rate-tabs]", visible: true
+  end
 end

@@ -2,7 +2,12 @@
 <%# On a re-render after a failed create the nature comes back inside entry[]. %>
 <% nature = params[:nature].presence || params.dig(:entry, :nature).presence || "outflow" %>
 
-<%= styled_form_with model: entry, url: transactions_path, class: "space-y-4" do |f| %>
+<% rate_accounts = Current.family.accounts.to_a %>
+<%= styled_form_with model: entry, url: transactions_path, class: "space-y-4", data: {
+      controller: "exchange-rate-form",
+      action: "submit->exchange-rate-form#prepareSubmit",
+      **exchange_rate_form_data(mode: "transaction", accounts: rate_accounts)
+    } do |f| %>
   <% if entry.errors.any? %>
     <%= render "shared/form_errors", model: entry %>
   <% end %>
@@ -18,12 +23,15 @@
     <%= f.text_field :name, label: t(".description"), placeholder: t(".description_placeholder"), required: true %>
 
     <% if @entry.account_id %>
-      <%= f.hidden_field :account_id %>
+      <%= f.hidden_field :account_id, data: { exchange_rate_form_target: "account" } %>
     <% else %>
-      <%= f.collection_select :account_id, Current.family.accounts.manual.active.alphabetically, :id, :name, { prompt: t(".account_prompt"), label: t(".account") }, required: true, class: "form-field__input text-ellipsis" %>
+      <%= f.collection_select :account_id, Current.family.accounts.manual.active.alphabetically, :id, :name, { prompt: t(".account_prompt"), label: t(".account") }, required: true, class: "form-field__input text-ellipsis",
+            data: { exchange_rate_form_target: "account", action: "change->exchange-rate-form#refresh" } %>
     <% end %>
 
-    <%= f.money_field :amount, label: t(".amount"), required: true %>
+    <%= f.money_field :amount, label: t(".amount"), required: true,
+          amount_data: { exchange_rate_form_target: "amount", action: "input->exchange-rate-form#recalculate" },
+          currency_data: { exchange_rate_form_target: "currency", action: "change->exchange-rate-form#refresh" } %>
     <%= f.fields_for :entryable do |ef| %>
       <%= render DS::CategorySelect.new(
             form: ef,
@@ -35,7 +43,16 @@
             recent_categories: recent_categories
           ) %>
     <% end %>
-    <%= f.date_field :date, label: t(".date"), required: true, min: Entry.min_supported_date, max: Date.current, value: Date.current %>
+    <%= f.date_field :date, label: t(".date"), required: true, min: Entry.min_supported_date, max: Date.current, value: entry.date || Date.current,
+          data: { exchange_rate_form_target: "date", action: "change->exchange-rate-form#refresh" } %>
+
+    <%# w2-transfers custom-exchange-rate: shown only when the amount's currency is not the account's %>
+    <%= render "shared/exchange_rate_tabs",
+          id_prefix: "entry",
+          rate_name: "entry[entryable_attributes][exchange_rate]",
+          converted_name: "entry[converted_amount]",
+          rate_value: params.dig(:entry, :entryable_attributes, :exchange_rate),
+          converted_value: params.dig(:entry, :converted_amount) %>
   </section>
 
   <%= render DS::Disclosure.new(title: t(".details")) do %>

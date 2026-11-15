@@ -133,4 +133,49 @@ class TransactionTest < ActiveSupport::TestCase
     transaction.toggle_tag!(tag)
     assert_empty transaction.reload.tag_ids
   end
+
+  # w2-transfers custom-exchange-rate
+  test "exchange_rate is stored in extra as a decimal and read back" do
+    transaction = Transaction.new
+    transaction.exchange_rate = "41,25"
+
+    assert_equal "41.25", transaction.extra["exchange_rate"]
+    assert_equal BigDecimal("41.25"), transaction.exchange_rate
+    assert transaction.valid?
+  end
+
+  test "a blank exchange_rate removes the rate and keeps the rest of extra" do
+    transaction = Transaction.new(extra: { "exchange_rate" => "41.25", "plaid" => { "pending" => false } })
+    transaction.exchange_rate = ""
+
+    assert_nil transaction.exchange_rate
+    assert_not transaction.extra.key?("exchange_rate")
+    assert_equal({ "pending" => false }, transaction.extra["plaid"])
+  end
+
+  test "exchange_rate must be greater than zero" do
+    [ "0", "-2" ].each do |value|
+      transaction = Transaction.new(exchange_rate: value)
+      assert_not transaction.valid?, "#{value} should be rejected"
+      assert transaction.errors.of_kind?(:exchange_rate, :greater_than)
+    end
+  end
+
+  test "exchange_rate must be a number and the bad value is never stored" do
+    transaction = Transaction.new(extra: { "exchange_rate" => "40" })
+    transaction.exchange_rate = "abc"
+
+    assert_not transaction.valid?
+    assert transaction.errors.of_kind?(:exchange_rate, :not_a_number)
+    assert_not transaction.extra.key?("exchange_rate")
+  end
+
+  test "custom_exchange_rate_applies? only when the entry and account currencies differ" do
+    account = accounts(:depository)
+    foreign = Entry.new(account: account, currency: "EUR", amount: 10, date: Date.current, name: "x", entryable: Transaction.new(exchange_rate: "1.1"))
+    local = Entry.new(account: account, currency: account.currency, amount: 10, date: Date.current, name: "x", entryable: Transaction.new(exchange_rate: "1.1"))
+
+    assert foreign.transaction.custom_exchange_rate_applies?
+    assert_not local.transaction.custom_exchange_rate_applies?
+  end
 end

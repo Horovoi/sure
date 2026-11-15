@@ -34,7 +34,9 @@ class TransfersController < ApplicationController
       source_account_id: transfer_params[:from_account_id],
       destination_account_id: transfer_params[:to_account_id],
       date: date,
-      amount: transfer_params[:amount].to_d
+      amount: transfer_params[:amount].to_d,
+      exchange_rate: transfer_params[:exchange_rate].presence,
+      destination_amount: transfer_params[:destination_amount].presence
     ).create
 
     if @transfer.persisted?
@@ -77,7 +79,7 @@ class TransfersController < ApplicationController
     end
 
     def transfer_params
-      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded ])
+      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate, :destination_amount ])
     end
 
     # Parsing raises on a bad value, which would be a 500; a blank or bad date is nil.

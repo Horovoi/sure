@@ -830,4 +830,59 @@ end
     assert_response :ok
     assert_select "select[name='investment_activity_label'] option[selected][value='Sell']"
   end
+
+  # w2-transfers custom-exchange-rate
+  test "creates a foreign-currency transaction with the user's rate" do
+    account = accounts(:depository)
+
+    post transactions_url, params: {
+      entry: {
+        account_id: account.id, name: "Hotel", date: Date.current, currency: "EUR", amount: 100, nature: "outflow",
+        entryable_type: "Transaction", entryable_attributes: { exchange_rate: "1,08" }
+      }
+    }
+
+    entry = account.entries.order(:created_at).last
+    assert_equal "Hotel", entry.name
+    assert_equal BigDecimal("1.08"), entry.transaction.exchange_rate
+  end
+
+  test "creates a foreign-currency transaction from the converted amount" do
+    account = accounts(:depository)
+
+    post transactions_url, params: {
+      entry: {
+        account_id: account.id, name: "Hotel", date: Date.current, currency: "EUR", amount: 100, nature: "outflow",
+        entryable_type: "Transaction", converted_amount: "108.5"
+      }
+    }
+
+    entry = account.entries.order(:created_at).last
+    assert_equal BigDecimal("1.085"), entry.transaction.exchange_rate
+  end
+
+  test "a bad rate shows the form again" do
+    account = accounts(:depository)
+
+    assert_no_difference "Entry.count" do
+      post transactions_url, params: {
+        entry: {
+          account_id: account.id, name: "Hotel", date: Date.current, currency: "EUR", amount: 100, nature: "outflow",
+          entryable_type: "Transaction", entryable_attributes: { exchange_rate: "0" }
+        }
+      }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "changing the rate in the drawer syncs the account" do
+    entry = create_transaction(account: accounts(:depository), currency: "EUR", amount: 50)
+
+    assert_enqueued_with job: SyncJob do
+      patch transaction_url(entry), params: { entry: { entryable_attributes: { id: entry.entryable_id, exchange_rate: "1.1" } } }
+    end
+
+    assert_equal BigDecimal("1.1"), entry.reload.transaction.exchange_rate
+  end
 end

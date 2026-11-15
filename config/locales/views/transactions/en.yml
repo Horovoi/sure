@@ -51,6 +51,10 @@ en:
       recurring: Recurring
     results:
       upcoming: Upcoming Recurring Transactions
+    exchange_rate_field:
+      hint: Leave blank to use the market rate.
+      label: Exchange rate, 1 %{from} in %{to}
+      no_market_rate: No stored rate from %{from} to %{to}, so this amount is left out of the balance until you enter one.
     show:
       account_label: Account
       additional_details: Additional details

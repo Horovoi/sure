@@ -385,11 +385,12 @@ class TransactionsController < ApplicationController
   private
     def entry_params
       entry_params = params.expect(entry: [
-        :name, :date, :amount, :currency, :excluded, :notes, :nature, :entryable_type,
-        entryable_attributes: [ :id, :category_id, :merchant_id, :kind, :investment_activity_label, { tag_ids: [] } ]
+        :name, :date, :amount, :currency, :excluded, :notes, :nature, :entryable_type, :converted_amount,
+        entryable_attributes: [ :id, :category_id, :merchant_id, :kind, :investment_activity_label, :exchange_rate, { tag_ids: [] } ]
       ])
 
       nature = entry_params.delete(:nature)
+      apply_converted_amount!(entry_params)
 
       # A blank amount or date would set the saved value to nil, and the page shown again
       # needs both. Dropping it keeps the saved value on update; on create the entry's
@@ -412,6 +413,28 @@ class TransactionsController < ApplicationController
       end
 
       entry_params
+    end
+
+    # w2-transfers custom-exchange-rate: the form's "Converted amount" tab sends what the
+    # amount came to in the account currency. It is stored as the rate it implies
+    # (converted / amount), so an edit of the amount later keeps the user's rate.
+    def apply_converted_amount!(entry_params)
+      converted = entry_params.delete(:converted_amount)
+      return if converted.blank?
+
+      converted_value = decimal_param(converted)
+      amount_value = decimal_param(entry_params[:amount]) || @entry&.amount
+      entry_params[:entryable_attributes] ||= {}
+
+      entry_params[:entryable_attributes][:exchange_rate] = if converted_value&.positive? && amount_value.present? && !amount_value.zero?
+        (converted_value / amount_value.abs).round(12).to_s("F")
+      else
+        converted # not a usable amount: the transaction's validation rejects it
+      end
+    end
+
+    def decimal_param(value)
+      UserDecimal.parse(value)
     end
 
     def search_params

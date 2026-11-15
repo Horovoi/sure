@@ -130,4 +130,45 @@ class Balance::SyncCacheTest < ActiveSupport::TestCase
     Balance::Materializer.new(@account, strategy: :forward).materialize_balances
     assert_equal 1_000, @account.reload.balance
   end
+
+  # w2-transfers custom-exchange-rate
+  test "a foreign transaction with a custom rate converts at that rate, not the market rate" do
+    day = 3.days.ago.to_date
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: day, rate: 41)
+    entry = create_transaction(account: @account, date: day, amount: 10, currency: "USD")
+    entry.transaction.update!(exchange_rate: "41.75")
+
+    converted = Balance::SyncCache.new(@account).get_entries(day).first
+
+    assert_equal BigDecimal("417.5"), converted.amount
+    assert_equal "UAH", converted.currency
+  end
+
+  test "a custom rate converts a transaction that has no market rate at all" do
+    day = 3.days.ago.to_date
+    entry = create_transaction(account: @account, date: day, amount: 10, currency: "PLN")
+    entry.transaction.update!(exchange_rate: "10.5")
+
+    cache = Balance::SyncCache.new(@account)
+
+    assert_equal BigDecimal("105"), cache.get_entries(day).first.amount
+    assert_equal 0, cache.unconvertible_entry_count
+  end
+
+  test "a custom rate on a transaction in the account currency is ignored" do
+    day = 3.days.ago.to_date
+    entry = create_transaction(account: @account, date: day, amount: 100, currency: "UAH")
+    entry.transaction.update_columns(extra: { "exchange_rate" => "2" })
+
+    assert_equal 100, Balance::SyncCache.new(@account).get_entries(day).first.amount
+  end
+
+  test "a stored custom rate that is not above zero falls back to the market rate" do
+    day = 3.days.ago.to_date
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: day, rate: 41)
+    entry = create_transaction(account: @account, date: day, amount: 10, currency: "USD")
+    entry.transaction.update_columns(extra: { "exchange_rate" => "0" })
+
+    assert_equal 410, Balance::SyncCache.new(@account).get_entries(day).first.amount
+  end
 end

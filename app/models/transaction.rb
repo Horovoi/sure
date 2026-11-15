@@ -23,6 +23,12 @@ class Transaction < ApplicationRecord
 
   after_save :clear_merchant_unlinked_association, if: :merchant_id_previously_changed?
 
+  # w2-transfers custom-exchange-rate: a rate the user entered for a transaction in a
+  # currency other than its account's (the bank's rate). Stored in extra["exchange_rate"]
+  # as a decimal string; Balance::SyncCache converts the amount with it instead of the
+  # stored market rate.
+  validate :exchange_rate_must_be_positive
+
   enum :kind, {
     standard: "standard", # A regular transaction, included in budget analytics
     funds_movement: "funds_movement", # Movement of funds between accounts, excluded from budget analytics
@@ -188,6 +194,38 @@ class Transaction < ApplicationRecord
     category.touch(:last_used_at) if saved_change_to_category_id? && category.present?
   end
 
+  # --- Custom exchange rate (w2-transfers) ---
+
+  # The user's rate from the entry currency into the account currency, as a BigDecimal,
+  # or nil when the market rate applies
+  def exchange_rate
+    raw = extra.is_a?(Hash) ? extra["exchange_rate"] : nil
+    return if raw.blank?
+
+    BigDecimal(raw.to_s)
+  rescue ArgumentError, TypeError
+    nil
+  end
+
+  # Blank removes the rate (the market rate applies again). A value that is not a number
+  # is kept aside for the validation message and never written to extra.
+  def exchange_rate=(value)
+    @exchange_rate_input = value
+    data = (extra.is_a?(Hash) ? extra : {}).except("exchange_rate")
+
+    if value.present?
+      rate = parse_exchange_rate(value)
+      data["exchange_rate"] = rate.to_s("F") if rate
+    end
+
+    self.extra = data
+  end
+
+  # A custom rate converts only when the entry and its account differ in currency
+  def custom_exchange_rate_applies?
+    exchange_rate.present? && entry.present? && entry.account.present? && entry.currency != entry.account.currency
+  end
+
   # Adds or removes one tag while holding the row lock. Assigning tag_ids
   # replaces the whole set, so two quick toggles computed from the same
   # snapshot would drop one of them; per-tagging writes under the lock can't.
@@ -204,6 +242,20 @@ class Transaction < ApplicationRecord
     def potential_posted_match_data
       return nil unless extra.is_a?(Hash)
       extra["potential_posted_match"]
+    end
+
+    def parse_exchange_rate(value)
+      UserDecimal.parse(value)
+    end
+
+    def exchange_rate_must_be_positive
+      return if @exchange_rate_input.blank? && exchange_rate.nil?
+
+      if @exchange_rate_input.present? && parse_exchange_rate(@exchange_rate_input).nil?
+        errors.add(:exchange_rate, :not_a_number)
+      elsif exchange_rate.present? && !exchange_rate.positive?
+        errors.add(:exchange_rate, :greater_than, count: 0)
+      end
     end
 
     def clear_merchant_unlinked_association

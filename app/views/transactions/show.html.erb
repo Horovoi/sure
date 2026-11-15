@@ -78,6 +78,9 @@
                     disable_currency: @entry.linked? %>
             </div>
 
+            <%# w2-transfers custom-exchange-rate %>
+            <%= render "transactions/exchange_rate_field", form: f, entry: @entry %>
+
             <%= f.fields_for :entryable do |ef| %>
               <% category_classification = @entry.amount.negative? ? "income" : "expense" %>
               <%= render DS::CategorySelect.new(

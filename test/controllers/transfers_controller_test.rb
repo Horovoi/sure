@@ -173,4 +173,44 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     assert_equal category, transfer.outflow_transaction.reload.category
     assert_not_nil category.reload.last_used_at
   end
+
+  # w2-transfers custom-exchange-rate
+  test "creates a cross-currency transfer at the user's rate" do
+    family = users(:family_admin).family
+    uah = family.accounts.create!(name: "UAH card", balance: 10_000, currency: "UAH", accountable: Depository.new)
+
+    assert_difference "Transfer.count", 1 do
+      post transfers_url, params: {
+        transfer: { from_account_id: uah.id, to_account_id: accounts(:depository).id, date: Date.current, amount: 4_150, exchange_rate: "0,024" }
+      }
+    end
+
+    transfer = Transfer.order(:created_at).last
+    assert_equal BigDecimal("-99.6"), transfer.inflow_transaction.entry.amount
+  end
+
+  test "creates a cross-currency transfer with the received amount" do
+    family = users(:family_admin).family
+    uah = family.accounts.create!(name: "UAH card", balance: 10_000, currency: "UAH", accountable: Depository.new)
+
+    post transfers_url, params: {
+      transfer: { from_account_id: uah.id, to_account_id: accounts(:depository).id, date: Date.current, amount: 4_150, destination_amount: "100" }
+    }
+
+    assert_equal(-100, Transfer.order(:created_at).last.inflow_transaction.entry.amount)
+  end
+
+  test "a bad exchange rate shows the form again" do
+    family = users(:family_admin).family
+    uah = family.accounts.create!(name: "UAH card", balance: 10_000, currency: "UAH", accountable: Depository.new)
+
+    assert_no_difference "Transfer.count" do
+      post transfers_url, params: {
+        transfer: { from_account_id: uah.id, to_account_id: accounts(:depository).id, date: Date.current, amount: 100, exchange_rate: "-1" }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_select "[data-testid=exchange-rate-tabs]"
+  end
 end

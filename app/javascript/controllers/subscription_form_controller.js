@@ -6,7 +6,11 @@ export default class extends Controller {
 
   static values = {
     familyCurrency: String,
-    exchangeRates: Object
+    exchangeRates: Object,
+    // GET /exchange_rate (ExchangeRatesController): the nearest-rate rule, 404 with no rate
+    exchangeRateUrl: { type: String, default: "/exchange_rate" },
+    fetchingText: String,
+    hintTemplate: String
   }
 
   connect() {
@@ -83,11 +87,14 @@ export default class extends Controller {
 
     if (!rate) {
       // Fetch from server (which will also cache to DB)
-      this.conversionTextTarget.textContent = "Fetching rate..."
+      this.conversionTextTarget.textContent = this.fetchingTextValue
       this.conversionHintTarget.classList.remove("hidden")
 
       try {
-        const response = await fetch(`/subscriptions/fetch_exchange_rate?from=${selectedCurrency}&to=${targetCurrency}`)
+        const url = new URL(this.exchangeRateUrlValue, window.location.origin)
+        url.searchParams.set("from", selectedCurrency)
+        url.searchParams.set("to", targetCurrency)
+        const response = await fetch(url, { headers: { Accept: "application/json" } })
         if (response.ok) {
           const data = await response.json()
           rate = data.rate
@@ -118,7 +125,9 @@ export default class extends Controller {
     }).format(convertedAmount)
 
     // Update the hint text
-    this.conversionTextTarget.textContent = `≈ ${formattedAmount} ${targetCurrency} at current rate`
+    this.conversionTextTarget.textContent = this.hintTemplateValue
+      .replace("%{amount}", formattedAmount)
+      .replace("%{currency}", targetCurrency)
     this.conversionHintTarget.classList.remove("hidden")
   }
 }
