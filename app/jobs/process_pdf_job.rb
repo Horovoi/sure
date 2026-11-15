@@ -1,5 +1,5 @@
 class ProcessPdfJob < ApplicationJob
-  queue_as :medium_priority
+  queue_as :ai_low_priority
 
   # Runs the AI steps for a PdfImport in the processing state. Each step skips work a
   # previous attempt already finished (AI summary, vault upload, extraction), so a retry

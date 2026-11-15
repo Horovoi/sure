@@ -1,5 +1,5 @@
 class AssistantResponseJob < ApplicationJob
-  queue_as :high_priority
+  queue_as :ai_high_priority
 
   # Never raises for a failed turn: the turn records its own failure, and a Sidekiq retry would run it again.
   def perform(message)

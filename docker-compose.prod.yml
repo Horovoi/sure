@@ -93,6 +93,10 @@ services:
         condition: service_healthy
     environment:
       <<: *rails_env
+      # Worker threads (and its DB pool): 3 for the default lane, 2 for the AI lane
+      # (config/sidekiq.yml). Puma (web) keeps its own default of 3.
+      RAILS_MAX_THREADS: 5
+      RAILS_AI_MAX_THREADS: 2
     networks:
       - sure_net
 

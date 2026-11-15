@@ -62,7 +62,7 @@ class Chat < ApplicationRecord
     AssistantMessage.create!(chat: self, ai_model: ai_model)
   end
 
-  # Retries the last turn: a failed one, a lost one (in flight for longer than AssistantMessage::STALE_AFTER),
+  # Retries the last turn: a failed one, a lost one (see AssistantMessage.stale),
   # or a prompt that never got an assistant message (the previous version left those when its job was lost).
   # Raises TurnInProgressError while a turn runs and NothingToRetryError when the last turn completed.
   def retry_last_turn!
@@ -128,7 +128,7 @@ class Chat < ApplicationRecord
 
     def fail_stale_turns
       assistant_messages.stale.each do |turn|
-        turn.fail_turn(AssistantMessage::StaleTurnError.new("No progress for #{AssistantMessage::STALE_AFTER.inspect}"))
+        turn.fail_turn(AssistantMessage::StaleTurnError.new("No progress for #{turn.stale_after.inspect}"))
       end
     end
 end
