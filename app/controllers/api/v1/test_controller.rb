@@ -3,8 +3,17 @@
 # Test controller for API V1 Base Controller functionality
 # This controller is only used for testing the base controller behavior
 class Api::V1::TestController < Api::V1::BaseController
+  before_action :capture_request_date
+
   def index
-    render_json({ message: "test_success", user: current_resource_owner&.email, current_user: Current.user&.email })
+    render_json({
+      message: "test_success",
+      user: current_resource_owner&.email,
+      current_user: Current.user&.email,
+      date: Date.current.iso8601,
+      callback_date: @request_date.iso8601,
+      time_zone: Time.zone.tzinfo.identifier
+    })
   end
 
   def not_found
@@ -44,4 +53,9 @@ class Api::V1::TestController < Api::V1::BaseController
       scopes: current_scopes
     })
   end
+
+  private
+    def capture_request_date
+      @request_date = Date.current
+    end
 end

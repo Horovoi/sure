@@ -33,6 +33,24 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "tools run in the family time zone" do
+    @user.family.update!(timezone: "Europe/Kyiv")
+
+    with_mcp_env do
+      Time.use_zone("UTC") do
+        # 23:30 UTC on 14 November is already 15 November in Kyiv
+        travel_to Time.utc(2026, 11, 14, 23, 30) do
+          post_jsonrpc "tools/call", params: { name: "get_accounts", arguments: {} }
+
+          assert_response :success
+          result = JSON.parse(JSON.parse(response.body).dig("result", "content", 0, "text"))
+          assert_equal "2026-11-15", result["as_of_date"]
+          assert_equal "UTC", Time.zone.name
+        end
+      end
+    end
+  end
+
   private
     def with_mcp_env(&block)
       with_env_overrides(MCP_API_TOKEN: "mcp-test-token", MCP_USER_EMAIL: @user.email, &block)

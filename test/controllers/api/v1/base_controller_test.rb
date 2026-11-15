@@ -32,6 +32,32 @@ class Api::V1::BaseControllerTest < ActionDispatch::IntegrationTest
     Redis.new.del("api_rate_limit:#{@api_key.id}")
   end
 
+  test "uses each authenticated family's time zone in callbacks and actions without leaking it" do
+    other_user = users(:empty)
+    other_key_value = "timezone_#{SecureRandom.hex(8)}"
+    other_key = ApiKey.create!(user: other_user, name: "Timezone Read", scopes: [ "read" ], display_key: other_key_value)
+    @user.family.update!(timezone: "Europe/Kyiv")
+    other_user.family.update!(timezone: "America/Los_Angeles")
+
+    Time.use_zone("UTC") do
+      # 23:30 UTC on 29 February is already 1 March in Kyiv and still 29 February in Los Angeles
+      travel_to Time.utc(2024, 2, 29, 23, 30) do
+        [ [ @plain_api_key, "Europe/Kyiv", "2024-03-01" ],
+          [ other_key_value, "America/Los_Angeles", "2024-02-29" ] ].each do |key, zone, date|
+          get "/api/v1/test", headers: { "X-Api-Key" => key }
+
+          assert_response :success
+          assert_equal zone, response.parsed_body["time_zone"]
+          assert_equal date, response.parsed_body["date"]
+          assert_equal date, response.parsed_body["callback_date"]
+          assert_equal "UTC", Time.zone.name
+        end
+      end
+    end
+  ensure
+    Redis.new.del("api_rate_limit:#{other_key.id}") if other_key
+  end
+
   test "should require authentication" do
     # Test that endpoints require OAuth tokens
     get "/api/v1/test"

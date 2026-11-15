@@ -8,6 +8,10 @@ class McpController < ApplicationController
   skip_before_action :detect_os
 
   before_action :authenticate_mcp_token!
+  # Localize wraps the request in the family time zone before authentication sets Current. Wrap again after it,
+  # so tools see the family zone (Date.current is the family's date).
+  skip_around_action :switch_timezone
+  around_action :switch_timezone
 
   def handle
     body = parse_request_body
