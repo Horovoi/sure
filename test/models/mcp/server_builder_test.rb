@@ -39,7 +39,7 @@ class Mcp::ServerBuilderTest < ActiveSupport::TestCase
     server = Mcp::ServerBuilder.build(@credential)
 
     assert_equal "sure", server.name
-    assert_equal Sure.version.to_s, server.version
+    assert_equal Sure.build_tag.to_s, server.version
     assert_equal Assistant.function_classes.map(&:name), server.tools.keys
     assert_equal Mcp::ServerBuilder::LIST_TTL_MS, server.ttl_ms
     assert_equal "private", server.cache_scope

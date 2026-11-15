@@ -23,7 +23,7 @@ class McpControllerTest < ActionDispatch::IntegrationTest
       assert_equal Mcp::ServerBuilder::LIST_TTL_MS, result["ttlMs"]
       assert_equal "private", result["cacheScope"]
       assert_equal "sure", result.dig("_meta", "io.modelcontextprotocol/serverInfo", "name")
-      assert_equal Sure.version.to_s, result.dig("_meta", "io.modelcontextprotocol/serverInfo", "version")
+      assert_equal Sure.build_tag.to_s, result.dig("_meta", "io.modelcontextprotocol/serverInfo", "version")
       assert result["capabilities"].key?("tools")
       assert_match "National Bank of Ukraine", result["instructions"]
     end

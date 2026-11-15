@@ -23,7 +23,7 @@ class Mcp::ServerBuilder
     MCP::Server.new(
       name: SERVER_NAME,
       title: "Sure",
-      version: Sure.version.to_s,
+      version: Sure.build_tag.to_s,
       instructions: instructions,
       tools: tools,
       capabilities: { tools: {} },

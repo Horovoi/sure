@@ -1,6 +1,6 @@
 require "test_helper"
 
-class Imports::PdfStatementBalanceCheckViewTest < ActionView::TestCase
+class ImportsPdfStatementBalanceCheckViewTest < ActionView::TestCase
   setup do
     @account = accounts(:depository)
     @import = families(:dylan_family).imports.create!(type: "PdfImport", account: @account, date_format: "%Y-%m-%d")
