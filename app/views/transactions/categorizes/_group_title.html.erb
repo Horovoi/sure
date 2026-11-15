@@ -1,0 +1,9 @@
+<%# locals: (display_name:, transaction_type:) %>
+<div id="categorize_group_title" class="flex items-center gap-2 min-w-0">
+  <h2 class="text-lg font-semibold text-primary truncate"><%= display_name %></h2>
+  <% if transaction_type == "income" %>
+    <%= render DS::Pill.new(label: t("transactions.categorizes.show.type_income"), tone: :success, marker: false) %>
+  <% elsif transaction_type == "expense" %>
+    <%= render DS::Pill.new(label: t("transactions.categorizes.show.type_expense"), tone: :neutral, marker: false) %>
+  <% end %>
+</div>

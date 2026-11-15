@@ -224,6 +224,15 @@ Rails.application.routes.draw do
     resource :bulk_update, only: %i[new create]
   end
 
+  # --- Categorize wizard (w2-rules) ---
+  namespace :transactions do
+    resource :categorize, only: %i[show create] do
+      patch :assign_entry, on: :collection
+      get :preview_rule, on: :collection
+    end
+  end
+  # --- end categorize wizard ---
+
   # --- Transaction name suggestions (w2-rules): before resources, so the name is not taken for a :id ---
   get "transactions/name_suggestions", to: "transactions#name_suggestions", as: :name_suggestions_transactions
   # --- end transaction name suggestions ---

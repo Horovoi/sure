@@ -245,6 +245,23 @@ class Rule < ApplicationRecord
     super
   end
 
+  # The rule the categorize wizard offers for a group: transactions of the group's type
+  # from its merchant (or, for a group without a merchant, whose name contains
+  # name_filter) get the category. Not saved; the caller saves it.
+  def self.build_for_categorize_group(family, category:, transaction_type:, merchant: nil, name_filter: nil)
+    name_filter = name_filter.to_s.gsub(/[[:space:]]+/, " ").strip
+    rule = family.rules.build(name: merchant&.name || name_filter, resource_type: "transaction", active: true)
+
+    if merchant
+      rule.conditions.build(condition_type: "transaction_merchant", operator: "=", value: merchant.id)
+    else
+      rule.conditions.build(condition_type: "transaction_name", operator: "like", value: name_filter)
+    end
+    rule.conditions.build(condition_type: "transaction_type", operator: "=", value: transaction_type) if transaction_type.in?(%w[income expense])
+    rule.actions.build(action_type: "set_transaction_category", value: category.id)
+    rule
+  end
+
   private
     # Serialized per family with a transaction-scoped advisory lock: without it, two
     # rules created at the same time both read the same MAX(position) and share a

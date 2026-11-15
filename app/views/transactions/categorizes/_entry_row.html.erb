@@ -1,0 +1,27 @@
+<%# locals: (entry:, category_options:) %>
+<div id="<%= dom_id(entry, :categorize) %>"
+     class="grid grid-cols-[1rem_minmax(0,1fr)_6.5rem_6.5rem_9rem] gap-3 items-center px-4 py-3 bg-container hover:bg-container-hover"
+     data-testid="categorize-entry-row">
+  <input type="hidden" name="categorize[all_entry_ids][]" value="<%= entry.id %>">
+  <input type="checkbox" name="categorize[entry_ids][]" value="<%= entry.id %>"
+         checked
+         class="checkbox checkbox--light shrink-0"
+         aria-label="<%= t("transactions.categorizes.entry_row.include_checkbox", name: entry.name) %>"
+         data-action="change->categorize#uncheckRule">
+  <div class="min-w-0">
+    <p class="font-medium text-primary truncate"><%= entry.name %></p>
+    <p class="text-xs text-secondary truncate"><%= entry.account.name %></p>
+  </div>
+  <span class="text-secondary whitespace-nowrap"><%= format_date(entry.date) %></span>
+  <span class="privacy-sensitive font-medium text-right whitespace-nowrap <%= entry.amount.negative? ? "text-success" : "text-primary" %>">
+    <%= format_money(entry.amount_money.abs) %>
+  </span>
+  <%# No name: the row's own pick saves at once and is never part of the group form %>
+  <select class="w-full text-xs border border-primary rounded-lg px-1.5 py-1 bg-container text-secondary"
+          aria-label="<%= t("transactions.categorizes.entry_row.assign_category_select", name: entry.name) %>"
+          data-entry-id="<%= entry.id %>"
+          data-action="change->categorize#assignEntry">
+    <option value=""><%= t("transactions.categorizes.entry_row.assign_category_prompt") %></option>
+    <%= grouped_options_for_select(category_options) %>
+  </select>
+</div>

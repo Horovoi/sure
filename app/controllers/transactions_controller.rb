@@ -40,6 +40,7 @@ class TransactionsController < ApplicationController
         if turbo_frame_request?
           render partial: "transactions/results_frame"
         else
+          @uncategorized_count = uncategorized_transactions_count
           render :index
         end
       end
@@ -394,6 +395,12 @@ class TransactionsController < ApplicationController
   end
 
   private
+    # --- Categorize wizard (w2-rules): the count on the wizard's link in the page header ---
+    def uncategorized_transactions_count
+      Current.family.entries.uncategorized_transactions.count
+    end
+    # --- end categorize wizard ---
+
     def entry_params
       entry_params = params.expect(entry: [
         :name, :date, :amount, :currency, :excluded, :notes, :nature, :entryable_type,

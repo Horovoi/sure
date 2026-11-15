@@ -42,6 +42,11 @@ class Transaction < ApplicationRecord
   INTERNAL_MOVEMENT_LABELS = [ "Transfer", "Sweep In", "Sweep Out", "Exchange" ].freeze
   TRANSFER_KINDS = %w[funds_movement cc_payment loan_payment].freeze
 
+  # Kinds the "Uncategorized" filter and the categorize wizard leave out: the two legs of a
+  # transfer between own accounts have nothing to categorize. A loan payment and an
+  # investment contribution are budget outflows, so they stay in.
+  UNCATEGORIZED_EXCLUDED_KINDS = %w[funds_movement cc_payment].freeze
+
   # Pending transaction scopes - filter based on provider pending flags in extra JSONB
   # Works with any provider that stores pending status in extra["provider_name"]["pending"]
   scope :pending, -> {

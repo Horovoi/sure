@@ -1,0 +1,105 @@
+<%# One step of the categorize wizard: one group of uncategorized transactions %>
+<div class="w-full space-y-6 pb-12"
+     data-controller="categorize"
+     data-categorize-assign-entry-url-value="<%= assign_entry_transactions_categorize_path %>"
+     data-categorize-preview-rule-url-value="<%= preview_rule_transactions_categorize_path %>"
+     data-categorize-position-value="<%= @position %>"
+     data-categorize-transaction-type-value="<%= @group.transaction_type %>">
+  <div class="flex items-center justify-between gap-4">
+    <%= render "transactions/categorizes/remaining_count", total_uncategorized: @total_uncategorized %>
+
+    <%= render DS::Link.new(
+          text: t(".skip"),
+          icon: "arrow-right",
+          icon_position: :right,
+          variant: "ghost",
+          href: transactions_categorize_path(position: @position + 1)
+        ) %>
+  </div>
+
+  <div class="space-y-1">
+    <%= render "transactions/categorizes/group_title",
+               display_name: @group.display_name,
+               transaction_type: @group.transaction_type %>
+    <%= render "transactions/categorizes/group_summary", entries: @group.entries %>
+  </div>
+
+  <%= form_with scope: :categorize, url: transactions_categorize_path, method: :post, id: "categorize-form", class: "w-full" do |form| %>
+    <%= form.hidden_field :position, value: @position %>
+    <%= form.hidden_field :transaction_type, value: @group.transaction_type %>
+    <%= form.hidden_field :merchant_id, value: @group.merchant&.id %>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start w-full">
+      <div class="space-y-4 min-w-0">
+        <div class="bg-container shadow-border-xs rounded-xl p-4 space-y-3">
+          <label class="flex items-center gap-2.5 cursor-pointer">
+            <%= form.check_box :create_rule,
+                  { checked: @group.entries.size > 1,
+                    class: "checkbox checkbox--light",
+                    data: { categorize_target: "createRuleCheckbox", action: "change->categorize#toggleRuleDetails" } },
+                  "1", "0" %>
+            <span class="text-sm font-medium text-primary"><%= t(".create_rule_label") %></span>
+          </label>
+
+          <div data-categorize-target="ruleDetails" class="<%= "opacity-40" unless @group.entries.size > 1 %>">
+            <%= form.hidden_field :grouping_key, value: @group.grouping_key, data: { categorize_target: "groupingKeyHidden" } %>
+
+            <p class="text-sm text-secondary leading-relaxed">
+              <% type_label = t(".type_#{@group.transaction_type}").downcase %>
+              <% if @group.merchant_group? %>
+                <%= t(".rule_description_merchant", type: type_label, merchant: @group.display_name) %>
+              <% else %>
+                <%= t(".rule_description_prefix", type: type_label) %>
+                <span class="inline-flex items-center gap-1 align-middle">
+                  <span class="font-medium text-primary" data-categorize-target="filterDisplay">"<%= @group.grouping_key %>"</span>
+                  <button type="button"
+                          class="text-secondary hover:text-primary"
+                          title="<%= t(".edit_filter") %>"
+                          aria-label="<%= t(".edit_filter") %>"
+                          data-action="click->categorize#startFilterEdit"
+                          data-categorize-target="filterEditTrigger">
+                    <%= icon("pencil", size: "sm") %>
+                  </button>
+                  <span class="hidden items-center gap-1" data-categorize-target="filterEditArea">
+                    <input type="text"
+                           value="<%= @group.grouping_key %>"
+                           autocomplete="off"
+                           aria-label="<%= t(".edit_filter") %>"
+                           class="text-sm border border-primary rounded-lg px-2 py-0.5 bg-container text-primary focus:outline-none focus:ring-1 w-40"
+                           data-categorize-target="filterInput"
+                           data-action="keydown.enter->categorize#confirmFilterEdit keydown.esc->categorize#cancelFilterEdit">
+                    <button type="button"
+                            class="flex items-center justify-center w-6 h-6 rounded-md button-bg-primary text-inverse shrink-0"
+                            title="<%= t(".confirm_filter") %>"
+                            aria-label="<%= t(".confirm_filter") %>"
+                            data-action="click->categorize#confirmFilterEdit">
+                      <%= icon("check", size: "sm", color: "current") %>
+                    </button>
+                  </span>
+                </span>
+                <%= t(".rule_description_suffix") %>
+              <% end %>
+            </p>
+          </div>
+        </div>
+
+        <div class="bg-container rounded-xl shadow-border-xs p-4 space-y-3">
+          <p class="text-xs text-secondary"><%= t(".transactions_hint") %></p>
+          <%= render "transactions/categorizes/transaction_list", entries: @group.entries, categories: @categories %>
+        </div>
+      </div>
+
+      <div class="bg-container shadow-border-xs rounded-xl p-4 space-y-3">
+        <p class="text-sm text-secondary"><%= t(".assign_category_hint") %></p>
+        <%= render DS::CategorySelect.new(
+              form: form,
+              categories: @categories,
+              classification: @group.transaction_type,
+              recent_categories: @recent_categories,
+              label: t(".assign_category"),
+              auto_submit: true
+            ) %>
+      </div>
+    </div>
+  <% end %>
+</div>
