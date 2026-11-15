@@ -163,6 +163,40 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     entries.each { |entry| assert_not entry.locked?(:name) }
   end
 
+  # --- w3-toolstrx reconciliation-status ---
+  test "bulk reconcile marks the selected manual transactions and counts only those" do
+    account = accounts(:depository)
+    entries = 2.times.map { |i| create_bulk_test_transaction(account, "Reconcile #{i}") }
+    synced = create_bulk_test_transaction(accounts(:connected), "Synced")
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: (entries + [ synced ]).map(&:id), reconciled_status: "cleared" } }
+
+    assert_redirected_to transactions_url
+    assert_equal I18n.t("transactions.bulk_updates.create.success", count: 2), flash[:notice]
+    assert entries.all? { |entry| entry.reload.cleared? }
+    assert synced.reload.unreconciled?
+    entries.each { |entry| assert_not entry.user_modified? }
+  end
+
+  test "an unknown reconciliation status is refused and nothing changes" do
+    entry = create_bulk_test_transaction(accounts(:depository), "Refused")
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], reconciled_status: "approved", notes: "x" } }
+
+    assert_equal I18n.t("transactions.reconcile.failure"), flash[:alert]
+    assert entry.reload.unreconciled?
+    assert_nil entry.notes
+  end
+
+  test "bulk reconcile cannot reach another family's entries" do
+    entry = create_bulk_test_transaction(accounts(:depository), "Ours")
+    sign_in users(:empty)
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entry.id ], reconciled_status: "reconciled" } }
+
+    assert entry.reload.unreconciled?
+  end
+
   private
     def create_bulk_test_transaction(account, name)
       account.entries.create!(

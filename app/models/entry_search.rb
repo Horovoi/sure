@@ -14,6 +14,8 @@ class EntrySearch
   attribute :categories, array: true
   attribute :merchants, array: true
   attribute :tags, array: true
+  attribute :attachment_status, array: true
+  attribute :reconcile_status, array: true
   TRANSACTIONS_JOIN = "INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'"
   ALL_FILTER_TYPES = %w[balance_update expense income trade transfer].freeze
   ENTRYABLE_TYPE_MAP = {
@@ -26,6 +28,28 @@ class EntrySearch
     # The caller's scope limits the result to its family.
     def tagged_transaction_ids(tags)
       Tagging.joins(:tag).where(taggable_type: "Transaction", tags: { name: tags }).select(:taggable_id)
+    end
+
+    # NOT EXISTS over the taggings of the transaction whose id is transaction_id (an Arel
+    # attribute), for the "Untagged" filter option
+    def untagged_condition(transaction_id)
+      taggings = Tagging.arel_table
+      Arel::Nodes::Not.new(
+        Tagging.where(taggable_type: "Transaction").where(taggings[:taggable_id].eq(transaction_id)).arel.exists
+      )
+    end
+
+    # EXISTS over the files of the transaction whose id is transaction_id (an Arel
+    # attribute), for the attachment filter (w3-toolstrx transaction-attachments)
+    def attachment_condition(transaction_id)
+      attachments = ActiveStorage::Attachment.arel_table
+
+      ActiveStorage::Attachment
+        .where(record_type: "Transaction", name: "attachments")
+        .where(attachments[:record_id].eq(transaction_id))
+        .select(1)
+        .arel
+        .exists
     end
 
     def apply_search_filter(scope, search)
@@ -124,6 +148,8 @@ class EntrySearch
     query = apply_category_conditions(query, categories)
     query = apply_merchant_conditions(query, merchants)
     query = apply_tag_conditions(query, tags)
+    query = apply_attachment_conditions(query, attachment_status)
+    query = apply_reconcile_status_conditions(query, reconcile_status)
     query
   end
 
@@ -173,27 +199,66 @@ class EntrySearch
 
       if include_uncategorized
         query = query.joins("LEFT JOIN categories ON categories.id = transactions.category_id") unless named_categories.present?
-        conditions << "(categories.id IS NULL AND transactions.kind NOT IN ('funds_movement', 'cc_payment'))"
+        # The legs of a transfer between own accounts have nothing to categorize
+        conditions << "(categories.id IS NULL AND transactions.kind NOT IN (?))"
+        binds.push(Transaction::UNCATEGORIZED_EXCLUDED_KINDS)
       end
 
       return query if conditions.empty?
       query.where(conditions.join(" OR "), *binds)
     end
 
+    # Merchant names, plus the "No merchant" sentinel for transactions without one
     def apply_merchant_conditions(query, merchants)
       return query if merchants.blank?
 
-      query
-        .joins(TRANSACTIONS_JOIN)
-        .joins("INNER JOIN merchants ON merchants.id = transactions.merchant_id")
-        .where(merchants: { name: merchants })
+      include_no_merchant = merchants.include?(Merchant::NO_MERCHANT_FILTER_VALUE)
+      named = merchants - [ Merchant::NO_MERCHANT_FILTER_VALUE ]
+      query = query.joins(TRANSACTIONS_JOIN)
+
+      if include_no_merchant
+        query
+          .joins("LEFT JOIN merchants ON merchants.id = transactions.merchant_id")
+          .where("merchants.name IN (?) OR transactions.merchant_id IS NULL", named)
+      else
+        query
+          .joins("INNER JOIN merchants ON merchants.id = transactions.merchant_id")
+          .where(merchants: { name: named })
+      end
     end
 
-    # A subquery, not a join, so an entry with two of the filtered tags is one row
+    # Tag names, plus the "Untagged" sentinel for transactions without a tag. Subqueries,
+    # not a join, so an entry with two of the filtered tags is one row.
     def apply_tag_conditions(query, tags)
       return query if tags.blank?
 
-      query.where(entryable_type: "Transaction", entryable_id: self.class.tagged_transaction_ids(tags))
+      include_untagged = tags.include?(Tag::UNTAGGED_FILTER_VALUE)
+      named = tags - [ Tag::UNTAGGED_FILTER_VALUE ]
+      entries = Entry.arel_table
+
+      tagged = entries[:entryable_id].in(self.class.tagged_transaction_ids(named).arel) if named.any?
+      untagged = self.class.untagged_condition(entries[:entryable_id]) if include_untagged
+
+      query.where(entryable_type: "Transaction").where([ tagged, untagged ].compact.reduce(:or))
+    end
+
+    # With or without a file. Only a transaction takes files, so either value leaves
+    # balance updates and trades out, as the Untagged option does.
+    def apply_attachment_conditions(query, statuses)
+      wanted = Array(statuses) & Transaction::Search::ATTACHMENT_STATUSES
+      return query unless wanted.one?
+
+      attached = self.class.attachment_condition(Entry.arel_table[:entryable_id])
+      query.where(entryable_type: "Transaction").where(wanted == [ "with" ] ? attached : attached.not)
+    end
+
+    # The reconciliation mark is a transaction's, on a manual account: balance updates,
+    # trades and synced accounts stay out (w3-toolstrx reconciliation-status)
+    def apply_reconcile_status_conditions(query, statuses)
+      wanted = Array(statuses) & Entry::RECONCILED_STATUS_CYCLE
+      return query if wanted.empty?
+
+      query.where(entryable_type: "Transaction", reconciled_status: wanted, account_id: Account.manual.select(:id))
     end
 
     def build_transaction_type_condition(txn_types)

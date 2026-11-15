@@ -56,8 +56,6 @@ class Category < ApplicationRecord
   # Stable, non-localized transactions filter value of the synthetic Uncategorized
   # category. A real category cannot take this name, so it never collides with one.
   UNCATEGORIZED_FILTER_VALUE = "__uncategorized__"
-  # Links and saved filters made before the sentinel used the display name.
-  LEGACY_UNCATEGORIZED_FILTER_VALUE = "Uncategorized"
 
   class Group
     attr_reader :category, :subcategories
@@ -175,11 +173,10 @@ class Category < ApplicationRecord
     end
 
     # True for a transactions filter value that means "no category": the sentinel, or
-    # the display name that older links and the assistant still send.
+    # the display name (Category.uncategorized.name) that links made before the sentinel
+    # and the assistant still send. The UI is English only, so that name is fixed.
     def uncategorized_filter_value?(value)
-      value.to_s == UNCATEGORIZED_FILTER_VALUE ||
-        value.to_s == LEGACY_UNCATEGORIZED_FILTER_VALUE ||
-        value.to_s == uncategorized_name
+      value.to_s == UNCATEGORIZED_FILTER_VALUE || value.to_s == uncategorized_name
     end
 
     # Helper to get the localized name for other investments

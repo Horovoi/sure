@@ -1,0 +1,36 @@
+---
+en:
+  # Per-entry reconciliation status (w3-toolstrx reconciliation-status)
+  transactions:
+    reconcile:
+      success: Marked as %{status}
+      failure: Could not change the reconciliation status
+      not_manual_account: Only transactions of manual accounts take a reconciliation status
+      statuses:
+        unreconciled: Unreconciled
+        cleared: Cleared
+        reconciled: Reconciled
+      badge:
+        unreconciled_tooltip: Not checked against a statement yet. Click to mark as cleared.
+        cleared_tooltip: Seen on a statement, not reconciled yet. Click to mark as reconciled.
+        reconciled_tooltip: The statement period is reconciled. Click to start again as unreconciled.
+      bulk:
+        label: Reconciliation status
+        hint: Only transactions of manual accounts take it.
+        no_change: "(no change)"
+        menu: Reconcile
+        mark_as: Mark as %{status}
+    search:
+      filters:
+        reconcile_status: Reconciliation
+  accounts:
+    show:
+      reconciliation_indicator:
+        matched: All reconciled
+        matched_tooltip:
+          one: The 1 transaction is reconciled
+          other: All %{count} transactions are reconciled
+        needs_attention:
+          one: 1 to reconcile
+          other: "%{count} to reconcile"
+        needs_attention_tooltip: "%{unreconciled} unreconciled and %{cleared} cleared. Click to list them."

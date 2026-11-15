@@ -1,0 +1,6 @@
+<%= turbo_stream.replace dom_id(@entry, :reconcile_badge), partial: "transactions/reconcile_badge", locals: { entry: @entry, compact: true } %>
+<%= turbo_stream.replace dom_id(@entry, :reconcile_pill), partial: "transactions/reconcile_badge", locals: { entry: @entry } %>
+<%= turbo_stream.replace dom_id(@entry.account, :reconciliation_indicator), partial: "accounts/show/reconciliation_indicator", locals: { account: @entry.account } %>
+<% flash_notification_stream_items.each do |item| %>
+  <%= item %>
+<% end %>

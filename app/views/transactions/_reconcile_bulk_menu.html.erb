@@ -1,0 +1,25 @@
+<%# The selection bar's quick reconcile menu (w3-toolstrx reconciliation-status). It
+    posts the picked status with the selected ids; entries that do not take the mark
+    (balance updates, trades, synced accounts) are skipped by Entry.bulk_update!. %>
+<%= render DS::Menu.new(variant: :button, placement: "top-end") do |menu| %>
+  <% menu.with_button(
+      class: "p-1.5 group/reconcile hover:bg-inverse flex items-center justify-center rounded-md",
+      title: t("transactions.reconcile.bulk.menu"),
+      aria: { label: t("transactions.reconcile.bulk.menu") },
+      data: { testid: "reconcile-bulk-menu" }
+    ) do %>
+    <%= icon "circle-check", class: "group-hover/reconcile:text-inverse" %>
+  <% end %>
+
+  <% Entry::RECONCILED_STATUS_CYCLE.each do |status| %>
+    <% menu.with_item(
+        variant: :button,
+        text: t("transactions.reconcile.bulk.mark_as", status: t("transactions.reconcile.statuses.#{status}")),
+        icon: reconcile_status_presentation(status)[:icon],
+        href: transactions_bulk_update_path(bulk_update: { reconciled_status: status }),
+        method: :post,
+        form: { data: { turbo_frame: "_top" } },
+        data: { action: "bulk-select#submitBulkRequest", bulk_select_scope_param: "bulk_update" }
+      ) %>
+  <% end %>
+<% end %>

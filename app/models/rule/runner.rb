@@ -14,14 +14,15 @@
 #
 # Every executed rule gets a RuleRun. A failing rule is recorded as a failed run
 # and the rules below still run; #run never raises for a rule, and returns the
-# RuleRun rows it wrote, so callers (the rules page, MCP, chat) can keep the ids.
+# RuleRun rows it wrote, so callers (the rules page, MCP, chat) can keep the ids. #matched_ids then gives the
+# transactions each executed rule acted on (apply_rule reports which of them changed).
 #
 # One run per family at a time, guarded by a PostgreSQL advisory lock. A busy lock
 # raises LockBusy before anything runs, so the calling job can reschedule itself.
 class Rule::Runner
   LockBusy = Class.new(StandardError)
 
-  attr_reader :errors
+  attr_reader :errors, :matched_ids
 
   def self.advisory_lock_key(family_id)
     Digest::MD5.hexdigest("rule_runner:#{family_id}").to_i(16) % (2**62)
@@ -34,6 +35,7 @@ class Rule::Runner
     @ignore_attribute_locks = ignore_attribute_locks
     @claimed_ids = Hash.new { |hash, attribute| hash[attribute] = Set.new }
     @stopped_ids = Set.new
+    @matched_ids = {}
     @errors = []
   end
 
@@ -103,6 +105,7 @@ class Rule::Runner
       begin
         scope = unstopped_scope(rule)
         matched_ids = scope.pluck(:id)
+        @matched_ids[rule.id] = matched_ids
 
         # The rule name is stored so it persists even if the rule is renamed later
         rule_run = RuleRun.create!(

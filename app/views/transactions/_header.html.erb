@@ -16,6 +16,8 @@
       <%= icon "arrow-left-right", class: "mt-1" %>
     <% end %>
 
+    <%= render "transactions/reconcile_badge", entry: entry %><%# w3-toolstrx %>
+
     <% if entry.linked? %>
       <span title="Linked with Plaid">
         <%= icon("refresh-ccw", size: "sm") %>

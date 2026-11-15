@@ -1,0 +1,51 @@
+---
+en:
+  # Transaction attachments (w3-toolstrx transaction-attachments)
+  transaction_attachments:
+    section_title: Attachments
+    attachments:
+      browse: Browse to add receipts or invoices
+      delete: Delete %{filename}
+      delete_confirm_body: "%{filename} will be deleted. This cannot be undone."
+      delete_confirm_button: Delete file
+      delete_confirm_title: Delete attachment?
+      download: Download %{filename}
+      empty: No attachments yet
+      hint: Images or PDFs, up to %{size} MB each. %{used} of %{max} files used.
+      max_reached: This transaction has the maximum of %{max} files. Delete one to add another.
+      too_large: File too large (max %{size} MB)
+      too_many: Too many files (max %{count})
+      upload: Upload
+      upload_many: Upload %{count} files
+      upload_one: Upload 1 file
+      view: Open %{filename}
+    create:
+      failed: "Could not upload: %{error}"
+      no_files_selected: No files selected
+      too_many: A transaction can have at most %{count} files
+      uploaded:
+        one: File uploaded
+        other: "%{count} files uploaded"
+    destroy:
+      deleted: Attachment deleted
+  activerecord:
+    errors:
+      models:
+        transaction:
+          attributes:
+            attachments:
+              invalid_format: "%{filename} has a type that is not allowed (%{file_format})"
+              too_large: "%{filename} is larger than %{max_mb} MB"
+              too_many: A transaction can have at most %{max} files
+  transactions:
+    search:
+      filters:
+        attachment: Attachment
+    searches:
+      filters:
+        attachment_filter:
+          with: With attachment
+          without: Without attachment
+        badge:
+          attachment_with: With attachment
+          attachment_without: Without attachment

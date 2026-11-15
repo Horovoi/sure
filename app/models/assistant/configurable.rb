@@ -164,7 +164,7 @@ module Assistant::Configurable
 
             ### Categories
 
-            #{(names + [ "Uncategorized" ]).join(", ")}
+            #{(names + [ Category.uncategorized_name ]).join(", ")}
           CONTEXT
         end
       end

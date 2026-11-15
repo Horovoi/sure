@@ -55,7 +55,21 @@ class Assistant
         Assistant::Function::UpdateBudget,
 
         # Savings goals (w3-reports goal-ai-hooks): create only
-        Assistant::Function::CreateGoal
+        Assistant::Function::CreateGoal,
+
+        # Rules: the list and its options, a preview, then saves (always inactive) and the apply that activates one
+        Assistant::Function::GetRules,
+        Assistant::Function::GetRuleOptions,
+        Assistant::Function::PreviewRule,
+        Assistant::Function::CreateRule,
+        Assistant::Function::UpdateRule,
+        Assistant::Function::ApplyRule,
+
+        # Transfers between own accounts: candidates for a transaction, then match, review and unmatch
+        Assistant::Function::GetTransferMatchCandidates,
+        Assistant::Function::MatchTransfer,
+        Assistant::Function::ReviewTransfer,
+        Assistant::Function::UnmatchTransfer
       ]
     end
 

@@ -52,8 +52,10 @@ export default class extends Controller {
       ? new Set(this.recentSectionTarget.querySelectorAll(".filterable-item"))
       : new Set();
 
+    const searching = rawFilterValue.length > 0;
+
     if (this.hasRecentSectionTarget) {
-      this.recentSectionTarget.classList.toggle("hidden", filterValue.length > 0);
+      this.recentSectionTarget.classList.toggle("hidden", searching);
     }
 
     if (this.hasEmptyMessageTarget) {
@@ -61,10 +63,14 @@ export default class extends Controller {
     }
 
     items.forEach((item) => {
-      const text = this.normalize(item.getAttribute("data-filter-name"));
+      if (searching && recentItems.has(item)) {
+        item.style.display = "none";
+        return;
+      }
+
+      const text = this.normalize(item.getAttribute("data-filter-name") || "");
       const shouldDisplay =
-        rawFilterValue.length === 0 ||
-        (filterValue.length > 0 && text.includes(filterValue));
+        !searching || (filterValue.length > 0 && text.includes(filterValue));
       item.style.display = shouldDisplay ? "" : "none";
 
       if (shouldDisplay) {

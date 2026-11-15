@@ -1127,4 +1127,32 @@ end
     assert_select "input#entry_name[role=combobox][required]"
     assert_includes response.body, CGI.escapeHTML(name_suggestions_transactions_path(nature: "inflow"))
   end
+
+  # --- w3-toolstrx filter-options ---------------------------------------------------------------------------
+
+  test "index names the account on an account_ids filter chip" do
+    account = @entry.account
+
+    get transactions_url(q: { account_ids: [ account.id ] })
+
+    assert_response :success
+    assert_select "#transaction-search-filters li p", text: account.name, count: 1
+    assert_select "#transaction-search-filters li p", text: account.id, count: 0
+  end
+
+  test "index renders a blank account filter value without failing" do
+    get transactions_url(q: { account_ids: [ "" ], accounts: [ "" ] })
+
+    assert_response :success
+  end
+
+  test "index shows No merchant and Untagged as options and as chips" do
+    get transactions_url(q: { merchants: [ Merchant::NO_MERCHANT_FILTER_VALUE ], tags: [ Tag::UNTAGGED_FILTER_VALUE ] })
+
+    assert_response :success
+    assert_select "#transaction-search-filters li p", text: "No merchant", count: 1
+    assert_select "#transaction-search-filters li p", text: "Untagged", count: 1
+    assert_select "input[type=checkbox][name='q[merchants][]'][value='#{Merchant::NO_MERCHANT_FILTER_VALUE}'][checked]"
+    assert_select "input[type=checkbox][name='q[tags][]'][value='#{Tag::UNTAGGED_FILTER_VALUE}'][checked]"
+  end
 end
