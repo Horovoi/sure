@@ -376,4 +376,89 @@ class RuleTest < ActiveSupport::TestCase
     assert rule.matches_transaction?(matching.transaction)
     assert_not rule.matches_transaction?(other.transaction)
   end
+
+  test "a new rule is numbered after the family's last rule" do
+    first = create_simple_rule
+    second = create_simple_rule
+
+    assert_equal first.position + 1, second.position
+    assert_equal [ first, second ], @family.rules.ordered.to_a
+  end
+
+  test "a rule created with a position keeps it" do
+    rule = @family.rules.create!(resource_type: "transaction", position: 7, actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+
+    assert_equal 7, rule.position
+  end
+
+  test "update_positions! sets the run order" do
+    a = create_simple_rule
+    b = create_simple_rule
+    c = create_simple_rule
+
+    Rule.update_positions!(@family, [ c.id, a.id, b.id ])
+
+    assert_equal [ c, a, b ], @family.rules.ordered.to_a
+    assert_equal [ 1, 2, 3 ], @family.rules.ordered.pluck(:position)
+  end
+
+  test "update_positions! refuses a list that leaves out or repeats a rule" do
+    a = create_simple_rule
+    b = create_simple_rule
+
+    assert_raises(ArgumentError) { Rule.update_positions!(@family, [ a.id ]) }
+    assert_raises(ArgumentError) { Rule.update_positions!(@family, [ a.id, a.id ]) }
+    assert_raises(ArgumentError) { Rule.update_positions!(@family, [ a.id, b.id, SecureRandom.uuid ]) }
+  end
+
+  test "active_rules_above lists only the active rules higher in the list" do
+    active_above = create_simple_rule(active: true)
+    create_simple_rule(active: false)
+    rule = create_simple_rule
+    create_simple_rule(active: true)
+
+    assert_equal [ active_above ], rule.active_rules_above.to_a
+  end
+
+  test "excluding_transaction_ids drops the given transactions" do
+    kept = create_transaction(date: Date.current, account: @account, name: "Kept")
+    dropped = create_transaction(date: Date.current, account: @account, name: "Dropped")
+    scope = @family.transactions.where(id: [ kept.entryable_id, dropped.entryable_id ])
+
+    assert_equal [ kept.entryable_id ], Rule.excluding_transaction_ids(scope, [ dropped.entryable_id ]).pluck(:id)
+    assert_equal 2, Rule.excluding_transaction_ids(scope, []).count
+  end
+
+  test "apply skips transactions a rule above claimed for the same attribute" do
+    claimed = create_transaction(date: Date.current, account: @account, name: "Coffee one")
+    free = create_transaction(date: Date.current, account: @account, name: "Coffee two")
+    rule = Rule.create!(
+      family: @family,
+      resource_type: "transaction",
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "coffee") ],
+      actions: [ Rule::Action.new(action_type: "set_transaction_category", value: @groceries_category.id) ]
+    )
+
+    rule.apply(claimed_ids: { category_id: Set[claimed.entryable_id] })
+
+    assert_nil claimed.transaction.reload.category
+    assert_equal @groceries_category, free.transaction.reload.category
+  end
+
+  test "an AI action stays readable after the provider goes away" do
+    Provider::Registry.stubs(:get_provider).with(:openai).returns(stub("llm"))
+    rule = @family.rules.create!(resource_type: "transaction", actions: [ Rule::Action.new(action_type: "auto_categorize") ])
+    Provider::Registry.unstub(:get_provider)
+    Provider::Registry.stubs(:get_provider).with(:openai).returns(nil)
+
+    rule = Rule.find(rule.id)
+
+    assert_equal "auto_categorize", rule.actions.first.executor.key
+    assert_not_includes Rule.new(family: @family, resource_type: "transaction").action_executors.map(&:key), "auto_categorize"
+  end
+
+  private
+    def create_simple_rule(active: false)
+      @family.rules.create!(resource_type: "transaction", active: active, actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    end
 end

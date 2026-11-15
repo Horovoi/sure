@@ -1,4 +1,7 @@
 class Rule < ApplicationRecord
+  # Namespace for the per-family advisory lock around position assignment
+  POSITION_LOCK_NAMESPACE = 4013
+
   UnsupportedResourceTypeError = Class.new(StandardError)
 
   belongs_to :family
@@ -10,6 +13,11 @@ class Rule < ApplicationRecord
   accepts_nested_attributes_for :actions, allow_destroy: true
 
   before_validation :normalize_name
+  before_create :assign_next_position
+
+  # Rules run top to bottom (Rule::Runner). created_at and id break ties, e.g. for
+  # rules created at the same moment before anyone reordered them.
+  scope :ordered, -> { order(:position, :created_at, :id) }
 
   validates :resource_type, presence: true
   validates :name, length: { minimum: 1 }, allow_nil: true
@@ -37,7 +45,52 @@ class Rule < ApplicationRecord
   end
 
   def affected_resource_count
-    matching_resources_scope.count
+    matching_scope.count
+  end
+
+  # Sets the run order of all rules of a family. ordered_ids must list every rule
+  # of the family exactly once, so a stale page (a rule added or deleted meanwhile)
+  # cannot leave rules with clashing or missing positions.
+  def self.update_positions!(family, ordered_ids)
+    ordered_ids = Array(ordered_ids).map(&:to_s)
+    family_rule_ids = family.rules.pluck(:id)
+
+    unless ordered_ids.size == family_rule_ids.size && ordered_ids.sort == family_rule_ids.sort
+      raise ArgumentError, "ordered_ids must list every rule of the family exactly once"
+    end
+
+    return if ordered_ids.empty?
+
+    encoder = PG::TextEncoder::Array.new
+    sql = sanitize_sql_array([ <<~SQL.squish, encoder.encode(ordered_ids), encoder.encode((1..ordered_ids.size).to_a), family.id ])
+      UPDATE rules SET position = new_positions.position
+      FROM unnest(?::uuid[], ?::integer[]) AS new_positions(id, position)
+      WHERE rules.id = new_positions.id AND rules.family_id = ?
+    SQL
+    with_connection { |connection| connection.update(sql, "Rule Update Positions") }
+  end
+
+  # Excludes transaction ids with one array parameter. where.not(id: ids) sends one
+  # bind per id, which breaks beyond PostgreSQL's 65,535 bind limit when a broad
+  # rule claims or stops many transactions.
+  def self.excluding_transaction_ids(scope, ids)
+    return scope if ids.empty?
+
+    scope.where.not("transactions.id = ANY(?::uuid[])", PG::TextEncoder::Array.new.encode(ids.to_a))
+  end
+
+  # Active rules that run before this one. "Apply rule" runs them first, so the
+  # result matches this rule's turn in the full run.
+  def active_rules_above
+    ordered_ids = family.rules.ordered.pluck(:id)
+    above_ids = ordered_ids.take_while { |id| id != self.id }
+    family.rules.where(id: above_ids, active: true).ordered
+  end
+
+  # The given transactions without re-checking the conditions, so they stay the
+  # same set while the actions change the fields the conditions read.
+  def scope_for_transaction_ids(ids)
+    registry.resource_scope.where("transactions.id = ANY(?::uuid[])", PG::TextEncoder::Array.new.encode(ids.to_a))
   end
 
   # Calculates total unique resources affected across multiple rules
@@ -48,7 +101,7 @@ class Rule < ApplicationRecord
     # Collect all unique transaction IDs matched by any rule
     transaction_ids = Set.new
     rules.each do |rule|
-      transaction_ids.merge(rule.send(:matching_resources_scope).pluck(:id))
+      transaction_ids.merge(rule.matching_scope.pluck(:id))
     end
 
     transaction_ids.size
@@ -59,14 +112,21 @@ class Rule < ApplicationRecord
   #   modified_count:      sync modifications plus transactions queued for async jobs
   #   sync_modified_count: modifications already made synchronously
   #   jobs_count:          async jobs queued
-  def apply(ignore_attribute_locks: false, rule_run: nil)
+  #
+  # scope: the transactions to act on. Rule::Runner passes the matches minus the
+  # transactions a rule higher up stopped. claimed_ids maps an attribute to the
+  # transaction ids a rule higher up already set it for; an action leaves those
+  # transactions alone ("top rule wins").
+  def apply(ignore_attribute_locks: false, rule_run: nil, scope: matching_scope, claimed_ids: {})
     sync_modified = 0
     async_queued = 0
     total_async_jobs = 0
     has_async = false
 
     actions.each do |action|
-      result = action.apply(matching_resources_scope, ignore_attribute_locks: ignore_attribute_locks, rule_run: rule_run)
+      excluded_ids = action.claimed_attributes.flat_map { |attribute| claimed_ids.fetch(attribute, []).to_a }.uniq
+      action_scope = Rule.excluding_transaction_ids(scope, excluded_ids)
+      result = action.apply(action_scope, ignore_attribute_locks: ignore_attribute_locks, rule_run: rule_run)
 
       if result.is_a?(Hash) && result[:async]
         has_async = true
@@ -87,10 +147,10 @@ class Rule < ApplicationRecord
     end
   end
 
-  # execution_type is "manual" for user-triggered runs and "scheduled" for
-  # runs triggered by a sync.
+  # execution_type is "manual" for user-triggered runs and "scheduled" for runs
+  # triggered by a sync. The active rules above this one run first (Rule::Runner).
   def apply_later(ignore_attribute_locks: false, execution_type: "manual")
-    RuleJob.perform_later(self, ignore_attribute_locks: ignore_attribute_locks, execution_type: execution_type)
+    ApplyRulesJob.perform_later(family, rule_ids: [ id ], ignore_attribute_locks: ignore_attribute_locks, execution_type: execution_type)
   end
 
   def primary_condition_title
@@ -118,24 +178,66 @@ class Rule < ApplicationRecord
 
   # Whether this rule's conditions (with its visibility and effective date) match the transaction now
   def matches_transaction?(transaction)
-    matching_resources_scope.where(id: transaction.id).exists?
+    matching_scope.where(id: transaction.id).exists?
+  end
+
+  # The transactions this rule's conditions match now
+  def matching_scope
+    scope = registry.resource_scope
+
+    # 1. Prepare the query with joins required by conditions
+    conditions.each do |condition|
+      scope = condition.prepare(scope)
+    end
+
+    # 2. Apply the conditions to the query
+    conditions.each do |condition|
+      scope = condition.apply(scope)
+    end
+
+    scope
+  end
+
+  # The action the rule list shows: the saved one with the lowest id, picked from
+  # preloaded actions without a query.
+  def displayed_action
+    actions.select(&:persisted?).min_by(&:id)
+  end
+
+  # Option lists (categories, merchants, accounts) that conditions and actions look
+  # their values up in, loaded once per key. They depend only on the family, so rules
+  # listed together share one cache (.share_option_lists).
+  attr_writer :option_lists
+
+  def option_list(key)
+    @option_lists ||= {}
+    @option_lists.fetch(key) { @option_lists[key] = yield }
+  end
+
+  def self.share_option_lists(rules)
+    option_lists = {}
+    rules.each { |rule| rule.option_lists = option_lists }
+  end
+
+  def reload(*)
+    @option_lists = nil
+    @registry = nil
+    super
   end
 
   private
-    def matching_resources_scope
-      scope = registry.resource_scope
+    # Serialized per family with a transaction-scoped advisory lock: without it, two
+    # rules created at the same time both read the same MAX(position) and share a
+    # position, so their run order would silently fall back to the created_at/id
+    # tie-break. before_create runs inside the save transaction, so the lock is held
+    # until the new row is committed.
+    def assign_next_position
+      return if position.to_i.positive?
 
-      # 1. Prepare the query with joins required by conditions
-      conditions.each do |condition|
-        scope = condition.prepare(scope)
-      end
-
-      # 2. Apply the conditions to the query
-      conditions.each do |condition|
-        scope = condition.apply(scope)
-      end
-
-      scope
+      self.class.connection.execute(
+        self.class.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(?, hashtext(?))", POSITION_LOCK_NAMESPACE, family_id.to_s ])
+      )
+      self.position = family.rules.maximum(:position).to_i + 1
     end
 
     def min_actions

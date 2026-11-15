@@ -18,9 +18,11 @@ class Family::Syncer
   def perform_post_sync
     family.auto_match_transfers!
 
-    Rails.logger.info("Applying rules for family #{family.id}")
-    family.rules.where(active: true).each do |rule|
-      rule.apply_later(execution_type: "scheduled")
+    # One job runs every active rule in order (Rule::Runner), so two rules that set
+    # the same field give the same result on every sync.
+    if family.rules.where(active: true).exists?
+      Rails.logger.info("Applying rules for family #{family.id}")
+      ApplyRulesJob.perform_later(family, execution_type: "scheduled")
     end
   end
 

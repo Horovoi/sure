@@ -1,7 +1,9 @@
 import { Controller } from "@hotwired/stimulus";
 
-// Shared base for the reorderable sections on the dashboard and the reports
-// page. Subclasses set `preferencesUrl` and `preferencesBody(order)`.
+// Shared base for the reorderable sections on the dashboard, the reports page
+// and the rules list. Subclasses set `preferencesUrl` and
+// `preferencesBody(order)`, or override `requestBody(order)` to send another
+// shape than { preferences: ... }.
 // When a save fails, the sections go back to the last order the server
 // confirmed, so the page never shows an order that was not stored.
 //
@@ -342,6 +344,10 @@ export default class SortableSectionsController extends Controller {
     });
   }
 
+  requestBody(order) {
+    return { preferences: this.preferencesBody(order) };
+  }
+
   async saveOrder() {
     // Compared with the last order asked for, not the last one confirmed: moving a section
     // back while the first save is still on its way must send the second save too
@@ -361,7 +367,7 @@ export default class SortableSectionsController extends Controller {
             "Content-Type": "application/json",
             "X-CSRF-Token": csrfToken.content,
           },
-          body: JSON.stringify({ preferences: this.preferencesBody(order) }),
+          body: JSON.stringify(this.requestBody(order)),
         });
         ok = response.ok;
         if (!ok) console.error("Failed to save section order:", response.status);

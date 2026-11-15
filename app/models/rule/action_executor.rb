@@ -5,8 +5,12 @@ class Rule::ActionExecutor
     @rule = rule
   end
 
+  def self.key
+    name.demodulize.underscore
+  end
+
   def key
-    self.class.name.demodulize.underscore
+    self.class.key
   end
 
   def label
@@ -19,6 +23,28 @@ class Rule::ActionExecutor
 
   def options
     nil
+  end
+
+  # Attributes this action sets. When several rules set the same attribute on a
+  # transaction, the rule highest in the list wins (see Rule::Runner), so the action
+  # skips transactions a rule above already claimed. Additive actions such as tags
+  # claim nothing.
+  def claimed_attributes
+    []
+  end
+
+  # Whether matching this action keeps rules further down from setting
+  # claimed_attributes. False for actions that only fill a field when they can
+  # (the AI and Bayes categorizers), so a broad one does not block the rules below.
+  def reserves_claimed_attributes?
+    true
+  end
+
+  # Whether this action can change anything with the given value. An action that
+  # cannot (e.g. its category was deleted) claims nothing, so it does not keep the
+  # rules below it from setting the field.
+  def actionable?(value)
+    true
   end
 
   def execute(scope, value: nil, ignore_attribute_locks: false, rule_run: nil)

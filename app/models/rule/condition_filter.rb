@@ -22,8 +22,12 @@ class Rule::ConditionFilter
     family_currency.step
   end
 
+  def self.key
+    name.demodulize.underscore
+  end
+
   def key
-    self.class.name.demodulize.underscore
+    self.class.key
   end
 
   def label

@@ -8,7 +8,17 @@ class Rule::Action < ApplicationRecord
   end
 
   def options
-    executor.options
+    rule.option_list([ :action, action_type ]) { executor.options }
+  end
+
+  def claimed_attributes
+    executor.claimed_attributes
+  end
+
+  # Whether this action keeps the rules below it from setting its claimed attributes
+  # on the transactions it matched (see Rule::Runner)
+  def reserves_claimed_attributes?
+    executor.reserves_claimed_attributes? && executor.actionable?(value)
   end
 
   def value_display

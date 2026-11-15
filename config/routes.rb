@@ -276,6 +276,8 @@ Rails.application.routes.draw do
       delete :destroy_all
       get :confirm_all
       post :apply_all
+      # ordered-rule-runner: save the run order
+      patch :reorder
     end
   end
 

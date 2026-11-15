@@ -18,7 +18,60 @@ en:
         other: and %{count} more conditions
       reapply: Re-apply rule
       resources_since: "%{resources} on or after %{date}"
+      stop_processing: Stop
+      stop_processing_hint: Rules further down don't change transactions matched by this rule.
       then: THEN
+    index:
+      page_title: Rules
+      delete_all_rules: Delete all rules
+      new_rule: New rule
+      ai_cost_warning: AI-enabled rule actions will cost money.  Be sure to filter as narrowly as possible to avoid unnecessary costs.
+      rules_heading: Rules
+      order_hint: Rules run from top to bottom. Once a rule sets a field on a transaction, rules further down don't change that field. Tags are added by every matching rule. Drag rules to change the order.
+      reorder_rule: "Rule %{name}. Press Enter or Space to grab it, then use the arrow keys to move it."
+      drag_to_reorder: Drag to reorder
+      no_rules_title: No rules yet
+      no_rules_description: Set up rules to perform actions to your transactions and other data on every account sync.
+    form:
+      rule_name_label: Rule name (optional)
+      rule_name_placeholder: Enter a name for this rule
+      if: IF
+      then: THEN
+      for: FOR
+      add_condition: Add condition
+      add_condition_group: Add condition group
+      add_action: Add action
+      all_past_and_future: All past and future %{resources}
+      starting_from: Starting from
+      stop_processing_label: Stop processing further rules
+      stop_processing_description: Rules further down the list don't change transactions this rule matches.
+    confirm:
+      title: Confirm changes
+      title_with_name: Confirm changes to "%{name}"
+      apply_notice_html: You are about to apply this rule to <span class="text-primary font-medium">%{count} %{resources}</span> that meet the specified rule criteria.  Please confirm if you wish to proceed with this change.
+      rules_above_notice:
+        one: The active rule above it runs first, so the result is the same as in the full run.
+        other: The %{count} active rules above it run first, so the result is the same as in the full run.
+      ai_cost_title: AI Cost Estimation
+      ai_cost_with_estimate_html:
+        one: 'This will use AI to categorize %{count} transaction. Estimated cost: <span class="font-semibold">~$%{cost}</span>'
+        other: 'This will use AI to categorize %{count} transactions. Estimated cost: <span class="font-semibold">~$%{cost}</span>'
+      ai_cost_no_estimate:
+        one: This will use AI to categorize %{count} transaction.
+        other: This will use AI to categorize %{count} transactions.
+      cost_unavailable_model: Cost estimation unavailable for model "%{model}".
+      cost_unavailable_no_provider: Cost estimation unavailable (no LLM provider configured).
+      cost_warning: You may incur costs, please check with the model provider for the most up-to-date prices.
+      view_usage: View usage history
+      confirm_button: Confirm changes
+    apply:
+      success: "%{resource} rule activated"
+    update:
+      success: Rule updated
+    destroy:
+      success: Rule deleted
+    destroy_all:
+      success: All rules deleted
     actions:
       value_placeholder: Enter a value
     apply_all:
@@ -47,6 +100,7 @@ en:
           queued: Queued
           processed: Processed
           modified: Modified
+          blocked: Blocked
       execution_types:
         manual: Manual
         scheduled: Scheduled
