@@ -10,6 +10,8 @@ en:
       data_not_available: Data not available for the selected period
     create:
       success: "%{type} account created"
+      opening_balance_date_future: The start date cannot be in the future.
+      opening_balance_date_invalid: The start date is not a valid date.
     destroy:
       success: "%{type} account scheduled for deletion"
       cannot_delete_linked: "Cannot delete a linked account. Please unlink it first."
@@ -20,6 +22,8 @@ en:
       no_accounts: No accounts yet
     form:
       balance: Current balance
+      opening_balance_date_label: Start date
+      opening_balance_date_hint: The account's history starts on this day, at the balance entered above (for a loan, at its original balance). A transaction dated earlier moves the start back to the day before it.
       name_label: Account name
       name_placeholder: Example account name
       additional_details: Additional details

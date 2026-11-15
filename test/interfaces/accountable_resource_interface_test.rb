@@ -14,4 +14,16 @@ module AccountableResourceInterfaceTest
     get edit_account_url(@account)
     assert_response :success
   end
+
+  test "update saves a currency change and rebuilds the balances" do
+    @account.update!(currency: "USD")
+
+    assert_enqueued_with(job: SyncJob) do
+      patch send("#{@account.accountable_type.underscore}_path", @account), params: {
+        account: { name: @account.name, currency: "EUR" }
+      }
+    end
+
+    assert_equal "EUR", @account.reload.currency
+  end
 end

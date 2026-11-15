@@ -216,6 +216,80 @@ class PropertiesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Property", Account.order(:created_at).last.accountable_type
   end
 
+  test "create keeps the subtype and a chosen currency" do
+    post properties_path, params: {
+      account: {
+        name: "Flat", currency: "EUR", accountable_type: "Property",
+        accountable_attributes: { subtype: "condominium" }
+      }
+    }
+
+    created = Account.order(:created_at).last
+    assert_equal "EUR", created.currency
+    assert_equal "condominium", created.subtype
+  end
+
+  test "create defaults to the family currency" do
+    post properties_path, params: { account: { name: "House", accountable_type: "Property" } }
+
+    assert_equal @user.family.currency, Account.order(:created_at).last.currency
+  end
+
+  test "balances update saves the value in the chosen currency" do
+    patch update_balances_property_path(@account), params: { account: { balance: 600000, currency: "EUR" } }
+
+    @account.reload
+    assert_equal 600000, @account.balance
+    assert_equal "EUR", @account.currency
+  end
+
+  test "a failed balances update leaves the currency as it was" do
+    Account.any_instance.stubs(:set_current_balance).returns(OpenStruct.new(success?: false, error: "Invalid balance"))
+
+    patch update_balances_property_path(@account), params: { account: { balance: 600000, currency: "EUR" } }
+
+    assert_response :unprocessable_entity
+    assert_equal "USD", @account.reload.currency
+  end
+
+  test "address update on a draft honors the stored return_to" do
+    draft_account = Account.create!(
+      family: @user.family, name: "Draft Property RT", accountable: Property.new,
+      status: "draft", balance: 500000, currency: "USD"
+    )
+    patch update_balances_property_path(draft_account), params: { account: { balance: 500000, currency: "USD" } }
+
+    get new_account_path(return_to: transactions_path)
+    patch update_address_property_path(draft_account), params: address_params
+
+    assert draft_account.reload.active?
+    assert_redirected_to transactions_path
+  end
+
+  test "address update ignores an external or non-string stored return_to" do
+    [ "https://evil.example/phish", [ "/transactions" ] ].each_with_index do |return_to, i|
+      draft_account = Account.create!(
+        family: @user.family, name: "Draft Property #{i}", accountable: Property.new,
+        status: "draft", balance: 500000, currency: "USD"
+      )
+      patch update_balances_property_path(draft_account), params: { account: { balance: 500000, currency: "USD" } }
+
+      get new_account_path("return_to" => return_to)
+      patch update_address_property_path(draft_account), params: address_params
+
+      assert draft_account.reload.active?
+      assert_redirected_to account_path(draft_account)
+    end
+  end
+
+  test "address keeps a postal code with a leading zero" do
+    patch update_address_property_path(@account), params: {
+      property: { address_attributes: { line1: "1 Khreshchatyk", locality: "Kyiv", country: "UA", postal_code: "01001" } }
+    }
+
+    assert_equal "01001", @account.reload.property.address.postal_code
+  end
+
   private
     def address_params
       {

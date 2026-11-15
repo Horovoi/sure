@@ -9,7 +9,12 @@ class PropertiesController < ApplicationController
 
   def create
     @account = Current.family.accounts.create!(
-      property_params.merge(accountable_type: "Property", currency: Current.family.currency, balance: 0, status: "draft")
+      property_params.merge(
+        accountable_type: "Property",
+        currency: property_params[:currency].presence || Current.family.currency,
+        balance: 0,
+        status: "draft"
+      )
     )
 
     redirect_to balances_property_path(@account)
@@ -17,8 +22,12 @@ class PropertiesController < ApplicationController
 
   def update
     if @account.update(property_params.except(:accountable_type))
+      currency_changed = @account.saved_change_to_currency?
       @account.lock_saved_attributes!
-      @success_message = "Property details updated successfully."
+      # Balances are stored in the account currency, so they are rebuilt in the new one.
+      # A draft gets no sync until its wizard is finished.
+      @account.sync_later if currency_changed && @account.active?
+      @success_message = t(".success")
 
       if @account.active?
         render :edit
@@ -26,7 +35,7 @@ class PropertiesController < ApplicationController
         redirect_to balances_property_path(@account)
       end
     else
-      @error_message = "Unable to update property details."
+      @error_message = t(".failure")
       render :edit, status: :unprocessable_entity
     end
   end
@@ -38,10 +47,17 @@ class PropertiesController < ApplicationController
   end
 
   def update_balances
-    result = @account.set_current_balance(balance_params[:balance].to_d)
+    # The value and its currency are one form: both commit or neither does
+    result = nil
+    Account.transaction do
+      new_currency = balance_params[:currency].presence
+      @account.update!(currency: new_currency) if new_currency && new_currency != @account.currency
+      result = @account.set_current_balance(balance_params[:balance].to_d)
+      raise ActiveRecord::Rollback unless result.success?
+    end
 
     if result.success?
-      @success_message = "Balance updated successfully."
+      @success_message = t(".success")
 
       if @account.active?
         render :balances
@@ -72,16 +88,21 @@ class PropertiesController < ApplicationController
         # A draft gets no sync while it is set up, and totals skip it until now.
         @account.sync_later
 
+        # The wizard (create, value, address) does not thread `?return_to=` through
+        # its steps, so only the session (StoreLocation) still has it. Sanitized here
+        # too: Rails' redirect host guard does not cover stream_redirect_to.
+        return_path = sanitize_return_to(session.delete(:return_to)) || account_path(@account)
+
         respond_to do |format|
-          format.html { redirect_to account_path(@account) }
-          format.turbo_stream { stream_redirect_to account_path(@account) }
+          format.html { redirect_to return_path }
+          format.turbo_stream { stream_redirect_to return_path }
         end
       else
-        @success_message = "Address updated successfully."
+        @success_message = t(".success")
         render :address
       end
     else
-      @error_message = "Unable to update address. Please check the required fields."
+      @error_message = t(".failure")
       render :address, status: :unprocessable_entity
     end
   end
@@ -98,6 +119,7 @@ class PropertiesController < ApplicationController
     def property_params
       params.expect(account: [
         :name,
+        :currency,
         :accountable_type,
         :institution_name,
         :institution_domain,

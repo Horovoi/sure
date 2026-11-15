@@ -28,6 +28,12 @@
                                  label: t("loans.form.term_months"),
                                  placeholder: t("loans.form.term_months_placeholder") %>
       </div>
+
+      <div>
+        <%= loan_form.select :subtype,
+                           Loan::SUBTYPES.keys.map { |key| [Loan.long_subtype_label_for(key), key] },
+                           { label: t("loans.form.subtype_label"), prompt: t("loans.form.subtype_prompt"), include_blank: t("loans.form.subtype_none") } %>
+      </div>
     <% end %>
   </div>
 <% end %>

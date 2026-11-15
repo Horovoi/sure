@@ -23,6 +23,7 @@ class LoansControllerTest < ActionDispatch::IntegrationTest
           notes: "Mortgage notes",
           accountable_type: "Loan",
           accountable_attributes: {
+            subtype: "mortgage",
             interest_rate: 5.5,
             term_months: 60,
             rate_type: "fixed",
@@ -40,6 +41,7 @@ class LoansControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Local Bank", created_account[:institution_name]
     assert_equal "localbank.example", created_account[:institution_domain]
     assert_equal "Mortgage notes", created_account[:notes]
+    assert_equal "mortgage", created_account.accountable.subtype
     assert_equal 5.5, created_account.accountable.interest_rate
     assert_equal 60, created_account.accountable.term_months
     assert_equal "fixed", created_account.accountable.rate_type
@@ -63,6 +65,7 @@ class LoansControllerTest < ActionDispatch::IntegrationTest
           accountable_type: "Loan",
           accountable_attributes: {
             id: @account.accountable_id,
+            subtype: "auto",
             interest_rate: 4.5,
             term_months: 48,
             rate_type: "fixed",
@@ -79,6 +82,7 @@ class LoansControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Updated Bank", @account[:institution_name]
     assert_equal "updatedbank.example", @account[:institution_domain]
     assert_equal "Updated loan notes", @account[:notes]
+    assert_equal "auto", @account.accountable.subtype
     assert_equal 4.5, @account.accountable.interest_rate
     assert_equal 48, @account.accountable.term_months
     assert_equal "fixed", @account.accountable.rate_type
@@ -87,5 +91,65 @@ class LoansControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to @account
     assert_equal "Loan account updated", flash[:notice]
     assert_enqueued_with(job: SyncJob)
+  end
+
+  test "create keeps the current balance when the original balance differs" do
+    post loans_path, params: {
+      account: {
+        name: "Car Loan", balance: 8000, currency: "USD", accountable_type: "Loan",
+        opening_balance_date: 1.year.ago.to_date.iso8601,
+        accountable_attributes: { initial_balance: 12000, rate_type: "fixed", interest_rate: 5, term_months: 48 }
+      }
+    }
+
+    created_account = Account.order(:created_at).last
+    assert_equal 1.year.ago.to_date, created_account.valuations.opening_anchor.first.entry.date
+    assert_equal 12000, created_account.valuations.opening_anchor.first.entry.amount
+    assert_equal 8000, created_account.entries.valuations.find_by(date: Date.current).amount
+  end
+
+  test "a late create failure renders the form with what was typed" do
+    invalid_entry = Entry.new.tap(&:validate)
+    Account::OpeningBalanceManager.any_instance.stubs(:set_opening_balance)
+      .raises(ActiveRecord::RecordInvalid.new(invalid_entry))
+
+    assert_no_difference "Account.count" do
+      post loans_path, params: { account: {
+        name: "Loan With Bad Anchor", balance: 50_000, currency: "USD", accountable_type: "Loan",
+        accountable_attributes: { interest_rate: 6, rate_type: "fixed", term_months: 60 }
+      } }
+    end
+
+    assert_response :unprocessable_entity
+    assert_select "form[action='#{loans_path}']", count: 1
+    assert_select "input[name='account[name]'][value='Loan With Bad Anchor']", count: 1
+    assert_select "input[name='account[accountable_attributes][interest_rate]'][value='6']", count: 1
+  end
+
+  test "a late create failure renders the loan's fields even when the form sent none" do
+    invalid_entry = Entry.new.tap(&:validate)
+    Account::OpeningBalanceManager.any_instance.stubs(:set_opening_balance)
+      .raises(ActiveRecord::RecordInvalid.new(invalid_entry))
+
+    assert_no_difference "Account.count" do
+      post loans_path, params: { account: {
+        name: "Loan Without Nested Attributes", balance: 50_000, currency: "USD", accountable_type: "Loan"
+      } }
+    end
+
+    assert_response :unprocessable_entity
+    assert_select "input[name='account[name]'][value='Loan Without Nested Attributes']", count: 1
+    assert_select "input[name='account[accountable_attributes][interest_rate]']", minimum: 1
+  end
+
+  test "an unknown loan subtype comes back as the form with an error" do
+    assert_no_difference "Account.count" do
+      post loans_path, params: { account: {
+        name: "Odd Loan", balance: 1000, currency: "USD", accountable_type: "Loan",
+        accountable_attributes: { subtype: "payday" }
+      } }
+    end
+
+    assert_response :unprocessable_entity
   end
 end
