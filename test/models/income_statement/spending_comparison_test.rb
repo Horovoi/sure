@@ -57,6 +57,34 @@ class IncomeStatement::SpendingComparisonTest < ActiveSupport::TestCase
     end
   end
 
+  test "cached nets follow a new transaction and keep the category objects" do
+    original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
+    travel_to Date.new(2026, 3, 8) do
+      spend(1, on: Date.new(2025, 12, 1), category: @misc)
+      spend(50, on: Date.new(2026, 2, 3))
+      spend(90, on: Date.new(2026, 3, 6))
+      period = Period.custom(start_date: Date.new(2026, 3, 1), end_date: Date.current)
+
+      first = row_for(comparison_for(period), @groceries)
+      assert_equal 90, first.total
+      # The average of the 1-8 windows of December, January and February
+      assert_in_delta 50.0 / 3, first.normal.to_f, 0.01
+      assert_equal "Groceries", first.category.name
+
+      cached = row_for(comparison_for(period), @groceries)
+      assert_equal [ first.total, first.normal ], [ cached.total, cached.normal ]
+
+      spend(10, on: Date.new(2026, 3, 7))
+      @family = Family.find(@family.id) # a new request: entries_cache_version is memoized per object
+
+      assert_equal 100, row_for(comparison_for(period), @groceries).total
+    end
+  ensure
+    Rails.cache = original_cache
+  end
+
   test "refunds in a category are netted against its spending" do
     travel_to Date.new(2026, 3, 20) do
       spend(100, on: Date.new(2026, 3, 2))
