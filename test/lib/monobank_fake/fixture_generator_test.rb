@@ -137,6 +137,13 @@ class MonobankFake::FixtureGeneratorTest < ActiveSupport::TestCase
     assert_in_delta(-4_210_000, usd["amount"], 99 * 51)
     assert_equal 42.1, fixture.dig("expected", "exchange_rates").find { |rate| rate["from"] == "USD" }["rate"]
     assert_includes fixture.dig("statements", "mbf-fop").map { |row| row["id"] }, "mbf-tr-fop-to-card-other"
+    assert_equal "UA213996220000026007233566001", rows.fetch("mbf-tr-fop-to-card")["counterIban"], "own IBANs mark own transfers"
+    assert_equal "UA903220010000026201300000001", rows.fetch("mbf-tr-fop-to-card-other")["counterIban"]
+    assert_equal "UA903220010000026201300000002", usd["counterIban"]
+    jar_in = rows.fetch("mbf-tr-card-to-jar-other")
+    assert_nil jar_in["counterIban"], "jar rows have no IBAN at the bank"
+    assert_equal "З чорної картки", jar_in["description"]
+    assert_equal "На чорну картку", rows.fetch("mbf-tr-jar-to-card-other")["description"]
     assert_includes fixture.dig("statements", "mbf-jar-vacation").map { |row| row["id"] }, "mbf-tr-card-to-jar-other"
   end
 

@@ -114,13 +114,13 @@
       { "id": "mbf-tr-fop-out", "days_ago": 0.12, "description": "Переказ на картку", "mcc": 4829, "amount": -2000000, "counterIban": "UA903220010000026201300000001", "_group": "own_transfer", "_category": null }
     ],
     "mbf-jar-vacation": [
-      { "id": "mbf-jar-old-topup", "days_ago": 60, "description": "Поповнення «Відпустка»", "mcc": 4829, "amount": 100000 },
-      { "id": "mbf-tr-jar-in", "days_ago": 0.25, "description": "Поповнення «Відпустка»", "mcc": 4829, "amount": 100000, "_group": "own_transfer", "_category": null },
-      { "id": "mbf-tr-jar-out", "days_ago": 0.2, "description": "Переказ на картку", "mcc": 4829, "amount": -50000, "_group": "own_transfer", "_category": null }
+      { "id": "mbf-jar-old-topup", "days_ago": 60, "description": "З чорної картки", "mcc": 4829, "amount": 100000 },
+      { "id": "mbf-tr-jar-in", "days_ago": 0.25, "description": "З чорної картки", "mcc": 4829, "amount": 100000, "_group": "own_transfer", "_category": null },
+      { "id": "mbf-tr-jar-out", "days_ago": 0.2, "description": "На чорну картку", "mcc": 4829, "amount": -50000, "_group": "own_transfer", "_category": null }
     ],
     "mbf-jar-reserve": [
-      { "id": "mbf-reserve-1", "days_ago": 150, "description": "Поповнення «Подушка безпеки»", "mcc": 4829, "amount": 500000 },
-      { "id": "mbf-reserve-2", "days_ago": 30, "description": "Поповнення «Подушка безпеки»", "mcc": 4829, "amount": 500000 }
+      { "id": "mbf-reserve-1", "days_ago": 150, "description": "З чорної картки", "mcc": 4829, "amount": 500000 },
+      { "id": "mbf-reserve-2", "days_ago": 30, "description": "З чорної картки", "mcc": 4829, "amount": 500000 }
     ]
   },
   "faults": [

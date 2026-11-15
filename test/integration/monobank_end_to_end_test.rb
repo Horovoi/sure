@@ -35,6 +35,7 @@ class MonobankEndToEndTest < ActiveSupport::TestCase
     @mono_visa = create_mono_visa
   end
 
+  # One test: the backfill is a year of statement windows a minute apart (about 35 s)
   test "connect, link Mono Visa, backfill every product, settle holds, quiet hourly sync" do
     with_monobank_fake(@fixture, min_request_interval: INTERVAL) do |fake|
       scenario = MonobankFake::Scenario.new(family: @family, account: @mono_visa, fixture: @fixture, fake: fake,
@@ -45,22 +46,14 @@ class MonobankEndToEndTest < ActiveSupport::TestCase
       assert_operator fake.requests.count { |entry| entry["function"] == "statement" && entry["status"] == 500 }, :>=, 1,
                       "the EUR fault was served (and the account recovered)"
 
+      import = @family.imports.new(type: "TransactionImport", account: @mono_visa)
+      assert_not import.valid?, "a statement import into the linked Mono Visa is refused"
+      assert_includes import.errors.details[:account].map { |detail| detail[:error] }, :provider_linked
+
       assert_checks scenario.settle_and_cancel_holds!
       assert_checks scenario.hourly_sync_is_quiet!
 
       scenario.report if verbose_log
-    end
-  end
-
-  test "a statement import into the linked account is refused" do
-    with_monobank_fake(@fixture, min_request_interval: INTERVAL) do |fake|
-      scenario = MonobankFake::Scenario.new(family: @family, account: @mono_visa, fixture: @fixture, fake: fake,
-                                            drain: drain, interval: INTERVAL, log: verbose_log)
-      scenario.connect_and_backfill!
-
-      import = @family.imports.new(type: "TransactionImport", account: @mono_visa)
-      assert_not import.valid?
-      assert_includes import.errors.details[:account].map { |detail| detail[:error] }, :provider_linked
     end
   end
 

@@ -36,12 +36,14 @@ module MonobankFake
       [ "p2p-in", "Від: Олена Петренко", 4829, 150_000, nil, nil, { "comment" => "За квитки" } ],
       [ "novus", "Novus", 5411, -23_480, "groceries", "Groceries" ]
     ].freeze
-    # [key, card description, card amount, other product, other description]
+    # [key, card description, card amount, other product, other description, counterIban on
+    # both rows]. Jar rows carry no counterIban at the bank; they read "З чорної картки" /
+    # "На чорну картку".
     TRANSFERS = [
-      [ "card-to-jar", "На банку «Відпустка»", -100_000, "mbf-jar-vacation", "Поповнення «Відпустка»" ],
-      [ "jar-to-card", "З банки «Відпустка»", 50_000, "mbf-jar-vacation", "Переказ на картку" ],
-      [ "uah-to-usd", "Купівля валюти", :usd, "mbf-usd", "Купівля валюти" ],
-      [ "fop-to-card", "Переказ між власними рахунками", 2_000_000, "mbf-fop", "Переказ на картку" ]
+      [ "card-to-jar", "На банку «Відпустка»", -100_000, "mbf-jar-vacation", "З чорної картки", false ],
+      [ "jar-to-card", "З банки «Відпустка»", 50_000, "mbf-jar-vacation", "На чорну картку", false ],
+      [ "uah-to-usd", "Купівля валюти", :usd, "mbf-usd", "Купівля валюти", true ],
+      [ "fop-to-card", "Переказ між власними рахунками", 2_000_000, "mbf-fop", "Переказ на картку", true ]
     ].freeze
     HOLDS = [ [ "hold-silpo", "Сільпо", 5411, -38_640 ], [ "hold-uklon", "Uklon", 4121, -12_000 ] ].freeze
     USD_BOUGHT = 100_000 # cents: $1,000
@@ -65,6 +67,7 @@ module MonobankFake
 
     def build
       sample = App.load_fixture(SAMPLE)
+      @ibans = sample["accounts"].to_h { |product| [ product["id"], product["iban"] ] }
       @used_amounts = Hash.new { |hash, date| hash[date] = [] }
       overlap = overlap_rows
       skipped = skipped_row
@@ -94,10 +97,11 @@ module MonobankFake
       fixture
     end
 
-    # Day after the latest hand-entered entry, at most today (Account::ProviderLink's rule)
+    # Day after the latest hand-entered entry, at most today (Account::ProviderLink's rule).
+    # Today is the family's: the link screen runs in its time zone.
     def default_cutover_date
       if (link = "Account::ProviderLink".safe_constantize) && link.respond_to?(:default_cutover_date)
-        return link.default_cutover_date(account) || @today
+        return Time.use_zone(@zone) { link.default_cutover_date(account) } || @today
       end
 
       latest = account.entries.where.not(entryable_type: "Valuation").where("date <= ?", @today).maximum(:date)
@@ -174,7 +178,7 @@ module MonobankFake
           rows << row
         end
 
-        TRANSFERS.each do |key, description, amount, other_id, other_description|
+        TRANSFERS.each do |key, description, amount, other_id, other_description, counter_iban|
           time = times.shift
           if amount == :usd
             uah = -(USD_BOUGHT * usd_rate).round.to_i
@@ -186,10 +190,15 @@ module MonobankFake
             other_amount = -card_amount
             extra = {}
           end
+          other_extra = {}
+          if counter_iban
+            extra = extra.merge("counterIban" => @ibans.fetch(other_id))
+            other_extra = { "counterIban" => @ibans.fetch(CARD_ID) }
+          end
           rows << { "id" => "mbf-tr-#{key}", "time" => time.to_i, "description" => description, "mcc" => 4829,
                     "amount" => card_amount, "_group" => "own_transfer", "_category" => nil }.merge(extra)
           others[other_id] << { "id" => "mbf-tr-#{key}-other", "time" => time.to_i, "description" => other_description,
-                                "mcc" => 4829, "amount" => other_amount, "_group" => "own_transfer", "_category" => nil }
+                                "mcc" => 4829, "amount" => other_amount, "_group" => "own_transfer", "_category" => nil }.merge(other_extra)
         end
 
         HOLDS.each do |key, description, mcc, amount|
@@ -229,7 +238,7 @@ module MonobankFake
         )
         rows = fixture["statements"].values.flatten
         categories = rows.select { |row| row["_category"] }.group_by { |row| row["_group"] }
-        transfers = TRANSFERS.map do |key, _, amount, _, _|
+        transfers = TRANSFERS.map do |key, _, amount, *|
           amount.is_a?(Integer) && amount.positive? ? { "outflow" => "mbf-tr-#{key}-other", "inflow" => "mbf-tr-#{key}" } : { "outflow" => "mbf-tr-#{key}", "inflow" => "mbf-tr-#{key}-other" }
         end
         {

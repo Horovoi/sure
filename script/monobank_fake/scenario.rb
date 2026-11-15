@@ -43,12 +43,15 @@ module MonobankFake
       @snapshot = Checks.snapshot(account)
       say "#{account.name}: #{snapshot[:entries].size} entries, #{snapshot[:balances].size} balance days, balance #{snapshot[:balance]}"
 
-      @item = family.create_monobank_item!(access_token: @token, name: "monobank (fake)")
+      # What the user does runs in the family's time zone, as a request does
+      @item = in_family_zone { family.create_monobank_item!(access_token: @token, name: "monobank (fake)") }
       say "connected #{item.class.name} #{item.id}"
       drain.run(item)
 
-      link_products!
-      item.reload.sync_later
+      in_family_zone do
+        link_products!
+        item.reload.sync_later
+      end
       drain.run(item)
 
       record_phase(:backfill, checks.tap(&:run))
@@ -65,26 +68,29 @@ module MonobankFake
       fake.cancel_hold!(account: linked_id, hold_id: cancelled) if cancelled
       say "fake: settled #{settled.inspect}, cancelled #{cancelled.inspect}"
 
-      item.reload.sync_later
+      in_family_zone { item.reload.sync_later }
       drain.run(item)
 
+      @after_holds = { pending: 0, pending_ids: [], gone: [ cancelled ].compact, settled: [ settled ].compact }
       result = checks
-      result.run(pending: 0, pending_ids: [], balances: live_balances, gone: [ cancelled ].compact, settled: [ settled ].compact)
+      result.run(**@after_holds, balances: live_balances)
       record_phase(:holds, result)
     end
 
     # Step 6: the hourly sync (SyncHourlyJob) after `gap` with nothing new at the bank: no
-    # statement request (no balance changed, no hold open), at most one client-info, and
-    # everything still as after step 5. Returns the Checks.
+    # statement request (no balance changed, no hold open), one client-info, and everything
+    # still as after step 5. Only this connection's token is counted: the hourly job syncs
+    # every connection (the test database's fixtures have one the fake does not know).
+    # Returns the Checks.
     def hourly_sync_is_quiet!(gap: 1.hour)
       drain.wait_until(@now.call + [ gap, @interval + 1 ].max)
       before = fake.requests.size
       SyncHourlyJob.perform_now
       drain.run(item)
-      requests = fake.requests.drop(before)
+      requests = fake.requests.drop(before).select { |entry| entry["token"] == @token }
 
       result = checks
-      result.run(pending: 0, pending_ids: [], balances: live_balances)
+      result.run(**(@after_holds || {}), balances: live_balances)
       statements = requests.count { |entry| entry["function"] == "statement" }
       client_info = requests.count { |entry| entry["function"] == "client_info" }
       result.add("hourly sync with nothing new asks no statement", statements.zero?, "#{statements} statement requests")
@@ -120,6 +126,10 @@ module MonobankFake
     end
 
     private
+
+      def in_family_zone(&block)
+        Time.use_zone(family.resolved_time_zone, &block)
+      end
 
       def checks
         Checks.new(family: family, item: item, fixture: fixture, fake: fake, snapshot: snapshot, account: account,
