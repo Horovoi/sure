@@ -1,0 +1,8 @@
+---
+en:
+  budget_categories:
+    confirm_button:
+      confirm: Confirm
+    index:
+      description: Adjust category budgets to set spending limits. Unallocated funds will be automatically assigned as uncategorized.
+      title: Edit your category budgets

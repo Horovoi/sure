@@ -499,4 +499,23 @@ class IncomeStatementTest < ActiveSupport::TestCase
 
     assert_equal 0, IncomeStatement.new(@family).avg_expense(interval: "month", category: @groceries_category)
   end
+
+  test "the budget-excluded kinds stay out of the totals, the family stats and the category stats" do
+    Entry.joins(:account).where(accounts: { family_id: @family.id }).destroy_all
+
+    assert_equal %w[funds_movement one_time cc_payment], Transaction::BUDGET_EXCLUDED_KINDS
+    assert_equal "'funds_movement', 'one_time', 'cc_payment'", Transaction.budget_excluded_kinds_sql
+
+    create_transaction(account: @checking_account, amount: 100, category: @groceries_category)
+    create_transaction(account: @checking_account, amount: 40, category: @groceries_category, kind: "loan_payment")
+    Transaction::BUDGET_EXCLUDED_KINDS.each do |kind|
+      create_transaction(account: @checking_account, amount: 1000, category: @groceries_category, kind: kind)
+    end
+
+    income_statement = IncomeStatement.new(@family)
+    assert_equal 140, income_statement.expense_totals(period: Period.last_30_days).total
+    assert_equal Money.new(140, @family.currency), income_statement.totals(date_range: Period.last_30_days.date_range).expense_money
+    assert_equal 140.0, income_statement.median_expense(interval: "month")
+    assert_equal 140.0, income_statement.median_expense(interval: "month", category: @groceries_category)
+  end
 end

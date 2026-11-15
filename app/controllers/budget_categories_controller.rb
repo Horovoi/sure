@@ -7,7 +7,10 @@ class BudgetCategoriesController < ApplicationController
   end
 
   def show
+    # The budget totals (IncomeStatement) leave out these kinds, so the drilldown does
+    # too: a matched transfer must not show under a category it does not count in.
     @recent_transactions = @budget.transactions
+                                  .where.not(transactions: { kind: Transaction::BUDGET_EXCLUDED_KINDS })
 
     if params[:id] == BudgetCategory.uncategorized.id
       @budget_category = @budget.uncategorized_budget_category
