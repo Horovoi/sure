@@ -35,6 +35,31 @@
   }
 }
 
+@utility button-bg-secondary-strong {
+  @apply bg-gray-200;
+
+  @variant theme-dark {
+    @apply bg-gray-700;
+  }
+}
+
+@utility button-bg-secondary-strong-hover {
+  @apply bg-gray-300;
+
+  @variant theme-dark {
+    @apply bg-gray-600;
+  }
+}
+
+/* Tinted link-coloured button (text-link on a blue tint), same in both themes */
+@utility button-bg-accent {
+  @apply bg-blue-tint-5;
+}
+
+@utility button-bg-accent-hover {
+  @apply bg-blue-tint-10;
+}
+
 @utility button-bg-disabled {
   @apply bg-gray-50;
 
@@ -100,11 +125,5 @@
   }
 }
 
-@utility bg-nav-indicator {
-  @apply bg-black;
-
-  @variant theme-dark {
-    @apply bg-white;
-  }
-}
+/* bg-nav-indicator is a theme colour (sure-design-system.css). */
 

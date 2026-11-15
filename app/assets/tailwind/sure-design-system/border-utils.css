@@ -91,3 +91,19 @@
   }
 }
 
+@utility border-inverse {
+  @apply border-alpha-white-200;
+
+  @variant theme-dark {
+    @apply border-alpha-black-300;
+  }
+}
+
+/* Row rules for divide-y / divide-x lists, matching border-subdued */
+@utility divide-subdued {
+  @apply divide-alpha-black-50;
+
+  @variant theme-dark {
+    @apply divide-alpha-white-100;
+  }
+}

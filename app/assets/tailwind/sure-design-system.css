@@ -26,6 +26,27 @@
   --color-destructive: var(--color-red-600);
   --color-shadow: --alpha(var(--color-black) / 6%);
 
+  /* Semantic colours. As theme colours (not @utility) they generate every
+     utility family (bg-, text-, border-, outline-, divide-, ring-) plus
+     opacity modifiers (bg-info/10), and the CSS variables stay available to
+     inline styles and JS. Dark values are in the @layer base block below. */
+  --color-info: var(--color-blue-600);
+  --color-link: var(--color-blue-600);
+  --color-focus-ring: var(--color-alpha-black-700);
+  --color-destructive-subtle: var(--color-red-200);
+  --color-toggle-track: var(--color-gray-300);
+  --color-nav-indicator: var(--color-black);
+
+  /* Surfaces (the page) and containers (cards and panels on it) */
+  --color-surface: var(--color-gray-50);
+  --color-surface-hover: var(--color-gray-100);
+  --color-surface-inset: var(--color-gray-100);
+  --color-surface-inset-hover: var(--color-gray-200);
+  --color-container: var(--color-white);
+  --color-container-hover: var(--color-gray-50);
+  --color-container-inset: var(--color-gray-50);
+  --color-container-inset-hover: var(--color-gray-100);
+
   /* Colors used in Stimulus controllers with SVGs (easier to define light/dark mode here than toggle within the controllers) */
   /* See @layer base block below for dark mode overrides */
   --budget-unused-fill: var(--color-gray-200);
@@ -259,6 +280,22 @@
     --color-destructive: var(--color-red-400);
     --color-shadow: --alpha(var(--color-white) / 8%);
 
+    --color-info: var(--color-blue-500);
+    --color-link: var(--color-blue-500);
+    --color-focus-ring: var(--color-alpha-white-700);
+    --color-destructive-subtle: var(--color-red-800);
+    --color-toggle-track: var(--color-gray-700);
+    --color-nav-indicator: var(--color-white);
+
+    --color-surface: var(--color-black);
+    --color-surface-hover: var(--color-gray-800);
+    --color-surface-inset: var(--color-gray-800);
+    --color-surface-inset-hover: var(--color-gray-800);
+    --color-container: var(--color-gray-900);
+    --color-container-hover: var(--color-gray-800);
+    --color-container-inset: var(--color-gray-800);
+    --color-container-inset-hover: var(--color-gray-700);
+
     /* Dark mode overrides for colors used in Stimulus controllers with SVGs */
     --budget-unused-fill: var(--color-gray-500);
     --budget-unallocated-fill: var(--color-gray-700);
@@ -291,8 +328,17 @@
     min-height: 100dvh;
   }
 
+  /* Every <button> gets the canonical keyboard-focus outline (the same
+     recipe as .focus-ring below). The transparent resting outline keeps a
+     transition on the button from fading in through currentColor. */
   button {
-    @apply cursor-pointer focus-visible:outline-gray-900;
+    @apply cursor-pointer;
+    outline: 2px solid transparent;
+    outline-offset: 0;
+
+    &:focus-visible {
+      outline-color: var(--color-focus-ring);
+    }
   }
 
   hr {
@@ -328,6 +374,26 @@
 }
 
 @layer components {
+  /*
+    Canonical keyboard-focus indicator for every focusable DS primitive: a 2px
+    outline that hugs the control (offset 0, follows the border radius) in the
+    theme-aware focus-ring token, on :focus-visible only so it never shows for
+    mouse or touch. An outline rather than a box-shadow, so a utility-layer
+    shadow-* on the same element cannot hide it, and it doubles as the
+    forced-colors indicator. .focus-ring-within puts it on a wrapper whose
+    focus lands on a child input. .form-field keeps its own soft halo.
+  */
+  .focus-ring,
+  .focus-ring-within {
+    outline: 2px solid transparent;
+    outline-offset: 0;
+  }
+
+  .focus-ring:focus-visible,
+  .focus-ring-within:focus-within {
+    outline-color: var(--color-focus-ring);
+  }
+
   /* Mobile bottom nav: safe-area adjustments
      - Default: respect safe-area insets
      - PWA standalone: reduce padding slightly to visually match Safari
