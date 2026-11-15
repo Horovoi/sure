@@ -80,4 +80,16 @@ class ScheduledJobsManagerTest < ActiveSupport::TestCase
     assert_includes ScheduledJobsManager::CONFIGURABLE_JOBS.keys, :security_health_check
     assert_includes ScheduledJobsManager::CONFIGURABLE_JOBS.keys, :subscription_transactions
   end
+
+  test "sync! writes every configurable job as an ActiveJob" do
+    # Stubbed so the test never touches the real cron entries in the shared test Redis
+    Sidekiq::Cron::Job.stubs(:find).returns(nil)
+    ScheduledJobsManager::CONFIGURABLE_JOBS.each_value do |config|
+      Sidekiq::Cron::Job.expects(:new)
+        .with(has_entries(name: config[:cron_name], class: config[:class], active_job: true))
+        .returns(stub(valid?: true, save: true))
+    end
+
+    ScheduledJobsManager.sync!
+  end
 end
