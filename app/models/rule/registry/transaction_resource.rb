@@ -21,6 +21,7 @@ class Rule::Registry::TransactionResource < Rule::Registry
     Rule::ActionExecutor::SetInvestmentActivityLabel,
     Rule::ActionExecutor::ExcludeTransaction,
     Rule::ActionExecutor::SetAsTransferOrPayment,
+    Rule::ActionExecutor::BayesCategorize,
     Rule::ActionExecutor::AutoCategorize,
     Rule::ActionExecutor::AutoDetectMerchants
   ].freeze

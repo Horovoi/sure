@@ -74,6 +74,8 @@ en:
       success: All rules deleted
     actions:
       value_placeholder: Enter a value
+    action_executors:
+      bayes_categorize: Categorize with the local classifier (no AI)
     apply_all:
       button: Apply All
       confirm_title: Apply All Rules

@@ -194,4 +194,29 @@ class EnrichableTest < ActiveSupport::TestCase
     assert_equal "Accepted Name", row.reload.value
     assert_equal "Accepted Name", Account.find(@enrichable.id).name
   end
+
+  test "a soft bayes lock blocks no enrichment, forced or not, and is released by it" do
+    @enrichable.lock_attr!(:name, source: "bayes")
+    assert @enrichable.soft_locked?(:name)
+    assert @enrichable.enrichable?(:name)
+
+    assert @enrichable.enrich_attribute(:name, "From a rule", source: "rule")
+
+    @enrichable.reload
+    assert_equal "From a rule", @enrichable.name
+    assert_not @enrichable.locked?(:name)
+  end
+
+  test "the enrichable scope counts a soft bayes lock as unlocked, unlike AI and user locks" do
+    soft = accounts(:depository)
+    ai = accounts(:investment)
+    user = accounts(:credit_card)
+    soft.lock_attr!(:name, source: "bayes")
+    ai.lock_attr!(:name, source: "ai")
+    user.lock_attr!(:name)
+    ids = [ soft.id, ai.id, user.id ]
+
+    assert_equal [ soft.id ], Account.where(id: ids).enrichable(:name).pluck(:id)
+    assert_equal [ soft.id, ai.id ].sort, Account.where(id: ids).enrichable(:name, force: true).pluck(:id).sort
+  end
 end

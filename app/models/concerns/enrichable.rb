@@ -15,12 +15,17 @@
 # A forced enrichment (a rule the user applies by hand) may replace a lock
 # that is not a user lock, and never a user lock.
 #
+# A soft lock ("bayes", the local classifier's guess) records who set the value
+# but blocks nothing: any later enrichment may replace it, forced or not, and a
+# user edit replaces it with a user lock.
+#
 module Enrichable
   extend ActiveSupport::Concern
 
   InvalidAttributeError = Class.new(StandardError)
 
   USER_LOCK_SOURCE = "user".freeze
+  SOFT_LOCK_SOURCES = %w[bayes].freeze
 
   included do
     scope :enrichable, ->(attrs, force: false) {
@@ -30,17 +35,20 @@ module Enrichable
 
   # SQL condition: none of attrs is locked in table's locked_attributes.
   # With force, only user locks (including legacy timestamp locks) count.
+  # Soft locks never count.
   def self.unlocked_condition(table, attrs, force: false)
     connection = ActiveRecord::Base.connection
     column = "#{connection.quote_table_name(table)}.locked_attributes"
     user = connection.quote(USER_LOCK_SOURCE)
+    soft = SOFT_LOCK_SOURCES.map { |source| connection.quote(source) }.join(", ")
 
     conditions = Array(attrs).map do |attr|
       key = connection.quote(attr.to_s)
+      source = "COALESCE(#{column} -> #{key} ->> 'source', #{user})"
       if force
-        "NOT (#{column} ? #{key} AND COALESCE(#{column} -> #{key} ->> 'source', #{user}) = #{user})"
+        "NOT (#{column} ? #{key} AND #{source} = #{user})"
       else
-        "NOT (#{column} ? #{key})"
+        "NOT (#{column} ? #{key} AND #{source} NOT IN (#{soft}))"
       end
     end
 
@@ -63,7 +71,7 @@ module Enrichable
     # Track current values before modification for virtual attributes (like tag_ids)
     current_values = {}
     enrichable_attrs = Array(attrs).reject do |attr_key, attr_value|
-      blocked_by_lock = locked?(attr_key) && !(force && !user_locked?(attr_key))
+      blocked_by_lock = locked?(attr_key) && !soft_locked?(attr_key) && !(force && !user_locked?(attr_key))
 
       if blocked_by_lock || ignored_enrichable_attributes.include?(attr_key)
         true
@@ -157,7 +165,7 @@ module Enrichable
   end
 
   def enrichable?(attr)
-    !locked?(attr)
+    !locked?(attr) || soft_locked?(attr)
   end
 
   # Who locked attr: "user", "ai", ... or nil when it is not locked.
@@ -170,6 +178,10 @@ module Enrichable
 
   def user_locked?(attr)
     lock_source(attr) == USER_LOCK_SOURCE
+  end
+
+  def soft_locked?(attr)
+    lock_source(attr).in?(SOFT_LOCK_SOURCES)
   end
 
   def lock_attr!(attr, source: USER_LOCK_SOURCE)
