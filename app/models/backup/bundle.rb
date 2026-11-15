@@ -222,7 +222,7 @@ class Backup::Bundle
       argv = [ "pg_dump", "--format=plain", "--no-password" ]
       argv += [ "--host", db[:host].to_s ] if db[:host].present?
       argv += [ "--port", db[:port].to_s ] if db[:port].present?
-      user = db[:username].presence || db[:user].presence
+      user = db[:username].presence
       argv += [ "--username", user.to_s ] if user
       argv << "--snapshot=#{snapshot}" if snapshot
       argv += [ "--dbname", db[:database].to_s ]
