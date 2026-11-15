@@ -45,6 +45,31 @@ class IncomeStatement
     Money.new(0, family.currency)
   end
 
+  # Per-day net spending of a period ({ date => amount }), for the dashboard's
+  # cumulative spending curve (IncomeStatement::SpendingTrend). Refunds net within their
+  # category on the day they land. A category whose period net is not spending (income,
+  # or refunded more than spent) stays out, as in IncomeStatement::CategoryNetting, so
+  # the last cumulative point equals the Sankey's spending.
+  #
+  # category_ids narrows it to those categories: ids, plus
+  # Category::UNCATEGORIZED_FILTER_VALUE for uncategorized spending. A parent covers its
+  # subcategories, as in the transactions category filter. nil means every category.
+  def daily_expense_series(period:, category_ids: nil)
+    rows = daily_spending_rows(period)
+    if category_ids
+      matches = expense_category_matcher(category_ids)
+      rows = rows.select { |row| matches.call(row.category_id) }
+    end
+
+    rows.group_by(&:date).transform_values { |day_rows| day_rows.sum(&:amount) }
+  end
+
+  # Categories with spending in the period's daily series, nil standing for
+  # uncategorized spending: the categories a filter on that series can offer.
+  def daily_expense_category_ids(period:)
+    daily_spending_rows(period).map(&:category_id).uniq
+  end
+
   def median_expense(interval: "month", category: nil, exclude_current_period: false)
     if category.present?
       category_stats(interval: interval, exclude_current_period: exclude_current_period)
@@ -144,6 +169,46 @@ class IncomeStatement
         currency: family.currency,
         category_totals: category_totals.freeze
       )
+    end
+
+    # The period's daily rows of the categories that net to spending. Memoized per
+    # period: the curve and its category filter read the same rows.
+    def daily_spending_rows(period)
+      @daily_spending_rows ||= {}
+      @daily_spending_rows[period_memo_key(period)] ||= begin
+        rows = daily_expense_rows(period)
+        spending_ids = rows.group_by(&:category_id).select { |_id, category_rows| category_rows.sum(&:amount).positive? }.keys
+        rows.select { |row| spending_ids.include?(row.category_id) }
+      end
+    end
+
+    # Cached per period and never per category filter: every selection reads these rows.
+    # They carry only the category id, so moving a subcategory under another parent
+    # takes effect without a new key.
+    def daily_expense_rows(period)
+      Rails.cache.fetch([
+        "income_statement", "daily_expense_rows", "v1", family.id, period.start_date.iso8601, period.end_date.iso8601,
+        family.entries_cache_version, ExchangeRate.conversion_cache_key(family.currency)
+      ], expires_in: Family::AGGREGATE_CACHE_TTL) do
+        DailyExpenseTotals.new(
+          family,
+          transactions_scope: family.transactions.visible.excluding_pending.in_period(period),
+          date_range: period.date_range
+        ).call
+      end
+    end
+
+    # A predicate over a row's category_id for a selection, expanding each selected
+    # parent to its current subcategories (categories nest one level deep). Memoized per
+    # selection, since one request filters two periods the same way.
+    def expense_category_matcher(category_ids)
+      key = category_ids.map(&:to_s).sort
+      (@expense_category_matchers ||= {})[key] ||= begin
+        selected = key.to_set
+        selected.merge(categories.filter_map { |category| category.id.to_s if selected.include?(category.parent_id.to_s) })
+
+        ->(category_id) { selected.include?(category_id.nil? ? Category::UNCATEGORIZED_FILTER_VALUE : category_id.to_s) }
+      end
     end
 
     # The stats depend on today's period (which one is current, and where the category

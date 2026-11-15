@@ -9,7 +9,7 @@ class PagesController < ApplicationController
 
   # The dashboard widgets, in their default order when the saved order leaves one out
   DASHBOARD_SECTION_KEYS = %w[
-    cashflow_sankey outflows_donut investment_summary net_worth_chart balance_sheet subscriptions_summary
+    cashflow_sankey outflows_donut spending_trend investment_summary net_worth_chart balance_sheet subscriptions_summary
   ].freeze
 
   # A widget's period form reloads only the widget's own turbo frame, so such a request
@@ -17,6 +17,7 @@ class PagesController < ApplicationController
   DASHBOARD_FRAME_SECTIONS = {
     "cashflow_sankey_section" => "cashflow_sankey",
     "outflows_donut_section" => "outflows_donut",
+    "spending_trend_section" => "spending_trend",
     "investment_summary_section" => "investment_summary",
     "net_worth_section" => "net_worth_chart"
   }.freeze
@@ -24,9 +25,12 @@ class PagesController < ApplicationController
   # Query params that shape what the dashboard shows without being saved. Customize mode
   # carries them through its links and buttons, so the widgets keep their periods.
   DASHBOARD_VIEW_PARAMS = (
-    %i[period start_date end_date cashflow_show_subcategories] +
+    %i[period start_date end_date cashflow_show_subcategories spending_period] +
     DASHBOARD_WIDGET_PERIOD_PREFIXES.flat_map { |prefix| %I[#{prefix}_period #{prefix}_start_date #{prefix}_end_date] }
   ).freeze
+
+  # The view params that hold a list (the spending curve's category filter)
+  DASHBOARD_VIEW_ARRAY_PARAMS = %i[spending_category_ids].freeze
 
   def dashboard
     @balance_sheet = Current.family.balance_sheet
@@ -102,7 +106,9 @@ class PagesController < ApplicationController
     end
 
     def dashboard_view_params
-      params.slice(*DASHBOARD_VIEW_PARAMS).permit(*DASHBOARD_VIEW_PARAMS).to_h.symbolize_keys
+      params.slice(*DASHBOARD_VIEW_PARAMS, *DASHBOARD_VIEW_ARRAY_PARAMS)
+        .permit(*DASHBOARD_VIEW_PARAMS, DASHBOARD_VIEW_ARRAY_PARAMS.index_with { [] })
+        .to_h.symbolize_keys
     end
 
     # The period one widget shows: its own <prefix>_period param, else the page period.
@@ -155,6 +161,16 @@ class PagesController < ApplicationController
             partial: "pages/dashboard/outflows_donut",
             locals: { outflows_data: outflows_data, period: @outflows_period },
             visible: @has_accounts && outflows_data[:categories].present?,
+            collapsible: true
+          }
+        },
+        "spending_trend" => -> {
+          {
+            key: "spending_trend",
+            title: "pages.dashboard.spending_trend.title",
+            partial: "pages/dashboard/spending_trend",
+            locals: { spending_trend_data: build_spending_trend_data },
+            visible: @has_accounts,
             collapsible: true
           }
         },
@@ -287,6 +303,55 @@ class PagesController < ApplicationController
         end
 
       { categories: categories, total: total.to_f.round(2), currency: expense_totals.currency, currency_symbol: currency_symbol }
+    end
+
+    # The spending curve: the budget period that holds the spending_period date (the
+    # current one by default; a future one is the current one) against the period before
+    # it, both narrowed to the category filter
+    def build_spending_trend_data
+      income_statement = Current.family.income_statement
+      period_date = safe_parse_date(params[:spending_period]) || Date.current
+      periods = IncomeStatement::SpendingTrend.periods(Current.family, period_date)
+
+      filter = IncomeStatement::ExpenseCategoryFilter.new(
+        income_statement,
+        periods: [ periods.current, periods.previous ],
+        values: IncomeStatement::ExpenseCategoryFilter.sanitize(Current.family, params[:spending_category_ids])
+      )
+      trend = IncomeStatement::SpendingTrend.new(income_statement, date: period_date, category_ids: filter.category_ids)
+
+      period_format = t("pages.dashboard.spending_trend.period_format")
+
+      {
+        trend: trend,
+        filter: filter,
+        currency: Current.family.currency,
+        current_label: I18n.l(trend.period_start, format: period_format),
+        previous_label: I18n.l(trend.previous_period.start_date, format: period_format),
+        compact_range: spending_trend_compact_range(trend.current_period),
+        period_options: IncomeStatement::SpendingTrend.recent_period_starts(Current.family).map { |start| [ I18n.l(start, format: period_format), start.iso8601 ] },
+        chart_data: {
+          days: trend.axis_days,
+          # Localized here, one per axis day, so the ticks follow the app locale
+          axis_labels: trend.axis_dates.map { |date| I18n.l(date, format: :short) },
+          current: trend.current_points.map { |point| spending_trend_point_json(point) },
+          previous: trend.previous_axis_points.map { |point| spending_trend_point_json(point) }
+        }
+      }
+    end
+
+    def spending_trend_point_json(point)
+      { day: point[:day], value: point[:value].to_f.round(2), date_formatted: I18n.l(point[:date], format: :short) }
+    end
+
+    # A short range for narrow screens ("Nov 05 - Dec 04, 2026")
+    def spending_trend_compact_range(period)
+      range = period.date_range
+      if range.begin == range.end
+        t("pages.dashboard.spending_trend.date_range_short_single", date: I18n.l(range.begin, format: :short), year: range.end.year)
+      else
+        t("pages.dashboard.spending_trend.date_range_short", start_date: I18n.l(range.begin, format: :short), end_date: I18n.l(range.end, format: :short), year: range.end.year)
+      end
     end
 
     def safe_parse_date(value)

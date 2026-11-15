@@ -208,4 +208,90 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
       I18n.t("pages.dashboard.customize.hide", title: I18n.t("pages.dashboard.balance_sheet.title"))
     assert_select "[data-testid=dashboard-hidden-sections]", text: /#{Regexp.escape(I18n.t("pages.dashboard.customize.none_hidden"))}/
   end
+
+  # --- Spending curve (w2-dash spending-curve) ---
+
+  test "the spending curve draws the current budget period on an axis to its last day" do
+    @family.update!(use_fiscal_months: true, fiscal_month_start_day: 5)
+    category = @family.categories.create!(name: "Curve Groceries", classification: "expense")
+
+    travel_to Date.new(2026, 3, 12) do
+      create_transaction(account: curve_account, currency: @family.currency, amount: 120, category: category, date: Date.new(2026, 3, 6))
+
+      get root_path(spending_category_ids: [ category.name ])
+
+      assert_response :ok
+      data = spending_chart_data
+      assert_equal 31, data["days"]
+      assert_equal I18n.l(Date.new(2026, 4, 4), format: :short), data["axis_labels"].last
+      assert_equal 8, data["current"].size
+      assert_in_delta 120, data["current"].last["value"]
+      assert_select "#spending-trend-section select[name=spending_period] option[selected][value=?]", "2026-03-05"
+    end
+  end
+
+  test "the spending category filter narrows both periods and keeps the period" do
+    picked = @family.categories.create!(name: "Curve Picked", classification: "expense")
+    other = @family.categories.create!(name: "Curve Other", classification: "expense")
+    create_transaction(account: curve_account, currency: @family.currency, amount: 40, category: picked)
+    create_transaction(account: curve_account, currency: @family.currency, amount: 900, category: other)
+
+    get root_path(spending_category_ids: [ picked.name ])
+
+    assert_response :ok
+    assert_in_delta 40, spending_chart_data["current"].last["value"]
+    assert_select "#spending-trend-section button", text: I18n.t("pages.dashboard.spending_trend.filter_categories", count: 1)
+    # The period form carries the filter, the filter form carries the period
+    assert_select "#spending-trend-section form input[type=hidden][name='spending_category_ids[]'][value=?]", picked.name
+    assert_select "#spending-trend-section form input[type=hidden][name=spending_period]"
+    assert_select "#spending-trend-section input[type=checkbox][name='spending_category_ids[]'][value=?][checked]", picked.name
+    assert_select "#spending-trend-section input[type=checkbox][name='spending_category_ids[]'][value=?]:not([checked])", other.name
+  end
+
+  test "an unknown spending category is ignored" do
+    get root_path(spending_category_ids: [ "No such category" ])
+
+    assert_response :ok
+    assert_select "#spending-trend-section button", text: I18n.t("pages.dashboard.spending_trend.filter_categories_all")
+    assert_select "#spending-trend-section form input[type=hidden][name='spending_category_ids[]']", count: 0
+  end
+
+  test "a hidden spending curve builds nothing" do
+    @user.update!(preferences: { "hidden_sections" => { "spending_trend" => true } })
+    IncomeStatement::SpendingTrend.expects(:new).never
+    IncomeStatement::ExpenseCategoryFilter.expects(:new).never
+
+    get root_path(spending_category_ids: [ categories(:food_and_drink).name ])
+
+    assert_response :ok
+    assert_select "section[data-section-key='spending_trend']", count: 0
+  end
+
+  test "the spending curve's frame request builds only that widget" do
+    IncomeStatement::Sankey.expects(:new).never
+
+    get root_path(spending_period: 1.month.ago.to_date.iso8601), headers: { "Turbo-Frame" => "spending_trend_section" }
+
+    assert_response :ok
+    assert_select "turbo-frame#spending_trend_section"
+  end
+
+  test "customize mode carries the spending filter through its links" do
+    name = categories(:food_and_drink).name
+
+    get root_path(customize: 1, spending_category_ids: [ name ])
+
+    assert_response :ok
+    assert_select "a[href=?]", root_path(spending_category_ids: [ name ]), text: I18n.t("pages.dashboard.customize.done")
+    assert_select "section[data-section-key='balance_sheet'] form input[name='spending_category_ids[]'][value=?]", name
+  end
+
+  private
+    def curve_account
+      @curve_account ||= @family.accounts.create!(name: "Curve checking", currency: @family.currency, balance: 0, accountable: Depository.new)
+    end
+
+    def spending_chart_data
+      JSON.parse(css_select("#spending-trend-section [data-controller='spending-chart']").sole["data-spending-chart-data-value"])
+    end
 end

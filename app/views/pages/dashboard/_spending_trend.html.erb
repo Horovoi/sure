@@ -1,0 +1,114 @@
+<%# locals: (spending_trend_data:) %>
+<%
+  trend = spending_trend_data[:trend]
+  filter = spending_trend_data[:filter]
+  currency = spending_trend_data[:currency]
+  range = trend.current_period.date_range
+  delta = Money.new(trend.delta, currency)
+  delta_class = delta.negative? ? "text-success" : (delta.zero? ? "text-secondary" : "text-destructive")
+  parent_ids = filter.options.filter_map { |option| option.category.parent_id }.to_set
+%>
+<%= turbo_frame_tag "spending_trend_section" do %>
+<div id="spending-trend-section" class="px-4 space-y-4">
+  <%# Both rows wrap, so on narrow widths the controls drop below the dates instead of
+      overflowing the card %>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-secondary hidden sm:block">
+      <%= t("pages.dashboard.spending_trend.date_range", start_date: l(range.begin, format: :long), end_date: l(range.end, format: :long)) %>
+    </p>
+    <p class="text-sm text-secondary sm:hidden"><%= spending_trend_data[:compact_range] %></p>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "spending_trend_section" } do |form| %>
+        <% Array(filter.values).each do |value| %>
+          <%= hidden_field_tag "spending_category_ids[]", value, id: nil %>
+        <% end %>
+        <%= form.select :spending_period,
+              spending_trend_data[:period_options],
+              { selected: trend.period_start.iso8601 },
+              data: { "auto-submit-form-target": "auto" },
+              aria: { label: t("pages.dashboard.spending_trend.period_picker_label") },
+              class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-xs sm:text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+      <% end %>
+
+      <%= render layout: "pages/dashboard/filter_popover", locals: {
+            button_text: filter.values ? t("pages.dashboard.spending_trend.filter_categories", count: filter.selected_count) : t("pages.dashboard.spending_trend.filter_categories_all"),
+            search_label: t("pages.dashboard.spending_trend.search_categories"),
+            apply_text: t("pages.dashboard.spending_trend.apply"),
+            frame: "spending_trend_section",
+            hidden_fields: { spending_period: trend.period_start.iso8601 },
+            list_controllers: "list-filter category-filter"
+          } do %>
+        <%# The cascade of the transactions category filter: checking a parent checks its
+            subcategories, and unchecking one subcategory unchecks the parent, so a parent
+            is submitted only while it covers every checked subcategory %>
+        <% filter.options.each do |option| %>
+          <% category = option.category %>
+          <%
+            checkbox_data = if category.persisted? && parent_ids.include?(category.id)
+              { action: "category-filter#toggleChildren", category_filter_group_param: category.id, category_filter_target: "parent" }
+            elsif category.parent_id.present?
+              { category_filter_target: "child", category_filter_group_id: category.parent_id }
+            else
+              {}
+            end
+          %>
+          <%= render layout: "pages/dashboard/filter_popover_option", locals: {
+                name: "spending_category_ids[]",
+                value: option.value,
+                checked: option.checked,
+                filter_name: category.name,
+                checkbox_data: checkbox_data
+              } do %>
+            <% if category.parent_id.present? %>
+              <%= icon("corner-down-right", size: "sm", class: "text-secondary") %>
+            <% end %>
+            <%= render partial: "categories/badge", locals: { category: category } %>
+          <% end %>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <span class="w-1 h-10 rounded-full bg-success shrink-0"></span>
+      <div class="min-w-0">
+        <p class="text-sm text-primary truncate"><%= spending_trend_data[:current_label] %></p>
+        <p class="flex flex-wrap items-baseline gap-x-2">
+          <span class="font-medium text-lg tabular-nums text-primary whitespace-nowrap" data-testid="spending-trend-current-total"><%= format_money Money.new(trend.current_total, currency) %></span>
+          <span class="text-sm tabular-nums whitespace-nowrap <%= delta_class %>" data-testid="spending-trend-delta"><%= format_money delta %></span>
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 min-w-0">
+      <span class="w-1 h-10 rounded-full bg-subdued shrink-0"></span>
+      <div class="min-w-0">
+        <p class="text-sm text-secondary truncate">
+          <span><%= spending_trend_data[:previous_label] %></span>
+          <%# While the selected period runs, the figure covers the same days so far %>
+          <% if trend.partial_comparison? %>
+            <span class="text-xs"><%= t("pages.dashboard.spending_trend.previous_through", date: l(trend.comparison_end_date, format: :short)) %></span>
+          <% end %>
+        </p>
+        <p class="font-medium text-lg tabular-nums text-secondary whitespace-nowrap" data-testid="spending-trend-previous-total"><%= format_money Money.new(trend.previous_total, currency) %></p>
+      </div>
+    </div>
+  </div>
+
+  <% if trend.any_spending? %>
+    <div class="w-full h-52"
+      data-controller="spending-chart"
+      data-spending-chart-data-value="<%= spending_trend_data[:chart_data].to_json %>"
+      data-spending-chart-currency-value="<%= currency %>"
+      data-spending-chart-current-label-value="<%= spending_trend_data[:current_label] %>"
+      data-spending-chart-previous-label-value="<%= spending_trend_data[:previous_label] %>">
+    </div>
+  <% else %>
+    <div class="w-full h-52 flex items-center justify-center">
+      <p class="text-secondary text-sm"><%= t("pages.dashboard.spending_trend.no_data") %></p>
+    </div>
+  <% end %>
+</div>
+<% end %>

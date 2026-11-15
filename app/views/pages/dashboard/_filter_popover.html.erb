@@ -1,0 +1,43 @@
+<%# locals: (button_text:, search_label:, apply_text:, frame:, hidden_fields: {}, list_controllers: "list-filter") %>
+<%# The checklist filter a dashboard widget puts beside its period picker: a GET form
+    into the widget's own turbo frame, with a searchable list of options (yielded by the
+    caller, one pages/dashboard/filter_popover_option each) and an Apply button.
+    hidden_fields carries the widget's other params (its period) through the submit, so
+    applying the filter keeps them. %>
+<%= render DS::Popover.new(variant: :button, no_padding: true) do |popover| %>
+  <% popover.with_button(
+       type: "button",
+       text: button_text,
+       variant: "outline",
+       icon: "list-filter"
+     ) %>
+
+  <% popover.with_custom_content do %>
+    <%= form_with url: root_path, method: :get, data: { turbo_frame: frame }, class: "p-3 w-64 space-y-2" do %>
+      <% hidden_fields.each do |name, value| %>
+        <% if value.is_a?(Array) %>
+          <% value.each do |item| %>
+            <%= hidden_field_tag "#{name}[]", item, id: nil %>
+          <% end %>
+        <% else %>
+          <%= hidden_field_tag name, value, id: nil %>
+        <% end %>
+      <% end %>
+
+      <div data-controller="<%= list_controllers %>">
+        <%= render DS::SearchInput.new(
+              variant: :embedded,
+              placeholder: search_label,
+              aria_label: search_label,
+              data: { list_filter_target: "input", action: "input->list-filter#filter" }
+            ) %>
+
+        <div class="my-2 max-h-64 overflow-y-auto space-y-1" data-list-filter-target="list">
+          <%= yield %>
+        </div>
+      </div>
+
+      <%= render DS::Button.new(type: "submit", text: apply_text, variant: "primary", full_width: true) %>
+    <% end %>
+  <% end %>
+<% end %>

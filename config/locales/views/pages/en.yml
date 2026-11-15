@@ -60,6 +60,21 @@ en:
         weight: "Weight"
         custom: "Custom"
         to: "to"
+      spending_trend:
+        title: "Spending"
+        period_format: "%B %Y"
+        period_picker_label: "Budget period"
+        date_range: "%{start_date} - %{end_date}"
+        date_range_short: "%{start_date} - %{end_date}, %{year}"
+        date_range_short_single: "%{date}, %{year}"
+        previous_through: "through %{date}"
+        filter_categories_all: "All categories"
+        filter_categories:
+          one: "%{count} category"
+          other: "%{count} categories"
+        search_categories: "Search categories"
+        apply: "Apply"
+        no_data: "No spending in these periods"
       investment_summary:
         title: "Investments"
         total_return: "Total Return"

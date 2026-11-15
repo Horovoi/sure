@@ -174,6 +174,30 @@ class DashboardTest < ApplicationSystemTestCase
     assert_selector "section[data-section-key='net_worth_chart']"
   end
 
+  test "the spending category filter changes the curve" do
+    travel = @family.categories.create!(name: "Curve Travel", color: "#2244aa")
+    create_transaction(account: @account, currency: @family.currency, category: travel, amount: 700_000, date: @start_date)
+
+    visit root_path
+    total = nil
+    within "#spending-trend-section" do
+      assert_selector "[data-controller='spending-chart'] svg path[data-series='current']"
+      total = find("[data-testid='spending-trend-current-total']").text
+
+      click_button I18n.t("pages.dashboard.spending_trend.filter_categories_all")
+      find("label[data-filter-name='Curve Travel'] input[type='checkbox']").click
+      # Unchecking a subcategory unchecks its parent, so the parent no longer covers it
+      find("label[data-filter-name='#{@child.name}'] input[type='checkbox']").click
+      assert_not find("label[data-filter-name='#{@parent.name}'] input[type='checkbox']").checked?
+      click_button I18n.t("pages.dashboard.spending_trend.apply")
+    end
+
+    within "#spending-trend-section" do
+      assert_no_selector "[data-testid='spending-trend-current-total']", exact_text: total
+      assert_not find("label[data-filter-name='Curve Travel'] input[type='checkbox']", visible: :all).checked?
+    end
+  end
+
   private
     # Large enough that the chart's label rule keeps the Shopping label
     def make_shopping_prominent
