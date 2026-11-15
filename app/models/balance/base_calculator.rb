@@ -9,14 +9,20 @@ class Balance::BaseCalculator
     raise NotImplementedError, "Subclasses must implement this method"
   end
 
+  # Logs what the last calculation left out or kept at 1:1 for want of an exchange rate
+  # (one DebugLogEntry). Nothing when no calculation ran.
+  def report_unconverted_amounts
+    @sync_cache&.report_unconverted_amounts
+  end
+
   private
     def sync_cache
       @sync_cache ||= Balance::SyncCache.new(account)
     end
 
+    # The sync cache already sums and memoizes the holdings value per date
     def holdings_value_for_date(date)
-      @holdings_value_for_date ||= {}
-      @holdings_value_for_date[date] ||= sync_cache.get_holdings(date).sum(&:amount)
+      sync_cache.get_holdings_value(date)
     end
 
     def derive_cash_balance_on_date_from_total(total_balance:, date:)
@@ -119,8 +125,8 @@ class Balance::BaseCalculator
     end
 
     def build_balance(date:, **args)
-      Balance.new(
-        account_id: account.id,
+      Balance::BalanceData.new(
+        account: account,
         currency: account.currency,
         date: date,
         balance: args[:balance],

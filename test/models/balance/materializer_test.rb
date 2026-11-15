@@ -157,6 +157,23 @@ class Balance::MaterializerTest < ActiveSupport::TestCase
     assert_equal 0, @account.reload.balance
   end
 
+
+  test "persists calculated balance data in batches" do
+    account = families(:empty).accounts.create!(name: "Batches", balance: 0, cash_balance: 0, currency: "USD", accountable: Depository.new)
+    account.entries.create!(name: "Opening", date: 4.days.ago.to_date, amount: 500, currency: "USD",
+                            entryable: Valuation.new(kind: "opening_anchor"))
+
+    calculated = Balance::ForwardCalculator.new(account).calculate
+    assert calculated.all? { |b| b.is_a?(Balance::BalanceData) }
+
+    stub_const(Balance::Materializer, :PERSIST_BATCH_SIZE, 2) do
+      Balance::Materializer.new(account, strategy: :forward).materialize_balances
+    end
+
+    assert_equal calculated.size, account.balances.count
+    assert_equal 500, account.balances.find_by(date: Date.current).balance
+  end
+
   private
 
     def assert_balance_fields_persisted(expected_balances)

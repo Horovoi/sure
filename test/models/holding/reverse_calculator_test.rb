@@ -202,6 +202,24 @@ class Holding::ReverseCalculatorTest < ActiveSupport::TestCase
     assert after_trade.all? { |h| h.cost_basis.nil? }
   end
 
+
+  test "returns holding data structs, gap-filled days included" do
+    voo = Security.create!(ticker: "VOO#{SecureRandom.hex(2)}", name: "Vanguard S&P 500 ETF")
+    # No price yesterday: that day is gap-filled from the day before
+    Security::Price.create!(security: voo, date: 2.days.ago.to_date, price: 490)
+    @account.holdings.create!(security: voo, date: Date.current, qty: 3, price: 500, amount: 1_500, currency: "USD")
+    create_trade(voo, qty: 3, date: 2.days.ago.to_date, price: 490, account: @account)
+
+    snapshot = OpenStruct.new(to_h: { voo.id => 3 })
+    calculated = Holding::ReverseCalculator.new(@account, portfolio_snapshot: snapshot).calculate
+
+    assert calculated.all? { |h| h.is_a?(Holding::HoldingData) }
+    filled = calculated.find { |h| h.date == 1.day.ago.to_date }
+    assert_not_nil filled
+    assert_equal 490, filled.price
+    assert_equal 490, filled.cost_basis
+  end
+
   private
     def assert_holdings(expected, calculated)
       expected.each do |expected_entry|

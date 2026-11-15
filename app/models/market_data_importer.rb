@@ -96,14 +96,14 @@ class MarketDataImporter
         pair_dates[inverse_key] = [ pair_dates[inverse_key], date ].compact.min
       end
 
-      # 2. ACCOUNT-BASED PAIRS – use the account's oldest entry date
-      account_first_entry_dates = Entry.group(:account_id).minimum(:date)
-
+      # 2. ACCOUNT-BASED PAIRS – use the account's oldest entry date, resolved in SQL for
+      # the foreign-currency accounts only, rather than a Ruby hash of every account's
       Account.joins(:family)
+             .joins("LEFT JOIN (SELECT account_id, MIN(date) AS first_entry_date FROM entries GROUP BY account_id) AS entry_mins ON entry_mins.account_id = accounts.id")
              .where.not("families.currency = accounts.currency")
-             .select("accounts.id, accounts.currency AS source, families.currency AS target")
+             .select("accounts.id, accounts.currency AS source, families.currency AS target, entry_mins.first_entry_date")
              .find_each do |account|
-        earliest_entry_date = account_first_entry_dates[account.id]
+        earliest_entry_date = account.first_entry_date
 
         chosen_date = [ earliest_entry_date, default_start_date ].compact.min
 

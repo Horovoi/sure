@@ -252,4 +252,16 @@ class MoneyTest < ActiveSupport::TestCase
     assert_equal 0, Money.new(1000).exchange_to(:jpy, fallback_rate: 0)
     assert_equal Money.new(1000, :jpy), Money.new(1000, :usd).exchange_to(:jpy, fallback_rate: 1)
   end
+
+  test "exchange_to without a rate raises a ConversionError naming both currencies and the date" do
+    ExchangeRate.stubs(:find_rate).returns(nil)
+
+    error = assert_raises(Money::ConversionError) do
+      Money.new(10, "PLN").exchange_to("UAH", date: Date.new(2026, 11, 1))
+    end
+
+    assert_equal "PLN", error.from_currency
+    assert_equal "UAH", error.to_currency
+    assert_match "from PLN to UAH on 2026-11-01", error.message
+  end
 end

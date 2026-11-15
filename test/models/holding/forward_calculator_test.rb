@@ -179,6 +179,22 @@ class Holding::ForwardCalculatorTest < ActiveSupport::TestCase
     assert_equal 1_000, today.amount
   end
 
+
+  test "returns holding data structs that the materializer persists" do
+    voo = Security.create!(ticker: "VOO#{SecureRandom.hex(2)}", name: "Vanguard S&P 500 ETF")
+    Security::Price.create!(security: voo, date: 1.day.ago.to_date, price: 500)
+    Security::Price.create!(security: voo, date: Date.current, price: 510)
+    create_trade(voo, qty: 2, date: 1.day.ago.to_date, price: 500, account: @account)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+
+    assert calculated.all? { |h| h.is_a?(Holding::HoldingData) }
+    assert_equal voo, calculated.last.security
+
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+    assert_equal 1_020, @account.holdings.find_by!(security: voo, date: Date.current).amount
+  end
+
   private
     def assert_holdings(expected, calculated)
       expected.each do |expected_entry|
