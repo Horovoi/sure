@@ -49,7 +49,10 @@ class TransfersTest < ApplicationSystemTestCase
       assert_text "1 UAH = 0.024 USD"
     end
 
-    click_button "Create transfer"
+    assert_difference "Transfer.count", +1 do
+      click_button "Create transfer"
+      assert_text I18n.t("transfers.create.success")
+    end
 
     transfer = Transfer.order(:created_at).last
     assert_equal uah, transfer.from_account
@@ -112,11 +115,12 @@ class TransfersTest < ApplicationSystemTestCase
   # w2-transfers transfer-form-fixes
   test "switching tabs keeps what was typed" do
     click_on "New transaction"
-    fill_in "entry[name]", with: "Carried over"
+    # The description is a combobox: its visible input is entry_name, a hidden one sends entry[name]
+    fill_in "entry_name", with: "Carried over"
     fill_in "entry[amount]", with: "123.45"
 
     click_on "Income"
-    assert_field "entry[name]", with: "Carried over"
+    assert_field "entry_name", with: "Carried over"
     assert_field "entry[amount]", with: "123.45"
 
     click_on "Transfer"
