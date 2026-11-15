@@ -87,7 +87,7 @@ export default class extends Controller {
       method: "PUT",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "X-CSRF-Token": document.querySelector('[name="csrf-token"]').content,
+        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content,
         Accept: "application/json",
       },
       body: new URLSearchParams({
