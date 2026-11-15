@@ -44,6 +44,12 @@ en:
       duplicate: A subscription for this pattern was just created. Reload the page to see it.
       success: Transaction marked as subscription
       unexpected_error: An unexpected error occurred
+    projected_recurring:
+      expected_on: Expected on %{date}
+      projected: Projected
+      recurring: Recurring
+    results:
+      upcoming: Upcoming Recurring Transactions
     show:
       account_label: Account
       additional_details: Additional details

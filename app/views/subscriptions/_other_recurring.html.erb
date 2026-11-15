@@ -1,0 +1,84 @@
+<%# locals: (recurring_transaction:) %>
+<%# One manual recurring row on the Other recurring tab. %>
+
+<tr id="<%= dom_id(recurring_transaction) %>"
+    class="border-b border-subdued hover:bg-surface-hover"
+    data-testid="other-recurring-row">
+  <td class="py-3 px-4 <%= "opacity-60" unless recurring_transaction.active? %>">
+    <div class="flex items-center gap-3">
+      <% if recurring_transaction.merchant&.logo_url.present? %>
+        <%= image_tag Setting.transform_brand_fetch_url(recurring_transaction.merchant.logo_url),
+            class: "w-8 h-8 rounded-full object-cover",
+            width: 32, height: 32,
+            loading: "lazy",
+            alt: "" %>
+      <% else %>
+        <%= render DS::FilledIcon.new(
+          variant: :text,
+          text: recurring_transaction.display_name,
+          size: "md",
+          rounded: true
+        ) %>
+      <% end %>
+
+      <div>
+        <span class="text-sm text-primary font-medium block"><%= recurring_transaction.display_name %></span>
+        <% if recurring_transaction.category.present? %>
+          <span class="text-xs text-secondary"><%= recurring_transaction.category.name %></span>
+        <% end %>
+      </div>
+    </div>
+  </td>
+
+  <td class="py-3 px-4 text-sm font-medium <%= recurring_transaction.amount.negative? ? "text-success" : "text-primary" %> <%= "opacity-60" unless recurring_transaction.active? %>">
+    <% if recurring_transaction.has_amount_variance? %>
+      <span class="inline-flex items-center gap-1 cursor-help"
+            title="<%= t(".amount_range", min: format_money(-recurring_transaction.expected_amount_min_money), max: format_money(-recurring_transaction.expected_amount_max_money)) %>">
+        <span class="text-xs text-secondary">~</span>
+        <span class="border-b border-dashed border-subdued"><%= format_money(-recurring_transaction.expected_amount_avg_money) %></span>
+      </span>
+    <% else %>
+      <%= format_money(-recurring_transaction.amount_money) %>
+    <% end %>
+  </td>
+
+  <td class="py-3 px-4 text-sm text-secondary <%= "opacity-60" unless recurring_transaction.active? %>">
+    <%= t(".day_of_month", day: recurring_transaction.expected_day_of_month) %>
+  </td>
+
+  <td class="py-3 px-4 text-sm text-secondary <%= "opacity-60" unless recurring_transaction.active? %>">
+    <%= l(recurring_transaction.next_expected_date, format: :short) %>
+  </td>
+
+  <td class="py-3 px-4 text-sm text-secondary <%= "opacity-60" unless recurring_transaction.active? %>">
+    <%= recurring_transaction.last_occurrence_date ? l(recurring_transaction.last_occurrence_date, format: :short) : "–" %>
+  </td>
+
+  <td class="py-3 px-4 <%= "opacity-60" unless recurring_transaction.active? %>">
+    <% if recurring_transaction.active? %>
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-success">
+        <%= t("subscriptions.status.active") %>
+      </span>
+    <% else %>
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-inset text-secondary">
+        <%= t("subscriptions.status.inactive") %>
+      </span>
+    <% end %>
+  </td>
+
+  <td class="py-3 px-4 text-right">
+    <div class="flex items-center justify-end gap-2">
+      <%= render DS::Menu.new(testid: "other-recurring-menu") do |menu| %>
+        <% menu.with_item(variant: "button", text: t(".make_subscription"), icon: "credit-card",
+            href: make_subscription_subscription_path(recurring_transaction), method: :post, frame: "_top") %>
+        <% menu.with_item(variant: "button", text: recurring_transaction.active? ? t(".pause") : t(".resume"),
+            icon: recurring_transaction.active? ? "pause" : "play",
+            href: toggle_status_subscription_path(recurring_transaction), method: :post) %>
+        <% menu.with_item(variant: "divider") %>
+        <% menu.with_item(variant: "button", text: t(".delete"), icon: "trash-2",
+            href: subscription_path(recurring_transaction), method: :delete, frame: "_top",
+            confirm: CustomConfirm.for_resource_deletion("recurring transaction")) %>
+      <% end %>
+    </div>
+  </td>
+</tr>

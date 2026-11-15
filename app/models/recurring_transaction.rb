@@ -91,6 +91,8 @@ class RecurringTransaction < ApplicationRecord
   scope :active_subscriptions, -> { subscriptions.active }
   # Rows the user created or confirmed (see #user_managed?).
   scope :user_managed, -> { where(manual: true).or(where(subscription_state: "subscription")) }
+  # Manual rows that are not subscriptions ("Other recurring" on Subscriptions).
+  scope :other_recurring, -> { where(manual: true).where.not(subscription_state: "subscription") }
 
   # Rows with the same identity as the given merchant or name and currency.
   # Amount is not part of the identity: it drifts with FX rates and prices.
@@ -296,19 +298,18 @@ class RecurringTransaction < ApplicationRecord
   # Confirms the row as a subscription with the billing cycle of the
   # transaction's history, in the Subscriptions category when there is one.
   def confirm_as_subscription!
-    matching_entries = self.class.find_matching_transaction_entries(
-      family: family,
-      merchant_id: merchant_id,
-      name: name,
-      currency: currency,
-      expected_day: expected_day_of_month,
-      lookback_months: 24
-    )
+    assign_detected_subscription_attributes
+    approve!
+  end
 
-    assign_attributes(
-      billing_cycle: SubscriptionDetector.detect_billing_cycle(matching_entries.map(&:date)),
-      category_id: family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")&.id || category_id
-    )
+  # "Make subscription" on an Other recurring row. Like approving a
+  # suggestion, it starts from the next future date (no charge is generated
+  # for a period nobody confirmed) and pays from the inferred account.
+  # Raises AASM::InvalidTransition for a row that already is a subscription.
+  def make_subscription!
+    assign_detected_subscription_attributes
+    self.default_account_id = inferred_account_id if default_account_id.blank?
+    roll_next_expected_date_forward
     approve!
   end
 
@@ -753,6 +754,28 @@ class RecurringTransaction < ApplicationRecord
   private
     def monetizable_currency
       currency
+    end
+
+    # Billing cycle from the transaction history and the Subscriptions
+    # category when there is one. A yearly cycle needs its billing month.
+    def assign_detected_subscription_attributes
+      matching_entries = self.class.find_matching_transaction_entries(
+        family: family,
+        merchant_id: merchant_id,
+        name: name,
+        currency: currency,
+        expected_day: expected_day_of_month,
+        lookback_months: 24
+      )
+      cycle = SubscriptionDetector.detect_billing_cycle(matching_entries.map(&:date))
+
+      assign_attributes(
+        billing_cycle: cycle,
+        category_id: family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")&.id || category_id
+      )
+      if billing_cycle_yearly? && expected_month.blank?
+        self.expected_month = matching_entries.map(&:date).max&.month || last_occurrence_date&.month || Date.current.month
+      end
     end
 
     def write_legacy_subscription_columns

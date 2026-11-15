@@ -218,18 +218,6 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :recurring_transactions, only: %i[index destroy] do
-    collection do
-      match :identify, via: [ :get, :post ]
-      match :cleanup, via: [ :get, :post ]
-      patch :update_settings
-    end
-
-    member do
-      match :toggle_status, via: [ :get, :post ]
-    end
-  end
-
   resources :subscriptions, only: %i[index new create show edit update destroy] do
     collection do
       get :calendar
@@ -248,6 +236,10 @@ Rails.application.routes.draw do
       post :dismiss_suggestion
       post :restore_suggestion
     end
+
+    # w1-budrec: detection toggle and manual recurring rows on Subscriptions
+    patch :update_detection_settings, on: :collection
+    post :make_subscription, on: :member
   end
 
   resources :subscription_services, only: [ :index ] do

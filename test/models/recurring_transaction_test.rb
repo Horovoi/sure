@@ -873,4 +873,48 @@ class RecurringTransactionTest < ActiveSupport::TestCase
 
     assert_raises(ArgumentError) { RecurringTransaction.mark_from_transaction!(entry.transaction, as: :bill) }
   end
+
+  # w1-budrec: Other recurring rows on Subscriptions
+
+  test "other_recurring scope holds manual rows that are not subscriptions" do
+    manual = identity_test_row(manual: true)
+    identity_test_row(merchant: merchants(:amazon), manual: true, subscription_state: "subscription")
+    identity_test_row(merchant: nil, name: "Detected")
+
+    assert_equal [ manual.id ], @family.recurring_transactions.other_recurring.pluck(:id)
+  end
+
+  test "make_subscription! confirms a manual row from its next future date" do
+    row = identity_test_row(manual: true, next_expected_date: 2.days.ago.to_date, inferred_account: accounts(:depository))
+
+    row.make_subscription!
+
+    row.reload
+    assert row.subscription?
+    assert row.billing_cycle_monthly?
+    assert_equal accounts(:depository), row.default_account
+    assert row.next_expected_date > Date.current
+  end
+
+  test "make_subscription! gives a yearly row its billing month" do
+    row = identity_test_row(manual: true, last_occurrence_date: 4.months.ago.to_date)
+    # One charge 90+ days ago reads as yearly
+    accounts(:depository).entries.create!(
+      date: 4.months.ago.to_date.change(day: 5), amount: 15.99, currency: "USD", name: "Netflix",
+      entryable: Transaction.new(merchant: @merchant)
+    )
+
+    row.make_subscription!
+
+    row.reload
+    assert row.subscription?
+    assert row.billing_cycle_yearly?
+    assert_equal 4.months.ago.to_date.month, row.expected_month
+  end
+
+  test "make_subscription! raises for a subscription" do
+    row = identity_test_row(manual: true, subscription_state: "subscription")
+
+    assert_raises(AASM::InvalidTransition) { row.make_subscription! }
+  end
 end

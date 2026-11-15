@@ -1,6 +1,8 @@
 <%= turbo_frame_tag "subscriptions_results" do %>
   <div class="bg-container rounded-xl shadow-border-xs">
-    <% if @subscriptions.empty? %>
+    <% if @other_recurring %>
+      <%= render "subscriptions/other_recurring_table", recurring_transactions: @subscriptions %>
+    <% elsif @subscriptions.empty? %>
       <div class="text-center py-12 px-4">
         <div class="text-secondary mb-4">
           <%= icon "credit-card", size: "xl" %>

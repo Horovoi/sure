@@ -296,7 +296,7 @@ class TransactionsTest < ApplicationSystemTestCase
 
     within_testid("mark-recurring") do
       assert_selector "button[disabled]", text: I18n.t("transactions.mark_recurring.already_button")
-      assert_link I18n.t("transactions.mark_recurring.view"), href: recurring_transactions_path
+      assert_link I18n.t("transactions.mark_recurring.view"), href: subscriptions_path(kind: "other")
     end
   end
 

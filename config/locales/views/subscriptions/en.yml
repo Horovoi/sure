@@ -12,12 +12,9 @@ en:
       approve_all: Approve All
       approve: Approve
       dismiss: Dismiss
-      detected_amount: "%{amount}/%{cycle}"
       transaction_count:
         one: "%{count} transaction"
         other: "%{count} transactions"
-      approve_usd: "Approve (USD)"
-      approve_local: "Keep local"
       approve_usd_option: "Approve as %{currency}"
       approve_local_option: "Keep local currency"
       dismiss_all: Dismiss All
@@ -25,6 +22,9 @@ en:
       previously_dismissed:
         one: "Previously Dismissed (1)"
         other: "Previously Dismissed (%{count})"
+      detection:
+        label: Detect recurring patterns automatically
+        description: After each import or sync, look for repeating transactions, suggest subscriptions and pause patterns that stopped. Detect from history still works when this is off.
     dismissed_suggestion:
       restore: Restore
       dismissed_badge: Dismissed
@@ -54,8 +54,6 @@ en:
       add_manually: Add Manually
       detect_from_history: Detect from History
       calendar: Calendar
-      monthly_total: Monthly Total
-      yearly_total: Yearly Total
       no_subscriptions: No subscriptions found
       no_subscriptions_description: Create a subscription to start tracking your recurring payments.
       filter:
@@ -64,7 +62,16 @@ en:
         inactive: Inactive
         monthly: Monthly
         yearly: Yearly
+        subscriptions: Subscriptions
+        other_recurring: Other recurring
       search_placeholder: Search subscriptions...
+      search_other_placeholder: Search recurring transactions...
+      suggestion_banner: Review and approve to add them to your subscriptions.
+      summary:
+        active: active
+        paused: paused
+        per_month: "/mo"
+        per_year: "/yr"
       table:
         name: Name
         amount: Amount
@@ -74,10 +81,6 @@ en:
         actions: Actions
         overdue: Overdue
         due_today: Due Today
-        record_now: Record now
-        no_account: No account linked
-        link_account_to_record: Link account to record
-        skip: Skip this occurrence
     calendar:
       title: Subscription Calendar
       list: List
@@ -93,7 +96,6 @@ en:
       title: New Subscription
       home: Home
     edit:
-      title: Edit Subscription
       home: Home
     form:
       service: Service
@@ -133,11 +135,6 @@ en:
     created: Subscription created successfully
     updated: Subscription updated successfully
     deleted: Subscription deleted successfully
-    marked_inactive: Subscription marked as inactive
-    marked_active: Subscription marked as active
-    toggle_status:
-      marked_inactive: Subscription marked as inactive
-      marked_active: Subscription marked as active
     record_transaction:
       success: Transaction recorded successfully
       already_exists: Transaction already exists for this period
@@ -145,6 +142,31 @@ en:
       not_due: This subscription is not due yet
     skip_occurrence:
       success: Occurrence skipped
+    other_recurring_table:
+      empty_title: No other recurring transactions
+      empty_description: Use Mark as Recurring in a transaction's details to track a repeating bill or income that is not a subscription.
+      name: Name
+      amount: Amount
+      expected_day: Expected Day
+      next_date: Next Date
+      last_occurrence: Last Occurrence
+      status: Status
+      actions: Actions
+    other_recurring:
+      amount_range: "Range: %{min} to %{max}"
+      day_of_month: Day %{day} of month
+      make_subscription: Make subscription
+      pause: Pause
+      resume: Resume
+      delete: Delete
+    destroy:
+      other_recurring_deleted: Recurring transaction deleted
+    make_subscription:
+      success: Now a subscription. Check its billing cycle and payment account.
+      failed: Could not make this a subscription
+    update_detection_settings:
+      enabled: Automatic detection turned on
+      disabled: Automatic detection turned off
     subscription:
       record_now: Record now
       link_account_to_record: Link account to record

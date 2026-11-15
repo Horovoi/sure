@@ -9,9 +9,9 @@
     <h4 class="text-primary"><%= t(".title") %></h4>
     <% if managed %>
       <p class="text-secondary">
-        <%= t(managed.subscription? ? ".already_subscription" : ".already_recurring", name: managed.display_name) %>
+        <%= managed.subscription? ? t(".already_subscription", name: managed.display_name) : t(".already_recurring", name: managed.display_name) %>
         <%= link_to t(".view"),
-              managed.subscription? ? edit_subscription_path(managed) : recurring_transactions_path,
+              managed.subscription? ? edit_subscription_path(managed) : subscriptions_path(kind: SubscriptionsController::OTHER_RECURRING_KIND),
               class: "text-primary underline hover:no-underline",
               data: { turbo_frame: "_top", testid: "mark-recurring-link" } %>
       </p>

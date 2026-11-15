@@ -15,10 +15,10 @@
 
       <div>
         <p class="text-primary text-3xl font-medium">
-          <%= format_money(monthly_total) %><span class="text-secondary text-sm font-normal">/mo</span>
+          <%= format_money(monthly_total) %><span class="text-secondary text-sm font-normal"><%= t("subscriptions.index.summary.per_month") %></span>
         </p>
         <p class="text-secondary text-sm">
-          <%= format_money(monthly_total * 12) %>/yr
+          <%= format_money(monthly_total * 12) %><%= t("subscriptions.index.summary.per_year") %>
         </p>
       </div>
 
