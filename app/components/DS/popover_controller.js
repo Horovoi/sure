@@ -30,6 +30,9 @@ export default class extends Controller {
     this.boundUpdate = this.update.bind(this);
     this.addEventListeners();
     this.startAutoUpdate();
+    // Every popover renders closed, so one that connects open is a copy Turbo
+    // cached while it was open, brought back by Back.
+    this.close();
   }
 
   // Derived from the content element's own class rather than tracked as
@@ -53,6 +56,8 @@ export default class extends Controller {
     this.element.addEventListener("keydown", this.handleKeydown);
     document.addEventListener("click", this.handleOutsideClick);
     document.addEventListener("turbo:load", this.handleTurboLoad);
+    document.addEventListener("turbo:before-cache", this.handleBeforeCache);
+    document.addEventListener("turbo:submit-end", this.handleTurboSubmitEnd);
   }
 
   removeEventListeners() {
@@ -60,7 +65,26 @@ export default class extends Controller {
     this.element.removeEventListener("keydown", this.handleKeydown);
     document.removeEventListener("click", this.handleOutsideClick);
     document.removeEventListener("turbo:load", this.handleTurboLoad);
+    document.removeEventListener("turbo:before-cache", this.handleBeforeCache);
+    document.removeEventListener("turbo:submit-end", this.handleTurboSubmitEnd);
   }
+
+  // Never cache a page with an open popover: Back would bring it back open.
+  handleBeforeCache = () => {
+    this.close();
+  };
+
+  // A successful submit of a form that holds this popover (the transactions
+  // filter form) closes it, so the results are not left under an open panel.
+  handleTurboSubmitEnd = (event) => {
+    if (!this.show) return;
+    if (event?.detail?.success === false) return;
+
+    const form = event.target;
+    if (form instanceof HTMLElement && form.contains(this.element)) {
+      this.close();
+    }
+  };
 
   handleTurboLoad = () => {
     if (!this.show) this.close();

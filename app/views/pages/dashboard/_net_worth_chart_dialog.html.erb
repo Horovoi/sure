@@ -2,7 +2,7 @@
 
 <% series = balance_sheet.net_worth_series(period: period) %>
 
-<%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "net_worth_fullscreen_dialog") do |d| %>
+<%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "net_worth_fullscreen_dialog", disable_frame: true) do |d| %>
   <%# Build a friendly period label: named period_text %>
   <% period_text = period.key.present? ? period.label : "#{period.start_date.strftime('%b %d, %Y')} to #{period.end_date.strftime('%b %d, %Y')}" %>
   <% d.with_header title: "Net Worth", meta: period_text, meta_id: "netWorthFullscreenPeriod" do %>

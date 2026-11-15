@@ -11,7 +11,7 @@ class DsSubmitButtonsTest < ApplicationSystemTestCase
     visit categories_url
     assert_text categories(:food_and_drink).name
 
-    find("[data-controller='DS--menu'] button[data-DS--menu-target='button']", match: :first).click
+    find("[data-controller='DS--menu'] button[data-ds--menu-target='button']", match: :first).click
     click_button "Delete all"
 
     within "#confirm-dialog" do

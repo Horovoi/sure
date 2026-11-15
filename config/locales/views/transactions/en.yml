@@ -207,4 +207,5 @@ en:
         greater_than: greater than
         less_than: less than
       form:
+        filter: Filter
         toggle_selection_checkboxes: Toggle all checkboxes

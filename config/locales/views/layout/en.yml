@@ -18,3 +18,7 @@ en:
       footer:
         privacy_policy: Privacy Policy
         terms_of_service: Terms of Service
+      confirm_dialog:
+        are_you_sure: Are you sure?
+        cannot_be_undone: This action cannot be undone.
+        confirm: Confirm
