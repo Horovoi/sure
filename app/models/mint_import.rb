@@ -17,7 +17,7 @@ class MintImport < Import
       }
     end
 
-    rows.insert_all!(mapped_rows)
+    rows.insert_all!(with_row_order(mapped_rows))
     refresh_rows_count!
   end
 

@@ -74,10 +74,6 @@ class RuleImport < Import
     refresh_rows_count!
   end
 
-  def parsed_csv
-    @parsed_csv ||= Import.parse_csv_str(raw_file_str, col_sep: col_sep)
-  end
-
   private
     # Rules are not tied to the import, so publishing cannot be undone.
     def supports_revert?

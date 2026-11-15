@@ -8,7 +8,8 @@ class Import::Row < ApplicationRecord
   validate :required_columns
   validate :currency_is_valid
 
-  scope :ordered, -> { order(:id) }
+  # File order: Import#with_row_order stamps each inserted row a microsecond apart
+  scope :ordered, -> { order(:created_at, :id) }
 
   def tags_list
     if tags.blank?
