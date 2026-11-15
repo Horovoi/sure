@@ -41,14 +41,22 @@
           dailyAvgFormatted: days_in_period > 0 ? Money.new(g[:total] / days_in_period, currency).format : nil,
           rank: idx + 1,
           subcategories: subs,
-          totalSubcategories: (g[:subcategories] || []).size
+          totalSubcategories: (g[:subcategories] || []).size,
+          href: g[:has_transactions] && g[:filter_value].present? && start_date && end_date ? transactions_path(q: { categories: [ g[:filter_value] ], start_date: start_date, end_date: end_date }) : nil
         }
       }.to_json
     %>
     <div class="mb-6 relative"
          data-controller="reports-treemap"
          data-reports-treemap-categories-value="<%= treemap_categories %>"
-         data-reports-treemap-type-value="<%= type %>">
+         data-reports-treemap-type-value="<%= type %>"
+         data-reports-treemap-labels-value="<%= {
+           txn: t("reports.treemap.txn"),
+           txns: t("reports.treemap.txns"),
+           avg: t("reports.treemap.avg"),
+           per_day: t("reports.treemap.per_day"),
+           more: t("reports.treemap.more")
+         }.to_json %>">
     </div>
   <% end %>
 

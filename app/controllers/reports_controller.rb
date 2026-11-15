@@ -6,6 +6,10 @@ class ReportsController < ApplicationController
   skip_authentication only: :export_transactions
   before_action :authenticate_for_export, only: :export_transactions
 
+  # How far apart the period starts of each report period type are, for comparing a
+  # period that runs up to today with the same days of earlier periods
+  SPENDING_COMPARISON_STEP_MONTHS = { monthly: 1, quarterly: 3, last_6_months: 6, ytd: 12 }.freeze
+
   def index
     setup_report_data(show_flash: true)
 
@@ -184,7 +188,8 @@ class ReportsController < ApplicationController
           },
           visible: Current.family.transactions.any?,
           collapsible: true
-        }
+        },
+        spending_vs_normal_section
       ]
 
       # Order sections according to user preference
@@ -199,6 +204,28 @@ class ReportsController < ApplicationController
       end
 
       ordered_sections
+    end
+
+    def spending_vs_normal_section
+      {
+        key: "spending_vs_normal",
+        title: "reports.spending_vs_normal.title",
+        partial: "reports/spending_vs_normal",
+        locals: { comparison: spending_comparison },
+        visible: @has_accounts && Current.family.transactions.any?,
+        collapsible: true
+      }
+    end
+
+    # This period's spending against the year before it, on the page's one income
+    # statement
+    def spending_comparison
+      @spending_comparison ||= IncomeStatement::SpendingComparison.new(
+        @income_statement,
+        period: @period,
+        history_start: IncomeStatement::SpendingComparison.history_start(Current.family),
+        step_months: SPENDING_COMPARISON_STEP_MONTHS.fetch(@period_type, 1)
+      )
     end
 
     def validate_and_fix_date_range(show_flash: false)

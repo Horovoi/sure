@@ -506,6 +506,24 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "div[data-category='category-#{rent.id}'] a"
   end
 
+  test "reports render the spending vs normal section with links to the changed categories" do
+    period_start = 2.months.ago.to_date.beginning_of_month
+    period_end = period_start.end_of_month
+    misc = @family.categories.create!(name: "Vs normal misc", classification: "expense", color: "#654321")
+    dining = @family.categories.create!(name: "Vs normal dining", classification: "expense", color: "#123456")
+    # Earlier history, so the period has a normal to compare with
+    create_transaction(account: accounts(:depository), name: "Old spend", amount: 10, category: misc, date: period_start - 200.days)
+    create_transaction(account: accounts(:depository), name: "Dinner", amount: 1_000, category: dining, date: period_start + 3.days)
+
+    get reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
+
+    assert_response :ok
+    assert_select "section[data-section-key='spending_vs_normal']"
+    assert_select "[data-testid=spending-vs-normal] [data-controller='reports-treemap'][data-reports-treemap-color-mode-value='normal']"
+    assert_select "[data-testid=spending-changes] a[href=?]",
+      transactions_path(q: { categories: [ "Vs normal dining" ], start_date: period_start, end_date: period_end })
+  end
+
   # A helper, not private: other streams append tests below it
   def breakdown_period_params
     { period_type: :custom, start_date: 30.days.ago.to_date, end_date: Date.current }
