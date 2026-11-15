@@ -39,6 +39,11 @@ class TransactionsController < ApplicationController
                                          Date.current)
                                   .includes(merchant: { logo_attachment: :blob })
 
+    # Only the search form (a frame request) takes the stream. A form posted elsewhere
+    # (bulk edit, a drawer's merge) that redirects here asks for a stream too: it gets
+    # the whole page with its flash message, which Turbo shows as a visit.
+    request.format = :html if request.format.turbo_stream? && !turbo_frame_request?
+
     respond_to do |format|
       format.html do
         if turbo_frame_request?
@@ -98,6 +103,9 @@ class TransactionsController < ApplicationController
   def create
     account = Current.family.accounts.find(params.dig(:entry, :account_id))
     @entry = account.entries.new(entry_params)
+    # A form sent without entryable fields still makes a transaction, and a failed
+    # save shows the form again with its pickers (they render from the entryable)
+    @entry.entryable ||= Transaction.new
 
     if @entry.save
       @entry.transaction.record_category_usage!
@@ -495,7 +503,8 @@ class TransactionsController < ApplicationController
 
       converted_value = decimal_param(converted)
       amount_value = decimal_param(entry_params[:amount]) || @entry&.amount
-      entry_params[:entryable_attributes] ||= {}
+      # Permitted like the rest of entry_params, or Entry.new refuses to read the nested hash
+      entry_params[:entryable_attributes] ||= ActionController::Parameters.new.permit!
 
       entry_params[:entryable_attributes][:exchange_rate] = if converted_value&.positive? && amount_value.present? && !amount_value.zero?
         (converted_value / amount_value.abs).round(12).to_s("F")

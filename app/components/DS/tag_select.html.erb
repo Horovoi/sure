@@ -38,6 +38,10 @@
 
   <div data-tag-select-hidden-inputs>
     <input type="hidden" name="<%= field_name %>" value="" <%= "disabled" if disabled %>>
+    <%# The selected tags travel with the form before the controller connects; it rebuilds these on connect. %>
+    <% tags.select { |tag| selected_ids.include?(tag.id.to_s) }.each do |tag| %>
+      <input type="hidden" name="<%= field_name %>" value="<%= tag.id %>" <%= "disabled" if disabled %>>
+    <% end %>
   </div>
 
   <% unless disabled %>

@@ -249,10 +249,12 @@ end
     )
 
     search = Transaction::Search.new(family, filters: {})
-    totals = OpenStruct.new(
+    totals = Transaction::Search::Totals.new(
       count: 0,
       expense_money: Money.new(0, family.currency),
-      income_money: Money.new(0, family.currency)
+      income_money: Money.new(0, family.currency),
+      transfer_inflow_money: Money.new(0, family.currency),
+      transfer_outflow_money: Money.new(0, family.currency)
     )
 
     Transaction::Search.expects(:new).with(family, filters: {}).returns(search)
@@ -899,15 +901,37 @@ end
     end
   end
 
+  test "the search form's stream request gets the summary and results streams" do
+    get transactions_url(q: { search: "Starb" }), headers: {
+      "Accept" => "text/vnd.turbo-stream.html, text/html", "Turbo-Frame" => "transactions_results"
+    }
+
+    assert_response :success
+    assert_equal "text/vnd.turbo-stream.html", response.media_type
+    assert_includes response.body, %(target="transactions_summary")
+  end
+
+  test "a stream request that is not the search (a redirect after a posted form) gets the page and its flash" do
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: [ entries(:transaction).id ], notes: "Bulk" } },
+                                       headers: { "Accept" => "text/vnd.turbo-stream.html, text/html" }
+    follow_redirect!(headers: { "Accept" => "text/vnd.turbo-stream.html, text/html" })
+
+    assert_equal "text/html", response.media_type
+    assert_includes response.body, I18n.t("transactions.bulk_updates.create.success", count: 1)
+  end
+
   test "a list of transfers only shows inflow and outflow totals" do
     family = @user.family
+    checking = family.accounts.create!(name: "Totals checking", balance: 0, currency: family.currency, accountable: Depository.new)
     savings = family.accounts.create!(name: "Totals savings", balance: 0, currency: family.currency, accountable: Depository.new)
-    create_transfer(from_account: accounts(:depository), to_account: savings, amount: 250, currency: family.currency)
+    create_transfer(from_account: checking, to_account: savings, amount: 250, currency: family.currency)
 
-    get transactions_url(q: { types: [ "transfer" ] })
+    # Only the new accounts: the fixtures' own transfer would add to the totals
+    get transactions_url(q: { types: [ "transfer" ], account_ids: [ checking.id, savings.id ] })
 
     assert_response :success
     assert_select "#total-income", text: /250/
+    assert_select "#total-expense", text: /250/
     assert_select "p", text: "Inflow"
     assert_select "p", text: "Outflow"
   end
