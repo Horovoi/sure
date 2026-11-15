@@ -389,4 +389,46 @@ class UserTest < ActiveSupport::TestCase
 
     assert_equal 1, user.sessions.count
   end
+
+  # --- w2-transfers default-account ---
+
+  test "the default account must belong to the user's family" do
+    other_family = Family.create!(name: "Other", currency: "USD")
+    foreign = other_family.accounts.create!(name: "Foreign", balance: 0, currency: "USD", accountable: Depository.new)
+
+    @user.default_account = foreign
+
+    assert_not @user.valid?
+    assert @user.errors.of_kind?(:default_account, :invalid)
+  end
+
+  test "default_account_for_entries is the default account while it is manual and active" do
+    @user.update!(default_account: accounts(:depository))
+
+    assert_equal accounts(:depository), @user.reload.default_account_for_entries
+  end
+
+  test "a linked default account is not used for new entries" do
+    @user.update!(default_account: accounts(:connected))
+
+    assert_nil @user.reload.default_account_for_entries
+  end
+
+  test "deleting the default account clears it" do
+    account = @user.family.accounts.create!(name: "Short-lived", balance: 0, currency: "USD", accountable: Depository.new)
+    @user.update!(default_account: account)
+
+    account.destroy!
+
+    assert_nil @user.reload.default_account_id
+  end
+
+  test "the database clears the default when the account row is deleted directly" do
+    account = @user.family.accounts.create!(name: "Deleted row", balance: 0, currency: "USD", accountable: Depository.new)
+    @user.update!(default_account: account)
+
+    Account.where(id: account.id).delete_all
+
+    assert_nil @user.reload.default_account_id
+  end
 end

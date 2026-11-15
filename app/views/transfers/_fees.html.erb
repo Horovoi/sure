@@ -1,0 +1,39 @@
+<%# locals: (transfer:) %>
+<%# w2-transfers transfer-fees: the transfer drawer's fee fields, one per side, each in
+    its account's currency. A blank field removes that side's fee. %>
+<%= tag.div id: dom_id(transfer, :fees), class: "space-y-3" do %>
+  <% fee_transactions = Transfer::FEE_SIDES.flat_map { |side| transfer.fee_transactions_for(side) } %>
+
+  <%= styled_form_with model: transfer, url: transfer_path(transfer), method: :patch, class: "space-y-2" do |f| %>
+    <% Transfer::FEE_SIDES.each do |side| %>
+      <% account = transfer.fee_account_for(side) %>
+      <% next unless account %>
+      <%= f.money_field :"#{side}_fee",
+            label: t("transfers.fees.#{side}_label", account: account.name),
+            value: transfer.fee_money_for(side)&.amount,
+            currency_value_override: account.currency,
+            hide_currency: true,
+            min: 0,
+            placeholder: "0" %>
+    <% end %>
+
+    <p class="text-xs text-secondary px-1"><%= t("transfers.fees.hint") %></p>
+
+    <div class="flex justify-end">
+      <%= render DS::Button.new(text: t("transfers.fees.save"), variant: :secondary, size: :sm, type: :submit) %>
+    </div>
+  <% end %>
+
+  <% if fee_transactions.any? %>
+    <ul class="space-y-1 text-sm">
+      <% fee_transactions.each do |fee| %>
+        <li class="flex items-center justify-between gap-2">
+          <%= link_to fee.entry.name, entry_path(fee.entry), class: "text-primary hover:underline truncate", data: { turbo_frame: "drawer" } %>
+          <span class="text-secondary whitespace-nowrap privacy-sensitive">
+            <%= format_money(fee.entry.amount_money) %> · <%= fee.entry.account.name %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+<% end %>

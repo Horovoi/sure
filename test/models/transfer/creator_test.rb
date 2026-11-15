@@ -250,4 +250,183 @@ class Transfer::CreatorTest < ActiveSupport::TestCase
     assert transfer.persisted?
     assert_equal(-400, transfer.inflow_transaction.entry.amount)
   end
+
+  # w2-transfers custom-exchange-rate
+  test "a transfer between currencies uses the user's rate instead of the stored one" do
+    uah_account = @family.accounts.create!(name: "UAH card", balance: 0, currency: "UAH", accountable: Depository.new)
+    ExchangeRate.create!(from_currency: "UAH", to_currency: "USD", date: @date, rate: 0.025)
+
+    transfer = Transfer::Creator.new(
+      family: @family,
+      source_account_id: uah_account.id,
+      destination_account_id: @source_account.id,
+      date: @date,
+      amount: 4_150,
+      exchange_rate: "0.024"
+    ).create
+
+    assert transfer.persisted?
+    assert_equal 4_150, transfer.outflow_transaction.entry.amount
+    assert_equal "UAH", transfer.outflow_transaction.entry.currency
+    assert_equal BigDecimal("-99.6"), transfer.inflow_transaction.entry.amount
+    assert_equal "USD", transfer.inflow_transaction.entry.currency
+  end
+
+  test "a transfer between currencies takes the destination amount exactly" do
+    uah_account = @family.accounts.create!(name: "UAH card", balance: 0, currency: "UAH", accountable: Depository.new)
+
+    # No stored rate at all: the received amount alone is enough
+    transfer = Transfer::Creator.new(
+      family: @family,
+      source_account_id: uah_account.id,
+      destination_account_id: @source_account.id,
+      date: @date,
+      amount: 4_150,
+      destination_amount: "100"
+    ).create
+
+    assert transfer.persisted?
+    assert_equal(-100, transfer.inflow_transaction.entry.amount)
+    assert_equal 4_150, transfer.outflow_transaction.entry.amount
+  end
+
+  test "a rate or destination amount that is not above zero is a validation error" do
+    uah_account = @family.accounts.create!(name: "UAH card", balance: 0, currency: "UAH", accountable: Depository.new)
+
+    [ { exchange_rate: "0" }, { exchange_rate: "abc" }, { destination_amount: "-5" }, { exchange_rate: "1", destination_amount: "2" } ].each do |options|
+      transfer = nil
+      assert_no_difference [ "Transfer.count", "Entry.count" ] do
+        transfer = Transfer::Creator.new(
+          family: @family, source_account_id: uah_account.id, destination_account_id: @source_account.id,
+          date: @date, amount: 100, **options
+        ).create
+      end
+
+      assert_not transfer.persisted?, options.inspect
+      assert transfer.errors[:base].any?, options.inspect
+    end
+  end
+
+  test "a rate given for two accounts in one currency is ignored" do
+    other_depository = @family.accounts.create!(name: "Savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: @source_account.id, destination_account_id: other_depository.id,
+      date: @date, amount: 100, exchange_rate: "2", destination_amount: "300"
+    ).create
+
+    assert transfer.persisted?
+    assert_equal(-100, transfer.inflow_transaction.entry.amount)
+  end
+
+  test "a zero amount is a validation error" do
+    other_depository = @family.accounts.create!(name: "Savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: @source_account.id, destination_account_id: other_depository.id,
+      date: @date, amount: 0
+    ).create
+
+    assert_not transfer.persisted?
+    assert_includes transfer.errors.full_messages.to_sentence, "Amount must be greater than 0"
+  end
+
+  # w2-transfers transfer-fees
+  test "fees on each side become linked expenses in Fees and the legs keep the principal" do
+    uah_account = @family.accounts.create!(name: "UAH card", balance: 0, currency: "UAH", accountable: Depository.new)
+
+    transfer = nil
+    assert_difference -> { Entry.count } => 4, -> { Transfer.count } => 1 do
+      transfer = Transfer::Creator.new(
+        family: @family,
+        source_account_id: uah_account.id,
+        destination_account_id: @source_account.id,
+        date: @date,
+        amount: 4_150,
+        destination_amount: "100",
+        source_fee: "41,50",
+        destination_fee: "1.5"
+      ).create
+    end
+
+    assert transfer.persisted?
+    assert_equal 4_150, transfer.outflow_transaction.entry.amount
+    assert_equal(-100, transfer.inflow_transaction.entry.amount)
+
+    source_fee = transfer.fee_transactions_for(:source).sole
+    assert_equal uah_account, source_fee.entry.account
+    assert_equal BigDecimal("41.5"), source_fee.entry.amount
+    assert_equal "UAH", source_fee.entry.currency
+    assert_equal "Fees", source_fee.category.name
+    assert_equal "standard", source_fee.kind
+    assert_equal @date, source_fee.entry.date
+
+    destination_fee = transfer.fee_transactions_for(:destination).sole
+    assert_equal @source_account, destination_fee.entry.account
+    assert_equal BigDecimal("1.5"), destination_fee.entry.amount
+    assert_equal "USD", destination_fee.entry.currency
+    assert_equal source_fee.category, destination_fee.category
+  end
+
+  test "a negative or unreadable fee is a validation error and nothing is saved" do
+    other_depository = @family.accounts.create!(name: "Savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    [ { source_fee: "-1" }, { destination_fee: "abc" } ].each do |options|
+      transfer = nil
+      assert_no_difference [ "Transfer.count", "Entry.count" ] do
+        transfer = Transfer::Creator.new(
+          family: @family, source_account_id: @source_account.id, destination_account_id: other_depository.id,
+          date: @date, amount: 100, **options
+        ).create
+      end
+
+      assert_includes transfer.errors.full_messages.to_sentence, "Fees must be numbers", options.inspect
+    end
+  end
+
+  test "a zero fee creates no fee expense" do
+    other_depository = @family.accounts.create!(name: "Savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    assert_difference -> { Entry.count } => 2 do
+      Transfer::Creator.new(
+        family: @family, source_account_id: @source_account.id, destination_account_id: other_depository.id,
+        date: @date, amount: 100, source_fee: "0", destination_fee: ""
+      ).create
+    end
+  end
+
+  # --- w2-transfers transfer-tags-counterpart ---
+
+  test "tags go on both legs and are locked against rules" do
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: accounts(:depository).id, destination_account_id: accounts(:credit_card).id,
+      date: @date, amount: @amount, tag_ids: [ tags(:one).id, tags(:two).id, "" ]
+    ).create
+
+    assert transfer.persisted?
+    [ transfer.outflow_transaction, transfer.inflow_transaction ].each do |transaction|
+      assert_equal [ tags(:one).id, tags(:two).id ].sort, transaction.reload.tag_ids.sort
+      assert transaction.locked?(:tag_ids)
+    end
+  end
+
+  test "a tag of another family is left out" do
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: accounts(:depository).id, destination_account_id: accounts(:credit_card).id,
+      date: @date, amount: @amount, tag_ids: [ tags(:one).id, tags(:three).id ]
+    ).create
+
+    assert_equal [ tags(:one).id ], transfer.outflow_transaction.reload.tag_ids
+    assert_equal [ tags(:one).id ], transfer.inflow_transaction.reload.tag_ids
+  end
+
+  test "no tags leaves both legs untagged and unlocked" do
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: accounts(:depository).id, destination_account_id: accounts(:credit_card).id,
+      date: @date, amount: @amount
+    ).create
+
+    assert_empty transfer.outflow_transaction.reload.tag_ids
+    assert_not transfer.outflow_transaction.locked?(:tag_ids)
+  end
 end

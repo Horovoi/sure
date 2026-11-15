@@ -1,0 +1,26 @@
+<%# locals: (entry:, transaction:) %>
+<%# w2-transfers transfer-hints: this row likely has its other side in another account
+    (Family#transaction_ids_with_transfer_candidates). The pill opens the matcher; the x
+    records "not a transfer", so neither the hint nor auto-match offers the pair again. %>
+<span id="<%= dom_id(transaction, :transfer_hint) %>" class="flex shrink-0 items-center gap-1" data-testid="transfer-hint">
+  <%= link_to new_transaction_transfer_match_path(entry),
+        class: "flex items-center rounded-full hover:opacity-80 focus-ring",
+        title: t("transactions.transfer_hint.tooltip"),
+        data: { turbo_frame: "modal", turbo_prefetch: false } do %>
+    <%= render DS::Pill.new(
+          label: t("transactions.transfer_hint.label"),
+          tone: :info,
+          marker: false,
+          icon: "arrow-right-left",
+          title: t("transactions.transfer_hint.tooltip")
+        ) %>
+  <% end %>
+  <%= button_to transaction_transfer_match_path(entry),
+        method: :delete,
+        form_class: "flex items-center",
+        class: "text-subdued hover:text-primary flex items-center justify-center cursor-pointer focus-ring rounded",
+        title: t("transactions.transfer_hint.dismiss"),
+        aria: { label: t("transactions.transfer_hint.dismiss") } do %>
+    <%= icon "x", size: "sm", color: "current" %>
+  <% end %>
+</span>

@@ -73,9 +73,11 @@ module EntriesTestHelper
       entryable: inflow_transaction
     )
 
+    # Confirmed, like Transfer::Creator: only a confirmed transfer gives the legs their kinds
     Transfer.create!(
       outflow_transaction: outflow_transaction,
-      inflow_transaction: inflow_transaction
+      inflow_transaction: inflow_transaction,
+      status: "confirmed"
     )
   end
 end

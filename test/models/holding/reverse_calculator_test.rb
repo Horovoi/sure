@@ -220,7 +220,118 @@ class Holding::ReverseCalculatorTest < ActiveSupport::TestCase
     assert_equal 490, filled.cost_basis
   end
 
+  # --- Weighted-average cost basis and transfers (w2-transfers wac-cost-basis) ---
+
+  test "a partial sell then a buy averages only the units still held" do
+    security = Security.create!(ticker: "TST#{SecureRandom.hex(2)}", name: "Test")
+
+    calc = calculator_with_trades(security, snapshot_qty: 10) do
+      create_trade(security, account: @account, qty: 10, price: 100, date: 10.days.ago.to_date)
+      create_trade(security, account: @account, qty: -5, price: 130, date: 6.days.ago.to_date)
+      create_trade(security, account: @account, qty: 5, price: 200, date: 3.days.ago.to_date)
+    end
+
+    assert_equal BigDecimal("100"), cost_basis_for(calc, security, 6.days.ago.to_date)
+    # (5 x 100 + 5 x 200) / 10
+    assert_equal BigDecimal("150"), cost_basis_for(calc, security, Date.current)
+  end
+
+  test "the basis is nil while fully sold and starts again after a repurchase" do
+    security = Security.create!(ticker: "TST#{SecureRandom.hex(2)}", name: "Test")
+    rebuy_date = 3.days.ago.to_date
+
+    calc = calculator_with_trades(security, snapshot_qty: 10) do
+      create_trade(security, account: @account, qty: 10, price: 100, date: 10.days.ago.to_date)
+      create_trade(security, account: @account, qty: -10, price: 130, date: 6.days.ago.to_date)
+      create_trade(security, account: @account, qty: 10, price: 150, date: rebuy_date)
+    end
+
+    assert_nil cost_basis_for(calc, security, 6.days.ago.to_date)
+    assert_nil cost_basis_for(calc, security, rebuy_date - 1)
+    assert_equal BigDecimal("150"), cost_basis_for(calc, security, Date.current)
+  end
+
+  test "a transfer out relieves the units and keeps the basis known" do
+    security = Security.create!(ticker: "TST#{SecureRandom.hex(2)}", name: "Test")
+
+    calc = calculator_with_trades(security, snapshot_qty: 10) do
+      create_trade(security, account: @account, qty: 10, price: 100, date: 10.days.ago.to_date)
+      transfer_out = create_trade(security, account: @account, qty: -10, price: 120, date: 6.days.ago.to_date)
+      transfer_out.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+      create_trade(security, account: @account, qty: 10, price: 150, date: 3.days.ago.to_date)
+    end
+
+    assert_equal BigDecimal("150"), cost_basis_for(calc, security, Date.current)
+    assert_not calc.send(:cost_basis_unknown?, security.id, Date.current)
+  end
+
+  test "a transfer in makes the basis unknown from its date, and a close releases it" do
+    security = Security.create!(ticker: "TST#{SecureRandom.hex(2)}", name: "Test")
+    buy_date = 12.days.ago.to_date
+    transfer_date = 9.days.ago.to_date
+    close_date = 6.days.ago.to_date
+    rebuy_date = 3.days.ago.to_date
+
+    # Trades net to 10, the snapshot's quantity, so the position really reaches zero
+    calc = calculator_with_trades(security, snapshot_qty: 10) do
+      create_trade(security, account: @account, qty: 10, price: 100, date: buy_date)
+      transfer_in = create_trade(security, account: @account, qty: 5, price: 120, date: transfer_date)
+      transfer_in.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+      create_trade(security, account: @account, qty: -15, price: 130, date: close_date)
+      create_trade(security, account: @account, qty: 10, price: 150, date: rebuy_date)
+    end
+
+    assert_equal BigDecimal("100"), cost_basis_for(calc, security, transfer_date - 1)
+    assert_nil cost_basis_for(calc, security, transfer_date)
+    assert calc.send(:cost_basis_unknown?, security.id, transfer_date)
+    assert_nil cost_basis_for(calc, security, close_date - 1)
+    assert_equal BigDecimal("150"), cost_basis_for(calc, security, rebuy_date)
+    assert_not calc.send(:cost_basis_unknown?, security.id, Date.current)
+  end
+
+  test "a transferred position stays unknown when opening shares keep it from closing" do
+    security = Security.create!(ticker: "TST#{SecureRandom.hex(2)}", name: "Test")
+
+    # The snapshot is 10 but the trades net to 8: two shares predate the history
+    calc = calculator_with_trades(security, snapshot_qty: 10) do
+      create_trade(security, account: @account, qty: 10, price: 100, date: 12.days.ago.to_date)
+      transfer_in = create_trade(security, account: @account, qty: 5, price: 120, date: 9.days.ago.to_date)
+      transfer_in.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+      create_trade(security, account: @account, qty: -15, price: 130, date: 6.days.ago.to_date)
+      create_trade(security, account: @account, qty: 8, price: 150, date: 3.days.ago.to_date)
+    end
+
+    assert_nil cost_basis_for(calc, security, Date.current)
+    assert calc.send(:cost_basis_unknown?, security.id, Date.current)
+  end
+
+  test "a transferred position stays unknown when a gapped import gives a negative baseline" do
+    security = Security.create!(ticker: "TST#{SecureRandom.hex(2)}", name: "Test")
+
+    # The trades net to +10 but the snapshot holds 0, so the seeded baseline is -10
+    calc = calculator_with_trades(security, snapshot_qty: 0) do
+      transfer_in = create_trade(security, account: @account, qty: 5, price: 120, date: 9.days.ago.to_date)
+      transfer_in.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+      create_trade(security, account: @account, qty: 5, price: 150, date: 5.days.ago.to_date)
+    end
+
+    assert_nil cost_basis_for(calc, security, 9.days.ago.to_date)
+    assert_nil cost_basis_for(calc, security, Date.current)
+  end
+
   private
+    def calculator_with_trades(security, snapshot_qty:)
+      yield
+      snapshot = OpenStruct.new(to_h: { security.id => snapshot_qty })
+      calc = Holding::ReverseCalculator.new(@account, portfolio_snapshot: snapshot)
+      calc.send(:precompute_cost_basis)
+      calc
+    end
+
+    def cost_basis_for(calc, security, date)
+      calc.send(:cost_basis_for, security.id, date)
+    end
+
     def assert_holdings(expected, calculated)
       expected.each do |expected_entry|
         calculated_entry = calculated.find { |c| c.security == expected_entry.security && c.date == expected_entry.date }

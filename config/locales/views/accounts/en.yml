@@ -2,6 +2,10 @@
 en:
   accounts:
     account:
+      complete_setup: Complete setup
+      default_label: Default
+      default_tooltip: New transactions and transfers start in this account
+      deletion_in_progress: (deletion in progress...)
       link_lunchflow: Link with Lunch Flow
       link_provider: Link with provider
       unlink_provider: Unlink from provider
@@ -12,6 +16,11 @@ en:
       success: "%{type} account created"
       opening_balance_date_future: The start date cannot be in the future.
       opening_balance_date_invalid: The start date is not a valid date.
+    set_default:
+      not_eligible: Only a manual account that is turned on can be the default.
+      success: New transactions and transfers now start in %{name}.
+    remove_default:
+      success: New transactions and transfers no longer start in a set account.
     destroy:
       success: "%{type} account scheduled for deletion"
       cannot_delete_linked: "Cannot delete a linked account. Please unlink it first."
@@ -78,7 +87,10 @@ en:
       menu:
         confirm_accept: Delete "%{name}"
         confirm_title: Delete account?
+        delete: Delete account
         edit: Edit
+        remove_default: Unset default
+        set_default: Set as default
         import: Import transactions
         import_trades: Import trades
         import_transactions: Import transactions

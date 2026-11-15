@@ -100,6 +100,14 @@ class TradeTest < ActiveSupport::TestCase
     assert_not sale.realized_gain_unconvertible?
   end
 
+  test "units transferred out were not sold, so they have no realized gain" do
+    sale = usd_sale_from_uah_position(sale_date: 3.days.ago.to_date, sale_currency: "UAH", sale_price: 4_500)
+    sale.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+
+    assert sale.transfer_movement?
+    assert_nil sale.reload.realized_gain_loss
+  end
+
   private
     def usd_sale_from_uah_position(sale_date:, sale_currency: "USD", sale_price: 110)
       account = families(:empty).accounts.create!(name: "UAH Brokerage", balance: 0, currency: "UAH", accountable: Investment.new)

@@ -267,6 +267,50 @@ class HoldingTest < ActiveSupport::TestCase
     assert_not @amzn.cost_basis_replaceable_by?("manual")
   end
 
+
+  # --- Transfers and the read path (w2-transfers wac-cost-basis) ---
+
+  test "a transfer does not set the cost basis" do
+    holding = holdings(:one)
+    holding.account.trades.each { |t| t.update!(investment_activity_label: Trade::TRANSFER_LABEL) }
+
+    assert_nil holding.avg_cost
+  end
+
+  # The guard keys on the label, and most purchases carry none
+  test "an unlabelled purchase still sets it" do
+    holding = holdings(:one)
+    holding.account.trades.each { |t| t.update!(investment_activity_label: nil) }
+
+    assert_not_nil holding.avg_cost
+  end
+
+  # Averaging the purchases alone and applying that to every unit would be the same error
+  test "a position mixing a purchase and a transfer has no knowable cost" do
+    holding = holdings(:one)
+    holding.account.trades.each { |t| t.update!(investment_activity_label: "Buy") }
+
+    holding.account.entries.create!(
+      date: holding.date - 1,
+      name: "Received 1 unit",
+      amount: -100,
+      currency: holding.currency,
+      entryable: Trade.new(security: holding.security, qty: 1, price: 100, currency: holding.currency,
+                           investment_activity_label: Trade::TRANSFER_LABEL)
+    )
+
+    assert_nil holding.avg_cost
+  end
+
+  test "a cost basis the user set survives a transfer" do
+    holding = holdings(:one)
+    holding.account.trades.each { |t| t.update!(investment_activity_label: Trade::TRANSFER_LABEL) }
+    holding.update_columns(cost_basis: 100, cost_basis_source: "manual", cost_basis_locked: true)
+
+    assert_equal 100, holding.reload.avg_cost.amount.to_d
+  end
+
+
   private
 
     def load_holdings

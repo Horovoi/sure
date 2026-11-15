@@ -129,10 +129,36 @@ class Balance::SyncCache
       account.entries.excluding_pending.order(:date)
     end
 
-    # The one place an entry's amount is converted. A per-entry rate (the custom exchange
-    # rate of a foreign-currency transaction) belongs here.
+    # The one place an entry's amount is converted. A foreign-currency transaction with a
+    # rate the user entered (Transaction#exchange_rate) converts at that rate; every other
+    # entry follows the nearest-rate rule.
     def entry_amount_in_account_currency(entry)
+      return entry.amount if entry.currency == account.currency
+
+      custom_rate = custom_rates[entry.entryable_id] if entry.entryable_type == "Transaction"
+      return entry.amount * custom_rate if custom_rate
+
       convert(entry.amount, entry.currency, entry.date)
+    end
+
+    # Transaction id => user-entered rate, read in one query for the transactions that
+    # have one, instead of loading every transaction of the history. A stored value that
+    # is not a rate above zero is ignored (the market rate applies).
+    def custom_rates
+      @custom_rates ||= account.entries
+        .where(entryable_type: "Transaction")
+        .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
+        .where.not(entries: { currency: account.currency })
+        .where("transactions.extra ->> 'exchange_rate' IS NOT NULL")
+        .pluck(Arel.sql("transactions.id"), Arel.sql("transactions.extra ->> 'exchange_rate'"))
+        .each_with_object({}) do |(id, raw), rates|
+          rate = begin
+            BigDecimal(raw.to_s)
+          rescue ArgumentError, TypeError
+            nil
+          end
+          rates[id] = rate if rate&.finite? && rate.positive?
+        end
     end
 
     # nil when the pair has no rate at all

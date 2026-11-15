@@ -41,4 +41,12 @@ class ApplicationHelperTest < ActionView::TestCase
   test "currency_label names the currency and its code" do
     assert_equal "Ukrainian Hryvnia (UAH)", currency_label("UAH")
   end
+
+  # w2-transfers transfer-form-fixes (upstream ea326e1c9)
+  test "a day with only transfers totals zero in its own currency" do
+    entries = Transaction::TRANSFER_KINDS.map { |kind| Entry.new(currency: "GBP", amount: 100, entryable: Transaction.new(kind: kind)) }
+
+    assert_equal "£0.00", totals_by_currency(collection: entries, money_method: :amount_money)
+    assert_equal "£0.00", totals_by_currency(collection: entries, money_method: :amount_money, negate: true)
+  end
 end

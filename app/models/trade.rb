@@ -9,6 +9,12 @@ class Trade < ApplicationRecord
   # Use the same activity labels as Transaction
   ACTIVITY_LABELS = Transaction::ACTIVITY_LABELS.dup.freeze
 
+  # Moving an asset between places you own is not an acquisition, so it must not set a
+  # cost basis, and moving it out is not a sale. One label, not the wider
+  # Transaction::INTERNAL_MOVEMENT_LABELS: "Exchange" on a security can be a disposal, and
+  # nothing has shown a sweep landing on a security. Holding and the calculators read it.
+  TRANSFER_LABEL = "Transfer".freeze
+
   validates :qty, presence: true
   validates :price, :currency, presence: true
   validates :investment_activity_label, inclusion: { in: ACTIVITY_LABELS }, allow_nil: true
@@ -20,6 +26,12 @@ class Trade < ApplicationRecord
 
   def sell?
     qty.negative?
+  end
+
+  # Units moved in from, or out to, a place the owner also holds. It looks exactly like a
+  # buy or a sale (same sign, same shape), and only the label tells them apart.
+  def transfer_movement?
+    investment_activity_label == TRANSFER_LABEL
   end
 
   class << self
@@ -145,6 +157,9 @@ class Trade < ApplicationRecord
 
     def calculate_realized_gain_loss
       return nil unless sell?
+      # Units sent to another account you own were not sold: comparing their basis with
+      # the day's price would book a gain nobody made.
+      return nil if transfer_movement?
 
       holding = basis_holding
 

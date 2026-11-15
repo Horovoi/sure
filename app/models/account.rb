@@ -55,6 +55,12 @@ class Account < ApplicationRecord
 
   has_one_attached :logo
 
+  # w2-transfers default-account: users whose new entries start in this account. The
+  # foreign key clears the link when the account row goes; leaving the active state clears
+  # it too, so a disabled account is never preselected.
+  has_many :default_for_users, class_name: "User", foreign_key: :default_account_id, inverse_of: :default_account, dependent: :nullify
+  after_update_commit :release_as_default_account, if: -> { saved_change_to_status? && !active? }
+
   delegated_type :accountable, types: Accountable::TYPES, dependent: :destroy
   delegate :subtype, to: :accountable, allow_nil: true
 
@@ -250,6 +256,12 @@ class Account < ApplicationRecord
     provider&.logo_url
   end
 
+  # Whether the new-entry forms may preselect this account (w2-transfers default-account):
+  # the transaction form lists only manual, active accounts
+  def eligible_as_default?
+    active? && manual?
+  end
+
   # Idempotent: a second click while the deletion is queued does nothing
   def destroy_later
     with_lock do
@@ -341,4 +353,9 @@ class Account < ApplicationRecord
       raise "Unknown account type: #{accountable_type}"
     end
   end
+
+  private
+    def release_as_default_account
+      User.where(default_account_id: id).update_all(default_account_id: nil, updated_at: Time.current)
+    end
 end

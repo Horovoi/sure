@@ -99,6 +99,17 @@ class Holding::Materializer
             "cost_basis_source" => "manual",
             "cost_basis_locked" => true
           )
+        elsif holding.cost_basis_unknown && clearable_calculated_basis?(existing)
+          # No cost basis can be known for this position now (it holds transferred-in
+          # units, or a held purchase has no exchange rate). A nil from the calculator
+          # alone would leave the earlier calculated figure standing, which reports a
+          # transferred coin as bought on the day it arrived. Cleared, so the read path
+          # answers "unknown". A manual or provider figure is somebody's statement of
+          # what the position cost, and stays (handled above or not clearable).
+          holdings_to_upsert_with_cost << base_attrs.merge(
+            "cost_basis" => nil,
+            "cost_basis_source" => nil
+          )
         elsif reconciled[:should_update] && reconciled[:cost_basis].present?
           # Update with new cost_basis and source
           holdings_to_upsert_with_cost << base_attrs.merge(
@@ -138,15 +149,26 @@ class Holding::Materializer
         .group_by { |h| [ h.security_id, h.currency ] }
     end
 
+    # A figure this app worked out (or one with no recorded source), as opposed to one
+    # somebody asserted. Nothing to clear when there is no figure.
+    def clearable_calculated_basis?(existing)
+      return false if existing.nil? || existing.cost_basis.nil? || existing.cost_basis_locked?
+
+      existing.cost_basis_source.nil? || existing.cost_basis_source == "calculated"
+    end
+
     def load_existing_holdings_map
       # Load holdings that might affect reconciliation:
       # - Locked holdings (must preserve their cost_basis)
       # - Holdings with a source (need to check priority)
       # - Provider-sourced holdings (must not be overwritten)
+      # - Anything carrying a cost_basis, source or not: otherwise a figure with no
+      #   source is invisible here and the unknown-basis clearing leaves it standing
       account.holdings
         .where(cost_basis_locked: true)
         .or(account.holdings.where.not(cost_basis_source: nil))
         .or(account.holdings.where.not(account_provider_id: nil))
+        .or(account.holdings.where.not(cost_basis: nil))
         .index_by { |h| holding_key(h) }
     end
 

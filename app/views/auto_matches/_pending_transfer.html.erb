@@ -1,0 +1,46 @@
+<%# locals: (transfer:) %>
+
+<% outflow = transfer.outflow_transaction.entry %>
+<% inflow = transfer.inflow_transaction.entry %>
+
+<div id="<%= dom_id(transfer) %>" class="flex items-start gap-1 pl-4" data-testid="auto-match-row">
+  <%= check_box_tag "transfer_ids[]", transfer.id, false,
+        id: dom_id(transfer, :select),
+        class: "checkbox checkbox--light mt-4 shrink-0",
+        aria: { label: t(".select", name: outflow.name) },
+        data: { id: transfer.id, auto_match_bulk_select_target: "row", action: "auto-match-bulk-select#toggleRow" } %>
+
+  <div class="min-w-0 flex-1">
+    <%= render DS::ReviewRow.new do |row| %>
+      <% row.with_actions do %>
+        <%= render DS::Button.new(text: t(".confirm"), icon: "check", variant: :outline, size: :sm,
+              href: confirm_auto_match_path(transfer), method: :patch) %>
+        <%= render DS::Button.new(text: t(".reject"), icon: "x", variant: :ghost, size: :sm,
+              href: reject_auto_match_path(transfer), method: :patch) %>
+      <% end %>
+
+      <div class="space-y-1 text-sm">
+        <p class="font-medium text-primary @md:truncate">
+          <%= link_to outflow.name, entry_path(outflow),
+                data: { turbo_frame: "drawer", turbo_prefetch: false },
+                class: "hover:underline" %>
+        </p>
+        <p class="text-secondary">
+          <%= t(".route", from: outflow.account.name, to: inflow.account.name) %>
+        </p>
+        <p class="text-secondary">
+          <span class="privacy-sensitive"><%= format_money(outflow.amount_money) %></span>
+          <% if inflow.currency != outflow.currency %>
+            <span aria-hidden="true">&rarr;</span>
+            <span class="privacy-sensitive"><%= format_money(inflow.amount_money.abs) %></span>
+          <% end %>
+          <span aria-hidden="true">&middot;</span>
+          <%= l(outflow.date, format: :long) %>
+          <% if inflow.date != outflow.date %>
+            <span class="text-subdued"><%= t(".arrived_on", date: l(inflow.date, format: :short)) %></span>
+          <% end %>
+        </p>
+      </div>
+    <% end %>
+  </div>
+</div>

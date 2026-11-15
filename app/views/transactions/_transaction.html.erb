@@ -110,15 +110,15 @@
 
                     <% if transaction.transfer.present? %>
                       <%= render "transactions/transfer_match", transaction: transaction %>
+                    <% elsif @transfer_hint_transaction_ids&.include?(transaction.id) %>
+                      <%= render "transactions/transfer_hint", entry: entry, transaction: transaction %>
                     <% end %>
                   </div>
                 </div>
 
                 <div class="text-secondary text-xs font-normal">
                   <% if transaction.transfer? %>
-                    <span class="text-secondary">
-                      <%= transaction.loan_payment? ? t("transactions.show.loan_payment") : t("transactions.show.transfer") %> • <%= entry.account.name %>
-                    </span>
+                    <%= render "transactions/transfer_accounts", entry: entry, transaction: transaction %>
                   <% else %>
                     <% if transaction.merchant&.present? %>
                       <span class="hidden lg:inline truncate"><%= transaction.merchant.name %> • </span>

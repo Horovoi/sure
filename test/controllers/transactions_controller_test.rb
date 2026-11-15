@@ -830,4 +830,194 @@ end
     assert_response :ok
     assert_select "select[name='investment_activity_label'] option[selected][value='Sell']"
   end
+
+  # w2-transfers custom-exchange-rate
+  test "creates a foreign-currency transaction with the user's rate" do
+    account = accounts(:depository)
+
+    post transactions_url, params: {
+      entry: {
+        account_id: account.id, name: "Hotel", date: Date.current, currency: "EUR", amount: 100, nature: "outflow",
+        entryable_type: "Transaction", entryable_attributes: { exchange_rate: "1,08" }
+      }
+    }
+
+    entry = account.entries.order(:created_at).last
+    assert_equal "Hotel", entry.name
+    assert_equal BigDecimal("1.08"), entry.transaction.exchange_rate
+  end
+
+  test "creates a foreign-currency transaction from the converted amount" do
+    account = accounts(:depository)
+
+    post transactions_url, params: {
+      entry: {
+        account_id: account.id, name: "Hotel", date: Date.current, currency: "EUR", amount: 100, nature: "outflow",
+        entryable_type: "Transaction", converted_amount: "108.5"
+      }
+    }
+
+    entry = account.entries.order(:created_at).last
+    assert_equal BigDecimal("1.085"), entry.transaction.exchange_rate
+  end
+
+  test "a bad rate shows the form again" do
+    account = accounts(:depository)
+
+    assert_no_difference "Entry.count" do
+      post transactions_url, params: {
+        entry: {
+          account_id: account.id, name: "Hotel", date: Date.current, currency: "EUR", amount: 100, nature: "outflow",
+          entryable_type: "Transaction", entryable_attributes: { exchange_rate: "0" }
+        }
+      }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "changing the rate in the drawer syncs the account" do
+    entry = create_transaction(account: accounts(:depository), currency: "EUR", amount: 50)
+
+    assert_enqueued_with job: SyncJob do
+      patch transaction_url(entry), params: { entry: { entryable_attributes: { id: entry.entryable_id, exchange_rate: "1.1" } } }
+    end
+
+    assert_equal BigDecimal("1.1"), entry.reload.transaction.exchange_rate
+  end
+
+  # w2-transfers transfer-hints
+  test "a likely unmatched pair shows the Transfer? hint on the list" do
+    outflow = create_transaction(account: accounts(:depository), amount: 321)
+    create_transaction(account: accounts(:credit_card), amount: -321)
+
+    get transactions_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(outflow.transaction, :transfer_hint)}" do
+      assert_select "a[href='#{new_transaction_transfer_match_path(outflow)}']", text: /Transfer\?/
+    end
+  end
+
+  test "a list of transfers only shows inflow and outflow totals" do
+    family = @user.family
+    savings = family.accounts.create!(name: "Totals savings", balance: 0, currency: family.currency, accountable: Depository.new)
+    create_transfer(from_account: accounts(:depository), to_account: savings, amount: 250, currency: family.currency)
+
+    get transactions_url(q: { types: [ "transfer" ] })
+
+    assert_response :success
+    assert_select "#total-income", text: /250/
+    assert_select "p", text: "Inflow"
+    assert_select "p", text: "Outflow"
+  end
+
+  # --- w2-transfers transfer-form-fixes ---
+
+  test "new takes the values another tab carried over" do
+    tag = tags(:one)
+    date = 4.days.ago.to_date
+
+    get new_transaction_url(nature: "inflow", draft: {
+      name: "Carried", amount: "12,5", date: date.iso8601, account_id: accounts(:depository).id, tag_ids: [ tag.id ]
+    })
+
+    assert_response :success
+    assert_select "input[name='entry[name]'][value='Carried']"
+    assert_select "input[name='entry[amount]'][value='12.50']"
+    assert_select "input[name='entry[date]'][value='#{date.iso8601}']"
+    assert_select "select[name='entry[account_id]'] option[selected][value='#{accounts(:depository).id}']"
+    assert_select "input[type=hidden][name='entry[entryable_attributes][tag_ids][]'][value='#{tag.id}']"
+  end
+
+  test "update drops a category sent for a confirmed transfer's inflow leg" do
+    outflow = Transaction.new
+    accounts(:depository).entries.create!(name: "Contribution", amount: 500, currency: "USD", date: Date.current, entryable: outflow)
+    inflow = Transaction.new
+    inflow_entry = accounts(:investment).entries.create!(name: "Contribution", amount: -500, currency: "USD", date: Date.current, entryable: inflow)
+    Transfer.create!(inflow_transaction: inflow, outflow_transaction: outflow, status: "confirmed")
+
+    patch transaction_url(inflow_entry), params: {
+      entry: { notes: "Monthly savings", entryable_type: "Transaction", entryable_attributes: { id: inflow.id, category_id: categories(:food_and_drink).id } }
+    }
+
+    assert_nil inflow.reload.category_id
+    assert_equal "Monthly savings", inflow_entry.reload.notes
+  end
+
+  test "the drawer shows a confirmed transfer's inflow leg with the outflow's category, disabled" do
+    outflow = Transaction.new(category: categories(:food_and_drink))
+    accounts(:depository).entries.create!(name: "Contribution", amount: 500, currency: "USD", date: Date.current, entryable: outflow)
+    inflow = Transaction.new
+    inflow_entry = accounts(:investment).entries.create!(name: "Contribution", amount: -500, currency: "USD", date: Date.current, entryable: inflow)
+    Transfer.create!(inflow_transaction: inflow, outflow_transaction: outflow, status: "confirmed")
+
+    get transaction_url(inflow_entry), headers: { "Turbo-Frame" => "drawer" }
+
+    assert_response :success
+    assert_select "button[disabled]", text: /#{categories(:food_and_drink).name}/
+    assert_select "input[type=hidden][name='entry[entryable_attributes][category_id]'][disabled]"
+    assert_includes response.body, I18n.t("transactions.show.category_set_on_outflow")
+  end
+
+  test "an investment contribution's outflow row has a category menu and its inflow row a read-only badge" do
+    outflow = Transaction.new(category: categories(:food_and_drink))
+    accounts(:depository).entries.create!(name: "Contribution out", amount: 500, currency: "USD", date: Date.current, entryable: outflow)
+    inflow = Transaction.new
+    accounts(:investment).entries.create!(name: "Contribution in", amount: -500, currency: "USD", date: Date.current, entryable: inflow)
+    Transfer.create!(inflow_transaction: inflow, outflow_transaction: outflow, status: "confirmed")
+
+    get transactions_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(outflow, :category_menu_desktop)} turbo-frame#category_dropdown"
+    assert_select "##{ActionView::RecordIdentifier.dom_id(inflow, :category_menu_desktop)} turbo-frame#category_dropdown", count: 0
+  end
+
+  # --- w2-transfers transfer-tags-counterpart ---
+
+  test "transfer rows name the counterpart account without a lookup per row" do
+    3.times do |i|
+      Transfer::Creator.new(
+        family: families(:dylan_family), source_account_id: accounts(:depository).id,
+        destination_account_id: accounts(:connected).id, date: Date.current - i, amount: 10 + i
+      ).create
+    end
+
+    # A lazy belongs_to or has_one load ends in LIMIT; a preload does not
+    lazy_leg_lookup = /"transactions"\."id" = \$1 LIMIT|"entries"\."entryable_id" = \$1|"accounts"\."id" = \$1 LIMIT|"transfers"\."(inflow|outflow)_transaction_id" = \$1/
+    assert_no_queries_match(lazy_leg_lookup) do
+      get transactions_url
+    end
+
+    assert_response :success
+    assert_includes response.body, "#{accounts(:depository).name} → #{accounts(:connected).name}"
+  end
+
+  # --- w2-transfers default-account ---
+
+  test "the new-transaction form preselects the default account" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+
+    get new_transaction_url
+
+    assert_select "select[name='entry[account_id]'] option[selected][value='#{accounts(:depository).id}']"
+  end
+
+  test "a disabled default account is not preselected" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+    accounts(:depository).update_columns(status: "disabled") # skips the callback that clears it
+
+    get new_transaction_url
+
+    assert_select "select[name='entry[account_id]'] option[selected]", count: 0
+  end
+
+  test "an account the form was opened for wins over the default" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+
+    get new_transaction_url(account_id: accounts(:credit_card).id)
+
+    assert_select "input[type=hidden][name='entry[account_id]'][value='#{accounts(:credit_card).id}']"
+  end
 end

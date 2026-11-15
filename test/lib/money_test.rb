@@ -350,4 +350,34 @@ class MoneyTest < ActiveSupport::TestCase
   test "keeps MXN separators in the Spanish locale" do
     assert_equal "100.12 MX$", Money.new(100.12, :mxn).format(locale: :es)
   end
+
+  # w2-transfers custom-exchange-rate
+  test "exchange_to with a custom rate uses it and never looks a rate up" do
+    ExchangeRate.expects(:find_rate).never
+    ExchangeRate.expects(:find_or_fetch_rate).never
+
+    assert_equal Money.new(415, :uah), Money.new(10, :usd).exchange_to(:uah, custom_rate: "41.5")
+    assert_equal Money.new(415, :uah), Money.new(10, :usd).exchange_to(:uah, custom_rate: BigDecimal("41.5"))
+  end
+
+  test "exchange_to with a custom rate that is not above zero raises instead of falling back" do
+    ExchangeRate.expects(:find_rate).never
+    ExchangeRate.expects(:find_or_fetch_rate).never
+
+    [ 0, -1, "abc", "NaN" ].each do |rate|
+      assert_raises(Money::ConversionError, "custom_rate #{rate.inspect}") do
+        Money.new(10, :usd).exchange_to(:uah, custom_rate: rate, fallback_rate: 1)
+      end
+    end
+  end
+
+  test "exchange_to with a blank custom rate follows the nearest-rate rule" do
+    ExchangeRate.expects(:find_or_fetch_rate).returns(OpenStruct.new(rate: 40))
+
+    assert_equal Money.new(400, :uah), Money.new(10, :usd).exchange_to(:uah, custom_rate: "")
+  end
+
+  test "exchange_to ignores a custom rate within one currency" do
+    assert_equal Money.new(10, :usd), Money.new(10, :usd).exchange_to(:usd, custom_rate: 0)
+  end
 end

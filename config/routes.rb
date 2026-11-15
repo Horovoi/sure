@@ -186,6 +186,31 @@ Rails.application.routes.draw do
 
   resources :transfers, only: %i[new create destroy show update]
 
+  # --- w2-transfers transfer-match-policy: review page for pending transfer auto-matches ---
+  resources :auto_matches, only: :index do
+    member do
+      patch :confirm
+      patch :reject
+    end
+    collection do
+      patch :bulk_update
+    end
+  end
+  # --- end w2-transfers transfer-match-policy ---
+
+  # --- w2-transfers custom-exchange-rate: one rate lookup for every form (nearest-rate rule) ---
+  get :exchange_rate, to: "exchange_rates#show"
+  # --- end w2-transfers custom-exchange-rate ---
+
+  # --- w2-transfers default-account: the account new entries start in ---
+  resources :accounts, only: [] do
+    member do
+      patch :set_default
+      patch :remove_default
+    end
+  end
+  # --- end w2-transfers default-account ---
+
   resources :imports, only: %i[index new show create update destroy] do
     member do
       post :publish
@@ -220,7 +245,7 @@ Rails.application.routes.draw do
   end
 
   resources :transactions, only: %i[index new create show update destroy] do
-    resource :transfer_match, only: %i[new create]
+    resource :transfer_match, only: %i[new create destroy] # destroy: w2-transfers transfer-hints "Not a transfer"
     resource :category, only: :update, controller: :transaction_categories
 
     collection do
@@ -245,7 +270,6 @@ Rails.application.routes.draw do
       post :detect
       post :approve_all_suggestions
       post :dismiss_all_suggestions
-      get :fetch_exchange_rate
     end
 
     member do

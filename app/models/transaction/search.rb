@@ -47,7 +47,8 @@ class Transaction::Search
   # Computes totals for the specific search
   def totals
     @totals ||= begin
-      Rails.cache.fetch("transaction_search_totals/#{cache_key_base}", expires_in: Family::AGGREGATE_CACHE_TTL) do
+      # v2: Totals gained the transfer inflow and outflow (w2-transfers transfer-hints)
+      Rails.cache.fetch("transaction_search_totals/v2/#{cache_key_base}", expires_in: Family::AGGREGATE_CACHE_TTL) do
         # The nearest stored rate of the entry's day; an amount in a currency with no rate
         # at all is left out, not counted at 1
         rate = ExchangeRate.rate_sql(
@@ -60,6 +61,10 @@ class Transaction::Search
                   .select(
                     "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN transactions.kind = 'investment_contribution' THEN ABS(entries.amount * #{rate}) WHEN entries.amount >= 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment') THEN ABS(entries.amount * #{rate}) ELSE 0 END), 0) as expense_total",
                     "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN entries.amount < 0 AND transactions.kind NOT IN ('funds_movement', 'cc_payment', 'investment_contribution') THEN ABS(entries.amount * #{rate}) ELSE 0 END), 0) as income_total",
+                    # Transfers are neither income nor spending; a list filtered to them shows
+                    # what came in and went out instead (transactions/_summary)
+                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN entries.amount < 0 AND transactions.kind IN ('funds_movement', 'cc_payment') THEN ABS(entries.amount * #{rate}) ELSE 0 END), 0) as transfer_inflow_total",
+                    "COALESCE(SUM(CASE WHEN entries.excluded THEN 0 WHEN entries.amount >= 0 AND transactions.kind IN ('funds_movement', 'cc_payment') THEN ABS(entries.amount * #{rate}) ELSE 0 END), 0) as transfer_outflow_total",
                     "COUNT(entries.id) as transactions_count"
                   )
                   .take
@@ -67,7 +72,9 @@ class Transaction::Search
         Totals.new(
           count: result.transactions_count.to_i,
           income_money: Money.new(result.income_total, family.currency),
-          expense_money: Money.new(result.expense_total, family.currency)
+          expense_money: Money.new(result.expense_total, family.currency),
+          transfer_inflow_money: Money.new(result.transfer_inflow_total, family.currency),
+          transfer_outflow_money: Money.new(result.transfer_outflow_total, family.currency)
         )
       end
     end
@@ -83,7 +90,7 @@ class Transaction::Search
   end
 
   private
-    Totals = Data.define(:count, :income_money, :expense_money)
+    Totals = Data.define(:count, :income_money, :expense_money, :transfer_inflow_money, :transfer_outflow_money)
 
     def apply_active_accounts_filter(query, active_accounts_only_filter)
       if active_accounts_only_filter

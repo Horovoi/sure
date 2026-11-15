@@ -1,0 +1,7 @@
+<%# w2-transfers transfer-hints: the two rows a rejected pending match changed
+    (TransfersController#respond_to_rejection), drawn in the page's view and without the
+    match controls. A row not on the page is skipped by Turbo. %>
+<% @redrawn_entries.each do |entry| %>
+  <%= turbo_stream.replace entry, partial: "entries/entry", locals: { entry: entry, view_ctx: @view_ctx } %>
+<% end %>
+<%= turbo_stream.append "notification-tray", partial: "shared/notifications/notice", locals: { message: t("transfers.update.rejected") } %>

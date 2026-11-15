@@ -118,11 +118,11 @@ class TransferTest < ActiveSupport::TestCase
     assert_equal "funds_movement", Transfer.outflow_kind_for(source_account: accounts(:credit_card), destination_account: depository)
   end
 
-  test "creating a transfer sets the kinds of both legs from the accounts" do
+  test "creating a confirmed transfer sets the kinds of both legs from the accounts" do
     outflow_entry = create_transaction(date: Date.current, account: accounts(:depository), amount: 500)
     inflow_entry = create_transaction(date: Date.current, account: accounts(:loan), amount: -500)
 
-    Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
+    Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction, status: "confirmed")
 
     assert_equal "loan_payment", outflow_entry.transaction.reload.kind
     assert_equal "funds_movement", inflow_entry.transaction.reload.kind
@@ -145,7 +145,7 @@ class TransferTest < ActiveSupport::TestCase
     category = ensure_investment_contributions_category(family)
     outflow_entry = create_transaction(date: Date.current, account: accounts(:depository), amount: 500)
     inflow_entry = create_transaction(date: Date.current, account: accounts(:investment), amount: -500)
-    transfer = Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
+    transfer = Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction, status: "confirmed")
 
     assert_equal category, outflow_entry.transaction.reload.category
 
@@ -196,4 +196,165 @@ class TransferTest < ActiveSupport::TestCase
     assert transfer.reload.confirmed?
     assert_equal "edited", transfer.notes
   end
+
+  # --- Kinds only on confirm (w2-transfers transfer-match-policy, decision 20) ---
+
+  test "a pending transfer leaves both legs as they were" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+
+    assert transfer.pending?
+    assert_equal "standard", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  test "confirm sets both legs' kinds from the destination account" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+
+    transfer.confirm!
+
+    assert transfer.reload.confirmed?
+    assert_equal "cc_payment", transfer.outflow_transaction.reload.kind
+    assert_equal "funds_movement", transfer.inflow_transaction.reload.kind
+  end
+
+  test "confirm gives an uncategorized outflow into an investment account the contributions category" do
+    category = ensure_investment_contributions_category(families(:dylan_family))
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:investment))
+
+    assert_nil transfer.outflow_transaction.reload.category
+
+    transfer.confirm!
+
+    outflow = transfer.outflow_transaction.reload
+    assert_equal "investment_contribution", outflow.kind
+    assert_equal category, outflow.category
+  end
+
+  test "confirm keeps an outflow category the user set" do
+    ensure_investment_contributions_category(families(:dylan_family))
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:investment))
+    transfer.outflow_transaction.update!(category: categories(:food_and_drink))
+
+    transfer.confirm!
+
+    assert_equal categories(:food_and_drink), transfer.outflow_transaction.reload.category
+  end
+
+  test "a failed confirm leaves the transfer pending and the legs unchanged" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+    Transaction.any_instance.stubs(:update!).raises(ActiveRecord::RecordInvalid.new(Transaction.new))
+
+    assert_raises(ActiveRecord::RecordInvalid) { transfer.confirm! }
+
+    assert transfer.reload.pending?
+  end
+
+  test "reject resets the kinds of a confirmed transfer" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+    transfer.confirm!
+
+    transfer.reject!
+
+    assert_equal "standard", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  test "reject keeps a one-time mark the user put on a leg of a pending match" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:credit_card))
+    transfer.outflow_transaction.update!(kind: "one_time")
+
+    transfer.reject!
+
+    assert_equal "one_time", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  test "destroy resets the kinds of a confirmed transfer" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:loan))
+    transfer.confirm!
+    assert_equal "loan_payment", transfer.outflow_transaction.reload.kind
+
+    transfer.destroy!
+
+    assert_equal "standard", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
+  private
+    def create_pending_transfer(from:, to:)
+      outflow_entry = create_transaction(date: Date.current, account: from, amount: 500)
+      inflow_entry = create_transaction(date: Date.current, account: to, amount: -500)
+
+      Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
+    end
+
+    # w2-transfers transfer-fees
+    def create_transfer_with_fee
+      family = accounts(:depository).family
+      savings = family.accounts.create!(name: "Fee savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+      Transfer::Creator.new(
+        family: family, source_account_id: accounts(:depository).id, destination_account_id: savings.id,
+        date: Date.current, amount: 100, source_fee: "2"
+      ).create
+    end
+
+    test "deleting a transfer leg deletes the transfer's fees" do
+      transfer = create_transfer_with_fee
+      fee_entry = transfer.fee_transactions.sole.entry
+
+      transfer.outflow_transaction.entry.destroy!
+
+      assert_not Transfer.exists?(transfer.id)
+      assert_not Entry.exists?(fee_entry.id)
+    end
+
+    test "destroying a transfer deletes its fees" do
+      transfer = create_transfer_with_fee
+      fee_entry = transfer.fee_transactions.sole.entry
+
+      transfer.destroy!
+
+      assert_not Entry.exists?(fee_entry.id)
+      assert Entry.exists?(transfer.outflow_transaction.entry.id), "the legs stay"
+    end
+
+    test "rejecting a transfer keeps its fees as plain expenses" do
+      transfer = create_transfer_with_fee
+      fee = transfer.fee_transactions.sole
+
+      transfer.reject!
+
+      fee.reload
+      assert_nil fee.fee_transfer_id
+      assert_equal "Fees", fee.category.name
+      assert_equal BigDecimal("2"), fee.entry.amount
+    end
+
+    test "set_fee! creates, changes and removes one side's fee" do
+      transfer = create_transfer_with_fee
+
+      assert transfer.set_fee!(side: :destination, amount: BigDecimal("3"))
+      assert_equal Money.new(3, "USD"), transfer.fee_money_for(:destination)
+
+      assert transfer.set_fee!(side: :destination, amount: BigDecimal("4"))
+      assert_equal Money.new(4, "USD"), transfer.fee_money_for(:destination)
+      assert_not transfer.set_fee!(side: :destination, amount: BigDecimal("4")), "no change"
+
+      assert transfer.set_fee!(side: :destination, amount: nil)
+      assert_nil transfer.fee_money_for(:destination)
+      assert_equal Money.new(2, "USD"), transfer.fee_money_for(:source)
+    end
+
+    test "auto-match never pairs a transfer fee" do
+      transfer = create_transfer_with_fee
+      fee = transfer.fee_transactions.sole
+      family = fee.entry.account.family
+      other = family.accounts.create!(name: "Fee match target", balance: 0, currency: "USD", accountable: Depository.new)
+      create_transaction(account: other, amount: -2, date: Date.current)
+
+      assert_no_difference -> { Transfer.where(outflow_transaction_id: fee.id).count } do
+        family.auto_match_transfers!
+      end
+    end
 end

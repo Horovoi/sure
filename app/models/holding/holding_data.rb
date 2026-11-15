@@ -1,9 +1,14 @@
 # One calculated daily holding, as the holding calculators and Holding.gapfill return it.
 # A plain Struct rather than a Holding record, for the same reason as
 # Balance::BalanceData: Holding::Materializer writes the rows with upsert_all.
+#
+# cost_basis_unknown is not the same as a nil cost_basis. Nil means "this calculation
+# produced nothing", and the materializer leaves an earlier figure standing. Unknown
+# means "no cost basis can be known here" (transferred-in units, or a held purchase with
+# no exchange rate), so a stale calculated figure has to go.
 Holding::HoldingData = Struct.new(
   :account_id, :security_id, :date,
-  :qty, :price, :currency, :amount, :cost_basis,
+  :qty, :price, :currency, :amount, :cost_basis, :cost_basis_unknown,
   keyword_init: true
 ) do
   # For callers outside the sync path (tests, the console). The sync path reads only the

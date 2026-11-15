@@ -85,12 +85,23 @@ class Money
   # fallback_rate when given and raises ConversionError otherwise; callers that total
   # amounts leave such an amount out (ExchangeRate.convert_or_leave_out) rather than
   # passing fallback_rate: 1.
-  def exchange_to(other_currency, date: Date.current, fallback_rate: nil)
+  #
+  # custom_rate is a rate the user entered (a bank's rate on a foreign-currency
+  # transaction or a transfer). When present it is used instead of any stored rate. A
+  # custom rate that is not a finite number above zero raises ConversionError: it never
+  # falls back to the stored rate or to fallback_rate, because the user said the stored
+  # rate is not the one that applied.
+  def exchange_to(other_currency, date: Date.current, fallback_rate: nil, custom_rate: nil)
     iso_code = currency.iso_code
     other_iso_code = Money::Currency.new(other_currency).iso_code
 
     if iso_code == other_iso_code
       self
+    elsif custom_rate.present?
+      rate = usable_custom_rate(custom_rate)
+      raise ConversionError.new(from_currency: iso_code, to_currency: other_iso_code, date: date) unless rate
+
+      Money.new(amount * rate, other_iso_code)
     else
       exchange_rate = stored_rate(from: iso_code, to: other_iso_code, date: date) || fallback_rate
 
@@ -164,6 +175,14 @@ class Money
 
       rate = record&.rate
       rate if rate && rate.to_d.finite? && rate.to_d.positive?
+    end
+
+    # A BigDecimal for a finite rate above zero; nil for anything else ("abc", 0, -1, NaN)
+    def usable_custom_rate(value)
+      rate = value.is_a?(BigDecimal) ? value : BigDecimal(value.to_s)
+      rate if rate.finite? && rate.positive?
+    rescue ArgumentError, TypeError
+      nil
     end
 
     def source_must_be_of_known_type

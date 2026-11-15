@@ -265,6 +265,8 @@ class TransactionsTest < ApplicationSystemTestCase
     outflow_entry = create_transaction("outflow", Date.current, 500, account: asset_account)
     inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: cash_account)
     @user.family.auto_match_transfers!
+    # An auto-match is only a suggestion until confirmed
+    outflow_entry.transaction.reload.transfer.confirm!
     visit transactions_url
 
     within "#entry-group-" + Date.current.to_s + "-totals" do
@@ -276,6 +278,8 @@ class TransactionsTest < ApplicationSystemTestCase
     outflow_entry = create_transaction("outflow", Date.current, 500, account: accounts(:other_asset))
     inflow_entry = create_transaction("inflow", 1.day.ago.to_date, -500, account: accounts(:investment))
     @user.family.auto_match_transfers!
+    # An auto-match is only a suggestion until confirmed
+    outflow_entry.transaction.reload.transfer.confirm!
     assert outflow_entry.transaction.reload.investment_contribution?
     visit transactions_url
 

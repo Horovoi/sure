@@ -1,4 +1,6 @@
 class Holding::ReverseCalculator
+  include Holding::TradeCalculatorHelpers
+
   attr_reader :account, :portfolio_snapshot
 
   def initialize(account, portfolio_snapshot:)
@@ -35,7 +37,7 @@ class Holding::ReverseCalculator
         previous_portfolio = transform_portfolio(current_portfolio, today_trades, direction: :reverse)
 
         # If current day, always use holding prices (since that's what Plaid gives us).  For historical values, use market data (since Plaid doesn't supply historical prices)
-        holdings += build_holdings(current_portfolio, date, price_source: date == Date.current ? "holding" : nil)
+        holdings.concat(build_holdings(current_portfolio, date, price_source: date == Date.current ? "holding" : nil))
         current_portfolio = previous_portfolio
       end
 
@@ -72,52 +74,84 @@ class Holding::ReverseCalculator
           price: price.price,
           currency: price.currency,
           amount: qty * price.price,
-          cost_basis: cost_basis_for(security_id, date)
+          cost_basis: cost_basis_for(security_id, date),
+          cost_basis_unknown: cost_basis_unknown?(security_id, date)
         )
       end.compact
     end
 
-    # Pre-compute cost basis for all securities at all dates using forward pass through trades
-    # Stores: { security_id => { date => cost_basis } }
+    # Walks every trade forward once and records, per security, the basis after each
+    # trade ([date, average, unknown], in trade order) and the spans [start, stop) during
+    # which the position holds units transferred in. stop is nil while a span is still
+    # open at the last trade.
     def precompute_cost_basis
-      @cost_basis_by_date = Hash.new { |h, k| h[k] = {} }
-      # unknown: a purchase had no exchange rate into the account currency, so the
-      # average from that day on is unknown rather than a figure that leaves it out
-      tracker = Hash.new { |h, k| h[k] = { total_cost: BigDecimal("0"), total_qty: BigDecimal("0"), unknown: false } }
+      @cost_basis_snapshots = Hash.new { |h, k| h[k] = [] }
+      @unknown_spans = Hash.new { |h, k| h[k] = [] }
+      trackers = Hash.new { |h, k| h[k] = Holding::CostBasisTracker.new }
+      open_unknown_start = {}
 
-      trades = portfolio_cache.get_trades.sort_by(&:date)
-      trade_index = 0
+      # Already chronological (date, then created_at, then id). The tracker is order
+      # sensitive once sells relieve it, so a re-sort by date alone could swap a same-day
+      # sell and repurchase.
+      trades = portfolio_cache.get_trades
 
-      account.start_date.upto(Date.current).each do |date|
-        # Process all trades up to and including this date
-        while trade_index < trades.size && trades[trade_index].date <= date
-          trade_entry = trades[trade_index]
-          trade = trade_entry.entryable
+      # A reverse-synced account can hold shares before its first imported trade. Seed
+      # each running position from the snapshot minus the net imported trades, so "back at
+      # zero" is the real position, not just the trades this app happens to have.
+      net_qty = Hash.new(0)
+      trades.each { |trade_entry| net_qty[trade_entry.entryable.security_id] += trade_entry.entryable.qty }
+      snapshot = portfolio_snapshot.to_h
+      positions = Hash.new(0)
+      net_qty.each_key { |security_id| positions[security_id] = (snapshot[security_id] || 0) - net_qty[security_id] }
 
-          if trade.qty > 0 && !tracker[trade.security_id][:unknown] # Only track buys
-            security_id = trade.security_id
-            # The trade price in the account currency at the trade's own date
-            converted_price = portfolio_cache.trade_price_in_account_currency(trade, trade_entry.date)
+      trades.each do |trade_entry|
+        trade = trade_entry.entryable
+        security_id = trade.security_id
+        tracker = trackers[security_id]
+        previous_position = positions[security_id]
+        positions[security_id] += trade.qty
 
-            if converted_price.nil?
-              tracker[security_id][:unknown] = true
-            else
-              tracker[security_id][:total_cost] += converted_price * trade.qty
-              tracker[security_id][:total_qty] += trade.qty
-            end
-          end
-          trade_index += 1
+        if apply_trade_to_tracker(tracker, trade_entry) == :transfer_in
+          open_unknown_start[security_id] ||= trade_entry.date
+        else
+          # Recorded after every trade, nil once fully sold, so a sold-out span has no
+          # basis instead of the last figure carried forward
+          @cost_basis_snapshots[security_id] << [ trade_entry.date, tracker.average_cost, tracker.unknown? ]
         end
 
-        # Store current cost basis snapshot for each security at this date
-        tracker.each do |security_id, data|
-          next if data[:unknown] || data[:total_qty].zero?
-          @cost_basis_by_date[security_id][date] = data[:total_cost] / data[:total_qty]
+        # Close an open span only on a real downward crossing through zero. A gapped
+        # import can reconstruct a negative baseline, and that position never held the
+        # transferred units.
+        if open_unknown_start[security_id] && previous_position.positive? && positions[security_id] <= 0
+          @unknown_spans[security_id] << [ open_unknown_start[security_id], trade_entry.date ]
+          open_unknown_start.delete(security_id)
         end
       end
+
+      open_unknown_start.each { |security_id, start| @unknown_spans[security_id] << [ start, nil ] }
+    end
+
+    def transferred_by?(security_id, date)
+      @unknown_spans[security_id].any? { |start, stop| start <= date && (stop.nil? || date < stop) }
     end
 
     def cost_basis_for(security_id, date)
-      @cost_basis_by_date.dig(security_id, date)
+      return nil if transferred_by?(security_id, date)
+
+      snapshot_on(security_id, date)&.second
+    end
+
+    # Unknown, not just nil: the position holds transferred-in units, or a held purchase
+    # has no exchange rate. The materializer clears a stale calculated figure for these.
+    def cost_basis_unknown?(security_id, date)
+      transferred_by?(security_id, date) || snapshot_on(security_id, date)&.third == true
+    end
+
+    # The last snapshot on or before the date, by binary search over the trade-ordered list
+    def snapshot_on(security_id, date)
+      snapshots = @cost_basis_snapshots[security_id]
+      index = snapshots.bsearch_index { |snapshot| snapshot.first > date }
+      index = snapshots.size if index.nil?
+      index.zero? ? nil : snapshots[index - 1]
     end
 end

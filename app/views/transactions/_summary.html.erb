@@ -1,4 +1,8 @@
 <%# locals: (totals:) %>
+<%# A list of transfers only (income and spending both zero) shows what came in and went
+    out instead. A mixed filter keeps Income and Expenses, which leave transfers out. %>
+<% show_transfers = totals.income_money.zero? && totals.expense_money.zero? &&
+     (totals.transfer_inflow_money.amount.positive? || totals.transfer_outflow_money.amount.positive?) %>
 <div class="space-y-4">
   <%= render "shared/exchange_rate_notes", family: Current.family %>
 
@@ -8,15 +12,15 @@
       <p class="text-primary font-medium text-lg md:text-xl" id="total-transactions"><%= totals.count.round(0) %></p>
     </div>
     <div class="p-3 md:p-4 space-y-2">
-      <p class="text-xs md:text-sm text-secondary"><%= t("transactions.summary.income") %></p>
-      <p class="text-primary font-medium text-lg md:text-xl" id="total-income">
-        <%= totals.income_money.format %>
+      <p class="text-xs md:text-sm text-secondary"><%= show_transfers ? t("transactions.summary.inflow") : t("transactions.summary.income") %></p>
+      <p class="text-primary font-medium text-lg md:text-xl privacy-sensitive" id="total-income">
+        <%= (show_transfers ? totals.transfer_inflow_money : totals.income_money).format %>
       </p>
     </div>
     <div class="p-3 md:p-4 space-y-2">
-      <p class="text-xs md:text-sm text-secondary"><%= t("transactions.summary.expenses") %></p>
-      <p class="text-primary font-medium text-lg md:text-xl" id="total-expense">
-        <%= totals.expense_money.format %>
+      <p class="text-xs md:text-sm text-secondary"><%= show_transfers ? t("transactions.summary.outflow") : t("transactions.summary.expenses") %></p>
+      <p class="text-primary font-medium text-lg md:text-xl privacy-sensitive" id="total-expense">
+        <%= (show_transfers ? totals.transfer_outflow_money : totals.expense_money).format %>
       </p>
     </div>
   </div>

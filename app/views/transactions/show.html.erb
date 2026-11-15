@@ -65,7 +65,7 @@
           <% unless @entry.transaction.transfer? %>
             <div class="flex items-center gap-2">
               <%= f.select :nature,
-                    [["Expense", "outflow"], ["Income", "inflow"]],
+                    [[t("transactions.form.expense"), "outflow"], [t("transactions.form.income"), "inflow"]],
                     { container_class: "w-1/3", label: t(".nature"), selected: @entry.amount.negative? ? "inflow" : "outflow" },
                     { data: { "auto-submit-form-target": "auto" }, disabled: @entry.linked? } %>
 
@@ -78,6 +78,14 @@
                     disable_currency: @entry.linked? %>
             </div>
 
+            <%# w2-transfers custom-exchange-rate %>
+            <%= render "transactions/exchange_rate_field", form: f, entry: @entry %>
+          <% end %>
+
+          <%# w2-transfers transfer-form-fixes: the category follows who owns it (Transaction#category_editable?),
+              so the outflow leg of a loan payment or an investment contribution takes one, and the
+              inflow leg shows the outflow's category read-only %>
+          <% if @entry.transaction.category_editable? %>
             <%= f.fields_for :entryable do |ef| %>
               <% category_classification = @entry.amount.negative? ? "income" : "expense" %>
               <%= render DS::CategorySelect.new(
@@ -91,6 +99,21 @@
                     auto_submit: true
                   ) %>
             <% end %>
+          <% elsif @entry.transaction.category_set_on_transfer_outflow? %>
+            <div class="space-y-1">
+              <div class="opacity-60 cursor-not-allowed">
+                <%= f.fields_for :entryable do |ef| %>
+                  <%= render DS::CategorySelect.new(
+                        form: ef,
+                        categories: [],
+                        selected_category: transfer_outflow_category(@entry.transaction),
+                        label: t(".category_label"),
+                        disabled: true
+                      ) %>
+                <% end %>
+              </div>
+              <p class="text-xs text-secondary"><%= t(".category_set_on_outflow") %></p>
+            </div>
           <% end %>
 
         <% end %>
@@ -218,12 +241,12 @@
 
         <div class="flex items-center justify-between gap-4 p-3">
           <div class="text-sm space-y-1">
-            <h4 class="text-primary">Transfer or Debt Payment?</h4>
-            <p class="text-secondary">Transfers and payments are special types of transactions that indicate money movement between 2 accounts.</p>
+            <h4 class="text-primary"><%= t(".transfer_matcher_title") %></h4>
+            <p class="text-secondary"><%= t(".transfer_matcher_description") %></p>
           </div>
 
           <%= render DS::Link.new(
-            text: "Open matcher",
+            text: t(".transfer_matcher_button"),
             icon: "arrow-left-right",
             variant: "outline",
             href: new_transaction_transfer_match_path(@entry),

@@ -311,22 +311,6 @@ class SubscriptionsController < ApplicationController
     redirect_to subscriptions_path, notice: t(".success")
   end
 
-  def fetch_exchange_rate
-    from_currency = params[:from]&.upcase
-    to_currency = params[:to]&.upcase || Current.family.currency
-
-    return render json: { error: "missing_currency" }, status: :bad_request unless from_currency
-    return render json: { rate: 1 } if from_currency == to_currency
-
-    rate = ExchangeRate.find_rate(from: from_currency, to: to_currency, date: Date.current)
-
-    if rate
-      render json: { from: from_currency, to: to_currency, rate: rate.rate.to_f }
-    else
-      render json: { error: "rate_unavailable" }, status: :not_found
-    end
-  end
-
   helper_method :should_remove_from_view?
 
   private
@@ -459,13 +443,17 @@ class SubscriptionsController < ApplicationController
     end
 
     # The latest usable rate on or before today for each currency (the nearest-rate rule),
-    # not only rates stored for today, which are missing until the day's sync has run
+    # not only rates stored for today, which are missing until the day's sync has run.
+    # Keyed "FROM_to_TO" as subscription_form_controller.js looks them up; it asks
+    # GET /exchange_rate for a pair that is not here.
     def load_exchange_rates_for_form
-      ExchangeRate.where(to_currency: Current.family.currency)
+      family_currency = Current.family.currency
+
+      ExchangeRate.where(to_currency: family_currency)
                   .where("exchange_rates.date <= ? AND exchange_rates.rate > 0", Date.current)
                   .select("DISTINCT ON (exchange_rates.from_currency) exchange_rates.from_currency, exchange_rates.rate")
                   .order(:from_currency, date: :desc)
-                  .to_h { |rate| [ rate.from_currency, rate.rate ] }
+                  .to_h { |rate| [ "#{rate.from_currency}_to_#{family_currency}", rate.rate.to_f ] }
     end
 
     def build_calendar_data(subscriptions, month)

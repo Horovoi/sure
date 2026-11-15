@@ -26,7 +26,7 @@
       <div class="pb-4 px-3 pt-2 text-sm space-y-3 text-primary">
         <div class="space-y-3">
           <dl class="flex items-center gap-2 justify-between">
-            <dt class="text-secondary">From</dt>
+            <dt class="text-secondary"><%= t(".from") %></dt>
             <dd class="flex items-center gap-2 font-medium">
               <%= render "accounts/logo", account: @transfer.from_account, size: "sm" %>
               <%= link_to @transfer.from_account.name, account_path(@transfer.from_account), data: { turbo_frame: "_top" } %>
@@ -34,13 +34,13 @@
           </dl>
 
           <dl class="flex items-center gap-2 justify-between">
-            <dt class="text-secondary">Date</dt>
+            <dt class="text-secondary"><%= t(".date") %></dt>
             <dd class="font-medium"><%= l(@transfer.outflow_transaction.entry.date, format: :long) %></dd>
           </dl>
 
           <dl class="flex items-center gap-2 justify-between">
-            <dt class="text-secondary">Amount</dt>
-            <dd class="font-medium text-red-500"><%= format_money @transfer.outflow_transaction.entry.amount_money * -1 %></dd>
+            <dt class="text-secondary"><%= t(".amount") %></dt>
+            <dd class="font-medium text-destructive privacy-sensitive"><%= format_money @transfer.outflow_transaction.entry.amount_money * -1 %></dd>
           </dl>
         </div>
 
@@ -48,7 +48,7 @@
 
         <div class="space-y-3">
           <dl class="flex items-center gap-2 justify-between">
-            <dt class="text-secondary">To</dt>
+            <dt class="text-secondary"><%= t(".to") %></dt>
             <dd class="flex items-center gap-2 font-medium">
               <%= render "accounts/logo", account: @transfer.to_account, size: "sm" %>
               <%= link_to @transfer.to_account.name, account_path(@transfer.to_account), data: { turbo_frame: "_top" } %>
@@ -56,15 +56,22 @@
           </dl>
 
           <dl class="flex items-center gap-2 justify-between">
-            <dt class="text-secondary">Date</dt>
+            <dt class="text-secondary"><%= t(".date") %></dt>
             <dd class="font-medium"><%= l(@transfer.inflow_transaction.entry.date, format: :long) %></dd>
           </dl>
 
           <dl class="flex items-center gap-2 justify-between">
-            <dt class="text-secondary">Amount</dt>
-            <dd class="font-medium text-green-500">+<%= format_money @transfer.inflow_transaction.entry.amount_money * -1 %></dd>
+            <dt class="text-secondary"><%= t(".amount") %></dt>
+            <dd class="font-medium text-success privacy-sensitive">+<%= format_money @transfer.inflow_transaction.entry.amount_money * -1 %></dd>
           </dl>
         </div>
+      </div>
+    <% end %>
+
+    <%# w2-transfers transfer-fees %>
+    <% dialog.with_section(title: t(".fees"), open: @transfer.fee_transactions.any?) do %>
+      <div class="pb-4 px-3 pt-2">
+        <%= render "transfers/fees", transfer: @transfer %>
       </div>
     <% end %>
 
@@ -72,7 +79,7 @@
       <%= styled_form_with model: @transfer,
               data: { controller: "auto-submit-form" }, class: "space-y-2" do |f| %>
         <% if @transfer.categorizable? %>
-          <%# A loan payment is spending, so its picker lists (and creates) expense categories. %>
+          <%# A loan payment or an investment contribution is spending, so its picker lists (and creates) expense categories. %>
           <%= render DS::CategorySelect.new(
                 form: f,
                 categories: @categories,

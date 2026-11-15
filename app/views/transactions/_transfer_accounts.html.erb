@@ -1,0 +1,16 @@
+<%# locals: (entry:, transaction:) %>
+
+<%# w2-transfers transfer-tags-counterpart: a transfer leg's row names both accounts, with an
+    arrow in the direction the money went. The counterpart leg comes preloaded
+    (Transaction::ROW_ASSOCIATIONS). A leg without a transfer names its own account only. %>
+<% transfer = transaction.transfer %>
+<% outgoing = transfer && transfer.outflow_transaction_id == transaction.id %>
+<% counterpart = transfer && (outgoing ? transfer.to_account : transfer.from_account) %>
+<span class="text-secondary">
+  <%= transaction.loan_payment? ? t("transactions.show.loan_payment") : t("transactions.show.transfer") %> •
+  <% if counterpart %>
+    <%= t(outgoing ? ".outgoing" : ".incoming", account: entry.account.name, counterpart: counterpart.name) %>
+  <% else %>
+    <%= entry.account.name %>
+  <% end %>
+</span>

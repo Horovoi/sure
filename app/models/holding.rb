@@ -183,6 +183,12 @@ class Holding < ApplicationRecord
         .where(security_id: security.id)
         .where("trades.qty > 0 AND entries.date <= ?", date)
 
+      # A transfer in is not a purchase: the units were acquired somewhere else at a
+      # price nothing here knows. One such transfer makes the whole position unknown,
+      # because averaging the purchases alone would apply their price to units that
+      # never cost it.
+      return nil if trades.where(investment_activity_label: Trade::TRANSFER_LABEL).exists?
+
       rate = ExchangeRate.rate_sql(
         from: "trades.currency",
         to: ActiveRecord::Base.connection.quote(currency),

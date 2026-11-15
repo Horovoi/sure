@@ -1,0 +1,62 @@
+<%# locals: (rate_name:, converted_name:, id_prefix:, rate_value: nil, converted_value: nil) %>
+<%# The exchange-rate tabs of the new-transaction and new-transfer forms, driven by
+    exchange_rate_form_controller.js on the form. Hidden until the money changes
+    currency. Each tab sends one field; a blank field means the market rate. %>
+<% active_tab = converted_value.present? && rate_value.blank? ? "converted" : "rate" %>
+<% rate_id = "#{id_prefix}_exchange_rate" %>
+<% converted_id = "#{id_prefix}_converted_amount" %>
+
+<div hidden
+     class="space-y-2 rounded-lg border border-secondary bg-container-inset p-3"
+     data-exchange-rate-form-target="container"
+     data-testid="exchange-rate-tabs">
+  <p class="text-xs text-secondary"><%= t("shared.exchange_rate_tabs.help") %></p>
+
+  <%= render DS::Tabs.new(active_tab: active_tab) do |tabs| %>
+    <%= tabs.with_nav do |nav| %>
+      <%= nav.with_btn(id: "rate", label: t("shared.exchange_rate_tabs.rate_tab")) %>
+      <%= nav.with_btn(id: "converted", label: t("shared.exchange_rate_tabs.converted_tab")) %>
+    <% end %>
+
+    <%= tabs.with_panel(tab_id: "rate") do %>
+      <div class="space-y-1">
+        <div class="form-field">
+          <div class="form-field__body">
+            <label class="form-field__label" for="<%= rate_id %>" data-exchange-rate-form-target="rateLabel">
+              <%= t("shared.exchange_rate_tabs.rate_tab") %>
+            </label>
+            <%= text_field_tag rate_name, rate_value,
+                  id: rate_id,
+                  class: "form-field__input",
+                  inputmode: "decimal",
+                  autocomplete: "off",
+                  data: { exchange_rate_form_target: "rateInput", action: "input->exchange-rate-form#recalculate" } %>
+          </div>
+        </div>
+        <p class="text-xs text-secondary px-1 privacy-sensitive" data-exchange-rate-form-target="convertedDisplay"></p>
+      </div>
+    <% end %>
+
+    <%= tabs.with_panel(tab_id: "converted") do %>
+      <div class="space-y-1">
+        <div class="form-field">
+          <div class="form-field__body">
+            <label class="form-field__label" for="<%= converted_id %>" data-exchange-rate-form-target="convertedLabel">
+              <%= t("shared.exchange_rate_tabs.converted_tab") %>
+            </label>
+            <%= text_field_tag converted_name, converted_value,
+                  id: converted_id,
+                  class: "form-field__input",
+                  inputmode: "decimal",
+                  autocomplete: "off",
+                  placeholder: "0.00",
+                  data: { exchange_rate_form_target: "convertedInput", action: "input->exchange-rate-form#recalculate" } %>
+          </div>
+        </div>
+        <p class="text-xs text-secondary px-1" data-exchange-rate-form-target="impliedRateDisplay"></p>
+      </div>
+    <% end %>
+  <% end %>
+
+  <p class="text-xs text-secondary px-1" data-exchange-rate-form-target="marketHint" aria-live="polite"></p>
+</div>

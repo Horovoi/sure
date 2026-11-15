@@ -1,6 +1,6 @@
 class AccountsController < ApplicationController
   require_bank_connections only: :select_provider
-  before_action :set_account, only: %i[sync sparkline toggle_active show destroy unlink confirm_unlink select_provider clear_filter]
+  before_action :set_account, only: %i[sync sparkline toggle_active show destroy unlink confirm_unlink select_provider clear_filter set_default remove_default]
   include Periodable
 
   def index
@@ -51,6 +51,8 @@ class AccountsController < ApplicationController
     @pagy, @entries = pagy(entries, limit: safe_per_page)
 
     @activity_feed_data = Account::ActivityFeedData.new(@account, @entries)
+    # w2-transfers transfer-hints: rows with a likely transfer counterpart show "Transfer?"
+    @transfer_hint_transaction_ids = Current.family.transaction_ids_with_transfer_candidates(@entries.select(&:transaction?).map(&:entryable))
   end
 
   def sync
@@ -91,6 +93,22 @@ class AccountsController < ApplicationController
       @account.sync_later
     end
     redirect_to accounts_path
+  end
+
+  # w2-transfers default-account: the new-transaction and new-transfer forms preselect it
+  def set_default
+    unless @account.eligible_as_default?
+      redirect_back_or_to account_path(@account), alert: t("accounts.set_default.not_eligible")
+      return
+    end
+
+    Current.user.update!(default_account: @account)
+    redirect_back_or_to account_path(@account), notice: t("accounts.set_default.success", name: @account.name)
+  end
+
+  def remove_default
+    Current.user.update!(default_account: nil) if Current.user.default_account_id == @account.id
+    redirect_back_or_to account_path(@account), notice: t("accounts.remove_default.success")
   end
 
   def destroy

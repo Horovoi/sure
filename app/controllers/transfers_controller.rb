@@ -2,10 +2,22 @@ class TransfersController < ApplicationController
   include StreamExtensions
 
   before_action :set_transfer, only: %i[show destroy update]
+  before_action :set_form_options, only: %i[new create]
 
+  # The form opens with what the user typed on another tab (draft[...], see
+  # transaction_type_tabs_controller.js) and the accounts it was opened for.
   def new
     @transfer = Transfer.new
-    @from_account_id = params[:from_account_id]
+    @from_account_id = params[:from_account_id].presence
+    @to_account_id = params[:to_account_id].presence
+    @amount = UserDecimal.parse(draft_params[:amount])&.abs
+    @date = parse_form_date(draft_params[:date])
+    @tag_ids = Array(draft_params[:tag_ids]).compact_blank
+
+    # w2-transfers default-account: the money leaves the default account unless the form
+    # was opened for another one
+    default_id = Current.user.default_account_for_entries&.id
+    @from_account_id ||= default_id unless default_id == @to_account_id
   end
 
   def show
@@ -18,7 +30,8 @@ class TransfersController < ApplicationController
   end
 
   def create
-    date = parse_transfer_date
+    keep_entered_values
+    date = @date
 
     if date.nil?
       # Without a date the creator cannot convert the amount or compare the legs' dates,
@@ -29,12 +42,27 @@ class TransfersController < ApplicationController
       return
     end
 
+    # The account pickers are design-system listboxes, which the browser does not check
+    # for `required`: a missing account is a form error, not a 404 from the creator.
+    unless Current.family.accounts.exists?(id: @from_account_id) && Current.family.accounts.exists?(id: @to_account_id)
+      @transfer = Transfer.new
+      @transfer.errors.add(:base, :accounts_required)
+      render :new, status: :unprocessable_entity
+      return
+    end
+
     @transfer = Transfer::Creator.new(
       family: Current.family,
-      source_account_id: transfer_params[:from_account_id],
-      destination_account_id: transfer_params[:to_account_id],
+      source_account_id: @from_account_id,
+      destination_account_id: @to_account_id,
       date: date,
-      amount: transfer_params[:amount].to_d
+      # A blank or unreadable amount is 0, which the creator refuses with a form error
+      amount: @amount || 0,
+      exchange_rate: transfer_params[:exchange_rate].presence,
+      destination_amount: transfer_params[:destination_amount].presence,
+      source_fee: transfer_params[:source_fee].presence,
+      destination_fee: transfer_params[:destination_fee].presence,
+      tag_ids: @tag_ids
     ).create
 
     if @transfer.persisted?
@@ -49,14 +77,26 @@ class TransfersController < ApplicationController
   end
 
   def update
+    @view_ctx = view_ctx_from_referer
+    rejecting = transfer_update_params[:status] == "rejected"
+
     Transfer.transaction do
+      # Locked, so a confirmation landing meanwhile cannot change what the response assumes
+      @transfer.lock!
+      @rejected_pending_match = rejecting && @transfer.pending?
       update_transfer_status
-      update_transfer_details unless transfer_update_params[:status] == "rejected"
+      update_transfer_details unless rejecting
     end
 
     respond_to do |format|
       format.html { redirect_back_or_to transactions_url, notice: t(".success") }
-      format.turbo_stream
+      format.turbo_stream do
+        if rejecting
+          respond_to_rejection
+        else
+          render :update
+        end
+      end
     end
   end
 
@@ -68,6 +108,40 @@ class TransfersController < ApplicationController
   end
 
   private
+    # w2-transfers transfer-hints: rejecting a pending match redraws its two rows in place,
+    # without a page reload, when that is enough: the match changed neither leg (so the
+    # page's totals stay right) and the page is an account page, which draws each leg on
+    # its own. Every other list draws a transfer once, by its outflow, so the freed inflow
+    # has no row to redraw there, and a confirmed transfer's legs go back to income and
+    # spending; the page reloads in those cases.
+    def respond_to_rejection
+      unless @rejected_pending_match && @view_ctx == "account"
+        stream_redirect_to(request.referer.presence || transactions_url, notice: t(".rejected"))
+        return
+      end
+
+      # Loaded again: the transfer's own legs still hold it in memory and would draw the pill
+      @redrawn_entries = Entry.where(entryable_type: "Transaction", entryable_id: [ @transfer.inflow_transaction_id, @transfer.outflow_transaction_id ])
+                              .includes(:account, entryable: Transaction::ROW_ASSOCIATIONS)
+                              .to_a
+      @transfer_hint_transaction_ids = Current.family.transaction_ids_with_transfer_candidates(@redrawn_entries.map(&:entryable))
+      render :reject
+    end
+
+    # How the page that asked draws its rows: an account page of one of the legs signs each
+    # leg for its own account, every other list shows a transfer as +/-. Taken from the
+    # Referer rather than from a parameter, so a stale button cannot claim a view the page
+    # does not have.
+    def view_ctx_from_referer
+      path = URI.parse(request.referer.to_s).path
+      return "global" if path.blank?
+
+      leg_account_ids = Entry.where(entryable_type: "Transaction", entryable_id: [ @transfer.inflow_transaction_id, @transfer.outflow_transaction_id ]).pluck(:account_id)
+      leg_account_ids.any? { |id| path == account_path(id) } ? "account" : "global"
+    rescue URI::InvalidURIError
+      "global"
+    end
+
     def set_transfer
       # Finds the transfer and ensures the family owns it
       @transfer = Transfer
@@ -77,12 +151,33 @@ class TransfersController < ApplicationController
     end
 
     def transfer_params
-      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded ])
+      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate, :destination_amount, :source_fee, :destination_fee, { tag_ids: [] } ])
+    end
+
+    # w2-transfers transfer-form-fixes: the form's account pickers (with their logos) and
+    # what it shows again after an error
+    def set_form_options
+      @accounts = Current.family.accounts.visible.alphabetically.includes(:account_providers, :plaid_account).to_a
+      @tags = Current.family.tags.alphabetically.to_a
+    end
+
+    # A form shown again after an error keeps the accounts, amount and date the user entered
+    def keep_entered_values
+      @from_account_id = transfer_params[:from_account_id].presence
+      @to_account_id = transfer_params[:to_account_id].presence
+      @amount = UserDecimal.parse(transfer_params[:amount])&.abs
+      @date = parse_form_date(transfer_params[:date])
+      @tag_ids = Array(transfer_params[:tag_ids]).compact_blank
+    end
+
+    # The values another tab of the new-entry modal carried over (transaction_type_tabs_controller.js)
+    def draft_params
+      draft = params[:draft]
+      draft.is_a?(ActionController::Parameters) ? draft.permit(:amount, :date, tag_ids: []) : {}
     end
 
     # Parsing raises on a bad value, which would be a 500; a blank or bad date is nil.
-    def parse_transfer_date
-      value = transfer_params[:date]
+    def parse_form_date(value)
       return if value.blank?
 
       Date.iso8601(value.to_s)
@@ -91,7 +186,7 @@ class TransfersController < ApplicationController
     end
 
     def transfer_update_params
-      params.expect(transfer: [ :notes, :status, :category_id ])
+      params.expect(transfer: [ :notes, :status, :category_id, :source_fee, :destination_fee ])
     end
 
     def update_transfer_status
@@ -105,11 +200,31 @@ class TransfersController < ApplicationController
     # Only the fields the request sent: the row's "Confirm" button sends just
     # the status, and must not wipe the category and notes.
     def update_transfer_details
-      if transfer_update_params.key?(:category_id)
+      # Only a categorizable transfer (loan payment, investment contribution) has a category
+      if transfer_update_params.key?(:category_id) && @transfer.categorizable?
         @transfer.outflow_transaction.update!(category_id: transfer_update_params[:category_id])
         @transfer.outflow_transaction.record_category_usage!
       end
 
       @transfer.update!(notes: transfer_update_params[:notes]) if transfer_update_params.key?(:notes)
+      update_transfer_fees
+    end
+
+    # w2-transfers transfer-fees: the drawer's fee fields. A blank field removes that
+    # side's fee; a value that is not an amount is left alone.
+    def update_transfer_fees
+      Transfer::FEE_SIDES.each do |side|
+        key = :"#{side}_fee"
+        next unless transfer_update_params.key?(key)
+
+        raw = transfer_update_params[key]
+        amount = UserDecimal.parse(raw)
+        next if raw.present? && (amount.nil? || amount.negative?)
+
+        next unless @transfer.set_fee!(side: side, amount: amount)
+
+        @fees_changed = true
+        @transfer.fee_account_for(side).sync_later
+      end
     end
 end

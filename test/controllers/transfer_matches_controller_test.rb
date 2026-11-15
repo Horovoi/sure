@@ -66,4 +66,30 @@ class TransferMatchesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to transactions_url
     assert_equal "Transfer created", flash[:notice]
   end
+
+  # w2-transfers transfer-hints
+  test "not a transfer removes the hint with a turbo stream and rejects the pair" do
+    outflow = create_transaction(amount: 120, account: accounts(:depository))
+    inflow = create_transaction(amount: -120, account: accounts(:credit_card))
+
+    assert_difference -> { RejectedTransfer.count }, 1 do
+      delete transaction_transfer_match_path(outflow), as: :turbo_stream
+    end
+
+    assert_response :success
+    assert_equal "text/vnd.turbo-stream.html", response.media_type
+    assert_includes response.body, %(action="remove")
+    assert_includes response.body, ActionView::RecordIdentifier.dom_id(outflow.transaction, :transfer_hint)
+    assert RejectedTransfer.exists?(inflow_transaction_id: inflow.entryable_id, outflow_transaction_id: outflow.entryable_id)
+  end
+
+  test "the matcher shows its copy from the locale" do
+    entry = create_transaction(amount: 120, account: accounts(:depository))
+
+    get new_transaction_transfer_match_path(entry)
+
+    assert_response :success
+    assert_select "h2", text: /To account/
+    assert_includes response.body, "Match the corresponding transaction in another account"
+  end
 end

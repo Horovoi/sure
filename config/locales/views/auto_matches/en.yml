@@ -1,0 +1,33 @@
+---
+en:
+  auto_matches:
+    already_resolved: That match was already confirmed or rejected
+    index:
+      title: Transfer matches
+      disabled_notice: Automatic transfer matching is off. Matches already suggested stay here until you review them. Turn it on again in Preferences.
+      pending_title: Pending matches
+      pending_subtitle: Pairs of transactions that look like one transfer between two of your accounts. A match changes nothing until you confirm it.
+      empty_title: No matches to review
+      empty_description: When a sync finds a likely transfer between two of your accounts, it shows up here.
+      select_all: Select all (%{count})
+      selected_count: "%{count} selected"
+      confirm_selected: Confirm selected
+      reject_selected: Reject selected
+    pending_transfer:
+      select: Select %{name}
+      confirm: Confirm
+      reject: Reject
+      route: "%{from} → %{to}"
+      arrived_on: arrived %{date}
+    confirm:
+      success: Transfer confirmed
+    reject:
+      success: Match rejected. These two transactions will not be matched again.
+    bulk_update:
+      invalid_selection: Select at least one match to confirm or reject
+      confirmed:
+        one: Confirmed 1 transfer
+        other: Confirmed %{count} transfers
+      rejected:
+        one: Rejected 1 match
+        other: Rejected %{count} matches

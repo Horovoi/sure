@@ -97,6 +97,8 @@ en:
     edit:
       home: Home
     form:
+      conversion_fetching: Looking up the rate...
+      conversion_hint: "≈ %{amount} %{currency} at the latest rate"
       service: Service
       service_placeholder: Search for a service (e.g. Netflix, Spotify)...
       service_hint: Select a known service to auto-fill details and display its logo
