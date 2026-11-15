@@ -185,6 +185,20 @@ class MonobankItemsControllerTest < ActionDispatch::IntegrationTest
     Current.reset
   end
 
+  test "the accounts page and Settings > Sync Providers show monobank" do
+    @item.create_linked_account!(monobank_account: @usd)
+
+    get accounts_url
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(@item)}"
+
+    with_self_hosting do
+      get settings_providers_url
+      assert_response :success
+      assert_select "#monobank-providers-panel form[action='#{monobank_items_path}']"
+    end
+  end
+
   test "the connection dialog renders" do
     get new_monobank_item_url
     assert_response :success
