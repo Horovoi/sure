@@ -16,8 +16,11 @@
         variant: :button,
         text: t("transactions.reconcile.bulk.mark_as", status: t("transactions.reconcile.statuses.#{status}")),
         icon: reconcile_status_presentation(status)[:icon],
-        href: transactions_bulk_update_path(bulk_update: { reconciled_status: status }),
+        href: transactions_bulk_update_path,
         method: :post,
+        # In the body, not the URL: a query bulk_update[...] would replace the whole
+        # bulk_update hash, the entry_ids bulk-select adds included
+        params: { bulk_update: { reconciled_status: status } },
         form: { data: { turbo_frame: "_top" } },
         data: { action: "bulk-select#submitBulkRequest", bulk_select_scope_param: "bulk_update" }
       ) %>

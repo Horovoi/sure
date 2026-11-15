@@ -360,7 +360,8 @@ class TransactionsTest < ApplicationSystemTestCase
     within "#" + dom_id(entry) do
       click_link entry.name, exact: true
     end
-    find("summary", text: I18n.t("transactions.show.settings")).click
+    # Section titles render uppercase (CSS), and the browser reports the rendered text
+    find("summary", text: /\A#{Regexp.escape(I18n.t("transactions.show.settings"))}\z/i).click
   end
 
   private

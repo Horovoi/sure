@@ -75,9 +75,8 @@
     @apply block text-xs text-gray-500 peer-disabled:text-gray-400;
   }
   
-  .hw-combobox__option {
-    @apply bg-container hover:bg-container-hover;
-  }
+  /* Options take their colors from the gem's rules and the --hw-* variables below, so
+     hovered, keyboard-navigated and selected options share one highlight */
 
   /* Below `mobile_at` the gem opens a full-screen dialog with fixed light colors */
   .hw-combobox__dialog {

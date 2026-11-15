@@ -19,6 +19,12 @@ class ComboboxDarkThemeTest < ApplicationSystemTestCase
     Security.stubs(:search_provider).returns([ securities(:aapl), securities(:msft) ])
   end
 
+  # The browser is shared: a phone-sized window would open every later test's
+  # combobox as a dialog
+  teardown do
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+  end
+
   test "security search dialog uses theme colors in the dark theme" do
     page.driver.browser.manage.window.resize_to(*PHONE)
     visit new_trade_path(account_id: accounts(:investment).id)

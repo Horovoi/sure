@@ -9,13 +9,14 @@ class ConfirmDialogTest < ApplicationSystemTestCase
   end
 
   test "shows a provider merchant's name as text instead of rendering it" do
-    name = %(<img src=x onerror="document.body.dataset.injected='yes'"> Coffee)
+    # A name no fixture merchant shares (the fixtures have "Starbucks Coffee")
+    name = %(<img src=x onerror="document.body.dataset.injected='yes'"> Corner roaster)
     merchant = ProviderMerchant.create!(name: name, source: "ai")
     Transaction.joins(entry: :account).where(accounts: { family_id: @user.family_id }).first.update!(merchant: merchant)
 
     visit family_merchants_path
 
-    within "tr", text: "Coffee" do
+    within "tr", text: "Corner roaster" do
       find("[data-DS--menu-target='button']").click
     end
     click_on I18n.t("family_merchants.provider_merchant.remove")

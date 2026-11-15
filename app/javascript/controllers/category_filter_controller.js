@@ -16,7 +16,7 @@ export default class extends Controller {
     // Only marks partly selected groups: a group whose children the server rendered all
     // checked keeps its parent as it was, so the parent's own transactions are not added
     this.parentTargets.forEach((parent) =>
-      this.#syncParent(parent.dataset.categoryFilterGroupParam, { allowCheck: false }),
+      this.#syncParent(parent.dataset.categoryFilterGroupParam),
     );
     this.element.addEventListener("change", this.#onChange);
   }
@@ -48,6 +48,8 @@ export default class extends Controller {
     });
   }
 
+  // Checking the last child does not check the parent: the parent's value would add
+  // the transactions filed under the parent itself, which nobody picked
   #onChange = (event) => {
     const groupId = event.target.dataset?.categoryFilterGroupId;
     if (groupId && this.childTargets.includes(event.target)) this.#syncParent(groupId);
@@ -57,7 +59,8 @@ export default class extends Controller {
     return this.childTargets.filter((child) => child.dataset.categoryFilterGroupId === String(groupId));
   }
 
-  #syncParent(groupId, { allowCheck = true } = {}) {
+  // Never checks the parent, only unchecks it while its group is partly selected
+  #syncParent(groupId) {
     if (!groupId) return;
 
     const parent = this.parentTargets.find((target) => target.dataset.categoryFilterGroupParam === String(groupId));
@@ -65,8 +68,7 @@ export default class extends Controller {
     if (!parent || children.length === 0) return;
 
     const checkedCount = children.filter((child) => child.checked).length;
-    const allChecked = checkedCount === children.length;
-    if (allowCheck || !allChecked) parent.checked = allChecked;
+    if (checkedCount < children.length) parent.checked = false;
     parent.indeterminate = checkedCount > 0 && checkedCount < children.length;
   }
 }

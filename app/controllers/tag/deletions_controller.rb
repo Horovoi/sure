@@ -7,7 +7,13 @@ class Tag::DeletionsController < ApplicationController
 
   def create
     @tag.replace_and_destroy! @replacement_tag
-    redirect_back_or_to tags_path, notice: t(".deleted")
+
+    # Opened as a page of its own, the page to go back to is this deleted tag's form
+    if request.referer.to_s.include?(new_tag_deletion_path(@tag))
+      redirect_to tags_path, notice: t(".deleted")
+    else
+      redirect_back_or_to tags_path, notice: t(".deleted")
+    end
   end
 
   private
