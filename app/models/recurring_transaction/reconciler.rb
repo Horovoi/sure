@@ -104,6 +104,9 @@ class RecurringTransaction::Reconciler
         .where(transactions: { recurring_transaction_id: nil })
         .where.not(transactions: { kind: Transaction::TRANSFER_KINDS })
         .where.not(amount: 0)
+        # A provider's pending hold is not the real charge yet: it may be released, or
+        # settle under another id, and the generated charge would be lost with it
+        .where.not(Transaction.pending_sql("transactions"))
         .where(date: (first_date - POSSIBLE_MATCH_DAYS)..(last_date + POSSIBLE_MATCH_DAYS))
         .includes(entryable: :merchant)
         .to_a
