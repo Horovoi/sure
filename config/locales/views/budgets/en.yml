@@ -12,3 +12,12 @@ en:
       of_amount: "of %{amount}"
       spent: Spent
       unused: Unused
+    copy_previous:
+      already_initialized: This budget is already set up
+      no_source: There is no earlier budget to copy
+      success: Copied the budget of %{source_name}
+    copy_previous_prompt:
+      copy_button: Copy %{source_name}
+      description: Copy the amounts of %{source_name} or start with an empty budget.
+      fresh_button: Start fresh
+      title: Set up this budget

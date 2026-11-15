@@ -364,4 +364,74 @@ class BudgetTest < ActiveSupport::TestCase
 
     assert_equal [ { color: "var(--budget-unallocated-fill)", amount: 1, id: "unused" } ], budget.to_donut_segments_json
   end
+
+  # --- Copy a previous budget -------------------------------------------------
+
+  test "copy_from! copies the totals and the category amounts" do
+    food = budget_test_category("Food")
+    source = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    source.update!(budgeted_spending: 3000, expected_income: 4000)
+    source.budget_categories.find_by!(category: food).update!(budgeted_spending: 500)
+    target = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+    target.copy_from!(source)
+    target.reload
+
+    assert_equal 3000, target.budgeted_spending
+    assert_equal 4000, target.expected_income
+    assert_equal 500, target.budget_categories.find_by!(category: food).budgeted_spending
+  end
+
+  test "copy_from! leaves the hidden rows of categories that are now income alone" do
+    side_gig = budget_test_category("Side gig")
+    source = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    source.update!(budgeted_spending: 1000)
+    source.budget_categories.find_by!(category: side_gig).update!(budgeted_spending: 300)
+    target = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    target.budget_categories.find_by!(category: side_gig).update!(budgeted_spending: 50)
+
+    side_gig.update!(classification: "income")
+    Budget.find(target.id).copy_from!(Budget.find(source.id))
+
+    assert_equal 50, target.all_budget_categories.find_by!(category: side_gig).budgeted_spending
+  end
+
+  test "copy_from! refuses a budget of another family or one that does not come first" do
+    target = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    later = Budget.create!(family: @family, start_date: Date.current.beginning_of_month, end_date: Date.current.end_of_month, currency: "USD", budgeted_spending: 100)
+    other_family = Budget.create!(family: families(:dylan_family), start_date: 3.months.ago.beginning_of_month, end_date: 3.months.ago.end_of_month, currency: "USD", budgeted_spending: 100)
+
+    assert_raises(ArgumentError) { target.copy_from!(other_family) }
+    assert_raises(ArgumentError) { target.copy_from!(later) }
+    assert_nil target.reload.budgeted_spending
+  end
+
+  test "copy_from! keeps the source amounts of a parent and its subcategory" do
+    food = budget_test_category("Food")
+    restaurants = budget_test_category("Restaurants", parent: food)
+    source = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    source.update!(budgeted_spending: 1000)
+    source.budget_categories.find_by!(category: food).update!(budgeted_spending: 500)
+    source.budget_categories.find_by!(category: restaurants).update!(budgeted_spending: 200)
+    target = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+    target.copy_from!(source)
+    target = Budget.find(target.id)
+
+    assert_equal 500, target.budget_categories.find_by!(category: food).budgeted_spending
+    assert_equal 200, target.budget_categories.find_by!(category: restaurants).budgeted_spending
+    assert_equal 500, target.allocated_spending
+  end
+
+  test "most_recent_initialized_budget is the newest earlier budget that is set up" do
+    older = Budget.find_or_bootstrap(@family, start_date: 3.months.ago)
+    older.update!(budgeted_spending: 100)
+    newer = Budget.find_or_bootstrap(@family, start_date: 2.months.ago)
+    newer.update!(budgeted_spending: 200)
+    Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    target = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+    assert_equal newer, target.most_recent_initialized_budget
+    assert_nil older.most_recent_initialized_budget
+  end
 end

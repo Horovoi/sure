@@ -10,7 +10,9 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <%# Budget Donut %>
       <div class="h-[300px] bg-container rounded-xl shadow-border-xs p-8">
-        <% if @budget.over_allocated? %>
+        <% if !@budget.initialized? && @source_budget.present? %>
+          <%= render "budgets/copy_previous_prompt", budget: @budget, source_budget: @source_budget %>
+        <% elsif @budget.over_allocated? %>
           <%= render "budgets/over_allocation_warning", budget: @budget %>
         <% else %>
           <%= render "budgets/budget_donut", budget: @budget %>

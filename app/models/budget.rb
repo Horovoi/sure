@@ -141,6 +141,49 @@ class Budget < ApplicationRecord
     budgeted_spending.present?
   end
 
+  # =============================================================================
+  # Copy a previous budget
+  # =============================================================================
+
+  # The newest set-up budget of the family that starts before this one: what an
+  # empty month offers to copy.
+  def most_recent_initialized_budget
+    family.budgets
+      .includes(:budget_categories)
+      .where(start_date: ...start_date)
+      .where.not(budgeted_spending: nil)
+      .order(start_date: :desc)
+      .first
+  end
+
+  # Copies the total, the expected income and each expense row's amount from an
+  # earlier budget of the family. Amounts are written to each row as they are, never
+  # added up from subcategories, so a parent and its subcategory keep the source
+  # amounts. Rows of categories that are now income stay hidden and untouched. The
+  # rollover carry is not copied: the rollover code calculates it.
+  def copy_from!(source_budget)
+    raise ArgumentError, "source budget must belong to the same family" unless source_budget.family_id == family_id
+    raise ArgumentError, "source budget must precede target budget" unless source_budget.start_date < start_date
+
+    Budget.transaction do
+      sync_budget_categories
+
+      update!(
+        budgeted_spending: source_budget.budgeted_spending,
+        expected_income: source_budget.expected_income || 0
+      )
+
+      target_by_category = budget_categories.index_by(&:category_id)
+
+      source_budget.budget_categories.each do |source_bc|
+        target_bc = target_by_category[source_bc.category_id]
+        next unless target_bc
+
+        target_bc.update!(budgeted_spending: source_bc[:budgeted_spending])
+      end
+    end
+  end
+
   # Income by category, without the refunds of expense categories: those lower the
   # spending of their category instead (see #refunds_in_expense_categories), so
   # counting them here as well would count them twice.

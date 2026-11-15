@@ -151,6 +151,9 @@ Rails.application.routes.draw do
   resources :budgets, only: %i[index show edit update], param: :month_year do
     get :picker, on: :collection
 
+    # w1-budrec: copy the previous budget into an empty month
+    post :copy_previous, on: :member
+
     resources :budget_categories, only: %i[index show update]
   end
 
