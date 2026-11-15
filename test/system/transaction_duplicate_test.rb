@@ -26,7 +26,7 @@ class TransactionDuplicateTest < ApplicationSystemTestCase
     end
 
     within "#modal" do
-      assert_field "entry[name]", with: "Duplicate source"
+      assert_field "entry_name", with: "Duplicate source"
       assert_field "entry[amount]", with: "42.50"
       fill_in "entry[amount]", with: "12.50"
       click_button I18n.t("transactions.form.submit")
@@ -61,7 +61,7 @@ class TransactionDuplicateTest < ApplicationSystemTestCase
     end
 
     within "#modal" do
-      assert_field "entry[name]", with: "Duplicate source"
+      assert_field "entry_name", with: "Duplicate source"
     end
   end
 end

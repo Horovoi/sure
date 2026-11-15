@@ -900,4 +900,41 @@ end
 
     assert_select "#entry-selection-bar a[data-bulk-select-target=duplicateLink].hidden[href=?]", new_transaction_path
   end
+
+  # --- Name suggestions (w2-rules): the new form's name autocomplete ---
+
+  test "name_suggestions returns past names with their usual category" do
+    get name_suggestions_transactions_url(q: "Starb", for_id: "entry_name", format: :turbo_stream)
+
+    assert_response :success
+    assert_includes response.body, "Starbucks"
+    assert_includes response.body, %(data-category-id="#{categories(:food_and_drink).id}")
+  end
+
+  test "name_suggestions reads only the family's transactions" do
+    other_account = families(:empty).accounts.create!(name: "Other", balance: 0, currency: "USD", accountable: Depository.new)
+    create_transaction(account: other_account, name: "Starbucks of another family", amount: 5)
+
+    get name_suggestions_transactions_url(q: "Starb", for_id: "entry_name", format: :turbo_stream)
+
+    assert_response :success
+    assert_not_includes response.body, "Starbucks of another family"
+  end
+
+  test "name_suggestions for an income form offers no expense category" do
+    get name_suggestions_transactions_url(q: "Starb", nature: "inflow", for_id: "entry_name", format: :turbo_stream)
+
+    assert_response :success
+    assert_includes response.body, "Starbucks"
+    assert_not_includes response.body, %(data-category-id="#{categories(:food_and_drink).id}")
+  end
+
+  test "the new form's name field is an autocomplete that asks name_suggestions" do
+    get new_transaction_url(nature: "inflow")
+
+    assert_response :success
+    assert_select "form[data-controller~=category-suggestion]"
+    assert_select "input#entry_name[role=combobox][required]"
+    assert_includes response.body, CGI.escapeHTML(name_suggestions_transactions_path(nature: "inflow"))
+  end
 end

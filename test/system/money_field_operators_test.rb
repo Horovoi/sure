@@ -36,7 +36,7 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
   test "the operator row stays reachable by Tab from the new transaction's amount" do
     visit new_transaction_url
 
-    fill_in "entry[name]", with: "Groceries"
+    fill_in "entry_name", with: "Groceries"
     assert_no_selector OPERATOR_ROW
 
     find_field("entry[amount]").click
@@ -47,7 +47,7 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
     page.driver.browser.action.send_keys(:tab).perform
     assert_equal I18n.t("shared.money_field.operator_add"), page.evaluate_script("document.activeElement.getAttribute('aria-label')")
 
-    fill_in "entry[name]", with: "Groceries"
+    fill_in "entry_name", with: "Groceries"
     assert_no_selector OPERATOR_ROW
   end
 
@@ -67,7 +67,7 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
   test "a calculation saves its result" do
     entry = create_transaction("Split bill") do
       fill_in "entry[amount]", with: "120+35,5"
-      find_field("entry[name]").click
+      find_field("entry_name").click
 
       assert_field "entry[amount]", with: "155,50"
     end
@@ -87,7 +87,7 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
 
   test "an amount that is not a number or calculation blocks the save" do
     visit new_transaction_url
-    fill_in "entry[name]", with: "Typo"
+    fill_in "entry_name", with: "Typo"
     select @account.name, from: "entry[account_id]"
     fill_in "entry[amount]", with: "100-"
 
@@ -102,7 +102,7 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
     # saves it and returns the new entry.
     def create_transaction(name)
       visit new_transaction_url
-      fill_in "entry[name]", with: name
+      fill_in "entry_name", with: name
       select @account.name, from: "entry[account_id]"
 
       yield

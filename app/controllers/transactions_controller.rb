@@ -378,6 +378,14 @@ class TransactionsController < ApplicationController
     redirect_back_or_to transactions_path
   end
 
+  # The new-transaction form's name autocomplete (hotwire_combobox async source):
+  # past names of this family's transactions, each with its usual category of
+  # the form's nature.
+  def name_suggestions
+    classification = params[:nature] == "inflow" ? "income" : "expense"
+    @suggestions = Transaction::NameSuggestion.for(Current.family, params[:q], classification: classification)
+  end
+
   def update_preferences
     Current.user.update_transactions_preferences(preferences_params)
     head :ok

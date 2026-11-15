@@ -224,6 +224,10 @@ Rails.application.routes.draw do
     resource :bulk_update, only: %i[new create]
   end
 
+  # --- Transaction name suggestions (w2-rules): before resources, so the name is not taken for a :id ---
+  get "transactions/name_suggestions", to: "transactions#name_suggestions", as: :name_suggestions_transactions
+  # --- end transaction name suggestions ---
+
   resources :transactions, only: %i[index new create show update destroy] do
     resource :transfer_match, only: %i[new create]
     resource :category, only: :update, controller: :transaction_categories
