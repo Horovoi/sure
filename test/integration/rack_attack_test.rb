@@ -111,7 +111,8 @@ class RackAttackTest < ActionDispatch::IntegrationTest
   end
 
   private
+    # PATH_INFO is set as sent: env_for reads "//sessions" as a URL with host "sessions"
     def attack_request(path, method:)
-      Rack::Attack::Request.new(Rack::MockRequest.env_for(path, method: method, "REMOTE_ADDR" => "10.0.0.7"))
+      Rack::Attack::Request.new(Rack::MockRequest.env_for(path, method: method, "REMOTE_ADDR" => "10.0.0.7", "PATH_INFO" => path.split("?").first))
     end
 end

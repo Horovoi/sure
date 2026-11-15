@@ -459,7 +459,8 @@ class UserTest < ActiveSupport::TestCase
 
     @user.update_dashboard_preferences({ "hidden_sections" => { "net_worth_chart" => true } })
     @user.update_dashboard_preferences({ "hidden_sections" => { "balance_sheet" => true } })
-    assert_equal %w[net_worth_chart balance_sheet], @user.reload.dashboard_hidden_sections
+    # jsonb keeps its own key order, so the hidden set is compared sorted
+    assert_equal %w[balance_sheet net_worth_chart], @user.reload.dashboard_hidden_sections.sort
     assert @user.dashboard_section_hidden?("balance_sheet")
 
     @user.update_dashboard_preferences({ "hidden_sections" => { "net_worth_chart" => false } })

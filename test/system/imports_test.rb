@@ -224,6 +224,8 @@ class ImportsTest < ApplicationSystemTestCase
     assert_link "Coffee typed by hand"
 
     click_on "Publish 1 new transaction"
+    # Wait for the publish request, so the job is enqueued before it is performed
+    assert_text "Import in progress"
     perform_enqueued_jobs
     visit import_path(import)
 
