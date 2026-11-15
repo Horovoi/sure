@@ -1,0 +1,8 @@
+<%# locals: (entries:) %>
+<p id="categorize_group_summary" class="text-sm text-secondary">
+  <%= t("transactions.categorizes.show.transaction_count", count: entries.size) %>
+  <% if entries.any? %>
+    &middot;
+    <span class="privacy-sensitive"><%= format_money(Transaction::Grouper.total_money(entries, Current.family.currency)) %></span>
+  <% end %>
+</p>

@@ -126,16 +126,49 @@ class CategoriesControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "JSON create returns the validation errors" do
-    existing = categories(:food_and_drink)
-
     assert_no_difference "Category.count" do
       post categories_url(format: :json), params: {
-        category: { name: existing.name, color: Category::COLORS.first, classification: "expense" }
+        category: { name: "", color: Category::COLORS.first, classification: "expense" }
       }, as: :json
     end
 
     assert_response :unprocessable_entity
     assert response.parsed_body["errors"].any?
+  end
+
+  test "JSON create of an existing name returns that category" do
+    existing = categories(:food_and_drink)
+
+    assert_no_difference "Category.count" do
+      post categories_url(format: :json), params: {
+        category: { name: existing.name, color: Category::COLORS.first, classification: existing.classification }
+      }, as: :json
+    end
+
+    assert_response :ok
+    assert_equal existing.id, response.parsed_body["id"]
+    assert_includes response.parsed_body["html"], %(data-category-id="#{existing.id}")
+  end
+
+  test "JSON create of an existing name of the other classification is refused" do
+    existing = categories(:food_and_drink)
+    other = existing.classification == "income" ? "expense" : "income"
+
+    assert_no_difference "Category.count" do
+      post categories_url(format: :json), params: {
+        category: { name: existing.name, color: Category::COLORS.first, classification: other }
+      }, as: :json
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "create that loses a race to the unique index shows the name error" do
+    Category.any_instance.stubs(:save).raises(ActiveRecord::RecordNotUnique)
+
+    post categories_url, params: { category: { name: "Racing", color: Category::COLORS.first } }
+
+    assert_response :unprocessable_entity
   end
 
   test "JSON create rejects a parent from another family" do
@@ -159,5 +192,75 @@ class CategoriesControllerTest < ActionDispatch::IntegrationTest
     category = Category.find_by!(name: "Picked")
     assert_equal category, @transaction.reload.category
     assert_not_nil category.last_used_at
+  end
+
+  test "merge page lists the family's categories with parents before their subcategories" do
+    get merge_categories_url
+    assert_response :success
+
+    body = response.body
+    assert_includes body, categories(:food_and_drink).id
+    assert_not_includes body, categories(:one).id
+    assert_operator body.index(%(value="#{categories(:food_and_drink).id}")), :<, body.index(%(value="#{categories(:subcategory).id}"))
+  end
+
+  test "index links to the merge page" do
+    get categories_url
+    assert_select "a[href='#{merge_categories_path}']"
+  end
+
+  test "perform_merge moves transactions and deletes the sources" do
+    target = categories(:food_and_drink)
+    source = families(:dylan_family).categories.create!(name: "Eating out", color: "#000000", lucide_icon: "utensils", classification: target.classification)
+    @transaction.update!(category: source)
+
+    assert_difference "Category.count", -1 do
+      post merge_categories_url, params: { category_merge: { category_id: target.id, source_ids: [ source.id ] } }
+    end
+
+    assert_redirected_to categories_url
+    assert_equal target, @transaction.reload.category
+    assert_match target.name, flash[:notice]
+  end
+
+  test "perform_merge refuses to merge across classifications" do
+    target = categories(:food_and_drink)
+    income = families(:dylan_family).categories.create!(name: "Salary", color: "#000000", lucide_icon: "banknote", classification: "income")
+
+    assert_no_difference "Category.count" do
+      post merge_categories_url, params: { category_merge: { category_id: target.id, source_ids: [ income.id ] } }
+    end
+
+    assert_redirected_to merge_categories_url
+    assert_match "Salary", flash[:alert]
+  end
+
+  test "perform_merge ignores another family's categories" do
+    target = categories(:food_and_drink)
+
+    assert_no_difference "Category.count" do
+      post merge_categories_url, params: { category_merge: { category_id: target.id, source_ids: [ categories(:one).id ] } }
+    end
+
+    assert_redirected_to merge_categories_url
+    assert Category.exists?(categories(:one).id)
+  end
+
+  test "perform_merge needs a target in the family" do
+    assert_no_difference "Category.count" do
+      post merge_categories_url, params: { category_merge: { category_id: categories(:one).id, source_ids: [ categories(:food_and_drink).id ] } }
+    end
+
+    assert_redirected_to merge_categories_url
+  end
+
+  test "perform_merge with only the target selected merges nothing" do
+    target = categories(:food_and_drink)
+
+    assert_no_difference "Category.count" do
+      post merge_categories_url, params: { category_merge: { category_id: target.id, source_ids: [ target.id ] } }
+    end
+
+    assert_redirected_to merge_categories_url
   end
 end

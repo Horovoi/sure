@@ -67,10 +67,6 @@ class Family::AutoMerchantDetector
       Provider::Registry.get_provider(:openai)
     end
 
-    def default_logo_provider_url
-      "https://cdn.brandfetch.io"
-    end
-
     def user_merchants_input
       family.merchants.map do |merchant|
         {
@@ -126,9 +122,7 @@ class Family::AutoMerchantDetector
     end
 
     def build_logo_url(business_url)
-      return nil unless Setting.brand_fetch_client_id.present? && business_url.present?
-      size = Setting.brand_fetch_logo_size
-      "#{default_logo_provider_url}/#{business_url}/icon/fallback/lettermark/w/#{size}/h/#{size}?c=#{Setting.brand_fetch_client_id}"
+      Setting.brand_fetch_icon_url(business_url)
     end
 
     def enhance_provider_merchant(merchant, auto_detection)
@@ -139,10 +133,8 @@ class Family::AutoMerchantDetector
         updates[:website_url] = auto_detection.business_url
 
         # Add logo if BrandFetch is configured
-        if Setting.brand_fetch_client_id.present?
-          size = Setting.brand_fetch_logo_size
-          updates[:logo_url] = "#{default_logo_provider_url}/#{auto_detection.business_url}/icon/fallback/lettermark/w/#{size}/h/#{size}?c=#{Setting.brand_fetch_client_id}"
-        end
+        logo_url = build_logo_url(auto_detection.business_url)
+        updates[:logo_url] = logo_url if logo_url.present?
       end
 
       return false if updates.empty?

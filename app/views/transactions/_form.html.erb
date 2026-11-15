@@ -4,8 +4,8 @@
 
 <% rate_accounts = Current.family.accounts.to_a %>
 <%= styled_form_with model: entry, url: transactions_path, class: "space-y-4", data: {
-      controller: "exchange-rate-form",
-      action: "submit->exchange-rate-form#prepareSubmit",
+      controller: "exchange-rate-form category-suggestion",
+      action: "submit->exchange-rate-form#prepareSubmit formdata->category-suggestion#syncName hw-combobox:selection->category-suggestion#onNameSuggestionSelected",
       **exchange_rate_form_data(mode: "transaction", accounts: rate_accounts)
     } do |f| %>
   <% if entry.errors.any? %>
@@ -20,7 +20,17 @@
   </section>
 
   <section class="space-y-2">
-    <%= f.text_field :name, label: t(".description"), placeholder: t(".description_placeholder"), required: true %>
+    <%# Past names as you type; picking one also picks its usual category (category_suggestion_controller) %>
+    <div class="form-field combobox">
+      <%= f.combobox :name,
+            name_suggestions_transactions_path(nature: nature),
+            free_text: true,
+            autocomplete: :list,
+            label: t(".description"),
+            placeholder: t(".description_placeholder"),
+            required: true,
+            input: { data: { category_suggestion_target: "name" } } %>
+    </div>
 
     <% if @entry.account_id %>
       <%= f.hidden_field :account_id, data: { exchange_rate_form_target: "account" } %>
@@ -33,17 +43,19 @@
     <%= f.money_field :amount, label: t(".amount"), required: true,
           amount_data: { exchange_rate_form_target: "amount", action: "input->exchange-rate-form#recalculate" },
           currency_data: { exchange_rate_form_target: "currency", action: "change->exchange-rate-form#refresh" } %>
-    <%= f.fields_for :entryable do |ef| %>
-      <%= render DS::CategorySelect.new(
-            form: ef,
-            categories: categories,
-            selected_id: ef.object&.category_id,
-            blank_label: t(".category_prompt"),
-            label: t(".category"),
-            classification: category_classification,
-            recent_categories: recent_categories
-          ) %>
-    <% end %>
+    <div data-category-suggestion-target="categoryField" data-action="change->category-suggestion#onCategorySelected">
+      <%= f.fields_for :entryable do |ef| %>
+        <%= render DS::CategorySelect.new(
+              form: ef,
+              categories: categories,
+              selected_id: ef.object&.category_id,
+              blank_label: t(".category_prompt"),
+              label: t(".category"),
+              classification: category_classification,
+              recent_categories: recent_categories
+            ) %>
+      <% end %>
+    </div>
     <%= f.date_field :date, label: t(".date"), required: true, min: Entry.min_supported_date, max: Date.current, value: entry.date || Date.current,
           data: { exchange_rate_form_target: "date", action: "change->exchange-rate-form#refresh" } %>
 

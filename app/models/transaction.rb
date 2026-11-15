@@ -13,13 +13,13 @@ class Transaction < ApplicationRecord
   accepts_nested_attributes_for :taggings, allow_destroy: true
 
   # What a transaction row reads besides the transaction itself (see transactions/_transaction):
-  # category, merchant, tags, and for transfers both legs' accounts (the counterpart name,
-  # the pending pill, Transfer#categorizable?) plus, on an inflow row, the outflow's
+  # category, merchant (with its uploaded logo, which FamilyMerchant#logo_url reads), tags,
+  # and for transfers both legs' accounts (the counterpart name, the pending pill, Transfer#categorizable?) plus, on an inflow row, the outflow's
   # category that the row shows read-only. Preload these when rendering a list, so rows do
   # not look them up one by one. The row's own leg is set by inverse_of; it is listed too
   # so a preload that skips the inverse still finds it loaded.
   ROW_ASSOCIATIONS = [
-    :category, :merchant, :tags,
+    :category, { merchant: { logo_attachment: :blob } }, :tags,
     {
       transfer_as_inflow: { inflow_transaction: { entry: :account }, outflow_transaction: [ :category, { entry: :account } ] },
       transfer_as_outflow: { inflow_transaction: { entry: :account }, outflow_transaction: { entry: :account } }
@@ -52,6 +52,11 @@ class Transaction < ApplicationRecord
   # Internal movement labels that should be excluded from budget (auto cash management)
   INTERNAL_MOVEMENT_LABELS = [ "Transfer", "Sweep In", "Sweep Out", "Exchange" ].freeze
   TRANSFER_KINDS = %w[funds_movement cc_payment loan_payment].freeze
+
+  # Kinds the "Uncategorized" filter and the categorize wizard leave out: the two legs of a
+  # transfer between own accounts have nothing to categorize. A loan payment and an
+  # investment contribution are budget outflows, so they stay in.
+  UNCATEGORIZED_EXCLUDED_KINDS = %w[funds_movement cc_payment].freeze
 
   # Pending transaction scopes - filter based on provider pending flags in extra JSONB
   # Works with any provider that stores pending status in extra["provider_name"]["pending"]
@@ -98,9 +103,7 @@ class Transaction < ApplicationRecord
 
   def set_category!(category)
     if category.is_a?(String)
-      category = entry.account.family.categories.find_or_create_by!(
-        name: category
-      )
+      category = entry.account.family.categories.find_or_create_by_name!(category)
     end
 
     update!(category: category)

@@ -154,6 +154,11 @@ Rails.application.routes.draw do
   patch "transactions/:id/tags", to: "transactions#update_tags", as: :tags_transaction
   # --- end DS pickers ---
 
+  # --- Category merge (w2-rules) ---
+  get "categories/merge", to: "categories#merge", as: :merge_categories
+  post "categories/merge", to: "categories#perform_merge", as: :perform_merge_categories
+  # --- end category merge ---
+
   resources :categories, except: :show do
     resources :deletions, only: %i[new create], module: :category
 
@@ -183,6 +188,12 @@ Rails.application.routes.draw do
       post :perform_merge
     end
   end
+
+  # --- Merchant page (w2-rules): after the block above, so /family_merchants/new and /merge are not read as an :id ---
+  resources :family_merchants, only: :show do
+    delete :clear_filter, on: :member
+  end
+  # --- end merchant page ---
 
   resources :transfers, only: %i[new create destroy show update]
 
@@ -243,6 +254,19 @@ Rails.application.routes.draw do
     resource :bulk_deletion, only: :create
     resource :bulk_update, only: %i[new create]
   end
+
+  # --- Categorize wizard (w2-rules) ---
+  namespace :transactions do
+    resource :categorize, only: %i[show create] do
+      patch :assign_entry, on: :collection
+      get :preview_rule, on: :collection
+    end
+  end
+  # --- end categorize wizard ---
+
+  # --- Transaction name suggestions (w2-rules): before resources, so the name is not taken for a :id ---
+  get "transactions/name_suggestions", to: "transactions#name_suggestions", as: :name_suggestions_transactions
+  # --- end transaction name suggestions ---
 
   resources :transactions, only: %i[index new create show update destroy] do
     resource :transfer_match, only: %i[new create destroy] # destroy: w2-transfers transfer-hints "Not a transfer"

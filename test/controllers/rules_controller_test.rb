@@ -310,4 +310,103 @@ class RulesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, I18n.t("rules.recent_runs.columns.transactions_counts.blocked")
     assert_includes response.body, "5 / 5 / 2 / 3"
   end
+
+  test "creates a rule with the new text operators" do
+    assert_difference -> { @user.family.rules.count }, 1 do
+      post rules_url, params: {
+        rule: {
+          resource_type: "transaction",
+          conditions_attributes: {
+            "0" => { condition_type: "transaction_name", operator: "starts_with", value: "AMZN" },
+            "1" => { condition_type: "transaction_notes", operator: "is_not_null", value: "" },
+            "2" => { condition_type: "transaction_name", operator: "matches_regex", value: "^amzn\\s+mktp" }
+          },
+          actions_attributes: { "0" => { action_type: "exclude_transaction" } }
+        }
+      }
+    end
+
+    rule = @user.family.rules.order(:created_at).last
+    assert_equal %w[is_not_null matches_regex starts_with], rule.conditions.map(&:operator).sort
+  end
+
+  test "an invalid regex shows the form again with the error" do
+    assert_no_difference -> { @user.family.rules.count } do
+      post rules_url, params: {
+        rule: {
+          resource_type: "transaction",
+          conditions_attributes: { "0" => { condition_type: "transaction_name", operator: "matches_regex", value: "(" } },
+          actions_attributes: { "0" => { action_type: "exclude_transaction" } }
+        }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_includes response.body, I18n.t("activerecord.errors.models.rule/condition.attributes.value.regex_invalid")
+  end
+
+  test "an unknown condition type, operator or action type gets a plain 422" do
+    [
+      { conditions_attributes: { "0" => { condition_type: "bogus", operator: "=", value: "x" } }, actions_attributes: { "0" => { action_type: "exclude_transaction" } } },
+      { conditions_attributes: { "0" => { condition_type: "transaction_name", operator: "bogus", value: "x" } }, actions_attributes: { "0" => { action_type: "exclude_transaction" } } },
+      { actions_attributes: { "0" => { action_type: "send_email_notification", value: "x" } } }
+    ].each do |attributes|
+      assert_no_difference -> { @user.family.rules.count } do
+        post rules_url, params: { rule: { resource_type: "transaction" }.merge(attributes) }
+      end
+
+      assert_response :unprocessable_entity
+      assert_equal "text/plain", response.media_type
+    end
+  end
+
+  test "new ignores an unknown resource type or action type prefill" do
+    get new_rule_url(resource_type: "account", action_type: "send_email_notification", action_value: "x")
+
+    assert_response :success
+  end
+
+  test "index renders a rule with an unsupported condition type" do
+    rule = @user.family.rules.create!(
+      resource_type: "transaction",
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "coffee") ],
+      actions: [ Rule::Action.new(action_type: "exclude_transaction") ]
+    )
+    rule.conditions.first.update_columns(condition_type: "name_removed")
+
+    get rules_url
+
+    assert_response :success
+    assert_includes response.body, "Unsupported (name_removed)"
+  end
+
+  test "creates a rule whose tag action sets several tags" do
+    work = @user.family.tags.create!(name: "Work trip")
+    travel = @user.family.tags.create!(name: "Travel spend")
+
+    post rules_url, params: {
+      rule: {
+        resource_type: "transaction",
+        conditions_attributes: { "0" => { condition_type: "transaction_name", operator: "like", value: "airline" } },
+        actions_attributes: { "0" => { action_type: "set_transaction_tags", value: [ "", work.id, travel.id ] } }
+      }
+    }
+
+    rule = @user.family.rules.order(:created_at).last
+    assert_equal [ work.id, travel.id ], rule.actions.first.execution_value
+  end
+
+  test "edit renders a stored single-tag action in the tag picker" do
+    tag = @user.family.tags.create!(name: "Legacy single")
+    rule = @user.family.rules.create!(
+      resource_type: "transaction",
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "coffee") ],
+      actions: [ Rule::Action.new(action_type: "set_transaction_tags", value: tag.id) ]
+    )
+
+    get edit_rule_url(rule)
+
+    assert_response :success
+    assert_select "[data-controller='tag-select'] [data-tag-id='#{tag.id}'][aria-selected='true']"
+  end
 end

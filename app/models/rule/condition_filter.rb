@@ -3,11 +3,42 @@ class Rule::ConditionFilter
 
   TYPES = [ "text", "number", "select" ]
 
+  # Operators whose value is a pattern, not text. The pattern is bound as given
+  # and matched against the column as stored: collapsing whitespace on either
+  # side would change what it matches (a run of spaces, a tab, `^\s`).
+  REGEX_OPERATORS = [ "matches_regex" ].freeze
+
+  # Operators that take no value (the form hides the value field for them)
+  VALUELESS_OPERATORS = [ "is_null", "is_not_null" ].freeze
+
+  # [label key under rules.condition_filters.operators, operator]
   OPERATORS_MAP = {
-    "text" => [ [ "Contains", "like" ], [ "Equal to", "=" ], [ "Is empty", "is_null" ] ],
-    "number" => [ [ "Greater than", ">" ], [ "Greater or equal to", ">=" ], [ "Less than", "<" ], [ "Less than or equal to", "<=" ], [ "Is equal to", "=" ], [ "Is not equal to", "!=" ] ],
-    "select" => [ [ "Equal to", "=" ], [ "Is empty", "is_null" ] ]
-  }
+    "text" => [
+      [ :contains, "like" ],
+      [ :does_not_contain, "not_like" ],
+      [ :starts_with, "starts_with" ],
+      [ :ends_with, "ends_with" ],
+      [ :matches_regex, "matches_regex" ],
+      [ :equal_to, "=" ],
+      [ :not_equal_to, "!=" ],
+      [ :is_empty, "is_null" ],
+      [ :is_not_empty, "is_not_null" ]
+    ],
+    "number" => [
+      [ :greater_than, ">" ],
+      [ :greater_or_equal_to, ">=" ],
+      [ :less_than, "<" ],
+      [ :less_than_or_equal_to, "<=" ],
+      [ :is_equal_to, "=" ],
+      [ :not_equal_to, "!=" ]
+    ],
+    "select" => [
+      [ :equal_to, "=" ],
+      [ :not_equal_to, "!=" ],
+      [ :is_empty, "is_null" ],
+      [ :is_not_empty, "is_not_null" ]
+    ]
+  }.freeze
 
   def initialize(rule)
     @rule = rule
@@ -38,8 +69,9 @@ class Rule::ConditionFilter
     nil
   end
 
+  # [[label, operator], ...] for the operator select
   def operators
-    OPERATORS_MAP.dig(type)
+    OPERATORS_MAP.fetch(type).map { |label_key, operator| [ operator_label(label_key), operator ] }
   end
 
   # Matchers can prepare the scope with joins by implementing this method
@@ -70,20 +102,34 @@ class Rule::ConditionFilter
       rule.family
     end
 
-    def build_sanitized_where_condition(field, operator, value)
-      if operator == "is_null"
-        ActiveRecord::Base.sanitize_sql_for_conditions(
-          "#{field} #{sanitize_operator(operator)}"
-        )
-      else
-        normalized_value = normalize_value(value)
-        normalized_field = normalize_field(field)
-        sanitized_value = operator == "like" ? "%#{ActiveRecord::Base.sanitize_sql_like(normalized_value)}%" : normalized_value
+    def operator_label(label_key)
+      I18n.t("rules.condition_filters.operators.#{label_key}")
+    end
 
-        ActiveRecord::Base.sanitize_sql_for_conditions([
-          "#{normalized_field} #{sanitize_operator(operator)} ?",
-          sanitized_value
-        ])
+    def build_sanitized_where_condition(field, operator, value)
+      sql_operator = sanitize_operator(operator)
+
+      return "#{field} #{sql_operator}" if VALUELESS_OPERATORS.include?(operator)
+
+      regex = REGEX_OPERATORS.include?(operator)
+      normalized_value = regex ? value.to_s : normalize_value(value)
+      normalized_field = regex ? field : normalize_field(field)
+
+      case operator
+      when "starts_with", "ends_with"
+        like_value = ActiveRecord::Base.sanitize_sql_like(normalized_value)
+        like_value = operator == "starts_with" ? "#{like_value}%" : "%#{like_value}"
+
+        ActiveRecord::Base.sanitize_sql_for_conditions([ "#{normalized_field} ILIKE ?", like_value ])
+      when "like", "not_like"
+        like_value = "%#{ActiveRecord::Base.sanitize_sql_like(normalized_value)}%"
+        expression = ActiveRecord::Base.sanitize_sql_for_conditions([ "#{normalized_field} #{sql_operator} ?", like_value ])
+
+        # "Does not contain" also matches rows where the field is absent (NULL):
+        # NOT ILIKE alone drops them through SQL's three-valued logic.
+        operator == "not_like" ? "(#{expression} OR #{field} IS NULL)" : expression
+      else
+        ActiveRecord::Base.sanitize_sql_for_conditions([ "#{normalized_field} #{sql_operator} ?", normalized_value ])
       end
     end
 
@@ -93,8 +139,22 @@ class Rule::ConditionFilter
       case operator
       when "like"
         "ILIKE"
+      when "not_like"
+        "NOT ILIKE"
+      when "starts_with", "ends_with"
+        "ILIKE"
+      when "matches_regex"
+        # Case-insensitive POSIX match, run by Postgres (see Rule::SafeRegex)
+        "~*"
       when "is_null"
         "IS NULL"
+      when "is_not_null"
+        "IS NOT NULL"
+      when "!="
+        # IS DISTINCT FROM treats NULL as a value, so "category not equal to X" also
+        # matches uncategorized transactions. Amounts are never NULL, so numbers
+        # behave as with a plain !=.
+        "IS DISTINCT FROM"
       else
         operator
       end

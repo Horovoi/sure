@@ -8,6 +8,7 @@ export default class extends Controller {
     "selectionBar",
     "selectionBarText",
     "bulkEditDrawerHeader",
+    "duplicateLink",
   ];
   static values = {
     singularLabel: String,
@@ -185,6 +186,30 @@ export default class extends Controller {
     this.selectionBarTarget.classList.toggle("hidden", count === 0);
     this.selectionBarTarget.querySelector("input[type='checkbox']").checked =
       count > 0;
+
+    this._updateDuplicateLink();
+  }
+
+  // Duplicate works on exactly one selected transaction (not a trade or a valuation)
+  _updateDuplicateLink() {
+    if (!this.hasDuplicateLinkTarget) return;
+
+    const row = this._selectedRow();
+    const canDuplicate = row?.dataset.entryType === "Transaction";
+    this.duplicateLinkTarget.classList.toggle("hidden", !canDuplicate);
+    if (!canDuplicate) return;
+
+    const url = new URL(this.duplicateLinkTarget.href, window.location.origin);
+    url.searchParams.set("duplicate_entry_id", row.dataset.id);
+    this.duplicateLinkTarget.href = url.toString();
+  }
+
+  _selectedRow() {
+    if (this.selectedIdsValue.length !== 1) return null;
+
+    return this.rowTargets.find(
+      (row) => row.dataset.id === this.selectedIdsValue[0],
+    );
   }
 
   _pluralizedResourceName() {

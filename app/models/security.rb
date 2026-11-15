@@ -81,17 +81,10 @@ class Security < ApplicationRecord
   end
 
   def brandfetch_icon_url(width: nil, height: nil)
-    return nil unless Setting.brand_fetch_client_id.present?
-
-    w = width || Setting.brand_fetch_logo_size
-    h = height || Setting.brand_fetch_logo_size
-
     identifier = extract_domain(website_url) if website_url.present?
     identifier ||= ticker
 
-    return nil unless identifier.present?
-
-    "https://cdn.brandfetch.io/#{identifier}/icon/fallback/lettermark/w/#{w}/h/#{h}?c=#{Setting.brand_fetch_client_id}"
+    Setting.brand_fetch_icon_url(identifier, width: width, height: height)
   end
 
   private

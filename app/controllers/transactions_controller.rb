@@ -5,12 +5,15 @@ class TransactionsController < ApplicationController
   USER_SETTABLE_KINDS = %w[standard one_time].freeze
 
   before_action :store_params!, only: :index
+  # Before the form options: a duplicate's nature decides which categories the form lists
+  before_action :prefill_params_from_duplicate!, only: :new
   before_action :set_new_transaction_form_options, only: %i[new create]
   before_action :set_entry_for_tags, only: :update_tags
 
   def new
     super
     apply_new_form_draft
+    apply_duplicate_attributes!
     preselect_default_account
   end
 
@@ -34,13 +37,14 @@ class TransactionsController < ApplicationController
                                   .where("next_expected_date <= ? AND next_expected_date >= ?",
                                          1.month.from_now.to_date,
                                          Date.current)
-                                  .includes(:merchant)
+                                  .includes(merchant: { logo_attachment: :blob })
 
     respond_to do |format|
       format.html do
         if turbo_frame_request?
           render partial: "transactions/results_frame"
         else
+          @uncategorized_count = uncategorized_transactions_count
           render :index
         end
       end
@@ -381,6 +385,14 @@ class TransactionsController < ApplicationController
     redirect_back_or_to transactions_path
   end
 
+  # The new-transaction form's name autocomplete (hotwire_combobox async source):
+  # past names of this family's transactions, each with its usual category of
+  # the form's nature.
+  def name_suggestions
+    classification = params[:nature] == "inflow" ? "income" : "expense"
+    @suggestions = Transaction::NameSuggestion.for(Current.family, params[:q], classification: classification)
+  end
+
   def update_preferences
     Current.user.update_transactions_preferences(preferences_params)
     head :ok
@@ -389,6 +401,12 @@ class TransactionsController < ApplicationController
   end
 
   private
+    # --- Categorize wizard (w2-rules): the count on the wizard's link in the page header ---
+    def uncategorized_transactions_count
+      Current.family.entries.uncategorized_transactions.count
+    end
+    # --- end categorize wizard ---
+
     def entry_params
       entry_params = params.expect(entry: [
         :name, :date, :amount, :currency, :excluded, :notes, :nature, :entryable_type, :converted_amount,
@@ -547,7 +565,8 @@ class TransactionsController < ApplicationController
       return unless account
 
       @selected_account_id = account.id
-      @entry.currency = account.currency unless @draft_currency
+      # A duplicate keeps the source's currency
+      @entry.currency = account.currency unless @draft_currency || duplicate_source
     end
 
     def draft_date(value)
@@ -564,8 +583,45 @@ class TransactionsController < ApplicationController
       @category_classification = nature == "inflow" ? "income" : "expense"
       @categories = Current.family.categories.where(classification: @category_classification).alphabetically_by_hierarchy.to_a
       @recent_categories = Category.recently_used_for(family: Current.family, classification: @category_classification).to_a
-      @merchants = Current.family.available_merchants.alphabetically.to_a
+      @merchants = Current.family.available_merchants.with_attached_logo.alphabetically.to_a
       @tags = Current.family.tags.alphabetically.to_a
+    end
+
+    # Duplicate (the selection bars' copy button, decision 45: duplicate-and-edit
+    # instead of splits): the new form opens filled from one of the family's
+    # transactions, dated today, for the user to change and save.
+    def duplicate_source
+      return @duplicate_source if defined?(@duplicate_source)
+
+      @duplicate_source = if params[:duplicate_entry_id].present?
+        Current.family.entries.transactions.includes(:entryable).find_by(id: params[:duplicate_entry_id])
+      end
+    end
+
+    def prefill_params_from_duplicate!
+      return unless duplicate_source
+
+      params[:nature] ||= duplicate_source.amount.negative? ? "inflow" : "outflow"
+      # The form's account list holds manual, active accounts only
+      if params[:account_id].blank? && Current.family.accounts.manual.active.exists?(id: duplicate_source.account_id)
+        params[:account_id] = duplicate_source.account_id
+      end
+    end
+
+    def apply_duplicate_attributes!
+      return unless duplicate_source
+
+      source = duplicate_source.transaction
+      @entry.assign_attributes(
+        name: duplicate_source.name,
+        amount: duplicate_source.amount.abs,
+        currency: duplicate_source.currency,
+        notes: duplicate_source.notes
+      )
+      # Only values the form's pickers offer: a category of the other classification is left out
+      @entry.entryable.category_id = source.category_id if @categories.any? { |category| category.id == source.category_id }
+      @entry.entryable.merchant_id = source.merchant_id if @merchants.any? { |merchant| merchant.id == source.merchant_id }
+      @entry.entryable.tag_ids = source.tag_ids & @tags.map(&:id)
     end
 
     def set_entry_for_tags

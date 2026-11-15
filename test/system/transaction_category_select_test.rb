@@ -36,7 +36,7 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
   test "creates a top-level category with the form's classification and saves it on the transaction" do
     visit new_transaction_url(nature: "inflow")
 
-    fill_in "entry[name]", with: "Side gig"
+    fill_in "entry_name", with: "Side gig"
     fill_in "entry[amount]", with: "250"
     select accounts(:depository).name, from: "entry[account_id]"
 

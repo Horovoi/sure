@@ -335,6 +335,11 @@ class Family::DataExporter
         return operand_record(:merchants, condition.value)&.name || condition.value
       end
 
+      # Map tag UUIDs to names for portability
+      if condition.condition_type == "transaction_tag"
+        return operand_record(:tags, condition.value)&.name || condition.value
+      end
+
       condition.value
     end
 
@@ -351,9 +356,15 @@ class Family::DataExporter
         return operand_record(:merchants, action.value, fallback_to_name: true)&.name || action.value
       end
 
-      # Map tag UUIDs to names for portability
+      # Map tag UUIDs to names for portability. The value lists one or more tag
+      # ids (Rule::Action#value=), each resolved on its own; a single tag exports
+      # its plain name as before.
       if action.action_type == "set_transaction_tags"
-        return operand_record(:tags, action.value, fallback_to_name: true)&.name || action.value
+        names = action.value.to_s.split(",").map do |id|
+          operand_record(:tags, id, fallback_to_name: true)&.name || id
+        end
+
+        return Rule::Action.encode_multi_value_names(names)
       end
 
       action.value

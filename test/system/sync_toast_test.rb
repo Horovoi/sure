@@ -12,7 +12,7 @@ class SyncToastTest < ApplicationSystemTestCase
     click_on I18n.t("accounts.show.activity.new_transaction")
 
     within "dialog[open]" do
-      fill_in "entry[name]", with: "Half-typed coffee"
+      fill_in "entry_name", with: "Half-typed coffee"
     end
 
     # A long delay, so the toast is still up when the test looks for it after the dialog closes
@@ -21,7 +21,7 @@ class SyncToastTest < ApplicationSystemTestCase
 
     # Deferred behind the dialog: no refresh, the typed value is still there
     within "dialog[open]" do
-      assert_field "entry[name]", with: "Half-typed coffee"
+      assert_field "entry_name", with: "Half-typed coffee"
     end
     assert_selector "#sync-toast[role='status']", visible: :hidden
 

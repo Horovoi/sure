@@ -60,8 +60,8 @@ class RuleImport < Import
         normalized_row = normalize_rule_row(row)
 
         rows.create!(
-          name: normalized_row[:name].to_s.strip,
-          resource_type: normalized_row[:resource_type].to_s.strip,
+          name: normalized_rule_text(normalized_row[:name], attribute: :name),
+          resource_type: normalized_rule_text(normalized_row[:resource_type], attribute: :resource_type),
           active: parse_boolean(normalized_row[:active]),
           effective_date: normalized_row[:effective_date].to_s.strip,
           conditions: normalized_row[:conditions].to_s.strip,
@@ -99,6 +99,22 @@ class RuleImport < Import
       }
     end
 
+    # Text Postgres cannot store (a null byte, malformed UTF-8) fails the import
+    # with a validation error instead of a driver error.
+    def normalized_rule_text(value, attribute:)
+      text = value.to_s
+      reject_invalid_text!(text, label: Rule.human_attribute_name(attribute))
+
+      text.strip
+    end
+
+    def reject_invalid_text!(value, label:)
+      return if DatabaseTextValidator.acceptable?(value)
+
+      errors.add(:base, :invalid, message: "#{label} #{I18n.t("errors.messages.invalid")}")
+      raise ActiveRecord::RecordInvalid.new(self)
+    end
+
     def extract_conditions_and_actions(fragments)
       pieces = Array(fragments).compact
       return [ "", "" ] if pieces.empty?
@@ -120,11 +136,11 @@ class RuleImport < Import
     end
 
     def create_or_update_rule_from_row(row)
-      rule_name = row.name.to_s.strip.presence
-      resource_type = row.resource_type.to_s.strip
+      rule_name = normalized_rule_text(row.name, attribute: :name).presence
+      resource_type = normalized_rule_text(row.resource_type, attribute: :resource_type)
 
       # Validate resource type
-      unless resource_type == "transaction"
+      unless resource_type.in?(Rule::SUPPORTED_RESOURCE_TYPES)
         errors.add(:base, "Unsupported resource type: #{resource_type}")
         raise ActiveRecord::RecordInvalid.new(self)
       end
@@ -213,6 +229,7 @@ class RuleImport < Import
     def resolve_import_condition_value(condition_data)
       condition_type = condition_data["condition_type"]
       value = condition_data["value"]
+      reject_invalid_text!(value, label: Rule::Condition.human_attribute_name(:value))
 
       return value unless value.present?
 
@@ -226,12 +243,18 @@ class RuleImport < Import
         return find_or_create_merchant(value).id
       end
 
+      # Map tag names to UUIDs
+      if condition_type == "transaction_tag"
+        return find_or_create_tag(value).id
+      end
+
       value
     end
 
     def resolve_import_action_value(action_data)
       action_type = action_data["action_type"]
       value = action_data["value"]
+      reject_invalid_text!(value, label: Rule::Action.human_attribute_name(:value))
 
       return value unless value.present?
 
@@ -245,9 +268,10 @@ class RuleImport < Import
         return find_or_create_merchant(value).id
       end
 
-      # Map tag names to UUIDs
+      # Map tag names to UUIDs. A multi-tag action lists several names (see
+      # Rule::Action.encode_multi_value_names), each resolved on its own.
       if action_type == "set_transaction_tags"
-        return find_or_create_tag(value).id
+        return resolve_import_tag_ids(value)
       end
 
       value
@@ -269,20 +293,31 @@ class RuleImport < Import
     end
 
     def find_or_create_category(name)
-      categories_by_name[name] ||= family.categories.create!(
-        name: name,
-        color: Category::UNCATEGORIZED_COLOR,
-        classification: "expense",
-        lucide_icon: "shapes"
-      )
+      categories_by_name[name] ||= family.categories.find_or_create_by_name!(name) do |category|
+        category.color = Category::UNCATEGORIZED_COLOR
+        category.classification = "expense"
+        category.lucide_icon = "shapes"
+      end
     end
 
     def find_or_create_merchant(name)
       merchants_by_name[name] ||= family.merchants.create!(name: name)
     end
 
+    # A value that is exactly an existing tag's name stays one tag, so an export
+    # written before multi-tag actions, of a tag whose name holds a comma, still
+    # imports as that tag. A JSON array of names works as well.
+    def resolve_import_tag_ids(value)
+      return find_or_create_tag(value).id if value.is_a?(String) && tags_by_name.key?(value)
+
+      names = Rule::Action.decode_multi_value_names(value).map(&:strip).compact_blank.uniq
+      return value if names.empty?
+
+      names.map { |name| find_or_create_tag(name).id }.join(",")
+    end
+
     def find_or_create_tag(name)
-      tags_by_name[name] ||= family.tags.create!(name: name)
+      tags_by_name[name] ||= family.tags.find_or_create_by_name!(name)
     end
 
     def parse_boolean(value)

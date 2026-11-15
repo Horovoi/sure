@@ -3,6 +3,7 @@ class Rule < ApplicationRecord
   POSITION_LOCK_NAMESPACE = 4013
 
   UnsupportedResourceTypeError = Class.new(StandardError)
+  SUPPORTED_RESOURCE_TYPES = %w[transaction].freeze
 
   belongs_to :family
   has_many :conditions, dependent: :destroy
@@ -19,8 +20,11 @@ class Rule < ApplicationRecord
   # rules created at the same moment before anyone reordered them.
   scope :ordered, -> { order(:position, :created_at, :id) }
 
-  validates :resource_type, presence: true
-  validates :name, length: { minimum: 1 }, allow_nil: true
+  # A null byte or malformed UTF-8 is reported by DatabaseTextValidator instead.
+  validates :resource_type, presence: true, inclusion: { in: SUPPORTED_RESOURCE_TYPES, allow_blank: true },
+    if: -> { DatabaseTextValidator.acceptable?(resource_type) }
+  validates :name, length: { minimum: 1 }, allow_nil: true, if: -> { DatabaseTextValidator.acceptable?(name) }
+  validates_with DatabaseTextValidator, attributes: %i[name resource_type]
   validate :no_nested_compound_conditions
 
   # Every rule must have at least 1 action
@@ -44,8 +48,12 @@ class Rule < ApplicationRecord
     end
   end
 
+  # Display-only: a pattern that times out reads as zero here. The failure shows
+  # where the rule runs (Rule::Runner records a failed RuleRun).
   def affected_resource_count
     matching_scope.count
+  rescue Rule::SafeRegex::TimeoutError
+    0
   end
 
   # Sets the run order of all rules of a family. ordered_ids must list every rule
@@ -102,6 +110,8 @@ class Rule < ApplicationRecord
     transaction_ids = Set.new
     rules.each do |rule|
       transaction_ids.merge(rule.matching_scope.pluck(:id))
+    rescue Rule::SafeRegex::TimeoutError
+      next
     end
 
     transaction_ids.size
@@ -157,7 +167,7 @@ class Rule < ApplicationRecord
     condition = displayed_condition
     return I18n.t("rules.no_condition") if condition.blank?
 
-    "If #{condition.filter.label.downcase} #{condition.operator} #{condition.value_display}"
+    "If #{condition.filter.label.downcase} #{condition.operator_display.downcase} #{condition.value_display}"
   end
 
   # The condition a summary shows first: an empty compound condition is skipped
@@ -176,14 +186,19 @@ class Rule < ApplicationRecord
     end
   end
 
-  # Whether this rule's conditions (with its visibility and effective date) match the transaction now
+  # Whether this rule's conditions (with its visibility and effective date) match the
+  # transaction now. A pattern that times out matches nothing, as when the rule runs.
   def matches_transaction?(transaction)
-    matching_scope.where(id: transaction.id).exists?
+    matching_scope(only_id: transaction.id).exists?
+  rescue Rule::SafeRegex::TimeoutError
+    false
   end
 
-  # The transactions this rule's conditions match now
-  def matching_scope
+  # The transactions this rule's conditions match now. only_id narrows the match to
+  # one transaction inside the query, so a pattern runs on that row alone.
+  def matching_scope(only_id: nil)
     scope = registry.resource_scope
+    scope = scope.where(id: only_id) if only_id
 
     # 1. Prepare the query with joins required by conditions
     conditions.each do |condition|
@@ -195,7 +210,12 @@ class Rule < ApplicationRecord
       scope = condition.apply(scope)
     end
 
-    scope
+    # A pattern is the one condition whose cost the database does not bound by
+    # itself, so its matches are resolved here under a statement timeout
+    # (Rule::SafeRegex::TimeoutError) and the scope becomes those ids.
+    return scope unless conditions.any?(&:uses_regex?)
+
+    scope_for_transaction_ids(Rule::SafeRegex.with_timeout { scope.pluck(:id) })
   end
 
   # The action the rule list shows: the saved one with the lowest id, picked from
@@ -223,6 +243,23 @@ class Rule < ApplicationRecord
     @option_lists = nil
     @registry = nil
     super
+  end
+
+  # The rule the categorize wizard offers for a group: transactions of the group's type
+  # from its merchant (or, for a group without a merchant, whose name contains
+  # name_filter) get the category. Not saved; the caller saves it.
+  def self.build_for_categorize_group(family, category:, transaction_type:, merchant: nil, name_filter: nil)
+    name_filter = name_filter.to_s.gsub(/[[:space:]]+/, " ").strip
+    rule = family.rules.build(name: merchant&.name || name_filter, resource_type: "transaction", active: true)
+
+    if merchant
+      rule.conditions.build(condition_type: "transaction_merchant", operator: "=", value: merchant.id)
+    else
+      rule.conditions.build(condition_type: "transaction_name", operator: "like", value: name_filter)
+    end
+    rule.conditions.build(condition_type: "transaction_type", operator: "=", value: transaction_type) if transaction_type.in?(%w[income expense])
+    rule.actions.build(action_type: "set_transaction_category", value: category.id)
+    rule
   end
 
   private
@@ -268,6 +305,8 @@ class Rule < ApplicationRecord
     end
 
     def normalize_name
-      self.name = nil if name.is_a?(String) && name.strip.empty?
+      return unless name.is_a?(String) && DatabaseTextValidator.acceptable?(name)
+
+      self.name = nil if name.strip.empty?
     end
 end

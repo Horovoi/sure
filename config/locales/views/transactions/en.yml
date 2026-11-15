@@ -1,6 +1,10 @@
 ---
 en:
   transactions:
+    selection_bar:
+      delete: Delete
+      duplicate: Duplicate
+      edit: Edit
     unknown_name: Unknown transaction
     form:
       account: Account
@@ -232,6 +236,8 @@ en:
         header_title: Edit transactions
         merchant_label: Merchant
         merchant_prompt: Select a merchant
+        name_label: Name
+        name_placeholder: Leave blank to keep each name
         none: None
         notes_label: Notes
         notes_placeholder: Enter a note that will be applied to selected transactions

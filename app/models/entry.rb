@@ -79,6 +79,38 @@ class Entry < ApplicationRecord
     SQL
   }
 
+  # Transactions with no category that the user can still categorize: on a visible account,
+  # not excluded, and not a leg of a transfer between own accounts. The categorize wizard and
+  # its count on the transactions page read this scope.
+  # The account test is a subquery, not a join: Family#entries joins accounts already.
+  scope :uncategorized_transactions, -> {
+    joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+      .where(account_id: Account.visible.select(:id))
+      .where(transactions: { category_id: nil })
+      .where.not(transactions: { kind: Transaction::UNCATEGORIZED_EXCLUDED_KINDS })
+      .where(entries: { excluded: false })
+  }
+
+  # Uncategorized transactions whose name contains `filter` (spaces collapsed, case ignored),
+  # of the given type ("income" or "expense"). It is the same match as the "name contains"
+  # rule the categorize wizard offers, so the preview shows what that rule would catch now.
+  def self.uncategorized_matching(entries, filter, transaction_type = nil)
+    normalized = filter.to_s.gsub(/[[:space:]]+/, " ").strip
+    return none if normalized.empty?
+
+    scope = entries
+      .uncategorized_transactions
+      .where("BTRIM(REGEXP_REPLACE(entries.name, '[[:space:]]+', ' ', 'g')) ILIKE ?", "%#{sanitize_sql_like(normalized)}%")
+
+    scope = case transaction_type
+    when "income" then scope.where(Transaction::Grouper::INCOME_SQL)
+    when "expense" then scope.where.not(Transaction::Grouper::INCOME_SQL)
+    else scope
+    end
+
+    scope.includes(:account, entryable: :merchant).order(date: :desc, id: :desc)
+  end
+
   def classification
     amount.negative? ? "income" : "expense"
   end
@@ -154,6 +186,8 @@ class Entry < ApplicationRecord
       bulk_attributes = {
         date: bulk_update_params[:date],
         notes: bulk_update_params[:notes],
+        # A blank name leaves each name as it is; a new one is a user edit and gets locked below
+        name: bulk_update_params[:name].to_s.strip,
         entryable_attributes: {
           category_id: bulk_update_params[:category_id],
           merchant_id: bulk_update_params[:merchant_id]

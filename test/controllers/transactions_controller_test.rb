@@ -1020,4 +1020,111 @@ end
 
     assert_select "input[type=hidden][name='entry[account_id]'][value='#{accounts(:credit_card).id}']"
   end
+
+  # --- Duplicate (w2-rules): the selection bars' copy button ---
+
+  test "new with duplicate_entry_id fills the form from the transaction" do
+    @entry.update!(notes: "Weekly coffee")
+    @entry.transaction.update!(tags: [ tags(:one) ])
+
+    get new_transaction_url(duplicate_entry_id: @entry.id)
+
+    assert_response :success
+    assert_select "input[name='entry[name]'][value=?]", @entry.name
+    assert_select "input[name='entry[amount]']" do |elements|
+      assert_equal @entry.amount.abs.to_d, elements.first["value"].to_d
+    end
+    assert_select "input[type=hidden][name='entry[account_id]'][value=?]", @entry.account_id
+    assert_select "input[name='entry[nature]'][value=outflow]"
+    assert_select "input[type=hidden][name='entry[entryable_attributes][category_id]'][value=?]", @entry.transaction.category_id
+    assert_select "input[type=hidden][name='entry[entryable_attributes][merchant_id]'][value=?]", @entry.transaction.merchant_id
+    assert_select "input[type=hidden][name='entry[entryable_attributes][tag_ids][]'][value=?]", tags(:one).id
+    assert_select "textarea[name='entry[notes]']", text: "Weekly coffee"
+    # Dated today, not on the source's date
+    assert_select "input[name='entry[date]'][value=?]", Date.current.to_s
+  end
+
+  test "duplicating an income opens the income form with its category" do
+    salary = @user.family.categories.create!(name: "Salary", color: "#22c55e", classification: "income", lucide_icon: "briefcase")
+    income = create_transaction(account: accounts(:depository), name: "Pay", amount: -500, category: salary)
+
+    get new_transaction_url(duplicate_entry_id: income.id)
+
+    assert_response :success
+    assert_select "input[name='entry[nature]'][value=inflow]"
+    assert_select "input[type=hidden][name='entry[entryable_attributes][category_id]'][value=?]", salary.id
+  end
+
+  test "new with an unknown duplicate_entry_id renders an empty form" do
+    get new_transaction_url(duplicate_entry_id: "not-an-id")
+
+    assert_response :success
+    assert_select "input[name='entry[name]']" do |elements|
+      assert_nil elements.first["value"]
+    end
+  end
+
+  test "new with another family's duplicate_entry_id does not fill the form" do
+    other_account = families(:empty).accounts.create!(name: "Other", balance: 0, currency: "USD", accountable: Depository.new)
+    other_entry = create_transaction(account: other_account, name: "Should not leak", amount: 50)
+
+    get new_transaction_url(duplicate_entry_id: other_entry.id)
+
+    assert_response :success
+    assert_not_includes response.body, "Should not leak"
+  end
+
+  test "new with a valuation id does not fill the form" do
+    valuation = entries(:valuation)
+
+    get new_transaction_url(duplicate_entry_id: valuation.id)
+
+    assert_response :success
+    assert_select "input[name='entry[name]']" do |elements|
+      assert_nil elements.first["value"]
+    end
+  end
+
+  test "the transactions selection bar has a hidden duplicate link" do
+    get transactions_url
+
+    assert_select "#entry-selection-bar a[data-bulk-select-target=duplicateLink].hidden[href=?]", new_transaction_path
+  end
+
+  # --- Name suggestions (w2-rules): the new form's name autocomplete ---
+
+  test "name_suggestions returns past names with their usual category" do
+    get name_suggestions_transactions_url(q: "Starb", for_id: "entry_name", format: :turbo_stream)
+
+    assert_response :success
+    assert_includes response.body, "Starbucks"
+    assert_includes response.body, %(data-category-id="#{categories(:food_and_drink).id}")
+  end
+
+  test "name_suggestions reads only the family's transactions" do
+    other_account = families(:empty).accounts.create!(name: "Other", balance: 0, currency: "USD", accountable: Depository.new)
+    create_transaction(account: other_account, name: "Starbucks of another family", amount: 5)
+
+    get name_suggestions_transactions_url(q: "Starb", for_id: "entry_name", format: :turbo_stream)
+
+    assert_response :success
+    assert_not_includes response.body, "Starbucks of another family"
+  end
+
+  test "name_suggestions for an income form offers no expense category" do
+    get name_suggestions_transactions_url(q: "Starb", nature: "inflow", for_id: "entry_name", format: :turbo_stream)
+
+    assert_response :success
+    assert_includes response.body, "Starbucks"
+    assert_not_includes response.body, %(data-category-id="#{categories(:food_and_drink).id}")
+  end
+
+  test "the new form's name field is an autocomplete that asks name_suggestions" do
+    get new_transaction_url(nature: "inflow")
+
+    assert_response :success
+    assert_select "form[data-controller~=category-suggestion]"
+    assert_select "input#entry_name[role=combobox][required]"
+    assert_includes response.body, CGI.escapeHTML(name_suggestions_transactions_path(nature: "inflow"))
+  end
 end

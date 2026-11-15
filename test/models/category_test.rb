@@ -186,4 +186,63 @@ class CategoryTest < ActiveSupport::TestCase
   test "the uncategorized placeholder uses the circle-dashed icon" do
     assert_equal "circle-dashed", Category.uncategorized.lucide_icon
   end
+
+  test "the database refuses a second category with the same name in a family" do
+    family = categories(:food_and_drink).family
+
+    assert_raises ActiveRecord::RecordNotUnique do
+      Category.insert_all!([ { family_id: family.id, name: categories(:food_and_drink).name, color: "#000000", lucide_icon: "shapes", classification: "expense" } ])
+    end
+  end
+
+  test "another family can use the same name" do
+    assert_difference "Category.count", +1 do
+      families(:empty).categories.create!(name: categories(:food_and_drink).name, color: "#000000", lucide_icon: "shapes")
+    end
+  end
+
+  test "bootstrap twice creates each default category once" do
+    family = families(:empty)
+    family.categories.bootstrap!
+
+    assert_no_difference "Category.count" do
+      family.categories.bootstrap!
+    end
+  end
+
+  test "find_or_create_by_name! returns the existing category" do
+    existing = categories(:food_and_drink)
+
+    found = existing.family.categories.find_or_create_by_name!(existing.name) { |category| category.color = "#123456" }
+
+    assert_equal existing, found
+    assert_not found.previously_new_record?
+  end
+
+  test "find_or_create_by_name! returns the category another request created in between" do
+    family = families(:empty)
+    raced = family.categories.create!(name: "Raced", color: "#000000", lucide_icon: "shapes")
+    # The lookup misses, as if the other request had not committed yet
+    Category.stubs(:find_by).returns(nil).then.returns(raced)
+
+    found = nil
+    assert_no_difference "Category.count" do
+      found = family.categories.find_or_create_by_name!("Raced")
+    end
+
+    assert_equal raced, found
+  end
+
+  test "find_or_create_by_name! keeps the caller's transaction usable after a unique violation" do
+    family = families(:empty)
+    family.categories.create!(name: "Raced", color: "#000000", lucide_icon: "shapes")
+    Category.any_instance.stubs(:valid?).returns(true)
+    # Skip the lookup and the validation, so the insert itself hits the unique index
+    Category.stubs(:find_by).returns(nil)
+
+    Category.transaction do
+      family.categories.find_or_create_by_name!("Raced")
+      assert family.categories.exists?(name: "Raced")
+    end
+  end
 end

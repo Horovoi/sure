@@ -6,6 +6,12 @@ class Merchant < ApplicationRecord
   # subscriptions attached to it; they become name-based instead.
   has_many :recurring_transactions
 
+  # An uploaded logo (FamilyMerchant only). Declared on the base class so a list that
+  # mixes both types can preload it: includes(merchant: { logo_attachment: :blob }).
+  has_one_attached :logo, dependent: :purge_later do |attachable|
+    attachable.variant :small, resize_to_fill: [ 128, 128 ], convert: :webp, saver: { quality: 80 }, preprocessed: true
+  end
+
   before_destroy :detach_recurring_transactions, prepend: true
 
   validates :name, presence: true

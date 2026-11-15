@@ -12,6 +12,7 @@
             class: "checkbox checkbox--light hidden lg:block",
             data: {
               id: entry.id,
+              entry_type: entry.entryable_type,
               "bulk-select-target": "row",
               action: "bulk-select#toggleRowSelection",
               checkbox_toggle_target: "selectionEntry"
@@ -121,7 +122,7 @@
                     <%= render "transactions/transfer_accounts", entry: entry, transaction: transaction %>
                   <% else %>
                     <% if transaction.merchant&.present? %>
-                      <span class="hidden lg:inline truncate"><%= transaction.merchant.name %> • </span>
+                      <span class="hidden lg:inline truncate"><%= render "transactions/merchant_link", merchant: transaction.merchant %> • </span>
                     <% end %>
                     <span class="text-secondary hidden lg:inline">
                       <%= link_to entry.account.name,
@@ -132,7 +133,7 @@
                     <div class="flex items-center gap-1 truncate">
                       <%= render "categories/category_name_mobile", transaction: transaction %>
                       <% if transaction.merchant&.present? %>
-                        <span class="lg:hidden truncate">• <%= transaction.merchant.name %></span>
+                        <span class="lg:hidden truncate">• <%= render "transactions/merchant_link", merchant: transaction.merchant %></span>
                       <% end %>
                     </div>
                   <% end %>

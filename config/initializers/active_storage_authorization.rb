@@ -4,8 +4,9 @@
 # types below, so a leaked or guessed link to a family export, an import file or
 # a family document is a 404 for anyone outside that family.
 #
-# Logos and avatars are not sensitive: any signed-in user may load them. A blob
-# with no attachment at all, or one whose record is gone, fails closed.
+# Account logos and avatars are not sensitive: any signed-in user may load them.
+# An uploaded merchant logo is served to the merchant's family only. A blob with
+# no attachment at all, or one whose record is gone, fails closed.
 #
 # The module is defined once, outside to_prepare, so a code reload in
 # development does not redefine its constants. Only the includes run on every
@@ -13,8 +14,9 @@
 module ActiveStorageAttachmentAuthorization
   extend ActiveSupport::Concern
 
-  # STI subclasses (PdfImport, ...) are stored under their base class, "Import".
-  PROTECTED_RECORD_TYPES = %w[FamilyExport Import FamilyDocument].freeze
+  # STI subclasses (PdfImport, FamilyMerchant, ...) are stored under their base class
+  # ("Import", "Merchant").
+  PROTECTED_RECORD_TYPES = %w[FamilyExport Import FamilyDocument Merchant].freeze
 
   # Tracked variants and previews are blobs of their own, attached to an
   # ActiveStorage::VariantRecord or to their source blob. They are authorized
@@ -48,6 +50,8 @@ module ActiveStorageAttachmentAuthorization
         family_export_attachment_authorized?(attachment)
       when "Import", "FamilyDocument"
         family_record_attachment_authorized?(attachment)
+      when "Merchant"
+        merchant_attachment_authorized?(attachment)
       else
         false
       end
@@ -56,6 +60,14 @@ module ActiveStorageAttachmentAuthorization
     # Mirrors FamilyExportsController, which limits exports to family admins.
     def family_export_attachment_authorized?(attachment)
       family_record_attachment_authorized?(attachment) && Current.user.admin?
+    end
+
+    # Only a family merchant takes an upload. A provider merchant is shared by families,
+    # so a file attached to one has no single owner and is refused.
+    def merchant_attachment_authorized?(attachment)
+      attachment.record.is_a?(FamilyMerchant) && family_record_attachment_authorized?(attachment)
+    rescue ActiveRecord::RecordNotFound
+      false
     end
 
     def family_record_attachment_authorized?(attachment)

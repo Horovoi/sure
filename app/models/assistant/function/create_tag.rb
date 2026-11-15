@@ -51,9 +51,10 @@ class Assistant::Function::CreateTag < Assistant::Function
     color = params["color"].presence || Tag::COLORS.sample
     return tool_error("invalid_color", "color must be a hex code such as #e99537.") unless HEX_COLOR.match?(color)
 
-    tag = family.tags.create!(name: name, color: color)
+    # The shared create path: a same-name tag created in between comes back as it is
+    tag = family.tags.find_or_create_by_name!(name) { |new_tag| new_tag.color = color }
 
-    { id: tag.id, created: true, tag: tag_snapshot(tag) }
+    { id: tag.id, created: tag.previously_new_record?, tag: tag_snapshot(tag) }
   end
 
   private

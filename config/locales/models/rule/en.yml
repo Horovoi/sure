@@ -1,0 +1,15 @@
+---
+en:
+  activerecord:
+    errors:
+      models:
+        rule/condition:
+          attributes:
+            value:
+              regex_invalid: "is not a valid regular expression"
+              regex_too_complex: "is too complex to run safely"
+              regex_too_long: "is too long (maximum is %{count} characters)"
+              regex_backreference: "cannot use back-references (\\1 to \\9)"
+  rule:
+    conditions:
+      unsupported_label: "Unsupported (%{type})"

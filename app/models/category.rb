@@ -1,4 +1,6 @@
 class Category < ApplicationRecord
+  include FamilyUniqueName
+
   has_many :transactions, dependent: :nullify, class_name: "Transaction"
   has_many :import_mappings, as: :mappable, dependent: :destroy, class_name: "Import::Mapping"
 
@@ -136,7 +138,7 @@ class Category < ApplicationRecord
 
     def bootstrap!
       default_categories.each do |name, color, icon, classification|
-        find_or_create_by!(name: name) do |category|
+        find_or_create_by_name!(name) do |category|
           category.color = color
           category.classification = classification
           category.lucide_icon = icon

@@ -1,0 +1,38 @@
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(title: t(".title"), subtitle: t(".description")) %>
+  <% dialog.with_body do %>
+    <%= styled_form_with url: perform_merge_categories_path, scope: :category_merge, method: :post, class: "space-y-4", data: { turbo_frame: "_top" } do |form| %>
+      <%= render DS::CategorySelect.new(
+            form: form,
+            categories: @categories,
+            label: t(".target_label"),
+            creatable: false
+          ) %>
+
+      <div class="space-y-2">
+        <p class="text-sm font-medium text-primary"><%= t(".sources_label") %></p>
+        <div class="space-y-3 border border-secondary rounded-lg p-2 max-h-80 overflow-auto">
+          <% { "income" => t(".income"), "expense" => t(".expense") }.each do |classification, heading| %>
+            <% group = @categories.select { |category| category.classification == classification } %>
+            <% next if group.empty? %>
+
+            <div class="space-y-1">
+              <p class="px-2 pt-1 text-xs font-medium text-secondary uppercase tracking-wide"><%= heading %></p>
+              <% group.each do |category| %>
+                <label class="flex items-center gap-2 p-2 hover:bg-surface-hover rounded-lg cursor-pointer <%= "pl-8" if category.parent_id.present? %>">
+                  <%= check_box_tag "category_merge[source_ids][]", category.id, false,
+                        id: dom_id(category, :merge_source),
+                        class: "checkbox checkbox--light" %>
+                  <%= render partial: "categories/badge", locals: { category: category } %>
+                </label>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+        <p class="text-xs text-secondary"><%= t(".sources_hint") %></p>
+      </div>
+
+      <%= render DS::Button.new(text: t(".submit"), type: :submit, full_width: true) %>
+    <% end %>
+  <% end %>
+<% end %>

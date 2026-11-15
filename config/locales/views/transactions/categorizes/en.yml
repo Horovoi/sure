@@ -1,0 +1,58 @@
+---
+en:
+  transactions:
+    # The transactions page header (its hard-coded strings moved here with the categorize link)
+    index:
+      categorize:
+        one: Categorize 1 transaction
+        other: Categorize %{count} transactions
+      edit_categories: Edit categories
+      edit_imports: Edit imports
+      edit_merchants: Edit merchants
+      edit_rules: Edit rules
+      edit_tags: Edit tags
+      new_rule: New rule
+      new_transaction: New transaction
+      title: Transactions
+    categorizes:
+      create:
+        categorized:
+          one: 1 transaction categorized as %{category}.
+          other: "%{count} transactions categorized as %{category}."
+        rule_created: Rule "%{name}" created.
+        rule_creation_failed: "The rule was not created: %{errors}"
+      entry_row:
+        assign_category_prompt: Set category…
+        assign_category_select: Category for %{name}
+        include_checkbox: Include %{name}
+      show:
+        all_done: All transactions are categorized.
+        assign_category: Category
+        assign_category_hint: Pick a category for the checked transactions.
+        breadcrumb_categorize: Categorize
+        breadcrumb_home: Home
+        breadcrumb_transactions: Transactions
+        col_amount: Amount
+        col_category: Category
+        col_date: Date
+        col_transaction: Transaction
+        confirm_filter: Use this text
+        create_rule_label: Also create a rule
+        edit_filter: Edit the text the rule looks for
+        no_matches: No uncategorized transactions contain this text.
+        remaining:
+          one: 1 uncategorized transaction left
+          other: "%{count} uncategorized transactions left"
+        rule_description_merchant: Future %{type} transactions from %{merchant} get this category.
+        rule_description_prefix: Future %{type} transactions whose name contains
+        rule_description_suffix: get this category.
+        skip: Skip
+        skipped_rest:
+          one: You skipped the last group. 1 transaction is still uncategorized.
+          other: You skipped the last groups. %{count} transactions are still uncategorized.
+        transaction_count:
+          one: 1 transaction
+          other: "%{count} transactions"
+        transactions_hint: Uncheck a transaction to leave it out, or pick a category for a single row.
+        type_expense: Expense
+        type_income: Income

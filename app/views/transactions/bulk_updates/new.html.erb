@@ -6,6 +6,7 @@
       <div class="space-y-4">
         <%= render DS::Disclosure.new(title: t(".overview"), open: true) do %>
           <%= form.date_field :date, label: t(".date_label"), max: Date.current %>
+          <%= form.text_field :name, label: t(".name_label"), placeholder: t(".name_placeholder"), autocomplete: "off" %>
         <% end %>
 
         <%= render DS::Disclosure.new(title: t(".transactions_section"), open: true) do %>
@@ -20,7 +21,7 @@
                   recent_categories: Category.recently_used_for(family: Current.family).to_a,
                   creatable: false
                 ) %>
-            <%= form.collection_select :merchant_id, Current.family.available_merchants.alphabetically, :id, :name, { prompt: t(".merchant_prompt"), label: t(".merchant_label"), variant: :logo, searchable: true } %>
+            <%= form.collection_select :merchant_id, Current.family.available_merchants.with_attached_logo.alphabetically, :id, :name, { prompt: t(".merchant_prompt"), label: t(".merchant_label"), variant: :logo, searchable: true } %>
             <%# Native multi-select on purpose: it sends tag_ids only when the user picks some,
                 and a sent empty set would clear every selected transaction's tags. %>
             <%= form.select :tag_ids, Current.family.tags.alphabetically.pluck(:name, :id), { include_blank: t(".none"), multiple: true, label: t(".tags_label"), container_class: "h-40", include_hidden: false } %>

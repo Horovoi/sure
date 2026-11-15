@@ -1,21 +1,19 @@
-<%# locals: (provider_merchant:) %>
+<%# locals: (provider_merchant:, linkable: true) %>
+<%# linkable: false for a recently unlinked merchant, which has no transactions to show %>
 
 <tr class="border-b border-subdued last:border-0 hover:bg-surface-hover">
   <td class="py-3 px-4 text-sm text-primary">
     <div class="flex w-full items-center gap-2.5">
-      <% if provider_merchant.logo_url %>
-        <div class="w-8 h-8 rounded-full flex justify-center items-center">
-          <%= image_tag Setting.transform_brand_fetch_url(provider_merchant.logo_url), class: "w-8 h-8 rounded-full" %>
-        </div>
-      <% else %>
-        <div class="w-8 h-8 rounded-full flex items-center justify-center bg-container-inset text-secondary text-sm font-medium">
-          <%= provider_merchant.name&.first&.upcase || "?" %>
-        </div>
-      <% end %>
+      <%= render "family_merchants/logo", merchant: provider_merchant %>
 
-      <p class="font-medium truncate">
-        <%= provider_merchant.name %>
-      </p>
+      <% if linkable %>
+        <%= link_to provider_merchant.name,
+              family_merchant_path(provider_merchant),
+              class: "font-medium truncate hover:underline",
+              data: { turbo_frame: "_top" } %>
+      <% else %>
+        <p class="font-medium truncate"><%= provider_merchant.name %></p>
+      <% end %>
     </div>
   </td>
   <td class="py-3 px-4 text-sm text-secondary align-middle">

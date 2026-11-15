@@ -180,7 +180,11 @@ export default class extends Controller {
         return;
       }
 
-      this.createFormTarget.insertAdjacentHTML("beforebegin", tag.html);
+      // A name that exists already comes back as that tag: select its row, don't add another
+      const listed = this.optionTargets.some(
+        (option) => option.dataset.tagId === String(tag.id),
+      );
+      if (!listed) this.createFormTarget.insertAdjacentHTML("beforebegin", tag.html);
       this.selectedIds.add(String(tag.id));
       this.renderSelection();
       this.searchTarget.value = "";

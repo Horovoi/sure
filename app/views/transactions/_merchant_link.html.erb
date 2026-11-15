@@ -1,0 +1,7 @@
+<%# locals: (merchant:) %>
+<%# The row's merchant opens the merchant page (all its transactions across accounts). %>
+<%= link_to merchant.name,
+      family_merchant_path(merchant),
+      data: { turbo_frame: "_top" },
+      class: "hover:underline",
+      title: t("transactions.merchant_link.title", name: merchant.name) %>

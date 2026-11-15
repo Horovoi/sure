@@ -33,7 +33,7 @@ class Import::CategoryMapping < Import::Mapping
   def create_mappable!
     return unless creatable?
 
-    self.mappable = import.family.categories.find_or_create_by!(name: key)
+    self.mappable = import.family.categories.find_or_create_by_name!(key)
     save!
   end
 end

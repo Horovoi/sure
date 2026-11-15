@@ -12,6 +12,7 @@ en:
       loading: Loading entries...
     selection_bar:
       delete: Delete
+      duplicate: Duplicate
       edit: Edit
     update:
       success: Entry updated

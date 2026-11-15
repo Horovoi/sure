@@ -3,12 +3,7 @@ class CategoryImport < Import
     transaction do
       rows.each do |row|
         category_name = row.name.to_s.strip
-        category = family.categories.find_or_initialize_by(name: category_name)
-        category.color = row.category_color.presence || category.color || Category::UNCATEGORIZED_COLOR
-        category.classification = row.category_classification.presence || category.classification || "expense"
-        category.lucide_icon = row.category_icon.presence || category.lucide_icon || "shapes"
-        category.parent = nil
-        category.save!
+        save_imported_category!(row, category_name)
 
         ensure_placeholder_category(row.category_parent)
       end
@@ -118,11 +113,27 @@ class CategoryImport < Import
       header.to_s.strip.downcase.gsub(/\*/, "").gsub(/[\s-]+/, "_")
     end
 
+    # A category of the same name created by another request between the lookup
+    # and the insert hits the unique index; the row then updates that category.
+    # The savepoint keeps the import's transaction usable after that error.
+    def save_imported_category!(row, category_name, retried: false)
+      category = family.categories.find_or_initialize_by(name: category_name)
+      category.color = row.category_color.presence || category.color || Category::UNCATEGORIZED_COLOR
+      category.classification = row.category_classification.presence || category.classification || "expense"
+      category.lucide_icon = row.category_icon.presence || category.lucide_icon || "shapes"
+      category.parent = nil
+      Category.transaction(requires_new: true) { category.save! }
+    rescue ActiveRecord::RecordNotUnique
+      raise if retried
+
+      save_imported_category!(row, category_name, retried: true)
+    end
+
     def ensure_placeholder_category(name)
       trimmed_name = name.to_s.strip
       return if trimmed_name.blank?
 
-      family.categories.find_or_create_by!(name: trimmed_name) do |placeholder|
+      family.categories.find_or_create_by_name!(trimmed_name) do |placeholder|
         placeholder.color = Category::UNCATEGORIZED_COLOR
         placeholder.classification = "expense"
         placeholder.lucide_icon = "shapes"
