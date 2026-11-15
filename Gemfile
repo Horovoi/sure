@@ -102,6 +102,8 @@ gem "flipper-active_record"
 # AI
 gem "ruby-openai"
 gem "langfuse-ruby", require: "langfuse"
+# Model Context Protocol server for /mcp (protocol 2026-07-28)
+gem "mcp", "~> 1.10"
 
 group :development, :test do
   gem "debug", platforms: %i[mri windows]

@@ -369,7 +369,9 @@ Rails.application.routes.draw do
     end
   end
 
-  post "mcp", to: "mcp#handle"
+  # --- MCP (w1-mcp): protocol 2026-07-28, POST only; GET and DELETE answer 405 ---
+  match "mcp", to: "mcp#handle", via: %i[post get delete]
+  # --- end MCP ---
 
 
 

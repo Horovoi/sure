@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "sure-staging": {
+      "type": "http",
+      "url": "http://localhost:3334/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SURE_STAGING_MCP_TOKEN}"
+      }
+    }
+  }
+}

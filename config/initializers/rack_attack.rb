@@ -58,6 +58,12 @@ class Rack::Attack
     request.ip if request.path.start_with?("/api/")
   end
 
+  # Throttle the MCP endpoint (the MCP spec requires rate-limited tool calls). One chat turn or Claude Code
+  # session makes a handful of calls; 300 a minute leaves room for bursts and stops a runaway loop.
+  throttle("mcp/ip", limit: 300, period: 1.minute) do |request|
+    request.ip if request.path == "/mcp"
+  end
+
   # Block requests that appear to be malicious
   blocklist("block malicious requests") do |request|
     # Block requests with suspicious user agents

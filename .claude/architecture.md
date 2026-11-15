@@ -65,3 +65,50 @@ Sidekiq handles:
 - Monetary values stored in user's base currency
 - `Money` objects handle conversion and formatting
 - Historical exchange rates for accurate reporting
+
+## MCP Endpoint (`/mcp`)
+
+Claude Code (and the in-app Claude chat, through the host bridge) reads and changes Sure's data over the
+Model Context Protocol. The endpoint serves protocol **2026-07-28 only**, statelessly, with tools only,
+through the official `mcp` gem (`MCP::Server::Transports::StreamableHTTPTransport`, `stateless: true`).
+
+- `McpController#handle`: one POST endpoint. GET and DELETE answer 405 (`Allow: POST`).
+  Before-actions, in order: bearer `MCP_API_TOKEN` (SHA256-digest compare, 401 with
+  `WWW-Authenticate: Bearer realm="sure"`), the active user from `MCP_USER_EMAIL`, a foreign `Origin`
+  gets 403 (no `Origin` and the same origin pass), `Mcp-Session-Id` and `Last-Event-ID` are dropped
+  (never echoed), the version gate (`initialize` or a missing or other `MCP-Protocol-Version` gets 400
+  with JSON-RPC -32022 and `data.supported`), then the family time zone wraps the request.
+- The SDK enforces the rest: `Mcp-Method` / `Mcp-Name` (Base64 sentinel decoded) and the header/`_meta`
+  version match (400, -32020), the required `_meta` envelope (400, -32602), unknown method (404, -32601),
+  unknown tool (400, -32602), notifications (202, no body), `resultType`, and the cache hints.
+- `Mcp::ServerBuilder.build(credential)`: one `MCP::Tool` per `Assistant.function_classes` entry, in the
+  same order as the chat. A tool returns its result as a JSON text block plus `structuredContent`; a
+  failure is an `isError` result built by `Assistant::FunctionToolCaller.error_result` (the full
+  exception goes only to the log). `tools/list` and `server/discover` carry `ttlMs` 60000 and
+  `cacheScope` private (the schemas hold family names).
+- `Assistant::Function#title`, `#mcp_annotations` (default read-only, idempotent, closed world) and
+  `#mcp_input_schema` (nullable properties are optional, empty enums pruned) describe each tool.
+- `Mcp::Credential`: who is calling (user, kind `:static` or `:turn`, assistant message). Every client
+  gets every tool; the credential feeds the tool-call audit.
+- Rack::Attack throttles `/mcp` at 300 requests a minute per IP.
+
+**Clients.** Claude Code 2.1.325 or newer is the minimum CLI version: it is the first version found to
+carry the 2026-07-28 client (`server/discover`, the `_meta` envelope); older CLIs speak only the
+handshake protocol and get -32022. The claude bridge reads this minimum. Confirm a new CLI with
+`claude --debug` against staging (the log shows `server/discover` and protocol 2026-07-28).
+
+Production is registered once by the claude bridge installer. By hand it is:
+
+```bash
+claude mcp add --scope user --transport http sure http://localhost:3333/mcp \
+  --header "Authorization: Bearer $MCP_API_TOKEN"
+```
+
+Staging (http://localhost:3334) reads the same `.env.production`, so it takes the same token. The
+project `.mcp.json` registers it as `sure-staging` and reads the token from `SURE_STAGING_MCP_TOKEN`
+in your shell; no secret is in the repository:
+
+```bash
+export SURE_STAGING_MCP_TOKEN=...   # the MCP_API_TOKEN value from .env.production
+bin/staging up && claude --debug    # then /mcp shows sure-staging
+```

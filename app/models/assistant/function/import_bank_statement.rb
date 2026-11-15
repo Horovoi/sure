@@ -18,6 +18,12 @@ class Assistant::Function::ImportBankStatement < Assistant::Function
     false
   end
 
+  # Creates a transaction import (rows the user reviews before publishing) from a PDF read by an LLM provider,
+  # so it is neither read-only nor idempotent, and the extraction reaches outside Sure.
+  def mcp_annotations
+    super.merge(read_only_hint: false, idempotent_hint: false, open_world_hint: true)
+  end
+
   def params_schema
     build_schema(
       required: [ "pdf_import_id" ],
@@ -108,11 +114,12 @@ class Assistant::Function::ImportBankStatement < Assistant::Function
       message: "Transactions extracted into import #{pdf_import.id}. Review and publish them in the Imports flow."
     }
   rescue => error
+    # The raw message can carry provider or SQL internals, so it stays in the log (decision 15)
     Rails.logger.error("ImportBankStatement error: #{error.class.name} - #{error.message}")
     {
       success: false,
       error: "extraction_failed",
-      message: "Failed to import bank statement: #{error.message.truncate(200)}"
+      message: "Failed to import bank statement. Check the import in the Imports page or try again later."
     }
   end
 

@@ -43,6 +43,34 @@ class Assistant::Function
     }
   end
 
+  # Human-readable name MCP clients show for the tool
+  def title
+    name.to_s.humanize
+  end
+
+  # MCP tool annotations, as keywords of MCP::Tool::Annotations. The default fits a tool that only reads
+  # Sure's own data. A tool that changes records or reaches outside Sure overrides this. Clients treat the hints
+  # as advice for how to present a call; they never gate one.
+  def mcp_annotations
+    {
+      read_only_hint: true,
+      destructive_hint: false,
+      idempotent_hint: true,
+      open_world_hint: false
+    }
+  end
+
+  # The input schema served over MCP. MCP validates arguments against it, so a property whose type allows null
+  # is optional there (a client may leave it out instead of sending null), and empty enums are pruned.
+  def mcp_input_schema
+    schema = params_schema.deep_dup.deep_symbolize_keys
+    properties = schema[:properties] || {}
+    nullable = properties.select { |_key, property| nullable_property?(property) }.keys.map(&:to_s)
+    schema[:required] = Array(schema[:required]).map(&:to_s) - nullable
+
+    prune_empty_enums(schema)
+  end
+
   private
     attr_reader :user
 
@@ -81,6 +109,13 @@ class Assistant::Function
       else
         node
       end
+    end
+
+    def nullable_property?(property)
+      return false unless property.is_a?(Hash)
+
+      Array(property[:type]).map(&:to_s).include?("null") ||
+        Array(property[:anyOf]).any? { |option| option.is_a?(Hash) && option[:type].to_s == "null" }
     end
 
     def family_account_names
