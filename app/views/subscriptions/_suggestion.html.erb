@@ -31,22 +31,20 @@
       <div class="flex items-center gap-2">
         <span class="text-sm text-primary font-medium truncate"><%= suggestion.display_name %></span>
         <% if suggestion.subscription_service.present? %>
-          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-50 text-success">
-            Matched
-          </span>
+          <%= render DS::Pill.new(label: t("subscriptions.suggestion.matched_badge"), tone: :success, marker: false) %>
         <% end %>
       </div>
       <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-secondary mt-0.5">
         <% if suggestion.detected_base_currency.present? && suggestion.detected_base_amount.present? %>
           <span class="font-medium text-primary">
-            <%= Money.new(suggestion.detected_base_amount * 100, suggestion.detected_base_currency).format %> <%= suggestion.detected_base_currency %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
+            <%= Money.new(suggestion.detected_base_amount, suggestion.detected_base_currency).format %> <%= suggestion.detected_base_currency %><%= suggestion.billing_cycle_yearly? ? t("subscriptions.index.summary.per_year") : t("subscriptions.index.summary.per_month") %>
           </span>
           <span class="text-secondary">
             (<%= format_money(-suggestion.amount_money) %> local)
           </span>
         <% else %>
           <span class="font-medium text-primary">
-            <%= format_money(-suggestion.amount_money) %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
+            <%= format_money(-suggestion.amount_money) %><%= suggestion.billing_cycle_yearly? ? t("subscriptions.index.summary.per_year") : t("subscriptions.index.summary.per_month") %>
           </span>
         <% end %>
         <% if suggestion.occurrence_count.present? && suggestion.occurrence_count.to_i > 0 %>
@@ -63,7 +61,7 @@
   </div>
 
   <%# Actions - consistent button styling for both dropdown and simple cases %>
-  <% approve_btn_classes = "inline-flex items-center gap-1.5 w-full px-3 py-1.5 text-sm font-medium text-success hover:bg-green-50 dark:hover:bg-green-950 rounded-lg transition-colors" %>
+  <% approve_btn_classes = "inline-flex items-center gap-1.5 w-full px-3 py-1.5 text-sm font-medium text-success hover:bg-success/10 rounded-lg transition-colors" %>
   <div class="flex items-center gap-1 flex-shrink-0">
     <%# Fixed-width wrapper ensures alignment regardless of button type %>
     <div class="w-[115px]">
@@ -101,7 +99,7 @@
 
     <%# Icon-only dismiss button %>
     <%= button_to dismiss_suggestion_subscription_path(suggestion), method: :post,
-        class: "inline-flex items-center justify-center w-8 h-8 text-secondary hover:text-destructive hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors",
+        class: "inline-flex items-center justify-center w-8 h-8 text-secondary hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors",
         title: t("subscriptions.suggestions.dismiss") do %>
       <%= icon "x", size: "sm", color: "current" %>
     <% end %>

@@ -29,14 +29,14 @@
 
   <%# Suggestion banner - only show when there are pending suggestions %>
   <% if @suggestion_count > 0 %>
-    <div class="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div class="bg-blue-50 theme-dark:bg-blue-950 border border-blue-200 theme-dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <%= icon "zap", size: "md", class: "text-blue-600 dark:text-blue-400" %>
+        <%= icon "zap", size: "md", class: "text-blue-600 theme-dark:text-blue-400" %>
         <div>
-          <p class="text-blue-900 dark:text-blue-100 font-medium">
+          <p class="text-blue-900 theme-dark:text-blue-100 font-medium">
             <%= t("subscriptions.detect.found", count: @suggestion_count) %>
           </p>
-          <p class="text-blue-700 dark:text-blue-300 text-sm"><%= t(".suggestion_banner") %></p>
+          <p class="text-blue-700 theme-dark:text-blue-300 text-sm"><%= t(".suggestion_banner") %></p>
         </div>
       </div>
       <%= render DS::Link.new(

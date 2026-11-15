@@ -63,22 +63,18 @@
   </td>
 
   <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= subscription.billing_cycle_monthly? ? "bg-violet-100 text-violet-700" : "bg-yellow-100 text-yellow-700" %>">
-      <%= t("subscriptions.billing_cycle.#{subscription.billing_cycle}") %>
-    </span>
+    <%# DS::Pill, not raw palette classes: those stayed light in dark mode %>
+    <%= render DS::Pill.new(label: t("subscriptions.billing_cycle.#{subscription.billing_cycle}"),
+                            tone: subscription.billing_cycle_monthly? ? :violet : :amber, marker: false) %>
   </td>
 
   <td class="py-3 px-4 text-sm <%= "opacity-60" unless subscription.active? %>">
     <% if subscription.overdue? %>
       <span class="text-destructive font-medium"><%= l(subscription.next_expected_date, format: :short) %></span>
-      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-destructive">
-        <%= t("subscriptions.index.table.overdue") %>
-      </span>
+      <span class="ml-1"><%= render DS::Pill.new(label: t("subscriptions.index.table.overdue"), tone: :error, marker: false) %></span>
     <% elsif subscription.due_today? %>
       <span class="text-primary font-medium"><%= l(subscription.next_expected_date, format: :short) %></span>
-      <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
-        <%= t("subscriptions.index.table.due_today") %>
-      </span>
+      <span class="ml-1"><%= render DS::Pill.new(label: t("subscriptions.index.table.due_today"), tone: :info, marker: false) %></span>
     <% else %>
       <span class="text-secondary"><%= l(subscription.next_expected_date, format: :short) %></span>
     <% end %>
@@ -86,13 +82,9 @@
 
   <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
     <% if subscription.active? %>
-      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-success">
-        <%= t("subscriptions.status.active") %>
-      </span>
+      <%= render DS::Pill.new(label: t("subscriptions.status.active"), tone: :success, marker: false) %>
     <% else %>
-      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-inset text-secondary">
-        <%= t("subscriptions.status.inactive") %>
-      </span>
+      <%= render DS::Pill.new(label: t("subscriptions.status.inactive"), tone: :neutral, marker: false) %>
     <% end %>
   </td>
 
@@ -103,14 +95,14 @@
           <%= button_to record_transaction_subscription_path(subscription),
               method: :post,
               title: t(".record_now"),
-              class: "p-1.5 rounded hover:bg-green-50 text-success" do %>
+              class: "p-1.5 rounded hover:bg-surface-hover text-success" do %>
             <%= icon "check-circle", size: "sm", color: "current" %>
           <% end %>
         <% else %>
           <%= link_to edit_subscription_path(subscription),
               title: t(".link_account_to_record"),
               data: { turbo_frame: "_top" },
-              class: "p-1.5 rounded hover:bg-yellow-50 text-warning" do %>
+              class: "p-1.5 rounded hover:bg-surface-hover text-warning" do %>
             <%= icon "link", size: "sm", color: "current" %>
           <% end %>
         <% end %>
