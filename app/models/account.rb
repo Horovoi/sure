@@ -36,6 +36,12 @@ class Account < ApplicationRecord
   # wizard is not finished) is listed, but its balance is not counted yet.
   scope :counted_in_totals, -> { where(status: "active") }
 
+  # Accounts counted in past net worth: active ones, and disabled ones for the days
+  # before they were disabled (disabled_at). Drafts and accounts being deleted stay out.
+  # BalanceSheet::HistoricalAccountScope gives the per-account windows.
+  HISTORICAL_STATUSES = %w[active disabled].freeze
+  scope :counted_in_history, -> { where(status: HISTORICAL_STATUSES) }
+
   scope :assets, -> { where(classification: "asset") }
   scope :liabilities, -> { where(classification: "liability") }
   scope :alphabetically, -> { order(:name) }
@@ -98,9 +104,9 @@ class Account < ApplicationRecord
 
   # Account state machine
   aasm column: :status do
-    state :active, initial: true
+    state :active, initial: true, before_enter: :clear_disabled_at
     state :draft
-    state :disabled
+    state :disabled, before_enter: :stamp_disabled_at
     state :pending_deletion
 
     event :activate do
@@ -341,4 +347,19 @@ class Account < ApplicationRecord
       raise "Unknown account type: #{accountable_type}"
     end
   end
+
+  private
+    # Runs on every entry to disabled: the disable event, and the restore after a failed
+    # deletion. A restore keeps the stamp of a disable that came before the deletion, so
+    # the days the account was already out stay out. The state is still the old one here.
+    def stamp_disabled_at
+      return if aasm.current_state == :pending_deletion && disabled_at.present?
+
+      self.disabled_at = Time.current
+    end
+
+    # Enable and activate bring the account back into net worth, for every day
+    def clear_disabled_at
+      self.disabled_at = nil
+    end
 end

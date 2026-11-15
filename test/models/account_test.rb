@@ -370,4 +370,62 @@ class AccountTest < ActiveSupport::TestCase
     account = Account.new(family: @family, name: "x", balance: 0, currency: "USD", accountable_type: "Depository", accountable_attributes: {})
     assert_kind_of Depository, account.accountable
   end
+
+  test "disabling stamps disabled_at and enabling clears it" do
+    travel_to Time.zone.local(2026, 3, 9, 12) do
+      @account.disable!
+      assert_equal Time.current, @account.reload.disabled_at
+    end
+
+    @account.enable!
+    assert_nil @account.reload.disabled_at
+  end
+
+  test "activating a disabled account clears disabled_at" do
+    @account.disable!
+    assert_not_nil @account.reload.disabled_at
+
+    @account.activate!
+    assert_nil @account.reload.disabled_at
+  end
+
+  test "a failed deletion stamps disabled_at" do
+    @account.mark_for_deletion!
+    assert_nil @account.disabled_at
+
+    travel_to Time.zone.local(2026, 3, 9, 12) do
+      @account.recover_from_failed_destroy!
+      assert @account.reload.disabled?
+      assert_equal Time.current, @account.disabled_at
+    end
+  end
+
+  test "a failed deletion of a disabled account keeps the day it was disabled" do
+    disabled_at = Time.zone.local(2026, 3, 1, 12)
+    travel_to(disabled_at) { @account.disable! }
+    @account.mark_for_deletion!
+
+    travel_to Time.zone.local(2026, 3, 9, 12) do
+      @account.recover_from_failed_destroy!
+    end
+
+    assert @account.reload.disabled?
+    assert_equal disabled_at, @account.disabled_at
+  end
+
+  test "counted_in_history holds active and disabled accounts, not drafts or deletions" do
+    active = @family.accounts.create!(name: "Active", balance: 0, currency: "USD", accountable: Depository.new)
+    disabled = @family.accounts.create!(name: "Disabled", balance: 0, currency: "USD", accountable: Depository.new)
+    draft = @family.accounts.create!(name: "Draft", balance: 0, currency: "USD", accountable: Property.new, status: "draft")
+    deleting = @family.accounts.create!(name: "Deleting", balance: 0, currency: "USD", accountable: Depository.new)
+    disabled.disable!
+    deleting.mark_for_deletion!
+
+    ids = @family.accounts.counted_in_history.pluck(:id)
+
+    assert_includes ids, active.id
+    assert_includes ids, disabled.id
+    assert_not_includes ids, draft.id
+    assert_not_includes ids, deleting.id
+  end
 end
