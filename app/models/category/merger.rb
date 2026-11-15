@@ -138,9 +138,10 @@ class Category::Merger
         .update_all(value: target_category.id.to_s, updated_at: Time.current)
 
       top_level_condition_ids = Rule::Condition.where(rule_id: rule_ids).select(:id)
-      Rule::Condition
-        .where(condition_type: CATEGORY_CONDITION_TYPES, value: source.id.to_s)
-        .where("rule_conditions.rule_id IN (:rules) OR rule_conditions.parent_id IN (:conditions)", rules: rule_ids, conditions: top_level_condition_ids)
+      category_conditions = Rule::Condition.where(condition_type: CATEGORY_CONDITION_TYPES, value: source.id.to_s)
+      category_conditions
+        .where(rule_id: rule_ids)
+        .or(category_conditions.where(parent_id: top_level_condition_ids))
         .update_all(value: target_category.id.to_s, updated_at: Time.current)
     end
 
