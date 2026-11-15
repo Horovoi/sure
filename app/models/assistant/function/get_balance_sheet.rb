@@ -57,6 +57,9 @@ class Assistant::Function::GetBalanceSheet < Assistant::Function
   end
 
   def call(params = {})
+    # A fresh report per call: one chat turn reuses this function and its user, and a write tool earlier in the
+    # turn must show in the numbers. Family#balance_sheet is memoized on the family, so it is not used here.
+    @balance_sheet = BalanceSheet.new(family)
     period = resolve_period(params)
     return period if period.is_a?(Hash)
 
@@ -88,7 +91,7 @@ class Assistant::Function::GetBalanceSheet < Assistant::Function
 
   private
     def balance_sheet
-      @balance_sheet ||= family.balance_sheet
+      @balance_sheet ||= BalanceSheet.new(family)
     end
 
     def resolve_period(params)
