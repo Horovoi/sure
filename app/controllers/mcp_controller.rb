@@ -136,10 +136,11 @@ class McpController < ApplicationController
       render_gate_error(:forbidden, "MCP is turned off in Settings > Self-Hosting")
     end
 
-    # The Claude chat's tools stop working the moment the user turns AI off, even mid-turn
+    # The Claude chat's tools stop working the moment the user turns AI off, even mid-turn. Only the switch is
+    # checked, not User#ai_enabled? (which also needs an LLM provider): the tools need no provider of their own.
     def require_ai_enabled_for_turn!
       return unless credential.turn?
-      return if credential.user.ai_enabled?
+      return if credential.user.ai_enabled
 
       render_gate_error(:forbidden, "AI is disabled for this user")
     end

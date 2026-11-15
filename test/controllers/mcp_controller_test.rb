@@ -660,6 +660,17 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_equal McpController::JSON_RPC_INVALID_REQUEST, rpc_error["code"]
   end
 
+  test "a turn token works with the AI switch on even when no LLM provider is configured" do
+    turn = streaming_claude_turn
+    @user.update!(ai_enabled: true)
+    User.any_instance.stubs(:ai_available?).returns(false)
+
+    mcp_post "tools/list", headers: turn_auth(turn)
+
+    assert_response :success
+    assert rpc_result["tools"].any?
+  end
+
   test "a turn token is 401 once its turn completed or failed" do
     turn = streaming_claude_turn
     token = Mcp::TurnToken.generate(turn)
