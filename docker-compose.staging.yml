@@ -43,6 +43,7 @@ services:
 
   # Publishes the app on the host. The app itself stays on the closed network.
   proxy:
+    container_name: ${COMPOSE_PROJECT_NAME}-proxy
     image: alpine/socat:1.8.0.3
     command: tcp-listen:8080,fork,reuseaddr tcp-connect:web:${CONTAINER_PORT:-3333}
     ports: ["127.0.0.1:${STAGING_PORT:-3334}:8080"]

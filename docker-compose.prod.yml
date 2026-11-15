@@ -35,7 +35,11 @@ x-rails-env: &rails_env
   BRAND_FETCH_HIGH_RES_LOGOS: ${BRAND_FETCH_HIGH_RES_LOGOS:-false}
 
 services:
+  # Each container is named <project>-<service> (sure-web, sure-staging-web). Without
+  # container_name Compose appends a replica number (sure-web-1), which means nothing
+  # here: every service runs exactly one container.
   web:
+    container_name: ${COMPOSE_PROJECT_NAME}-web
     # Built locally by bin/deploy and tagged with the commit it was built from
     image: sure:${BUILD_COMMIT_SHA:-latest}
     build:
@@ -66,6 +70,7 @@ services:
       start_period: 30s
 
   worker:
+    container_name: ${COMPOSE_PROJECT_NAME}-worker
     # Same image as web; never pulled from a registry
     image: sure:${BUILD_COMMIT_SHA:-latest}
     pull_policy: never
@@ -92,6 +97,7 @@ services:
       - sure_net
 
   db:
+    container_name: ${COMPOSE_PROJECT_NAME}-db
     image: postgres:16
     restart: unless-stopped
     volumes:
@@ -107,6 +113,7 @@ services:
       - sure_net
 
   redis:
+    container_name: ${COMPOSE_PROJECT_NAME}-redis
     image: redis:latest
     restart: unless-stopped
     volumes:
@@ -120,6 +127,7 @@ services:
       - sure_net
 
   backup:
+    container_name: ${COMPOSE_PROJECT_NAME}-backup
     image: prodrigestivill/postgres-backup-local
     restart: unless-stopped
     volumes:

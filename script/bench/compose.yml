@@ -1,0 +1,47 @@
+# Extra containers for `bin/staging bench`: the old version twice (the second one
+# shows how much two identical containers differ) and the new version once, all on
+# the staging copy, plus a container that sends the requests.
+
+x-bench-web: &bench_web
+  extends:
+    file: docker-compose.prod.yml
+    service: web
+  build: !reset null
+  ports: !reset []
+  restart: "no"
+  profiles: [bench]
+  environment:
+    STAGING_CLONE: "1"
+    SMTP_ADDRESS: ""
+    SMTP_USERNAME: ""
+    SMTP_PASSWORD: ""
+  volumes:
+    - ${BENCH_DIR:-./script/bench}:/bench:ro
+    - ${BENCH_OUT:-./tmp/bench}:/out
+
+services:
+  web-old-a:
+    <<: *bench_web
+    container_name: ${COMPOSE_PROJECT_NAME}-web-old-a
+    image: sure:${BENCH_OLD:-none}
+  web-old-b:
+    <<: *bench_web
+    container_name: ${COMPOSE_PROJECT_NAME}-web-old-b
+    image: sure:${BENCH_OLD:-none}
+  web-new:
+    <<: *bench_web
+    container_name: ${COMPOSE_PROJECT_NAME}-web-new
+    image: sure:${BENCH_NEW:-none}
+  driver:
+    container_name: ${COMPOSE_PROJECT_NAME}-driver
+    image: sure:${BENCH_NEW:-none}
+    entrypoint: []
+    command: ["sleep", "infinity"]
+    environment:
+      TARGET_PORT: ${CONTAINER_PORT:-3333}
+    restart: "no"
+    profiles: [bench]
+    volumes:
+      - ${BENCH_DIR:-./script/bench}:/bench:ro
+      - ${BENCH_OUT:-./tmp/bench}:/out
+    networks: [sure_net]
