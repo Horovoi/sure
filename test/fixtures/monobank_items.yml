@@ -1,0 +1,8 @@
+one:
+  family: dylan_family
+  name: monobank
+  access_token: test_monobank_token
+  status: good
+  institution_name: monobank
+  institution_domain: monobank.ua
+  institution_url: https://monobank.ua

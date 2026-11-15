@@ -1,0 +1,10 @@
+uah_card:
+  monobank_item: one
+  account_id: mono_uah_card
+  name: Black card ·4321
+  currency: UAH
+  account_kind: card
+  account_type: black
+  raw_balance_minor: 4200000
+  credit_limit: 50000
+  current_balance: -8000
