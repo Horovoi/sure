@@ -29,7 +29,7 @@
   <% if @q.present? %>
     <% resolved_clear_all_url = clear_all_url || transactions_path(clear_filters: true, per_page: params[:per_page].presence) %>
     <%= render DS::Link.new(
-      text: "Clear all",
+      text: t("transactions.searches.filters_bar.clear_all"),
       variant: "ghost",
       icon: "x",
       href: resolved_clear_all_url,

@@ -13,6 +13,18 @@ en:
     index:
       title: Exports
       new: New Export
+    new:
+      title: Export your data
+      subtitle: Download all your financial data
+      included_heading: "What's included:"
+      included:
+        accounts: All accounts and balances
+        transactions: Transaction history
+        trades: Investment trades
+        categories: Categories, tags and rules
+      import_note: "This export includes all of your data, but only some of it can be imported back with the CSV import: accounts, transactions (with category and tags) and trades. The rest is for your records only."
+      cancel: Cancel
+      submit: Export data
     table:
       title: Exports
       header:

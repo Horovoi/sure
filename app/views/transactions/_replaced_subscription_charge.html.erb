@@ -16,11 +16,12 @@
                 name: replaced["name"],
                 amount: format_money(Money.new(replaced["amount"].to_d, replaced["currency"].presence || transaction.entry.currency))) %>
         </p>
-        <%= button_to t("transactions.replaced_subscription_charge.restore"),
-              restore_subscription_charge_transaction_path(transaction),
+        <%= render DS::Button.new(text: t("transactions.replaced_subscription_charge.restore"),
+              href: restore_subscription_charge_transaction_path(transaction),
               method: :post,
-              class: "btn btn--outline btn--sm",
-              data: { turbo_frame: "_top", testid: "restore-subscription-charge" } %>
+              variant: :outline,
+              size: :sm,
+              data: { turbo_frame: "_top", testid: "restore-subscription-charge" }) %>
       </div>
     </div>
   </div>

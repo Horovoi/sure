@@ -68,12 +68,10 @@
           <p class="text-sm"><%= t(".cache_icons_label", default: "Cache subscription icons") %></p>
           <p class="text-secondary text-sm"><%= t(".cache_icons_description", default: "Download all subscription service icons from Brand Fetch and store them locally.") %></p>
         </div>
-        <button type="button"
-                class="btn btn--outline text-sm"
-                data-icon-cache-target="button"
-                data-action="click->icon-cache#cache">
-          <%= t(".cache_icons_button", default: "Cache All Icons") %>
-        </button>
+        <%= render DS::Button.new(text: t(".cache_icons_button", default: "Cache All Icons"),
+                                  variant: :outline,
+                                  size: :sm,
+                                  data: { icon_cache_target: "button", action: "click->icon-cache#cache" }) %>
       </div>
       <p class="text-sm text-secondary mt-2 hidden" data-icon-cache-target="status"></p>
     </div>

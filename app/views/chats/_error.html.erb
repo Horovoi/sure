@@ -1,17 +1,17 @@
 <%# locals: (chat:) %>
 
-<div id="chat-error" class="px-3 py-2 bg-red-100 border border-red-500 rounded-lg">
+<div id="chat-error" class="px-3 py-2 bg-destructive/10 border border-destructive rounded-lg">
   <% if chat.debug_mode? && chat.error.present? %>
-    <div class="overflow-x-auto text-xs p-4 bg-red-200 rounded-md mb-2">
+    <div class="overflow-x-auto text-xs p-4 bg-destructive/20 text-primary rounded-md mb-2">
       <code><%= chat.error %></code>
     </div>
   <% end %>
 
   <div class="flex items-center justify-between gap-2">
     <div class="space-y-1">
-      <p class="text-xs text-red-500"><%= t("chats.error.message") %></p>
+      <p class="text-xs text-destructive"><%= t("chats.error.message") %></p>
       <% if (detail = chat.user_facing_error) %>
-        <p class="text-xs text-red-500" data-testid="chat-error-detail"><%= detail %></p>
+        <p class="text-xs text-destructive" data-testid="chat-error-detail"><%= detail %></p>
       <% end %>
     </div>
 

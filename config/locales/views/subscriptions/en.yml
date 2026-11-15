@@ -28,6 +28,8 @@ en:
     dismissed_suggestion:
       restore: Restore
       dismissed_badge: Dismissed
+    suggestion:
+      matched_badge: Matched
     restore_suggestion:
       success: Suggestion restored
     detect:

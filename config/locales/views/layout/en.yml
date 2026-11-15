@@ -10,6 +10,9 @@ en:
         reports: Reports
         subscriptions: Subscriptions
         transactions: Transactions
+      open_sidebar: Open menu
+      toggle_left_sidebar: Show or hide the accounts panel
+      toggle_right_sidebar: Show or hide the assistant panel
     auth:
       existing_account: Already have an account?
       no_account: New to %{product_name}?

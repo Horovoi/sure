@@ -30,21 +30,19 @@
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
         <span class="text-sm text-secondary font-medium truncate"><%= suggestion.display_name %></span>
-        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-secondary">
-          <%= t(".dismissed_badge") %>
-        </span>
+        <%= render DS::Pill.new(label: t(".dismissed_badge"), tone: :neutral, marker: false) %>
       </div>
       <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-secondary mt-0.5">
         <% if suggestion.detected_base_currency.present? && suggestion.detected_base_amount.present? %>
           <span>
-            <%= Money.new(suggestion.detected_base_amount * 100, suggestion.detected_base_currency).format %> <%= suggestion.detected_base_currency %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
+            <%= Money.new(suggestion.detected_base_amount, suggestion.detected_base_currency).format %> <%= suggestion.detected_base_currency %><%= suggestion.billing_cycle_yearly? ? t("subscriptions.index.summary.per_year") : t("subscriptions.index.summary.per_month") %>
           </span>
           <span>
             (<%= format_money(-suggestion.amount_money) %> local)
           </span>
         <% else %>
           <span>
-            <%= format_money(-suggestion.amount_money) %>/<%= suggestion.billing_cycle_yearly? ? "yr" : "mo" %>
+            <%= format_money(-suggestion.amount_money) %><%= suggestion.billing_cycle_yearly? ? t("subscriptions.index.summary.per_year") : t("subscriptions.index.summary.per_month") %>
           </span>
         <% end %>
         <% if suggestion.occurrence_count.present? && suggestion.occurrence_count.to_i > 0 %>

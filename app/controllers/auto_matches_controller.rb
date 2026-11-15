@@ -13,6 +13,9 @@ class AutoMatchesController < ApplicationController
   before_action :set_transfer, only: %i[confirm reject]
 
   def index
+    # The default breadcrumb is the controller name ("Auto Matches"); the page is "Transfer matches"
+    @breadcrumbs = [ [ t("breadcrumbs.home"), root_path ], [ t(".title"), nil ] ]
+
     @pagy, @pending_transfers = pagy(
       pending_transfers
         .includes(inflow_transaction: [ :merchant, { entry: :account } ], outflow_transaction: [ :merchant, { entry: :account } ])

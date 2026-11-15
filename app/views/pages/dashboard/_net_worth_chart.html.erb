@@ -12,6 +12,8 @@
             size: :sm,
             icon: "maximize-2",
             type: "button",
+            title: t(".expand"),
+            aria: { label: t(".expand") },
             data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "net_worth_fullscreen_dialog" },
             class: "hidden sm:inline-flex"
           ) %>
@@ -68,6 +70,7 @@
     data-time-series-chart-select-period-param-value="net_worth_period"
     data-time-series-chart-select-start-param-value="net_worth_start_date"
     data-time-series-chart-select-end-param-value="net_worth_end_date"
+    data-time-series-chart-select-frame-value="net_worth_section"
     draggable="false"
     data-period-label="<%= period.key.present? ? period.label : t("pages.dashboard.net_worth_chart_dialog.date_range", start: l(period.start_date, format: "%b %d, %Y"), end: l(period.end_date, format: "%b %d, %Y")) %>"
     data-period-start="<%= period.start_date %>"

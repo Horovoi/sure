@@ -56,13 +56,9 @@
 
   <td class="py-3 px-4 <%= "opacity-60" unless recurring_transaction.active? %>">
     <% if recurring_transaction.active? %>
-      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-success">
-        <%= t("subscriptions.status.active") %>
-      </span>
+      <%= render DS::Pill.new(label: t("subscriptions.status.active"), tone: :success, marker: false) %>
     <% else %>
-      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-inset text-secondary">
-        <%= t("subscriptions.status.inactive") %>
-      </span>
+      <%= render DS::Pill.new(label: t("subscriptions.status.inactive"), tone: :neutral, marker: false) %>
     <% end %>
   </td>
 

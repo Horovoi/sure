@@ -145,7 +145,23 @@ test("of two labels from different columns that would collide, the smaller yield
   assert.equal(hidden.has(0), true);
 });
 
-test("label boxes in the same column are left to the spacing rule", () => {
+// The expanded dialog (a large graph) spaces labels 19.6px apart, less than a
+// two-line label: "Streaming" sat on top of "Outdoor" in the subcategory column.
+test("in a large graph, overlapping label boxes in one column still yield", () => {
+  const nodes = column([
+    [3000, 60, 72],
+    [523.75, 81, 85],
+  ]).map((node) => ({ ...node, x1: 115 }));
+  const labelBoxes = new Map([
+    [0, { x: 60, y: 53, width: 50, height: 24 }],
+    [1, { x: 50, y: 70, width: 60, height: 24 }],
+  ]);
+  const hidden = hiddenSankeyLabels(nodes, { height: 800, minSpacing: SPACING, labelBoxes });
+  assert.equal(hidden.has(0), false, "the larger node keeps its label");
+  assert.equal(hidden.has(1), true, "the smaller one yields instead of overlapping");
+});
+
+test("label boxes in the same column that do not touch both stay", () => {
   const nodes = column([
     [500, 0, 20],
     [400, 30, 50],

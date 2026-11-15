@@ -22,23 +22,26 @@
                     <p class="text-sm font-medium text-primary"><%= potential_match.name %></p>
                     <p class="text-xs text-secondary"><%= potential_match.date.strftime("%b %d, %Y") %> • <%= potential_match.account.name %></p>
                   </div>
-                  <p class="text-sm font-medium <%= potential_match.amount.negative? ? "text-green-600" : "text-primary" %>">
+                  <p class="text-sm font-medium <%= potential_match.amount.negative? ? "text-success" : "text-primary" %>">
                     <%= format_money(-potential_match.amount_money) %>
                   </p>
                 </div>
               </div>
 
               <div class="flex items-center gap-2 mt-3">
-                <%= button_to t("transactions.show.merge_duplicate"),
-                    merge_duplicate_transaction_path(@entry.transaction),
-                    method: :post,
-                    class: "btn btn--primary btn--sm",
-                    data: { turbo_frame: "_top" } %>
-                <%= button_to t("transactions.show.keep_both"),
-                    dismiss_duplicate_transaction_path(@entry.transaction),
-                    method: :post,
-                    class: "btn btn--outline btn--sm",
-                    data: { turbo_frame: "_top" } %>
+                <%# DS::Button: the old "btn btn--primary" classes are not in the design
+                    system, so both actions rendered as plain text %>
+                <%= render DS::Button.new(text: t("transactions.show.merge_duplicate"),
+                      href: merge_duplicate_transaction_path(@entry.transaction),
+                      method: :post,
+                      size: :sm,
+                      data: { turbo_frame: "_top" }) %>
+                <%= render DS::Button.new(text: t("transactions.show.keep_both"),
+                      href: dismiss_duplicate_transaction_path(@entry.transaction),
+                      method: :post,
+                      variant: :outline,
+                      size: :sm,
+                      data: { turbo_frame: "_top" }) %>
               </div>
             </div>
           </div>
@@ -69,11 +72,11 @@
             <div class="flex items-center gap-2">
               <%= f.select :nature,
                     [[t("transactions.form.expense"), "outflow"], [t("transactions.form.income"), "inflow"]],
-                    { container_class: "w-1/3", label: t(".nature"), selected: @entry.amount.negative? ? "inflow" : "outflow" },
+                    { container_class: "w-2/5 sm:w-1/3", label: t(".nature"), selected: @entry.amount.negative? ? "inflow" : "outflow" },
                     { data: { "auto-submit-form-target": "auto" }, disabled: @entry.linked? } %>
 
               <%= f.money_field :amount, label: t(".amount"),
-                    container_class: "w-2/3",
+                    container_class: "w-3/5 sm:w-2/3",
                     auto_submit: true,
                     min: 0,
                     value: @entry.amount.abs,

@@ -6,7 +6,7 @@
       <div class="flex items-center gap-2">
         <h2 class="text-lg font-medium"><%= t(".title") %></h2>
         <% if suggestion_count > 0 %>
-          <%= link_to suggestions_subscriptions_path, class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors" do %>
+          <%= link_to suggestions_subscriptions_path, class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors" do %>
             <%= icon "zap", size: "xs" %>
             <%= t(".new_suggestions", count: suggestion_count) %>
           <% end %>
@@ -59,9 +59,8 @@
                 <p class="font-medium text-primary"><%= subscription.display_name %></p>
                 <p class="text-xs text-secondary">
                   <%= l(subscription.next_expected_date, format: :short) %>
-                  <span class="inline-flex items-center ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium <%= subscription.billing_cycle_monthly? ? "bg-violet-100 text-violet-700" : "bg-yellow-100 text-yellow-700" %>">
-                    <%= subscription.billing_cycle_monthly? ? t(".monthly") : t(".yearly") %>
-                  </span>
+                  <span class="ml-1"><%= render DS::Pill.new(label: subscription.billing_cycle_monthly? ? t(".monthly") : t(".yearly"),
+                                                             tone: subscription.billing_cycle_monthly? ? :violet : :amber, marker: false) %></span>
                 </p>
               </div>
             </div>
