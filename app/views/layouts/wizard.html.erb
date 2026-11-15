@@ -21,7 +21,8 @@
         <%= render DS::Link.new(
           variant: "icon",
           icon: "x",
-          href: content_for(:cancel_path) || root_path
+          href: content_for(:cancel_path) || root_path,
+          aria: { label: t("ds.dialog.close") }
         ) %>
       <% end %>
     </header>

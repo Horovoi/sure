@@ -14,7 +14,8 @@
       <%= render DS::Link.new(
         variant: "icon",
         icon: "x",
-        href: imports_path
+        href: imports_path,
+        aria: { label: t("ds.dialog.close") }
       ) %>
     </header>
 

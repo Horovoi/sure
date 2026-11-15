@@ -9,7 +9,7 @@
             <%= t("reports.google_sheets_instructions.title_no_key") %>
           <% end %>
         </h3>
-        <%= icon("x", as_button: true, data: { action: "DS--dialog#close" }, class: "text-subdued hover:text-primary") %>
+        <%= icon("x", as_button: true, aria: { label: t("ds.dialog.close") }, data: { action: "DS--dialog#close" }, class: "text-subdued hover:text-primary") %>
       </div>
 
       <div class="text-sm text-secondary space-y-3 whitespace-pre-line">
