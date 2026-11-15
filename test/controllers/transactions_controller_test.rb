@@ -930,6 +930,13 @@ end
     assert_select "input[type=hidden][name='entry[entryable_attributes][tag_ids][]'][value='#{tag.id}']"
   end
 
+  test "new ignores a carried-over draft with no known field" do
+    get new_transaction_url(nature: "inflow", draft: { unknown: "x" })
+
+    assert_response :success
+    assert_select "input[name='entry[name]']"
+  end
+
   test "update drops a category sent for a confirmed transfer's inflow leg" do
     outflow = Transaction.new
     accounts(:depository).entries.create!(name: "Contribution", amount: 500, currency: "USD", date: Date.current, entryable: outflow)

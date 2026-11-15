@@ -580,10 +580,9 @@ class TransactionsController < ApplicationController
     # against the family, and a category only comes along between tabs of the same nature
     # (the list follows the nature).
     def apply_new_form_draft
-      draft = params[:draft]
-      return unless draft.is_a?(ActionController::Parameters)
+      return unless params[:draft].is_a?(ActionController::Parameters)
 
-      draft = draft.permit(:account_id, :name, :amount, :date, :currency, :notes, :merchant_id, :category_id, tag_ids: [])
+      draft = params.expect(draft: [ :account_id, :name, :amount, :date, :currency, :notes, :merchant_id, :category_id, tag_ids: [] ])
 
       @entry.name = draft[:name].to_s.strip.first(255) if draft[:name].present?
       @entry.notes = draft[:notes] if draft[:notes].present?
@@ -603,6 +602,8 @@ class TransactionsController < ApplicationController
       transaction.merchant = Current.family.available_merchants.find_by(id: draft[:merchant_id]) if draft[:merchant_id].present?
       transaction.category = @categories.find { |category| category.id == draft[:category_id] } if draft[:category_id].present?
       transaction.tag_ids = Current.family.tags.where(id: Array(draft[:tag_ids])).pluck(:id) if draft[:tag_ids].present?
+    rescue ActionController::ParameterMissing
+      # A draft with none of these fields carries nothing over; the form opens as usual
     end
 
     # w2-transfers default-account: with no account given or carried over, the account
