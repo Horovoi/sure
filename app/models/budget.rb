@@ -19,6 +19,8 @@ class Budget < ApplicationRecord
   monetize :budgeted_spending, :expected_income, :allocated_spending,
            :actual_spending, :available_to_spend, :available_to_allocate,
            :estimated_spending, :estimated_income, :actual_income, :remaining_expected_income
+  # w3-reports goals-free-cash
+  monetize :available_cash, :earmarked_for_goals, :free_cash
 
   class << self
     def date_to_param(date, family: nil)
@@ -460,7 +462,74 @@ class Budget < ApplicationRecord
     [ (reserved / budgeted_spending.to_d * 100).to_f, 100 - spent_bar_width_percent ].min.clamp(0, 100)
   end
 
+  # --- w3-reports goals-free-cash: cash on hand, beside the plan ---
+  #
+  # Outside the allocation arithmetic on purpose. budgeted_spending, allocated_spending
+  # and available_to_allocate answer "what did I plan to spend"; these answer "what do I
+  # actually have". The panel shows them beside the plan, never folded into it.
+
+  # Spendable cash: active cash accounts the reports count. Cash inside an investment
+  # account is not money for this period's budget, and an account excluded from reports
+  # (w3-reports exclude-from-reports) stays out like everywhere else.
+  def cash_accounts
+    family.accounts.counted_in_totals.included_in_reports.where(accountable_type: "Depository")
+  end
+
+  # In the budget currency. Each balance converts at today's nearest stored rate; one
+  # with no rate at all is left out (never counted at 1) and named by
+  # missing_cash_currencies.
+  def available_cash
+    @available_cash ||= cash_accounts.to_a.sum(0.to_d) { |account| cash_in_budget_currency(account.balance_money) }
+  end
+
+  # What live goals already claim, out of the same accounts. Restricted to cash_accounts
+  # because a goal can also be backed by an investment account that available_cash never
+  # counted: subtracting that earmark would make the free figure too low, or negative,
+  # with nothing on the page to explain it. Read through the shared pool (backing_within),
+  # so a whole-account link counts for the remainder it claims, not as zero.
+  def earmarked_for_goals
+    @earmarked_for_goals ||= begin
+      ids = cash_accounts.pluck(:id)
+
+      if ids.empty?
+        0.to_d
+      else
+        goals = Goal.prepared_for(family, scope: family.goals.not_released)
+        total = goals.sum(0.to_d) { |goal| goal.backing_within(ids, currency: currency) }
+        goals.each { |goal| cash_missing_currencies.merge(goal.missing_exchange_rate_currencies) }
+        total
+      end
+    end
+  end
+
+  def free_cash
+    [ available_cash - earmarked_for_goals, 0 ].max
+  end
+
+  # Currencies left out of the cash figures for want of a rate, for the panel's warning
+  def missing_cash_currencies
+    available_cash
+    earmarked_for_goals
+    cash_missing_currencies.to_a.sort
+  end
+
+  # The panel is about money held now, so only the current period shows it
+  def shows_available_cash?
+    current?
+  end
+
   private
+    def cash_missing_currencies
+      @cash_missing_currencies ||= Set.new
+    end
+
+    def cash_in_budget_currency(money)
+      money.exchange_to(currency).amount
+    rescue Money::ConversionError
+      cash_missing_currencies << money.currency.iso_code
+      0.to_d
+    end
+
     def build_subscription_reservations
       return {} if end_date < Date.current
 

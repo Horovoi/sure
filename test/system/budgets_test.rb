@@ -141,4 +141,20 @@ class BudgetsTest < ApplicationSystemTestCase
     assert_selector "[data-testid='budget-section-on-track']"
     assert_current_path budget_path(budget)
   end
+
+  # --- w3-reports goals-free-cash ---
+
+  test "the current budget shows cash on hand with the earmark and the free figure" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 2000, expected_income: 3000)
+
+    visit budget_path(budget)
+
+    within "#budget_available_cash" do
+      assert_text I18n.t("budgets.available_cash.heading")
+      assert_text I18n.t("budgets.available_cash.earmarked")
+      within_testid("budget-free-cash") { assert_text budget.free_cash_money.format }
+      assert_link I18n.t("budgets.available_cash.goals_link"), href: goals_path
+    end
+  end
 end

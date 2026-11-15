@@ -55,6 +55,17 @@ en:
     actuals_summary:
       expenses: Expenses
       income: Income
+    # w3-reports goals-free-cash
+    available_cash:
+      heading: Cash on hand
+      subtitle: Beside the plan above, not part of it.
+      available: Available in cash
+      earmarked: Already earmarked for goals
+      free: Really free
+      goals_link: View goals
+      currency_warning:
+        one: "%{currencies} has no exchange rate into %{currency}, so its balances are left out of these figures."
+        other: "%{currencies} have no exchange rate into %{currency}, so their balances are left out of these figures."
     subscription_reservations:
       explanation: Subscription charges due later in this period. Spent and remaining do not include them.
       reserved: Reserved for subscriptions
