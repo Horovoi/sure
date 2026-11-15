@@ -23,6 +23,13 @@ class DS::IconPicker < DesignSystemComponent
     @picker_controller = picker_controller
   end
 
+  # The text the search matches. It has the icon code and the same words
+  # with spaces, so "dollar sign" finds "circle-dollar-sign".
+  def filter_name(icon_name)
+    words = icon_name.to_s.tr("-", " ")
+    words == icon_name.to_s ? words : "#{icon_name} #{words}"
+  end
+
   # Data attributes for each icon radio, in the picker controller's namespace.
   def radio_data
     {

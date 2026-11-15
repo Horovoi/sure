@@ -64,6 +64,20 @@ class DS::IconPickerTest < ViewComponent::TestCase
     assert_selector "input[name='category[color]']", visible: :all
   end
 
+  test "a hyphenated icon code is also searchable by its words with spaces" do
+    render_icon_picker(icons: %w[circle-dollar-sign pizza])
+
+    assert_selector "label.filterable-item[data-filter-name='circle-dollar-sign circle dollar sign']"
+    assert_selector "label.filterable-item[data-filter-name='pizza']"
+  end
+
+  test "renders every category icon code" do
+    render_icon_picker(icons: Category.icon_codes)
+
+    assert_selector "label.filterable-item", count: Category.icon_codes.size
+    assert_selector "label.filterable-item svg", count: Category.icon_codes.size, visible: :all
+  end
+
   private
     def render_icon_picker(icons:)
       render_inline DS::IconPicker.new(

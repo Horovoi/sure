@@ -27,7 +27,7 @@
         type: "button",
         text: t(".filter"),
         variant: "outline",
-        icon: "filter"
+        icon: "list-filter"
       ) %>
 
       <% popover.with_custom_content do %>
@@ -43,7 +43,7 @@
           action: "click->checkbox-toggle#toggle",
           checkbox_toggle_target: "toggleButton"
         } do %>
-      <%= icon("list-checks") %>
+      <%= icon("list-todo") %>
     <% end %>
   </div>
 <% end %>

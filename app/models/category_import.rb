@@ -6,7 +6,7 @@ class CategoryImport < Import
         category = family.categories.find_or_initialize_by(name: category_name)
         category.color = row.category_color.presence || category.color || Category::UNCATEGORIZED_COLOR
         category.classification = row.category_classification.presence || category.classification || "expense"
-        category.lucide_icon = row.category_icon.presence || category.lucide_icon || "layers"
+        category.lucide_icon = row.category_icon.presence || category.lucide_icon || "shapes"
         category.parent = nil
         category.save!
 
@@ -125,7 +125,7 @@ class CategoryImport < Import
       family.categories.find_or_create_by!(name: trimmed_name) do |placeholder|
         placeholder.color = Category::UNCATEGORIZED_COLOR
         placeholder.classification = "expense"
-        placeholder.lucide_icon = "layers"
+        placeholder.lucide_icon = "shapes"
       end
     end
 end

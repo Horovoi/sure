@@ -105,4 +105,42 @@ class CategoryTest < ActiveSupport::TestCase
   test "recently_used_for ignores categories never picked by hand" do
     assert_empty Category.recently_used_for(family: @family)
   end
+
+  test "every icon_codes name renders through lucide-rails" do
+    codes = Category.icon_codes
+
+    assert_equal codes.uniq, codes, "icon_codes has duplicates"
+    codes.each do |code|
+      svg = ApplicationController.helpers.lucide_icon(code)
+      assert_includes svg, "<svg", "#{code} did not render"
+    end
+  end
+
+  test "icon_codes keeps the modern upstream names and the icons categories already use" do
+    codes = Category.icon_codes
+
+    %w[shapes circle-dollar-sign drama pill dumbbell hand-helping receipt piggy-bank store].each do |modern|
+      assert_includes codes, modern
+    end
+    # Icons that existing categories got from the earlier shorter list and rename
+    %w[layers dollar-sign film stethoscope target gift file-text trending-up star building scan bar-chart calendar].each do |kept|
+      assert_includes codes, kept
+    end
+  end
+
+  test "bootstrap gives a new family the modern default icons, all of them in icon_codes" do
+    family = families(:empty)
+    family.categories.bootstrap!
+
+    assert_equal "circle-dollar-sign", family.categories.find_by!(name: "Income").lucide_icon
+    assert_equal "drama", family.categories.find_by!(name: "Entertainment").lucide_icon
+    assert_equal "piggy-bank", family.categories.find_by!(name: "Savings & Investments").lucide_icon
+    family.categories.each do |category|
+      assert_includes Category.icon_codes, category.lucide_icon, "#{category.name} has an icon the form does not offer"
+    end
+  end
+
+  test "the uncategorized placeholder uses the circle-dashed icon" do
+    assert_equal "circle-dashed", Category.uncategorized.lucide_icon
+  end
 end

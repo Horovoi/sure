@@ -49,7 +49,7 @@
       <% if self_hosted? %>
         <%= render DS::MenuItem.new(variant: "link", roving: false, text: t(".feedback"), icon: "megaphone", href: feedback_path) %>
       <% end %>
-      <%= render DS::MenuItem.new(variant: "link", roving: false, text: t(".contact"), icon: "message-square", href: "https://discord.gg/36ZGBsxYEK", target: "_blank", rel: "noopener noreferrer") %>
+      <%= render DS::MenuItem.new(variant: "link", roving: false, text: t(".contact"), icon: "message-square-more", href: "https://discord.gg/36ZGBsxYEK", target: "_blank", rel: "noopener noreferrer") %>
 
       <%= render DS::MenuItem.new(variant: "divider") %>
 

@@ -16,6 +16,17 @@ en:
       edit: Edit category
     form:
       placeholder: Category name
+      name_label: Name
+      classification_label: Classification
+      income: Income
+      expense: Expense
+      unassigned: "(unassigned)"
+      parent_category_label: "Parent category (optional)"
+      trigger_label: Choose color and icon
+      color: Color
+      icon: Icon
+      auto_adjust: auto-adjust.
+      poor_contrast: "Poor contrast, choose a darker color or"
     index:
       bootstrap: Use defaults (recommended)
       categories: Categories
