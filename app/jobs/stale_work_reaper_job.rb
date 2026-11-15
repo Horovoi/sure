@@ -60,12 +60,16 @@ class StaleWorkReaperJob < ApplicationJob
 
       rule[:stale].call.find_each do |record|
         # The row lock reloads the record, so work that finished since the query is left alone
+        before = nil
         reaped = record.with_lock do
           before = record.status
           rule[:reap].call(record)
           record.status != before
         end
-        count += 1 if reaped
+        if reaped
+          count += 1
+          capture_reap(name, record, before)
+        end
       rescue AASM::InvalidTransition
         # Its job finished between the query and the transition: nothing to do
       rescue => e
@@ -74,5 +78,29 @@ class StaleWorkReaperJob < ApplicationJob
       end
 
       count
+    end
+
+    # Each reap is a warn entry in Settings > Debug: the work's job was lost somewhere
+    def capture_reap(name, record, before)
+      DebugLogEntry.capture(
+        category: "stale_work",
+        level: "warn",
+        message: "#{name} #{record.id} reaped: was #{before}, now #{record.status}",
+        source: self.class.name,
+        family: family_of(record),
+        account: record.is_a?(Account) ? record : nil,
+        metadata: { record_type: name, record_id: record.id, status: record.status, created_at: record.try(:created_at)&.iso8601 }
+      )
+    end
+
+    def family_of(record)
+      return record if record.is_a?(Family)
+
+      record.try(:family) ||
+        record.try(:rule)&.family ||
+        record.try(:chat)&.user&.family ||
+        record.try(:impersonated)&.family
+    rescue StandardError
+      nil
     end
 end

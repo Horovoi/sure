@@ -74,4 +74,35 @@ class StaleWorkReaperJobTest < ActiveJob::TestCase
     assert_equal "StaleWorkReaperJob", schedule.dig("reap_stale_work", "class")
     assert_equal "15 * * * *", schedule.dig("reap_stale_work", "cron")
   end
+
+  test "each reap writes one warn entry to the debug log" do
+    family = families(:dylan_family)
+    stuck = family.family_exports.create!(status: "processing")
+    stuck.update_columns(updated_at: 2.hours.ago)
+    family.family_exports.create!(status: "processing")
+
+    assert_difference -> { DebugLogEntry.where(category: "stale_work", level: "warn").count }, 1 do
+      StaleWorkReaperJob.perform_now
+    end
+
+    entry = DebugLogEntry.order(:created_at).last
+    assert_equal "StaleWorkReaperJob", entry.source
+    assert_equal family, entry.family
+    assert_equal "FamilyExport", entry.metadata["record_type"]
+    assert_equal stuck.id, entry.metadata["record_id"]
+  end
+
+  test "a reaped rule run is logged once, as a warn and not as a rule run failure" do
+    rule = families(:dylan_family).rules.create!(resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    run = RuleRun.create!(rule: rule, rule_name: "r", execution_type: "manual", status: "pending", pending_jobs_count: 1, executed_at: 3.hours.ago)
+    run.update_columns(created_at: 3.hours.ago, updated_at: 3.hours.ago)
+
+    assert_difference -> { DebugLogEntry.count }, 1 do
+      StaleWorkReaperJob.perform_now
+    end
+
+    entry = DebugLogEntry.order(:created_at).last
+    assert_equal "warn", entry.level
+    assert_equal rule.family, entry.family
+  end
 end
