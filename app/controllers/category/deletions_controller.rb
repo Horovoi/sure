@@ -8,7 +8,12 @@ class Category::DeletionsController < ApplicationController
   def create
     @category.replace_and_destroy! @replacement_category
 
-    redirect_back_or_to transactions_path, notice: t(".success")
+    # Opened as a page of its own, the page to go back to is this deleted category's form
+    if request.referer.to_s.include?(new_category_deletion_path(@category))
+      redirect_to categories_path, notice: t(".success")
+    else
+      redirect_back_or_to transactions_path, notice: t(".success")
+    end
   end
 
   private

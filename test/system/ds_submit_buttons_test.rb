@@ -49,7 +49,12 @@ class DsSubmitButtonsTest < ApplicationSystemTestCase
     source = merchants(:starbucks)
     visit merge_family_merchants_url
 
-    select target.name, from: I18n.t("family_merchants.merge.target_label")
+    # The target picker is a searchable DS::Select listbox, not a native select
+    container = find("label", exact_text: I18n.t("family_merchants.merge.target_label"))
+                  .find(:xpath, "./ancestor::div[contains(concat(' ', @data-controller, ' '), ' select ')][1]")
+    container.find("button[aria-haspopup='listbox']").click
+    container.find("[role='listbox'] [role='option'][data-value='#{target.id}']", visible: true).click
+    assert_selector "input[type=hidden][name='target_id'][value='#{target.id}']", visible: :all
     check source.name
     click_button I18n.t("family_merchants.merge.submit")
 

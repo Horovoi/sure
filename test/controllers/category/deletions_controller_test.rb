@@ -37,4 +37,17 @@ class Category::DeletionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to transactions_url
   end
+
+  test "create from the deletion page opened on its own goes to the categories" do
+    post category_deletions_url(@category), headers: { "Referer" => new_category_deletion_url(@category) }
+
+    assert_redirected_to categories_url
+  end
+
+  test "create goes back to the page the deletion was opened from" do
+    post category_deletions_url(@category), headers: { "Referer" => categories_url }
+
+    assert_redirected_to categories_url
+    assert_equal I18n.t("category.deletions.create.success"), flash[:notice]
+  end
 end

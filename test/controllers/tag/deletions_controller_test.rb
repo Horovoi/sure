@@ -50,4 +50,10 @@ class Tag::DeletionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
   end
+
+  test "create from the deletion page opened on its own goes to the tags" do
+    post tag_deletions_url(@tag), headers: { "Referer" => new_tag_deletion_url(@tag) }
+
+    assert_redirected_to tags_url
+  end
 end
