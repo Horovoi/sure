@@ -77,4 +77,34 @@ class Family::SyncerTest < ActiveSupport::TestCase
     syncer.perform_sync(family_sync)
     syncer.perform_post_sync
   end
+
+  test "syncs every active provider item type while bank connections are on" do
+    BankConnections.stubs(:enabled?).returns(true)
+    family_sync = syncs(:family)
+    @family.enable_banking_items.create!(name: "Test Enable Banking", country_code: "FI", application_id: "app-id", client_certificate: "cert")
+    @family.coinstats_items.create!(name: "Test CoinStats", api_key: "coinstats-key")
+    @family.coinbase_items.create!(name: "Test Coinbase", api_key: "coinbase-key", api_secret: "coinbase-secret")
+    @family.coinbase_items.create!(name: "Deleted Coinbase", api_key: "old-key", api_secret: "old-secret", scheduled_for_deletion: true)
+
+    Account.any_instance.stubs(:sync_later)
+    [ PlaidItem, LunchflowItem, EnableBankingItem, CoinstatsItem ].each do |item_class|
+      item_class.any_instance.expects(:sync_later).times(item_class.where(family: @family).active.count)
+    end
+    CoinbaseItem.any_instance.expects(:sync_later).once
+
+    Family::Syncer.new(@family).perform_sync(family_sync)
+  end
+
+  test "syncs no provider item type while bank connections are off" do
+    BankConnections.stubs(:enabled?).returns(false)
+    family_sync = syncs(:family)
+    @family.coinstats_items.create!(name: "Test CoinStats", api_key: "coinstats-key")
+
+    Account.any_instance.stubs(:sync_later)
+    [ PlaidItem, LunchflowItem, EnableBankingItem, CoinstatsItem, CoinbaseItem ].each do |item_class|
+      item_class.any_instance.expects(:sync_later).never
+    end
+
+    Family::Syncer.new(@family).perform_sync(family_sync)
+  end
 end

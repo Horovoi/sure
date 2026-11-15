@@ -14,4 +14,10 @@ class BankConnectionsTest < ActiveSupport::TestCase
       end
     end
   end
+
+  test "item associations match the provider item has_many reflections of Family" do
+    reflected = Family.reflect_on_all_associations(:has_many).map(&:name).select { |name| name.to_s.end_with?("_items") }
+
+    assert_equal reflected.sort, BankConnections::ITEM_ASSOCIATIONS.sort
+  end
 end

@@ -32,7 +32,7 @@ class Family::Syncer
       syncables = family.accounts.visible.manual.to_a
       return syncables unless BankConnections.enabled?
 
-      family.plaid_items.active.to_a + family.lunchflow_items.active.to_a + family.enable_banking_items.active.to_a +
-        family.coinstats_items.active.to_a + family.coinbase_items.active.to_a + syncables
+      items = BankConnections::ITEM_ASSOCIATIONS.flat_map { |association| family.public_send(association).active.to_a }
+      items + syncables
     end
 end

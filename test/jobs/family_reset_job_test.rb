@@ -103,4 +103,27 @@ class FamilyResetJobTest < ActiveJob::TestCase
     assert_equal 0, @family.rules.reload.count
     assert_equal 0, @family.recurring_transactions.reload.count
   end
+
+  test "reset removes every provider item type and keeps the pre-reset export" do
+    @plaid_provider.stubs(:remove_item)
+    create_provider_items
+
+    BankConnections::ITEM_ASSOCIATIONS.each do |association|
+      assert @family.public_send(association).exists?, "#{association} should exist before the reset"
+    end
+
+    FamilyResetJob.perform_now(@family)
+
+    BankConnections::ITEM_ASSOCIATIONS.each do |association|
+      assert_equal 0, @family.public_send(association).reload.count, "#{association} should be gone after the reset"
+    end
+    assert @family.family_exports.reload.where(status: "completed").exists?, "the pre-reset export should survive the reset"
+  end
+
+  private
+    def create_provider_items
+      @family.enable_banking_items.create!(name: "Test Enable Banking", country_code: "FI", application_id: "app-id", client_certificate: "cert")
+      @family.coinstats_items.create!(name: "Test CoinStats", api_key: "coinstats-key")
+      @family.coinbase_items.create!(name: "Test Coinbase", api_key: "coinbase-key", api_secret: "coinbase-secret")
+    end
 end
