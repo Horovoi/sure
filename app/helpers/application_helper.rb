@@ -37,6 +37,13 @@ module ApplicationHelper
     end
   end
 
+  # The chevron for a <details> summary. It follows its own <details> (the
+  # arbitrary variant), not `group-open:`, which matches any open ancestor
+  # group: a disclosure nested in an open one would otherwise show as open.
+  def disclosure_chevron
+    icon "chevron-right", size: "sm", class: "[details[open]>summary_&]:rotate-90 motion-safe:transition-transform motion-safe:duration-150"
+  end
+
   # Convert alpha (0-1) to 8-digit hex (00-FF)
   def hex_with_alpha(hex, alpha)
     alpha_hex = (alpha * 255).round.to_s(16).rjust(2, "0")

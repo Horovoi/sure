@@ -1,0 +1,36 @@
+<% heading = capture do %>
+  <div class="flex items-center justify-between gap-3 px-4 py-2">
+    <div class="flex items-center gap-1.5 text-xs font-medium uppercase text-secondary">
+      <% if collapsible %>
+        <%= helpers.disclosure_chevron %>
+      <% end %>
+      <h2><%= title %></h2>
+      <span class="text-subdued" aria-hidden="true">&middot;</span>
+      <p><%= count %></p>
+    </div>
+    <%= aside %>
+  </div>
+<% end %>
+<% card = capture do %>
+  <%= tag.div class: card_classes do %>
+    <%= content %>
+  <% end %>
+<% end %>
+
+<%= tag.section class: container_classes do %>
+  <% if collapsible %>
+    <%# A plain <details> rather than DS::Disclosure, so the section does not
+        depend on a particular Disclosure API: the heading row is the summary
+        and the card is the body. `group` lets aside content react to the
+        open state (group-open:hidden). %>
+    <%= tag.details class: "group", open: true, data: persist_data do %>
+      <%= tag.summary class: "list-none cursor-pointer focus-ring rounded-lg select-none" do %>
+        <%= heading %>
+      <% end %>
+      <%= card %>
+    <% end %>
+  <% else %>
+    <%= heading %>
+    <%= card %>
+  <% end %>
+<% end %>

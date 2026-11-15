@@ -1,5 +1,14 @@
 ---
 en:
+  ds:
+    pill:
+      aria_label: "%{label}"
+      default_label: Preview
+    popover:
+      avatar_default_label: Open menu
+    icon_picker:
+      no_matching_icons: No matching icons
+      search_placeholder: Search icons...
   provider_sync_summary:
     title: Sync summary
     last_sync: "Last sync: %{time_ago} ago"
