@@ -16,6 +16,9 @@ class Account < ApplicationRecord
   # Recurring rows only point at the account (the one to post to, or the one the pattern was seen on)
   has_many :default_recurring_transactions, class_name: "RecurringTransaction", foreign_key: :default_account_id, inverse_of: :default_account, dependent: :nullify
   has_many :inferred_recurring_transactions, class_name: "RecurringTransaction", foreign_key: :inferred_account_id, inverse_of: :inferred_account, dependent: :nullify
+  # Savings goals (w2-goals). The links go before the account: their FK is RESTRICT.
+  has_many :goal_accounts, dependent: :destroy
+  has_many :goals, through: :goal_accounts
 
   monetize :balance, :cash_balance
 
@@ -341,4 +344,24 @@ class Account < ApplicationRecord
       raise "Unknown account type: #{accountable_type}"
     end
   end
+
+  # --- Savings goals (w2-goals) ----------------------------------------------
+  # Fixed earmark this account has reserved across every goal still holding its money
+  # (whole-balance links reserve no fixed slice). Same states as
+  # Goal.pooled_allocations_for, so the two never disagree.
+  def goal_earmarked_total
+    GoalAccount.joins(:goal)
+               .where(account_id: id)
+               .where.not(allocated_amount: nil)
+               .where.not(goals: { state: Goal::RELEASED_STATES })
+               .sum(:allocated_amount)
+               .to_d
+  end
+
+  # Headroom left to earmark before the fixed earmarks exceed the balance. Negative
+  # means the account is over-earmarked (the goals then progress pro rata).
+  def free_to_earmark
+    balance.to_d - goal_earmarked_total
+  end
+  # --- end savings goals -----------------------------------------------------
 end

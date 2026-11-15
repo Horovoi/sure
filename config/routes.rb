@@ -177,6 +177,19 @@ Rails.application.routes.draw do
     resources :budget_categories, only: %i[index show update]
   end
 
+  # --- Savings goals (w2-goals): goals and their lifecycle; pledges and spending add their own routes below ---
+  resources :goals do
+    member do
+      patch :pause
+      patch :resume
+      patch :complete
+      patch :archive
+      patch :unarchive
+      patch :reopen
+    end
+  end
+  # --- end savings goals ---
+
   resources :family_merchants, only: %i[index new create edit update destroy] do
     collection do
       get :merge

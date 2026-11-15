@@ -27,6 +27,10 @@ class FamilyResetJob < ApplicationJob
       family.rules.destroy_all
       family.recurring_transactions.destroy_all
 
+      # Goals are funded by the accounts deleted below; without them a goal has no links
+      # left and could not be saved again
+      family.goals.destroy_all
+
       # Delete accounts and related data
       family.accounts.destroy_all
       family.categories.destroy_all

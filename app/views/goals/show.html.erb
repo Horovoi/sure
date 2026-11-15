@@ -1,0 +1,150 @@
+<div class="space-y-4 pb-6 lg:pb-12">
+  <header class="flex items-start gap-3 sm:gap-4">
+    <div class="hidden sm:block">
+      <%= render Goals::AvatarComponent.new(goal: @goal, size: "xl") %>
+    </div>
+    <div class="min-w-0 flex-1">
+      <h1 class="text-2xl font-semibold text-primary break-words"><%= @goal.name %></h1>
+      <%# Each segment is its own nowrap span so a short trailing one — "184 days
+          left" — moves to the next line whole instead of breaking after "days".
+          The first segment carries the target and a long-format date, so it is
+          left free to wrap; pinning it would overflow a narrow screen. %>
+      <p class="text-sm text-secondary mt-1 privacy-sensitive">
+        <%= safe_join(
+              @goal.header_summary_parts.map.with_index { |part, i|
+                tag.span(part, class: ("whitespace-nowrap" unless i.zero?))
+              },
+              " · "
+            ) %>
+      </p>
+    </div>
+    <div class="shrink-0">
+      <%= render DS::Menu.new do |menu| %>
+        <%# Edit lives in the kebab, matching the rest of Sure (accounts,
+            categories, rules, family_merchants, chats, transactions all
+            put their Edit action inside the kebab dropdown). Keeps the
+            header to one primary action. %>
+        <% menu.with_item(variant: "link", text: t(".edit"), icon: "pencil", href: edit_goal_path(@goal), data: { turbo_frame: :modal }) %>
+        <% if @goal.may_pause? %>
+          <% menu.with_item(variant: "button", text: t(".pause"), icon: "pause", href: pause_goal_path(@goal), method: :patch) %>
+        <% end %>
+        <% if @goal.may_resume? %>
+          <% menu.with_item(variant: "button", text: t(".resume"), icon: "play", href: resume_goal_path(@goal), method: :patch) %>
+        <% end %>
+        <% if @goal.may_complete? %>
+          <% menu.with_item(
+               variant: "button",
+               text: t(".complete"),
+               icon: "circle-check-big",
+               href: complete_goal_path(@goal),
+               method: :patch,
+               confirm: goal_complete_confirm(@goal)
+             ) %>
+        <% end %>
+        <% if @goal.may_archive? %>
+          <% menu.with_item(
+               variant: "button",
+               text: t(".archive"),
+               icon: "archive",
+               href: archive_goal_path(@goal),
+               method: :patch,
+               confirm: CustomConfirm.new(
+                 title: t(".confirm_archive_title"),
+                 body: t(".confirm_archive_body"),
+                 btn_text: t(".confirm_archive_cta")
+               )
+             ) %>
+        <% end %>
+        <% if @goal.may_unarchive? %>
+          <% menu.with_item(variant: "button", text: t(".unarchive"), icon: "archive-restore", href: unarchive_goal_path(@goal), method: :patch) %>
+        <% end %>
+        <% if @goal.may_reopen? %>
+          <% menu.with_item(variant: "button", text: t(".reopen"), icon: "rotate-ccw", href: reopen_goal_path(@goal), method: :patch) %>
+        <% end %>
+        <%# Available in any state — see GoalsController#destroy for why there's
+            no archive-first gate. %>
+        <% menu.with_item(
+             variant: "button",
+             text: t(".delete"),
+             icon: "trash-2",
+             href: goal_path(@goal),
+             method: :delete,
+             destructive: true,
+             confirm: @goal.deletion_confirm
+           ) %>
+      <% end %>
+    </div>
+  </header>
+
+  <%= render "status_callout", goal: @goal %>
+
+  <% if @goal.paused? %>
+    <%= render DS::Alert.new(variant: "info", title: t("goals.show.paused_banner.title")) do %>
+      <p class="text-secondary"><%= t("goals.show.paused_banner.body") %></p>
+      <div class="mt-2">
+        <%= render DS::Button.new(
+          text: t("goals.show.paused_banner.resume_cta"),
+          href: resume_goal_path(@goal),
+          variant: "primary",
+          size: "sm",
+          method: :patch
+        ) %>
+      </div>
+    <% end %>
+  <% elsif @goal.archived? %>
+    <%= render DS::Alert.new(variant: "info", title: t("goals.show.archived_banner.title")) do %>
+      <p class="text-secondary"><%= t("goals.show.archived_banner.body") %></p>
+      <% if @goal.may_unarchive? %>
+        <div class="mt-2">
+          <%= render DS::Button.new(
+            text: t("goals.show.archived_banner.restore_cta"),
+            href: unarchive_goal_path(@goal),
+            variant: "primary",
+            size: "sm",
+            method: :patch
+          ) %>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+
+  <%# Above the ring: the headline figures are what a partial total misleads. %>
+  <%= render "goals/currency_warning", goal: @goal %>
+
+  <%# Top row: ring panel (status, no elevation) + projection chart card %>
+  <section class="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-3">
+    <div class="rounded-xl p-5 flex flex-col items-center justify-center text-center">
+      <%= render Goals::ProgressRingComponent.new(goal: @goal, size: 180) %>
+      <%# The figure the ring is drawn from — held plus already spent on the
+          goal — so the two agree. What is still sitting in each account is in
+          the funding breakdown below, which is where that question belongs. %>
+      <p class="text-xl font-medium text-primary tabular-nums privacy-sensitive mt-4"><%= @goal.progress_amount_money.format(precision: 0) %></p>
+      <% if @goal.any_consumption? %>
+        <p class="text-xs text-secondary tabular-nums mt-0.5 privacy-sensitive">
+          <%= t(".ring.including_used", amount: @goal.consumed_amount_money.format(precision: 0)) %>
+        </p>
+      <% end %>
+      <% if @goal.contributions_basis? %>
+        <p class="text-xs text-secondary tabular-nums mt-0.5 privacy-sensitive"><%= t(".ring.market_value", amount: @goal.market_value_money.format(precision: 0)) %></p>
+      <% end %>
+      <% unless @goal.completed? %>
+        <p class="text-xs text-subdued tabular-nums mt-0.5 privacy-sensitive"><%= t(".ring.to_go", amount: @goal.remaining_amount_money.format(precision: 0)) %></p>
+      <% end %>
+    </div>
+
+    <%= render Goals::LifecyclePanelComponent.new(goal: @goal) %>
+  </section>
+
+  <% if @goal.linked_accounts.any? %>
+    <%= render DS::Card.new do %>
+      <%= render Goals::FundingAccountsBreakdownComponent.new(goal: @goal) %>
+    <% end %>
+  <% end %>
+
+  <% if @goal.notes.present? %>
+    <%= render DS::Card.new do %>
+      <h2 class="text-sm font-medium text-primary mb-2"><%= t(".notes") %></h2>
+      <p class="text-sm text-secondary whitespace-pre-line"><%= @goal.notes %></p>
+    <% end %>
+  <% end %>
+</div>

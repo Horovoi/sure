@@ -46,3 +46,12 @@ full_backup:
   queue: "scheduled"
   active_job: true
   description: "Writes the daily backup bundle (database, files, icons, encrypted env) and mirrors it off-site"
+
+# Savings goals (w2-goals). Daily; the job itself acts only on each family's first day
+# of a fiscal month, in the family's time zone.
+refresh_maintained_goal_targets:
+  cron: "0 3 * * *" # daily at 03:00 UTC
+  class: "RefreshMaintainedGoalTargetsJob"
+  queue: "scheduled"
+  active_job: true
+  description: "Recomputes the target of reserves set in months of expenses on the first day of each fiscal month"
