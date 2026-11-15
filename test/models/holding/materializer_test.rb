@@ -114,4 +114,71 @@ class Holding::MaterializerTest < ActiveSupport::TestCase
     assert_equal BigDecimal("180.00"), holding.cost_basis,
       "Trade-derived cost_basis should override provider cost_basis when available"
   end
+
+  # --- Transfers and the stored cost basis (w2-transfers wac-cost-basis) ---
+
+  # Materialized first and relabelled after: the case that matters is a position already
+  # carrying a figure worked out before anyone knew the movement was a transfer
+  test "a transfer clears a cost basis this app had worked out" do
+    create_trade(@aapl, account: @account, qty: 1, price: 200, date: Date.current)
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+    assert_equal 200, latest_holding.cost_basis.to_d
+
+    @account.trades.each { |t| t.update!(investment_activity_label: Trade::TRANSFER_LABEL) }
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    assert_nil latest_holding.cost_basis
+    assert_nil latest_holding.cost_basis_source
+    assert_nil latest_holding.avg_cost
+  end
+
+  test "a transfer clears a stored basis that recorded no source" do
+    create_trade(@aapl, account: @account, qty: 1, price: 200, date: Date.current)
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    @account.holdings.where(security: @aapl).update_all(cost_basis: 200, cost_basis_source: nil)
+    @account.trades.each { |t| t.update!(investment_activity_label: Trade::TRANSFER_LABEL) }
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    assert_nil latest_holding.cost_basis
+  end
+
+  test "a transfer leaves a provider cost basis alone" do
+    create_trade(@aapl, account: @account, qty: 1, price: 200, date: Date.current)
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    @account.holdings.where(security: @aapl).update_all(cost_basis: 150, cost_basis_source: "provider")
+    @account.trades.each { |t| t.update!(investment_activity_label: Trade::TRANSFER_LABEL) }
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    assert_equal 150, latest_holding.cost_basis.to_d
+  end
+
+  test "a manual cost basis survives a transfer" do
+    create_trade(@aapl, account: @account, qty: 1, price: 200, date: 1.day.ago.to_date)
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+    @account.holdings.find_by!(security: @aapl, date: 1.day.ago.to_date).set_manual_cost_basis!(BigDecimal("120"))
+
+    @account.trades.each { |t| t.update!(investment_activity_label: Trade::TRANSFER_LABEL) }
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    today = latest_holding
+    assert_equal BigDecimal("120"), today.cost_basis
+    assert_equal "manual", today.cost_basis_source
+    assert today.cost_basis_locked?
+  end
+
+  test "an ordinary purchase still gets its calculated basis" do
+    create_trade(@aapl, account: @account, qty: 1, price: 200, date: Date.current)
+
+    Holding::Materializer.new(@account, strategy: :forward).materialize_holdings
+
+    assert_equal 200, latest_holding.cost_basis.to_d
+    assert_equal "calculated", latest_holding.cost_basis_source
+  end
+
+  private
+    def latest_holding
+      @account.holdings.where(security: @aapl).order(:date).last
+    end
 end

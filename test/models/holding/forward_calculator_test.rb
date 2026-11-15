@@ -195,6 +195,108 @@ class Holding::ForwardCalculatorTest < ActiveSupport::TestCase
     assert_equal 1_020, @account.holdings.find_by!(security: voo, date: Date.current).amount
   end
 
+  # --- Weighted-average cost basis and transfers (w2-transfers wac-cost-basis) ---
+
+  test "a partial sell then a buy averages only the units still held" do
+    load_prices
+
+    create_trade(@voo, qty: 10, date: 4.days.ago.to_date, price: 460, account: @account)
+    create_trade(@voo, qty: -5, date: 3.days.ago.to_date, price: 470, account: @account)
+    create_trade(@voo, qty: 5, date: 2.days.ago.to_date, price: 480, account: @account)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+    current = calculated.find { |h| h.security_id == @voo.id && h.date == Date.current }
+
+    # (5 x 460 + 5 x 480) / 10, not (10 x 460 + 5 x 480) / 15
+    assert_equal BigDecimal("470"), current.cost_basis
+    assert_not current.cost_basis_unknown
+  end
+
+  test "the cost basis starts again after a position is fully sold and repurchased" do
+    load_prices
+
+    create_trade(@voo, qty: 10, date: 4.days.ago.to_date, price: 460, account: @account)
+    create_trade(@voo, qty: -10, date: 3.days.ago.to_date, price: 480, account: @account)
+    create_trade(@voo, qty: 10, date: 1.day.ago.to_date, price: 490, account: @account)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+    sold_out = calculated.find { |h| h.security_id == @voo.id && h.date == 2.days.ago.to_date }
+    current = calculated.find { |h| h.security_id == @voo.id && h.date == Date.current }
+
+    assert_nil sold_out.cost_basis
+    # Only the repurchased lot is held: 490, not (460 + 490) / 2
+    assert_equal BigDecimal("490"), current.cost_basis
+  end
+
+  test "a transfer in makes the cost basis unknown" do
+    load_prices
+
+    create_trade(@voo, qty: 10, date: 4.days.ago.to_date, price: 460, account: @account)
+    transfer_in = create_trade(@voo, qty: 5, date: 3.days.ago.to_date, price: 470, account: @account)
+    transfer_in.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+    before = calculated.find { |h| h.security_id == @voo.id && h.date == 4.days.ago.to_date }
+    current = calculated.find { |h| h.security_id == @voo.id && h.date == Date.current }
+
+    assert_equal BigDecimal("460"), before.cost_basis
+    assert_not before.cost_basis_unknown
+    # Not 460 for all 15 units, and not the transfer's own price
+    assert_nil current.cost_basis
+    assert current.cost_basis_unknown
+  end
+
+  test "a transfer out relieves the units and keeps the basis known" do
+    load_prices
+
+    create_trade(@voo, qty: 10, date: 4.days.ago.to_date, price: 460, account: @account)
+    transfer_out = create_trade(@voo, qty: -10, date: 3.days.ago.to_date, price: 470, account: @account)
+    transfer_out.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+    create_trade(@voo, qty: 10, date: 1.day.ago.to_date, price: 490, account: @account)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+    current = calculated.find { |h| h.security_id == @voo.id && h.date == Date.current }
+
+    assert_equal BigDecimal("490"), current.cost_basis
+    assert_not current.cost_basis_unknown
+  end
+
+  test "a closed transferred position releases the unknown basis" do
+    load_prices
+
+    create_trade(@voo, qty: 10, date: 4.days.ago.to_date, price: 460, account: @account)
+    transfer_in = create_trade(@voo, qty: 5, date: 3.days.ago.to_date, price: 470, account: @account)
+    transfer_in.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+    create_trade(@voo, qty: -15, date: 2.days.ago.to_date, price: 480, account: @account)
+    create_trade(@voo, qty: 10, date: 1.day.ago.to_date, price: 490, account: @account)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+    while_held = calculated.find { |h| h.security_id == @voo.id && h.date == 3.days.ago.to_date }
+    current = calculated.find { |h| h.security_id == @voo.id && h.date == Date.current }
+
+    assert while_held.cost_basis_unknown
+    assert_nil while_held.cost_basis
+    assert_not current.cost_basis_unknown
+    assert_equal BigDecimal("490"), current.cost_basis
+  end
+
+  test "the unknown basis is released when the position crosses zero within one day" do
+    load_prices
+
+    create_trade(@voo, qty: 10, date: 4.days.ago.to_date, price: 460, account: @account)
+    # One day: transfer in, sell everything, buy back
+    transfer_in = create_trade(@voo, qty: 5, date: 2.days.ago.to_date, price: 480, account: @account)
+    transfer_in.entryable.update!(investment_activity_label: Trade::TRANSFER_LABEL)
+    create_trade(@voo, qty: -15, date: 2.days.ago.to_date, price: 480, account: @account)
+    create_trade(@voo, qty: 10, date: 2.days.ago.to_date, price: 480, account: @account)
+
+    calculated = Holding::ForwardCalculator.new(@account).calculate
+    current = calculated.find { |h| h.security_id == @voo.id && h.date == Date.current }
+
+    assert_not current.cost_basis_unknown
+    assert_equal BigDecimal("480"), current.cost_basis
+  end
+
   private
     def assert_holdings(expected, calculated)
       expected.each do |expected_entry|
