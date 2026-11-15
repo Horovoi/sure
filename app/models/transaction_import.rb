@@ -72,7 +72,13 @@ class TransactionImport < Import
   # and name are not listed: publishing takes those entries over (and revert hands
   # them back).
   def already_recorded
-    @already_recorded ||= duplicate_plan.skipped
+    preview_plan.skipped
+  end
+
+  # { row id => Entry } for rows with the same date, amount and name as an existing
+  # entry. Publishing takes those entries over instead of creating new ones.
+  def already_claimed
+    preview_plan.claims
   end
 
   def required_column_keys
@@ -112,6 +118,11 @@ class TransactionImport < Import
 
   private
     DuplicatePlan = Data.define(:accounts, :claims, :skipped)
+
+    # The plan the confirm step shows, built once for both lists
+    def preview_plan
+      @preview_plan ||= duplicate_plan
+    end
 
     # Decides, before anything is written, what happens to each row:
     # - accounts: row id => the account it goes into

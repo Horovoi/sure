@@ -122,6 +122,13 @@ en:
       title: Imports
       new: New Import
     already_recorded:
+      claimed_description: The account already has these transactions under the
+        same name, amount and date. Publishing links them to this import and creates
+        no new ones; a category, tags or notes in the file replace theirs. Revert gives
+        them back as they were.
+      claimed_title:
+        one: 1 transaction already recorded under the same name
+        other: "%{count} transactions already recorded under the same name"
       description: The account already has these transactions (same amount, date
         up to 3 days apart). They are skipped and left as they are. Open one to check it.
       entry_details: "%{amount} on %{date}"

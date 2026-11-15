@@ -1,10 +1,12 @@
-<%# locals: (import:, matches:) %>
-<%# matches: { row id => Entry } from Import::DuplicateMatcher %>
+<%# locals: (import:, matches:, variant: :skipped) %>
+<%# matches: { row id => Entry }. variant :skipped lists the rows Import::DuplicateMatcher found
+    (publishing leaves them out); :claimed lists the same-name rows publishing takes over. %>
 
 <% if matches.any? %>
-  <div id="already_recorded" class="bg-container border border-primary rounded-xl p-2">
-    <%= render DS::Disclosure.new(title: t("imports.already_recorded.title", count: matches.size), align: "left") do %>
-      <p class="text-xs text-secondary px-3 pb-2"><%= t("imports.already_recorded.description") %></p>
+  <% claimed = variant == :claimed %>
+  <div id="<%= claimed ? "already_claimed" : "already_recorded" %>" class="bg-container border border-primary rounded-xl p-2">
+    <%= render DS::Disclosure.new(title: t(claimed ? "imports.already_recorded.claimed_title" : "imports.already_recorded.title", count: matches.size), align: "left") do %>
+      <p class="text-xs text-secondary px-3 pb-2"><%= t(claimed ? "imports.already_recorded.claimed_description" : "imports.already_recorded.description") %></p>
 
       <div class="bg-container shadow-border-xs rounded-lg text-sm divide-y divide-primary">
         <% import.rows.where(id: matches.keys).ordered.each do |row| %>

@@ -285,7 +285,8 @@ class Import < ApplicationRecord
 
   def dry_run
     mappings = {
-      transactions: rows_count - already_recorded.size,
+      # Only rows that create an entry: skipped and claimed rows add nothing
+      transactions: rows_count - already_recorded.size - already_claimed.size,
       categories: Import::CategoryMapping.for_import(self).creational.count,
       tags: Import::TagMapping.for_import(self).creational.count
     }
@@ -298,6 +299,12 @@ class Import < ApplicationRecord
   # { row id => Entry } for rows an account already records, which publishing skips.
   # Overridden by the imports that check for duplicates.
   def already_recorded
+    {}
+  end
+
+  # { row id => Entry } for rows whose existing entry publishing takes over (same
+  # date, amount and name). Overridden by TransactionImport.
+  def already_claimed
     {}
   end
 

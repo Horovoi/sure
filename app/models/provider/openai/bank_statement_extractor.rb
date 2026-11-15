@@ -172,14 +172,39 @@ class Provider::Openai::BankStatementExtractor
       nil
     end
 
+    # The prompt asks for a number, but a model can copy the statement's text:
+    # "-1 234,56" (Ukrainian and most European statements), "1.234,56", "1,234.56",
+    # "−12,50" (Unicode minus). Stripping everything but digits, "." and "-" read
+    # "-1 234,56" as -123456.
     def parse_amount(amount)
       return nil if amount.nil?
+      return amount.to_f if amount.is_a?(Numeric)
 
-      if amount.is_a?(Numeric)
-        amount.to_f
-      else
-        amount.to_s.gsub(/[^0-9.\-]/, "").to_f
-      end
+      text = amount.to_s.gsub(/\p{Space}/, "").tr("−", "-")
+      negative = text.start_with?("-") || text.match?(/\A\(.*\)\z/)
+      digits = text.gsub(/[^\d.,]/, "")
+
+      value = case decimal_separator(digits)
+      when "," then digits.delete(".").tr(",", ".")
+      when "." then digits.delete(",")
+      else digits.delete(".,")
+      end.to_f
+
+      negative ? -value : value
+    end
+
+    # The separator before the decimals, or nil when the number has none. With both
+    # "." and "," the last one is it. One kind used more than once groups thousands
+    # ("1.234.567"). A single "," before exactly three digits groups thousands too
+    # ("1,234"); any other single "," or "." is the decimal separator.
+    def decimal_separator(digits)
+      separators = digits.scan(/[.,]/)
+      return nil if separators.empty?
+      return digits[digits.rindex(/[.,]/)] if separators.uniq.size > 1
+      return nil if separators.size > 1
+      return nil if separators.first == "," && digits.match?(/,\d{3}\z/)
+
+      separators.first
     end
 
     def instructions_with_metadata
