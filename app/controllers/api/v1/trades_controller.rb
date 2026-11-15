@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class Api::V1::TradesController < Api::V1::BaseController
-  include Pagy::Backend
-
   before_action :ensure_read_scope, only: [ :index, :show ]
   before_action :ensure_write_scope, only: [ :create, :update, :destroy ]
   before_action :set_trade, only: [ :show, :update, :destroy ]

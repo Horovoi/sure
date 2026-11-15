@@ -1,6 +1,4 @@
 module ApplicationHelper
-  include Pagy::Frontend
-
   def product_name
     Rails.configuration.x.product_name
   end

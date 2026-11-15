@@ -24,7 +24,6 @@ require "rails/test_help"
 # that asserts "nothing was broadcast" fails whenever it runs before anything broadcasts.
 ActionCable.server
 
-require "minitest/mock"
 require "minitest/autorun"
 require "mocha/minitest"
 require "aasm/minitest"

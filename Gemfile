@@ -7,7 +7,7 @@ gem "rails", "~> 8.1.0"
 
 # Drivers
 gem "pg", "~> 1.5"
-gem "redis", "~> 5.4"
+gem "redis"
 
 # Deployment
 gem "puma", ">= 5.0"
@@ -31,7 +31,6 @@ gem "lookbook", "2.3.11"
 gem "hotwire_combobox"
 
 # Background Jobs
-gem "connection_pool", "~> 2.5" # sidekiq 8.0.5 predates connection_pool 3 support (8.0.10 / 8.1.0)
 gem "sidekiq"
 gem "sidekiq-cron"
 
@@ -46,8 +45,11 @@ gem "logtail-rails"
 gem "skylight", groups: [ :production ]
 
 # Active Storage
-gem "aws-sdk-s3", "~> 1.208.0", require: false
+gem "aws-sdk-s3", "~> 1.208", require: false
 gem "image_processing", ">= 1.2"
+# image_processing 2 leaves the backend to the app. Loaded only when a variant is made:
+# the production image has libvips, this Mac does not.
+gem "ruby-vips", require: false
 
 # Other
 gem "ostruct"
@@ -78,7 +80,7 @@ gem "httparty"
 gem "rotp", "~> 6.3"
 gem "rqrcode", "~> 3.0"
 gem "activerecord-import"
-gem "rubyzip", "~> 2.3"
+gem "rubyzip"
 gem "pdf-reader"
 
 # OpenID Connect, OAuth & SAML authentication
@@ -99,7 +101,7 @@ gem "flipper-active_record"
 
 # AI
 gem "ruby-openai"
-gem "langfuse-ruby", "~> 0.1.4", require: "langfuse"
+gem "langfuse-ruby", require: "langfuse"
 
 group :development, :test do
   gem "debug", platforms: %i[mri windows]
@@ -129,7 +131,7 @@ end
 group :test do
   gem "capybara"
   gem "selenium-webdriver"
-  gem "minitest", "~> 5.25" # Minitest 6 drops minitest/mock; migrate the suite first
+  gem "minitest"
   gem "mocha"
   gem "vcr"
   gem "webmock"

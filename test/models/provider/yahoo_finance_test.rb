@@ -152,35 +152,29 @@ class Provider::YahooFinanceTest < ActiveSupport::TestCase
     # Mock a Faraday error
     faraday_error = Faraday::ConnectionFailed.new("Connection failed")
 
-    @provider.stub :client, ->(*) { raise faraday_error } do
-      result = @provider.send(:with_provider_response) { raise faraday_error }
+    result = @provider.send(:with_provider_response) { raise faraday_error }
 
-      assert_not result.success?
-      assert_instance_of Provider::YahooFinance::Error, result.error
-    end
+    assert_not result.success?
+    assert_instance_of Provider::YahooFinance::Error, result.error
   end
 
   test "handles rate limit errors" do
     rate_limit_error = Faraday::TooManyRequestsError.new("Rate limit exceeded", { body: "Too many requests" })
 
-    @provider.stub :client, ->(*) { raise rate_limit_error } do
-      result = @provider.send(:with_provider_response) { raise rate_limit_error }
+    result = @provider.send(:with_provider_response) { raise rate_limit_error }
 
-      assert_not result.success?
-      assert_instance_of Provider::YahooFinance::RateLimitError, result.error
-    end
+    assert_not result.success?
+    assert_instance_of Provider::YahooFinance::RateLimitError, result.error
   end
 
   test "handles 401 unauthorized as authentication error" do
     unauthorized_error = Faraday::UnauthorizedError.new("Unauthorized", { body: "Invalid Crumb" })
 
-    @provider.stub :client, ->(*) { raise unauthorized_error } do
-      result = @provider.send(:with_provider_response) { raise unauthorized_error }
+    result = @provider.send(:with_provider_response) { raise unauthorized_error }
 
-      assert_not result.success?
-      assert_instance_of Provider::YahooFinance::AuthenticationError, result.error
-      assert_match(/authentication failed/, result.error.message)
-    end
+    assert_not result.success?
+    assert_instance_of Provider::YahooFinance::AuthenticationError, result.error
+    assert_match(/authentication failed/, result.error.message)
   end
 
   # ================================
