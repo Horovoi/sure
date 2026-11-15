@@ -219,6 +219,17 @@ class Category < ApplicationRecord
     uncategorized? || other_investments?
   end
 
+  # The key that groups income statement category totals. Both synthetic categories
+  # have no id, so keying by id alone puts Uncategorized and Other investments on the
+  # same nil key and one overwrites the other. Budget and the category netting of the
+  # income statement both index totals by this one key.
+  def totals_key
+    return :uncategorized if uncategorized?
+    return :other_investments if other_investments?
+
+    id
+  end
+
   private
     def category_level_limit
       if (subcategory? && parent.subcategory?) || (parent? && subcategory?)

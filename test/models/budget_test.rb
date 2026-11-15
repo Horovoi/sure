@@ -200,4 +200,109 @@ class BudgetTest < ActiveSupport::TestCase
       assert_equal Date.new(2026, 2, 1), old.reload.start_date
     end
   end
+
+  # --- Refund netting ---------------------------------------------------------
+
+  def budget_test_account
+    @budget_test_account ||= Account.create!(
+      family: @family, accountable: Depository.new, name: "Budget account",
+      status: "active", currency: "USD", balance: 0
+    )
+  end
+
+  def budget_test_entry(category:, amount:, name: "Entry")
+    Entry.create!(
+      account: budget_test_account, entryable: Transaction.new(category: category),
+      date: Date.current, name: name, amount: amount, currency: "USD"
+    )
+  end
+
+  def budget_test_category(name, classification: "expense", parent: nil)
+    @family.categories.create!(name: name, classification: classification, parent: parent, color: "#000000", lucide_icon: "tag")
+  end
+
+  test "a refund lowers its category's spending and the total spending" do
+    healthcare = budget_test_category("Healthcare")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: healthcare, amount: 500, name: "Doctor")
+    budget_test_entry(category: healthcare, amount: -200, name: "Insurance refund")
+
+    budget = Budget.find(budget.id)
+    row = budget.budget_categories.find { |bc| bc.category_id == healthcare.id }
+
+    assert_equal 300, budget.budget_category_actual_spending(row)
+    assert_equal 300, budget.actual_spending
+    assert_equal [ 300 ], budget.expense_category_totals.map(&:total)
+  end
+
+  test "a refund larger than its category's spending clamps the category at 0" do
+    returns = budget_test_category("Returns")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: returns, amount: 50)
+    budget_test_entry(category: returns, amount: -80)
+
+    budget = Budget.find(budget.id)
+    row = budget.budget_categories.find { |bc| bc.category_id == returns.id }
+
+    assert_equal 0, budget.budget_category_actual_spending(row)
+    assert_equal 0, budget.actual_spending
+    assert_empty budget.expense_category_totals
+  end
+
+  test "a subcategory refund lowers the subcategory and its parent" do
+    food = budget_test_category("Food")
+    restaurants = budget_test_category("Restaurants", parent: food)
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: food, amount: 100)
+    budget_test_entry(category: restaurants, amount: 300)
+    budget_test_entry(category: restaurants, amount: -120)
+
+    budget = Budget.find(budget.id)
+    parent_row = budget.budget_categories.find { |bc| bc.category_id == food.id }
+    sub_row = budget.budget_categories.find { |bc| bc.category_id == restaurants.id }
+
+    assert_equal 180, budget.budget_category_actual_spending(sub_row)
+    assert_equal 280, budget.budget_category_actual_spending(parent_row)
+    assert_equal 280, budget.actual_spending
+  end
+
+  test "an uncategorized inflow does not lower uncategorized spending or the total spending" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: nil, amount: 400)
+    budget_test_entry(category: nil, amount: -150)
+
+    budget = Budget.find(budget.id)
+
+    assert_equal 400, budget.budget_category_actual_spending(budget.uncategorized_budget_category)
+    assert_equal 400, budget.actual_spending
+    assert_equal 150, budget.actual_income
+  end
+
+  test "uncategorized and other investments keep separate totals" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: nil, amount: 75)
+
+    budget = Budget.find(budget.id)
+    keys = budget.send(:expense_totals_by_category).keys
+
+    assert_includes keys, :uncategorized
+    assert_includes keys, :other_investments
+    assert_equal 75, budget.budget_category_actual_spending(budget.uncategorized_budget_category)
+  end
+
+  test "actual income leaves out the refunds of expense categories" do
+    salary = budget_test_category("Salary", classification: "income")
+    shopping = budget_test_category("Shopping")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: salary, amount: -1000)
+    budget_test_entry(category: shopping, amount: 200)
+    budget_test_entry(category: shopping, amount: -50)
+
+    budget = Budget.find(budget.id)
+
+    assert_equal 1000, budget.actual_income
+    assert_equal [ salary.id ], budget.income_category_totals.map { |ct| ct.category.id }
+    assert_equal 100, budget.income_category_totals.first.weight
+    assert_equal 150, budget.actual_spending
+  end
 end

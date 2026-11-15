@@ -139,12 +139,24 @@ class Budget < ApplicationRecord
     budgeted_spending.present?
   end
 
+  # Income by category, without the refunds of expense categories: those lower the
+  # spending of their category instead (see #refunds_in_expense_categories), so
+  # counting them here as well would count them twice.
   def income_category_totals
-    income_totals.category_totals.reject { |ct| ct.category.subcategory? || ct.total.zero? }.sort_by(&:weight).reverse
+    totals = income_totals.category_totals.select do |ct|
+      !ct.category.subcategory? && (ct.category.uncategorized? || (ct.category.persisted? && ct.category.classification == "income"))
+    end
+
+    with_weights(totals)
   end
 
+  # Spending by top-level category, net of the category's refunds and never below 0.
   def expense_category_totals
-    expense_totals.category_totals.reject { |ct| ct.category.subcategory? || ct.total.zero? }.sort_by(&:weight).reverse
+    totals = expense_totals.category_totals.reject { |ct| ct.category.subcategory? }.map do |ct|
+      ct.with(total: net_category_spending(ct.category, ct.total))
+    end
+
+    with_weights(totals)
   end
 
   def current?
@@ -191,12 +203,18 @@ class Budget < ApplicationRecord
     income_statement.median_expense(interval: "month")
   end
 
+  # Spending net of the refunds in expense categories, never below 0.
   def actual_spending
-    expense_totals.total
+    [ expense_totals.total - refunds_in_expense_categories, 0 ].max
   end
 
+  # A category's spending net of its refunds, never below 0. A parent's totals
+  # include its subcategories, so a subcategory refund lowers both.
   def budget_category_actual_spending(budget_category)
-    expense_totals.category_totals.find { |ct| ct.category.id == budget_category.category.id }&.total || 0
+    category = budget_category.category
+    expense = expense_totals_by_category[category.totals_key]&.total || 0
+
+    net_category_spending(category, expense)
   end
 
   def category_median_monthly_expense(category)
@@ -271,8 +289,9 @@ class Budget < ApplicationRecord
     family.income_statement.median_income(interval: "month")
   end
 
+  # Income without the refunds of expense categories, which lower spending instead.
   def actual_income
-    family.income_statement.income_totals(period: self.period).total
+    income_totals.total - refunds_in_expense_categories
   end
 
   def actual_income_percent
@@ -301,6 +320,53 @@ class Budget < ApplicationRecord
     end
 
     def income_totals
-      @income_totals ||= family.income_statement.income_totals(period: period)
+      @income_totals ||= income_statement.income_totals(period: period)
+    end
+
+    # =============================================================================
+    # Refund netting
+    #
+    # The income statement classifies each transaction by the sign of its amount, so
+    # a refund in an expense category (an inflow) lands in the income totals under
+    # that category. Budgets net it against the category's spending. Inflows without
+    # a category stay gross: one is as likely to be income as a refund.
+    # =============================================================================
+
+    # Refunds of the budget's top-level expense categories. A parent's total includes
+    # its subcategories, so counting top-level rows only counts each refund once.
+    def refunds_in_expense_categories
+      @refunds_in_expense_categories ||= refund_netted_category_ids.sum do |category_id|
+        income_totals_by_category[category_id]&.total || 0
+      end
+    end
+
+    def refund_netted_category_ids
+      @refund_netted_category_ids ||= budget_categories.reject(&:subcategory?).map(&:category_id).to_set
+    end
+
+    # Spending of one category less its refunds, never below 0. Only persisted expense
+    # categories net their refunds; the uncategorized row stays gross.
+    def net_category_spending(category, expense)
+      return expense unless category.persisted? && category.classification == "expense"
+
+      refund = income_totals_by_category[category.totals_key]&.total || 0
+      [ expense - refund, 0 ].max
+    end
+
+    def expense_totals_by_category
+      @expense_totals_by_category ||= expense_totals.category_totals.index_by { |ct| ct.category.totals_key }
+    end
+
+    def income_totals_by_category
+      @income_totals_by_category ||= income_totals.category_totals.index_by { |ct| ct.category.totals_key }
+    end
+
+    # Drops zero rows and weighs each row against the rows shown, largest first, so
+    # the bars of the actuals summary add up to 100%.
+    def with_weights(category_totals)
+      shown = category_totals.reject { |ct| ct.total.zero? }
+      sum = shown.sum(&:total)
+
+      shown.map { |ct| ct.with(weight: sum.zero? ? 0 : ct.total.to_f / sum * 100) }.sort_by(&:weight).reverse
     end
 end

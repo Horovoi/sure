@@ -45,4 +45,10 @@ class CategoryTest < ActiveSupport::TestCase
     assert_equal [ "Food & Drink", "Restaurants" ], option_labels
     assert_equal [ categories(:food_and_drink).id, categories(:subcategory).id ], option_ids
   end
+
+  test "totals_key is the id of a persisted category and a symbol for the synthetic ones" do
+    assert_equal categories(:food_and_drink).id, categories(:food_and_drink).totals_key
+    assert_equal :uncategorized, @family.categories.uncategorized.totals_key
+    assert_equal :other_investments, @family.categories.other_investments.totals_key
+  end
 end
