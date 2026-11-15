@@ -28,16 +28,34 @@ en:
       icon: Icon
       poor_contrast: "Poor contrast, choose a darker color or"
     index:
+      all_categories: all categories
       bootstrap: Use defaults (recommended)
       categories: Categories
       categories_expenses: Expense categories
       categories_incomes: Income categories
+      delete_all: Delete all
       empty: No categories found
+      merge: Merge categories
       new: New category
+    merge:
+      title: Merge categories
+      description: Move everything in the selected categories into one target category, then delete the selected categories.
+      target_label: Merge into
+      sources_label: Categories to merge
+      sources_hint: Transactions, budget amounts, subcategories, recurring transactions and rule values move to the target. Income and expense categories cannot be merged together. The target is ignored if you also select it here.
+      income: Income
+      expense: Expense
+      submit: Merge selected
     menu:
       loading: Loading...
     new:
       new_category: New category
+    perform_merge:
+      success:
+        one: Merged %{count} category into %{target}
+        other: Merged %{count} categories into %{target}
+      no_categories_selected: Select at least one category to merge
+      target_not_found: Select the category to merge into
     update:
       success: Category updated successfully
   category:

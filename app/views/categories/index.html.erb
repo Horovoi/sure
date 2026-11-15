@@ -5,11 +5,21 @@
     <%= render DS::Menu.new do |menu| %>
       <% menu.with_item(
           variant: "button",
-          text: "Delete all",
+          text: t(".delete_all"),
           href: destroy_all_categories_path,
           method: :delete,
           icon: "trash-2",
-          confirm: CustomConfirm.for_resource_deletion("all categories", high_severity: true)) %>
+          confirm: CustomConfirm.for_resource_deletion(t(".all_categories"), high_severity: true)) %>
+    <% end %>
+
+    <% if @categories.size > 1 %>
+      <%= render DS::Link.new(
+        text: t(".merge"),
+        variant: "outline",
+        icon: "combine",
+        href: merge_categories_path,
+        frame: :modal
+      ) %>
     <% end %>
 
     <%= render DS::Link.new(

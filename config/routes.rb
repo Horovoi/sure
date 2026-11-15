@@ -154,6 +154,11 @@ Rails.application.routes.draw do
   patch "transactions/:id/tags", to: "transactions#update_tags", as: :tags_transaction
   # --- end DS pickers ---
 
+  # --- Category merge (w2-rules) ---
+  get "categories/merge", to: "categories#merge", as: :merge_categories
+  post "categories/merge", to: "categories#perform_merge", as: :perform_merge_categories
+  # --- end category merge ---
+
   resources :categories, except: :show do
     resources :deletions, only: %i[new create], module: :category
 

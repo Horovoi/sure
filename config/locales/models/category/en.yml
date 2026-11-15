@@ -5,3 +5,9 @@ en:
       uncategorized: Uncategorized
       other_investments: Other Investments
       investment_contributions: Investment Contributions
+      merger:
+        errors:
+          not_in_family: The category does not belong to this family.
+          classification_mismatch: "%{names} cannot merge into %{target}: income and expense categories cannot be merged."
+          parent_into_subcategory: A parent category cannot merge into its own subcategory.
+          subcategories_into_subcategory: A category with subcategories cannot merge into a subcategory.
