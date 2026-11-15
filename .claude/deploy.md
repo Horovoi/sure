@@ -34,7 +34,8 @@ A normal deploy takes about half a minute. What it does, in order:
 1. Builds `sure:<commit>` from the working tree. Uncommitted changes are included and listed.
 2. Rehearsal: copies production into staging, runs the new migrations there, checks that
    no table lost rows and that the app starts. If this fails, production is untouched.
-3. Backs up the production database to `backups/pre-deploy/` (the last 10 are kept).
+3. Writes a pre-deploy backup bundle to `backups/bundles/pre-deploy/` and mirrors it
+   off-site (the last 10 are kept in each place). See [Backups](#backups).
 4. If migrations are pending: stops the app, migrates, checks again that no table lost rows.
 5. Starts web, worker and the scheduled backup container, and waits for the health check.
 
@@ -50,7 +51,8 @@ docker compose -p sure -f docker-compose.prod.yml --env-file .env.production log
 - `bin/deploy` is the only thing that runs migrations in production. The container
   entrypoint does not, so restarting a container never changes the schema.
 - A rollback switches the image only. It does not undo migrations. To go back past a
-  migration, restore the pre-deploy backup.
+  migration, restore the pre-deploy bundle (the owner does this, see
+  [Restoring production](#restoring-production-the-owner-only)).
 - Write migrations so the previous version still works on the new schema where possible;
   that keeps `--rollback` useful.
 
@@ -64,6 +66,8 @@ bin/staging up ... --worker     # also run background jobs
 bin/staging down [--wipe]       # stop staging (--wipe also deletes the copy)
 bin/staging dev                 # bin/dev with hot reload on the copy (port 3000)
 bin/staging run <command...>    # any command against the copy, e.g. bin/rails console
+bin/staging exec <command...>   # a command in the running staging worker container
+bin/staging restore <bundle>    # load a backup bundle into the copy and start it
 bin/staging bench <old> <new>   # compare page speed of two versions on the copy
 ```
 
@@ -83,6 +87,104 @@ bin/staging bench <old> <new>   # compare page speed of two versions on the copy
 
 Use staging, not production, to try a risky change, to reproduce a problem that needs
 real data, and to measure performance.
+
+## Backups
+
+Two kinds of backup live in `BACKUP_DIR` (default `./backups`):
+
+- The **daily database sidecar** (the `backup` service, `prodrigestivill/postgres-backup-local`)
+  writes database dumps to `backups/daily`, `weekly`, `monthly` and `last`, and prunes them
+  itself. Nothing else writes or deletes there.
+- **Bundles** (`Backup::Bundle`): a full, restorable copy in one folder under
+  `backups/bundles/<kind>/<UTC stamp>_<tag>/`:
+
+  | File | What |
+  |---|---|
+  | `db.sql.gz` | Plain SQL dump of the database (`gunzip -c db.sql.gz \| psql`) |
+  | `storage.tar.gz` | The `app-storage` volume (`/rails/storage`, uploaded files) |
+  | `icons.tar.gz` | The `icons` volume (`/rails/public/icons`) |
+  | `env.production.age` | `.env.production`, encrypted with age to `BACKUP_AGE_RECIPIENT` (mode 600). Skipped, and `"env": "skipped"` in the manifest, when no recipient is set |
+  | `manifest.json` | Kind, tag, build commit, time, schema version, pg_dump version, the row count of every table, and size plus sha256 of every file |
+
+| Kind | Made by | Parts | Kept here / off-site |
+|---|---|---|---|
+| `daily` | `FullBackupJob`, 04:00 Kyiv (`config/schedule.yml`, `full_backup`) | all | 7 / 30 |
+| `pre-deploy` | `bin/deploy` step 3 | all | 10 / 10 |
+| `pre-reset` | `FamilyResetJob`, before it deletes anything | database and files | 5 / 5 |
+| `manual` | `bin/rails 'backup:create[manual]'` | all | 5 / 5 |
+
+- Every bundle is copied to `OFFSITE_BACKUP_DIR/bundles/<kind>/` (`/offsite` in the worker)
+  and each file is checked against its sha256 there. Without `OFFSITE_BACKUP_DIR` the
+  mirror is `backups/offsite`, on the same disk; `bin/deploy` warns about that.
+- Pruning deletes only folders named `<stamp>_<tag>` that hold a `manifest.json`. Other
+  files and folders, and the flat `backups/pre-deploy/sure_pre_deploy_*.sql.gz` files from
+  before bundles, are left alone.
+- The pre-deploy bundle: `bin/deploy` dumps the database through the db container and
+  tars both volumes read-only (no Rails), then runs `bin/rails 'backup:seal[<dir>,pre_deploy]'`
+  in a one-off worker of the new image, which adds the encrypted env file and the
+  manifest, mirrors and prunes. If sealing fails the deploy stops before touching
+  production, and the dump and tarballs stay in the folder it names. Its env copy holds
+  the new `BUILD_COMMIT_SHA`, so it differs from `.env.production` in that one line.
+- The worker mounts `BACKUP_DIR` at `/backups`, `OFFSITE_BACKUP_DIR` at `/offsite` and
+  `.env.production` read-only at `/run/secrets/env.production`. `bin/deploy` rewrites
+  `.env.production` in place (`cat >`) so that single-file mount keeps working.
+- On staging the worker mounts `backups/staging` instead, so bundles made on the copy
+  (manual, or pre-reset from a reset there) land only in `backups/staging/bundles/`. The
+  daily job does nothing on staging.
+
+### Owner one-time setup
+
+1. `brew install age`, then `age-keygen -o sure-backup.key`. Put the private key (the
+   whole file) in the password manager and delete the file. Never store it in this
+   repository, in `backups/` or in the off-site folder.
+2. Add to `.env.production`: `BACKUP_AGE_RECIPIENT=age1...` (the public key that
+   `age-keygen` printed) and `OFFSITE_BACKUP_DIR=/path/to/another/disk/sure-backups`.
+3. Deploy (`bin/deploy`); it recreates the worker with the new mounts. Check that the
+   pre-deploy bundle is in both `backups/bundles/pre-deploy/` and the off-site folder.
+
+### Testing a bundle on staging
+
+```bash
+bin/staging up --worker
+bin/staging exec bin/rails 'backup:create[manual]'   # writes backups/staging/bundles/manual/...
+bin/staging restore backups/bundles/daily/<name>     # or any bundle folder
+```
+
+`bin/staging restore` checks every sha256 against the manifest, stops the staging app,
+drops and recreates the staging database, loads `db.sql.gz`, unpacks the tarballs into
+the staging volumes, defuses provider credentials, prints any table whose row count
+differs from the manifest, then migrates and starts the deployed version on it. It never
+decrypts `env.production.age`: the private key stays with the owner.
+
+### Restoring production (the owner only)
+
+Claude never restores production. The owner runs these by hand, from the repository
+root, with the bundle folder in `B`:
+
+```bash
+B=backups/bundles/pre-deploy/<name>
+shasum -a 256 "$B"/*.gz "$B"/*.age          # compare with manifest.json
+# 1. The env file, if it was lost or changed (key from the password manager):
+age -d -i /path/to/sure-backup.key "$B/env.production.age" > .env.production.restored
+# 2. Stop the app and load the dump into a fresh database:
+P="docker compose -p sure -f docker-compose.prod.yml --env-file .env.production"
+$P stop web worker
+$P exec -T db sh -c 'dropdb -U "$POSTGRES_USER" --force "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+gunzip -c "$B/db.sql.gz" | sed '/^SET transaction_timeout = /d' |
+  $P exec -T db sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+# 3. Unpack the volumes:
+$P run --rm --no-deps -v "$PWD/$B:/bundle:ro" --entrypoint sh web -c \
+  'find /rails/storage -mindepth 1 -delete && tar -xzf /bundle/storage.tar.gz -C /rails/storage'
+$P run --rm --no-deps -v "$PWD/$B:/bundle:ro" --entrypoint sh web -c \
+  'find /rails/public/icons -mindepth 1 -delete && tar -xzf /bundle/icons.tar.gz -C /rails/public/icons'
+# 4. Start the version that matches the restored schema (see below):
+bin/deploy --rollback <commit>
+```
+
+The `sed` line drops a setting that pg_dump 17 writes and the postgres 16 server does
+not know. For a daily, manual or pre-reset bundle, the matching version is the tag in
+its folder name. A pre-deploy bundle holds the database as it was before that deploy's
+migrations, while its tag names the new version: start the version deployed before it.
 
 ## Rules
 
@@ -106,6 +208,8 @@ real data, and to measure performance.
 | `bin/deploy`, `bin/staging` | The two entry points; both have `--help` |
 | `script/deploy/lib.sh` | Shared shell functions (copying, migration check, images) |
 | `script/staging/defuse.rb` | Replaces provider credentials in the copy |
+| `script/staging/bundle_check.rb` | Checks a bundle against its manifest for `bin/staging restore` |
+| `app/models/backup/bundle.rb`, `lib/tasks/backup.rake`, `app/jobs/full_backup_job.rb` | Backup bundles |
 | `script/bench/` | Benchmark containers, request driver and summary |
 | `docker-compose.prod.yml` | Production services; also the base for staging |
 | `docker-compose.staging.yml` | Staging differences: closed network, proxy, published ports |

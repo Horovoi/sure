@@ -28,3 +28,10 @@ sync_hourly:
 # clean_data, run_security_health_checks and generate_subscription_transactions are
 # scheduled from Settings by ScheduledJobsManager at every Sidekiq start; do not add
 # them here, or this file overwrites the configured times on every boot.
+
+full_backup:
+  cron: "0 4 * * * Europe/Kyiv" # daily at 04:00 Kyiv time
+  class: "FullBackupJob"
+  queue: "scheduled"
+  active_job: true
+  description: "Writes the daily backup bundle (database, files, icons, encrypted env) and mirrors it off-site"

@@ -23,6 +23,14 @@ services:
   worker:
     profiles: [worker]
     restart: "no"
+    # Replaces production's backup mounts: backups made on the copy (manual and
+    # pre-reset bundles) go only to backups/staging, never next to production's.
+    volumes: !override
+      - app-storage:/rails/storage
+      - icons:/rails/public/icons
+      - ./backups/staging:/backups
+      - ./backups/staging/offsite:/offsite
+      - ./.env.production:/run/secrets/env.production:ro
     environment:
       <<: *staging_env
 
