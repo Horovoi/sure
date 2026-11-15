@@ -78,7 +78,7 @@
       <% else %>
         <%= button_to "/auth/#{provider_name}", method: :post, form: { data: { turbo: false } }, class: "w-full inline-flex items-center justify-center gap-2 rounded-md border border-secondary bg-container px-4 py-2 text-sm font-medium text-primary hover:bg-secondary transition" do %>
           <% if provider[:icon].present? %>
-            <%= icon provider[:icon], size: "sm" %>
+            <%= icon sso_provider_icon_key(provider[:icon]), size: "sm" %>
           <% end %>
           <span><%= provider[:label].presence || provider[:name].to_s.titleize %></span>
         <% end %>
