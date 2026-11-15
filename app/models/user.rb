@@ -16,6 +16,10 @@ class User < ApplicationRecord
   has_many :sso_audit_logs, dependent: :nullify
   accepts_nested_attributes_for :family, update_only: true
 
+  # w2-transfers default-account: the account new entries start in (see #default_account_for_entries)
+  belongs_to :default_account, class_name: "Account", optional: true, inverse_of: :default_for_users
+  validate :default_account_in_family
+
   validates :email, presence: true, uniqueness: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validate :ensure_valid_profile_image
   validates :default_period, inclusion: { in: Period::PERIODS.keys }
@@ -53,6 +57,13 @@ class User < ApplicationRecord
 
   generates_token_for :email_confirmation, expires_in: 1.day do
     unconfirmed_email
+  end
+
+  # w2-transfers default-account: the default account when the forms may preselect it
+  # (manual and active, Account#eligible_as_default?), else nil
+  def default_account_for_entries
+    account = default_account
+    account if account&.family_id == family_id && account.eligible_as_default?
   end
 
   def pending_email_change?
@@ -274,6 +285,12 @@ class User < ApplicationRecord
   end
 
   private
+    def default_account_in_family
+      return if default_account_id.blank?
+
+      errors.add(:default_account, :invalid) unless default_account&.family_id == family_id
+    end
+
     # Merges into the stored preferences: a hash value (collapsed sections) is merged
     # key by key, anything else (section order) replaces the stored value. The row
     # lock makes the read-modify-write atomic when sections are toggled quickly.

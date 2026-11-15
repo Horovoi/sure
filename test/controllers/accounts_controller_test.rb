@@ -368,6 +368,61 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_select "p.font-mono", count: 0
   end
 
+
+  # --- w2-transfers default-account ---
+
+  test "set_default makes the account the default for new entries" do
+    patch set_default_account_url(@account), headers: { "Referer" => account_url(@account) }
+
+    assert_redirected_to account_url(@account)
+    assert_equal @account.id, @user.reload.default_account_id
+  end
+
+  test "set_default refuses a disabled account" do
+    @account.disable!
+
+    patch set_default_account_url(@account)
+
+    assert_equal I18n.t("accounts.set_default.not_eligible"), flash[:alert]
+    assert_nil @user.reload.default_account_id
+  end
+
+  test "set_default refuses another family's account" do
+    other_family = Family.create!(name: "Other", currency: "USD")
+    foreign = other_family.accounts.create!(name: "Foreign", balance: 0, currency: "USD", accountable: Depository.new)
+
+    patch set_default_account_url(foreign)
+
+    assert_response :not_found
+    assert_nil @user.reload.default_account_id
+  end
+
+  test "remove_default clears the default" do
+    @user.update!(default_account: @account)
+
+    patch remove_default_account_url(@account)
+
+    assert_nil @user.reload.default_account_id
+  end
+
+  test "the account menu offers Set as default, then Unset default" do
+    get account_url(@account)
+    assert_select "[data-testid=account-menu] form[action='#{set_default_account_path(@account)}']"
+
+    @user.update!(default_account: @account)
+
+    get account_url(@account)
+    assert_select "[data-testid=account-menu] form[action='#{remove_default_account_path(@account)}']"
+  end
+
+  test "the accounts list marks the default account" do
+    @user.update!(default_account: @account)
+
+    get accounts_url
+
+    assert_select "##{ActionView::RecordIdentifier.dom_id(@account)}", text: /#{I18n.t("accounts.account.default_label")}/
+  end
+
   private
     def empty_series
       Series.new(start_date: 1.day.ago.to_date, end_date: Date.current, interval: "1 day", values: [])

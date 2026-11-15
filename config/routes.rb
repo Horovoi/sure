@@ -202,6 +202,15 @@ Rails.application.routes.draw do
   get :exchange_rate, to: "exchange_rates#show"
   # --- end w2-transfers custom-exchange-rate ---
 
+  # --- w2-transfers default-account: the account new entries start in ---
+  resources :accounts, only: [] do
+    member do
+      patch :set_default
+      patch :remove_default
+    end
+  end
+  # --- end w2-transfers default-account ---
+
   resources :imports, only: %i[index new show create update destroy] do
     member do
       post :publish

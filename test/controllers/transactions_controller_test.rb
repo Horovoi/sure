@@ -993,4 +993,31 @@ end
     assert_response :success
     assert_includes response.body, "#{accounts(:depository).name} → #{accounts(:connected).name}"
   end
+
+  # --- w2-transfers default-account ---
+
+  test "the new-transaction form preselects the default account" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+
+    get new_transaction_url
+
+    assert_select "select[name='entry[account_id]'] option[selected][value='#{accounts(:depository).id}']"
+  end
+
+  test "a disabled default account is not preselected" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+    accounts(:depository).update_columns(status: "disabled") # skips the callback that clears it
+
+    get new_transaction_url
+
+    assert_select "select[name='entry[account_id]'] option[selected]", count: 0
+  end
+
+  test "an account the form was opened for wins over the default" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+
+    get new_transaction_url(account_id: accounts(:credit_card).id)
+
+    assert_select "input[type=hidden][name='entry[account_id]'][value='#{accounts(:credit_card).id}']"
+  end
 end

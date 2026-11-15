@@ -143,6 +143,8 @@ class Account::MarketDataImporter
     end
 
     def foreign_account?
+      return false if account.family.nil? # an account whose family is gone (upstream a76aa340d)
+
       account.currency != account.family.currency
     end
 end

@@ -11,6 +11,7 @@ class TransactionsController < ApplicationController
   def new
     super
     apply_new_form_draft
+    preselect_default_account
   end
 
   def index
@@ -526,12 +527,27 @@ class TransactionsController < ApplicationController
       draft_account = @entry.account_id ? nil : Current.family.accounts.manual.active.find_by(id: draft[:account_id])
       @selected_account_id = draft_account&.id
       @entry.currency = draft_account.currency if draft_account
-      @entry.currency = draft[:currency] if draft[:currency].present? && Current.family.enabled_currency_codes(extra: []).include?(draft[:currency])
+      if draft[:currency].present? && Current.family.enabled_currency_codes(extra: []).include?(draft[:currency])
+        @entry.currency = draft[:currency]
+        @draft_currency = true
+      end
 
       transaction = @entry.entryable
       transaction.merchant = Current.family.available_merchants.find_by(id: draft[:merchant_id]) if draft[:merchant_id].present?
       transaction.category = @categories.find { |category| category.id == draft[:category_id] } if draft[:category_id].present?
       transaction.tag_ids = Current.family.tags.where(id: Array(draft[:tag_ids])).pluck(:id) if draft[:tag_ids].present?
+    end
+
+    # w2-transfers default-account: with no account given or carried over, the account
+    # picker starts on the user's default account (manual and active), in its currency
+    def preselect_default_account
+      return if @entry.account_id || @selected_account_id
+
+      account = Current.user.default_account_for_entries
+      return unless account
+
+      @selected_account_id = account.id
+      @entry.currency = account.currency unless @draft_currency
     end
 
     def draft_date(value)

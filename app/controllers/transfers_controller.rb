@@ -13,6 +13,11 @@ class TransfersController < ApplicationController
     @amount = UserDecimal.parse(draft_params[:amount])&.abs
     @date = parse_form_date(draft_params[:date])
     @tag_ids = Array(draft_params[:tag_ids]).compact_blank
+
+    # w2-transfers default-account: the money leaves the default account unless the form
+    # was opened for another one
+    default_id = Current.user.default_account_for_entries&.id
+    @from_account_id ||= default_id unless default_id == @to_account_id
   end
 
   def show

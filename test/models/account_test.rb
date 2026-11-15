@@ -370,4 +370,34 @@ class AccountTest < ActiveSupport::TestCase
     account = Account.new(family: @family, name: "x", balance: 0, currency: "USD", accountable_type: "Depository", accountable_attributes: {})
     assert_kind_of Depository, account.accountable
   end
+
+  # --- w2-transfers default-account ---
+
+  test "disabling the default account clears it" do
+    user = users(:family_admin)
+    account = accounts(:depository)
+    user.update!(default_account: account)
+
+    account.disable!
+
+    assert_nil user.reload.default_account_id
+  end
+
+  test "queueing the default account for deletion clears it" do
+    user = users(:family_admin)
+    account = accounts(:depository)
+    user.update!(default_account: account)
+
+    account.mark_for_deletion!
+
+    assert_nil user.reload.default_account_id
+  end
+
+  test "only a manual, active account can be the default" do
+    assert accounts(:depository).eligible_as_default?
+    assert_not accounts(:connected).eligible_as_default?
+
+    accounts(:depository).disable!
+    assert_not accounts(:depository).reload.eligible_as_default?
+  end
 end

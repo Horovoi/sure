@@ -415,4 +415,23 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "[data-controller~=select][data-controller~=list-filter] input[type=search]", minimum: 2
   end
+
+  # --- w2-transfers default-account ---
+
+  test "the new-transfer form starts from the default account" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+
+    get new_transfer_url
+
+    assert_select "input[type=hidden][name='transfer[from_account_id]'][value='#{accounts(:depository).id}']"
+  end
+
+  test "a disabled default account is not the transfer source" do
+    users(:family_admin).update!(default_account: accounts(:depository))
+    accounts(:depository).update_columns(status: "disabled")
+
+    get new_transfer_url
+
+    assert_select "input[type=hidden][name='transfer[from_account_id]'][value='#{accounts(:depository).id}']", count: 0
+  end
 end

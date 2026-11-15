@@ -11,15 +11,21 @@
             <span>
               <%= account.name %>
             </span>
-            <span class="text-red-500 animate-pulse">
-              (deletion in progress...)
+            <span class="text-destructive animate-pulse">
+              <%= t(".deletion_in_progress") %>
             </span>
           </p>
         <% else %>
-          <div>
+          <div class="flex items-center gap-1.5">
             <%= link_to account.name, account, class: [(account.active? ? "text-primary" : "text-subdued"), "text-sm font-medium hover:underline"], data: { turbo_frame: "_top" } %>
-            <% if account.institution_name %>
+            <% if account.institution_name.present? %>
               <span class="text-secondary">• <%= account.institution_name %></span>
+            <% end %>
+            <%# w2-transfers default-account %>
+            <% if Current.user&.default_account_id == account.id %>
+              <span class="inline-flex items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary" title="<%= t(".default_tooltip") %>">
+                <%= t(".default_label") %>
+              </span>
             <% end %>
           </div>
           <% if account.long_subtype_label %>
@@ -63,7 +69,7 @@
 
       <% if account.draft? %>
         <%= render DS::Link.new(
-          text: "Complete setup",
+          text: t(".complete_setup"),
           href: edit_account_path(account, return_to: return_to),
           variant: :outline,
           frame: :modal
