@@ -13,8 +13,9 @@ module Assistant::Configurable
     end
 
     private
+      # Every tool, writes and deletes included, with no approval prompt (owner answer 2); each call is audited
       def default_functions
-        Assistant.function_classes
+        Assistant.function_classes_for(:full)
       end
 
       def default_instructions(preferred_currency, preferred_date_format)

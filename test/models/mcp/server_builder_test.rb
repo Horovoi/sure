@@ -116,11 +116,39 @@ class Mcp::ServerBuilderTest < ActiveSupport::TestCase
     assert_equal true, import[:open_world_hint]
   end
 
-  test "a credential needs a known kind and a user" do
+  test "a credential needs a known kind, a known scope and a user" do
     assert_raises(ArgumentError) { Mcp::Credential.new(user: @user, kind: :oauth) }
+    assert_raises(ArgumentError) { Mcp::Credential.new(user: @user, kind: :static, scope: :admin) }
     assert_raises(ArgumentError) { Mcp::Credential.new(user: nil, kind: :static) }
     assert_equal :full, @credential.scope
     assert @credential.static?
+  end
+
+  test "the static and turn tokens both get the full tool set" do
+    turn = Mcp::Credential.turn(@user, assistant_message: nil)
+
+    assert_equal :full, turn.scope
+    assert turn.turn?
+    assert_equal Assistant.function_classes_for(:full), turn.function_classes
+    assert_equal Assistant.function_classes_for(:full), @credential.function_classes
+  end
+
+  test "a read-scope server registers only the read tools" do
+    credential = Mcp::Credential.new(user: @user, kind: :static, scope: :read)
+
+    names = Mcp::ServerBuilder.build(credential).tools.keys
+
+    assert_equal Assistant.function_classes_for(:read).map(&:name), names
+    assert_not_includes names, "import_bank_statement"
+  end
+
+  test "call_tool marks a soft {error, hint} result as a tool error" do
+    NullableFunction.any_instance.stubs(:call).returns({ error: "invalid_date", hint: "Use YYYY-MM-DD." })
+
+    response = Mcp::ServerBuilder.new(@credential).call_tool(NullableFunction, { query: "x" })
+
+    assert response.error?
+    assert_equal "invalid_date", response.structured_content["error"]
   end
 
   private

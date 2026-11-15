@@ -18,6 +18,11 @@ class Assistant::Function::SearchFamilyFiles < Assistant::Function
     false
   end
 
+  # Read-only, but the search runs in the vector store provider, outside Sure
+  def open_world?
+    true
+  end
+
   def params_schema
     build_schema(
       required: [ "query" ],
@@ -61,10 +66,12 @@ class Assistant::Function::SearchFamilyFiles < Assistant::Function
     )
 
     unless response.success?
+      # The provider's message can carry request internals, so it stays in the log (decision 15)
+      Rails.logger.error("SearchFamilyFiles provider error: #{response.error&.class&.name} - #{response.error&.message}")
       return {
         success: false,
         error: "search_failed",
-        message: "Failed to search documents: #{response.error&.message}"
+        message: "Failed to search documents. Try again later."
       }
     end
 
@@ -88,7 +95,7 @@ class Assistant::Function::SearchFamilyFiles < Assistant::Function
     {
       success: false,
       error: "search_failed",
-      message: "An error occurred while searching documents: #{error.message.truncate(200)}"
+      message: "An error occurred while searching documents. Try again later."
     }
   end
 end

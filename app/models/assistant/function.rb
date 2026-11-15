@@ -1,4 +1,22 @@
+# One tool the assistant can call: the in-app chat (OpenAI or Claude) and /mcp serve the same classes.
+#
+# Scope tag (class level, `scope_tag :write`): what a call can do to the family's data.
+# - :read (the default) only reads.
+# - :write creates or changes records.
+# - :destructive deletes records or overwrites them in a way a later call cannot undo by itself.
+# The tag sets the MCP annotations, and Assistant.function_classes_for(:read) leaves out every tool that is not
+# :read. Chat and the static and turn MCP tokens all get scope :full, every tool with no approval prompt (owner
+# answer 2); every call is audited instead.
+#
+# Write-tool contract, for every :write or :destructive tool (the tool-call audit reads both):
+# - The result names the record or records it changed: `id` for one, `ids` for several (alongside `entry_id`
+#   and the like where the tool speaks in entries), so a wrong call can be found and reverted. `record_type`
+#   names their class.
+# - `audit_before(params)` returns the current state of the record the call will change or delete (a Hash of
+#   its attributes, or nil when the call only creates). It runs before `call`.
 class Assistant::Function
+  SCOPE_TAGS = %i[read write destructive].freeze
+
   class << self
     def name
       raise NotImplementedError, "Subclasses must implement the name class method"
@@ -6,6 +24,19 @@ class Assistant::Function
 
     def description
       raise NotImplementedError, "Subclasses must implement the description class method"
+    end
+
+    # With an argument, declares the tag; without, reads it (inherited, :read by default)
+    def scope_tag(tag = nil)
+      return @scope_tag || (superclass.respond_to?(:scope_tag) ? superclass.scope_tag : :read) if tag.nil?
+
+      raise ArgumentError, "Unknown scope tag #{tag.inspect}; use one of #{SCOPE_TAGS.inspect}" unless SCOPE_TAGS.include?(tag)
+
+      @scope_tag = tag
+    end
+
+    def read_only?
+      scope_tag == :read
     end
   end
 
@@ -53,16 +84,42 @@ class Assistant::Function
     name.to_s.humanize
   end
 
-  # MCP tool annotations, as keywords of MCP::Tool::Annotations. The default fits a tool that only reads
-  # Sure's own data. A tool that changes records or reaches outside Sure overrides this. Clients treat the hints
-  # as advice for how to present a call; they never gate one.
+  def scope_tag
+    self.class.scope_tag
+  end
+
+  # MCP tool annotations, as keywords of MCP::Tool::Annotations, derived from the scope tag. A :read tool is
+  # read-only; only a :destructive tool carries destructiveHint. Clients treat the hints as advice for how to
+  # present a call; they never gate one.
   def mcp_annotations
     {
-      read_only_hint: true,
-      destructive_hint: false,
-      idempotent_hint: true,
-      open_world_hint: false
+      read_only_hint: scope_tag == :read,
+      destructive_hint: scope_tag == :destructive,
+      idempotent_hint: idempotent?,
+      open_world_hint: open_world?
     }
+  end
+
+  # Calling it again with the same arguments changes nothing more. True for reads; a write tool that sets a
+  # value (rather than adding a record) overrides it.
+  def idempotent?
+    scope_tag == :read
+  end
+
+  # The call reaches outside Sure (an LLM provider, a vector store). Overridden by the tools that do.
+  def open_world?
+    false
+  end
+
+  # The class of the records a write tool's result ids point to ("Transaction", "Category", ...), for the audit
+  def record_type
+    nil
+  end
+
+  # The state of the record a :write or :destructive call will change or delete, for the tool-call audit. Nil
+  # for reads and for calls that only create.
+  def audit_before(_params)
+    nil
   end
 
   # The input schema served over MCP. MCP validates arguments against it, so a property whose type allows null

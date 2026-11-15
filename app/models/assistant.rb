@@ -3,6 +3,8 @@ class Assistant
 
   attr_reader :chat, :instructions
 
+  TOOL_SCOPES = %i[read full].freeze
+
   class << self
     def for_chat(chat)
       config = config_for(chat)
@@ -28,6 +30,17 @@ class Assistant
         # Imports
         Assistant::Function::ImportBankStatement
       ]
+    end
+
+    # The tools one caller may use, in the fixed order of function_classes. :full is every tool: the in-app
+    # chat and both MCP tokens use it (owner answer 2). :read keeps only the :read-tagged tools, for tests and a
+    # future read-only token.
+    def function_classes_for(scope)
+      case scope
+      when :full then function_classes
+      when :read then function_classes.select(&:read_only?)
+      else raise ArgumentError, "Unknown tool scope #{scope.inspect}; use one of #{TOOL_SCOPES.inspect}"
+      end
     end
   end
 

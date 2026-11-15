@@ -213,6 +213,28 @@ class AssistantTest < ActiveSupport::TestCase
     refute_match "internals", output.to_json
   end
 
+  # --- Tool registry --------------------------------------------------------------------------------------
+  # The chat gets every tool, writes and deletes included, with no approval prompt (owner answer 2). No test may
+  # assert that the chat lacks write, delete, rule or transfer tools.
+
+  test "the chat gets the full tool set in the registry order" do
+    assert_equal Assistant.function_classes_for(:full), Assistant.config_for(@chat)[:functions]
+    assert_equal Assistant.function_classes, Assistant.function_classes_for(:full)
+  end
+
+  test "the read scope keeps only read tools, in the registry order" do
+    read = Assistant.function_classes_for(:read)
+
+    assert read.any?
+    assert read.all?(&:read_only?)
+    assert_equal Assistant.function_classes.select(&:read_only?), read
+    assert_not_includes read, Assistant::Function::ImportBankStatement
+  end
+
+  test "an unknown tool scope is refused" do
+    assert_raises(ArgumentError) { Assistant.function_classes_for(:admin) }
+  end
+
   private
     def use_llm(*steps)
       ScriptedLlm.new(*steps).tap do |llm|

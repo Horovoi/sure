@@ -376,6 +376,44 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     Setting.mcp_enabled = true
   end
 
+  # --- Tool scope -----------------------------------------------------------------------------------------
+
+  test "a full-scope credential lists every tool in the fixed order" do
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      assert_equal Assistant.function_classes_for(:full).map(&:name), rpc_result["tools"].map { |tool| tool["name"] }
+    end
+  end
+
+  test "a read-scope credential lists no write tool and cannot call one" do
+    Mcp::Credential.stubs(:static).returns(Mcp::Credential.new(user: @user, kind: :static, scope: :read))
+
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      names = rpc_result["tools"].map { |tool| tool["name"] }
+      assert_equal Assistant.function_classes_for(:read).map(&:name), names
+      assert_not_includes names, "import_bank_statement"
+      assert(rpc_result["tools"].all? { |tool| tool.dig("annotations", "readOnlyHint") })
+
+      mcp_post "tools/call", params: { name: "import_bank_statement", arguments: { pdf_import_id: SecureRandom.uuid } }
+
+      assert_response :bad_request
+      assert_equal(-32602, rpc_error["code"])
+    end
+  end
+
+  test "a tool that refuses its arguments returns an error result" do
+    with_mcp_env do
+      mcp_post "tools/call", params: { name: "get_valuations", arguments: { account_id: "not-a-uuid" } }
+
+      assert_response :success
+      assert_equal true, rpc_result["isError"]
+      assert_equal "invalid_account_id", rpc_result.dig("structuredContent", "error")
+    end
+  end
+
   private
     def with_mcp_env(&block)
       with_env_overrides(MCP_API_TOKEN: TOKEN, MCP_USER_EMAIL: @user.email, &block)

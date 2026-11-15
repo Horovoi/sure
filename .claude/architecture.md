@@ -93,10 +93,17 @@ through the official `mcp` gem (`MCP::Server::Transports::StreamableHTTPTranspor
   `classification` income/expense/transfer, compact rows), `get_holdings`, `get_valuations`,
   `get_categories`, `get_tags`, `get_merchants`, `search_family_files`. Filters take exact names from the
   get_* tools, not enums. A soft failure is `{error, hint}`, like a raised one.
-- `Assistant::Function#title`, `#mcp_annotations` (default read-only, idempotent, closed world) and
-  `#mcp_input_schema` (nullable properties are optional, empty enums pruned) describe each tool.
-- `Mcp::Credential`: who is calling (user, kind `:static` or `:turn`, assistant message). Every client
-  gets every tool; the credential feeds the tool-call audit.
+- Scope tags: each `Assistant::Function` declares `scope_tag :read` (default), `:write` or `:destructive`.
+  `#mcp_annotations` follow the tag (read gives readOnlyHint, destructive gives destructiveHint; a tool
+  overrides `#idempotent?` / `#open_world?`). `#mcp_input_schema` makes nullable properties optional and
+  prunes empty enums. Write tools return the changed record `id`/`ids`, name their `record_type`, and
+  define `audit_before(params)` (state before the call) for the tool-call audit.
+- `Assistant.function_classes_for(scope)`: `:full` is every tool in the fixed order of
+  `Assistant.function_classes`; `:read` keeps only read tools. The chat (`Assistant::Configurable`) and both
+  MCP tokens use `:full`: every tool, writes and deletes included, no approval prompt.
+- `Mcp::Credential`: who is calling (user, kind `:static` or `:turn`, scope, assistant message). The scope
+  picks the tools the server registers, so a tool outside it is an unknown tool (-32602). The credential
+  also feeds the tool-call audit.
 - Rack::Attack throttles `/mcp` at 300 requests a minute per IP.
 
 **Clients.** Claude Code 2.1.325 or newer is the minimum CLI version: it is the first version found to

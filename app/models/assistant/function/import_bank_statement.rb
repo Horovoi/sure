@@ -14,14 +14,26 @@ class Assistant::Function::ImportBankStatement < Assistant::Function
     end
   end
 
+  # Creates a transaction import (rows the user reviews before publishing) from a PDF read by an LLM provider:
+  # a write that adds rows, not one that removes any, and the extraction reaches outside Sure.
+  scope_tag :write
+
   def strict_mode?
     false
   end
 
-  # Creates a transaction import (rows the user reviews before publishing) from a PDF read by an LLM provider,
-  # so it is neither read-only nor idempotent, and the extraction reaches outside Sure.
-  def mcp_annotations
-    super.merge(read_only_hint: false, idempotent_hint: false, open_world_hint: true)
+  def open_world?
+    true
+  end
+
+  def record_type
+    "Import"
+  end
+
+  # The import's destination account and rows before the call sets them
+  def audit_before(params)
+    pdf_import = family.imports.find_by(id: params["pdf_import_id"], type: "PdfImport")
+    pdf_import&.slice(:id, :account_id, :status, :rows_count)
   end
 
   def params_schema
@@ -107,6 +119,7 @@ class Assistant::Function::ImportBankStatement < Assistant::Function
 
     {
       success: true,
+      id: pdf_import.id,
       import_id: pdf_import.id,
       transaction_count: pdf_import.rows_count,
       document_type: pdf_import.document_type,

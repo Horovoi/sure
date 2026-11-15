@@ -1,6 +1,7 @@
 # Builds the MCP server for one /mcp request (protocol 2026-07-28, stateless: nothing outlives the request).
-# Every Assistant function is one MCP tool, in the order of Assistant.function_classes, which is also the
-# order the in-app chat sees (one tool set everywhere, owner answer 14).
+# Every Assistant function in the credential's scope is one MCP tool, in the order of Assistant.function_classes,
+# which is also the order the in-app chat sees. Both tokens have scope :full, so MCP and the chat serve one tool
+# set (owner answer 14).
 class Mcp::ServerBuilder
   SERVER_NAME = "sure".freeze
 
@@ -43,7 +44,8 @@ class Mcp::ServerBuilder
     function = function_class.new(user)
     result = function.call(Assistant::FunctionToolCaller.parse_arguments(arguments))
 
-    tool_response(result)
+    # A tool that refuses the arguments answers {error, hint} without raising; that is a tool error too
+    tool_response(result, error: result.is_a?(Hash) && result.key?(:error))
   rescue => e
     tool_response(Assistant::FunctionToolCaller.error_result(function_class.name, e), error: true)
   end
@@ -51,8 +53,10 @@ class Mcp::ServerBuilder
   private
     attr_reader :credential
 
+    # The credential's scope picks the tools. A tool outside it is not registered, so tools/list leaves it out and
+    # tools/call answers it as an unknown tool (-32602).
     def function_classes
-      Assistant.function_classes
+      credential.function_classes
     end
 
     def user
