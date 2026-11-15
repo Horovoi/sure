@@ -14,8 +14,10 @@ module MonobankFake
 
     attr_reader :performed, :errors, :kicks
 
+    # max_follow_ups: syncs the drain asks for per run when an account must retry a
+    # failed fetch (each retry doubles its back-off, so a fault that never clears stops here).
     def initialize(adapter: ActiveJob::Base.queue_adapter, wait:, max_jobs: 2_000, max_duration: 2.hours,
-                   raise_errors: true, log: nil, now: -> { Time.current })
+                   max_follow_ups: 5, raise_errors: true, log: nil, now: -> { Time.current })
       unless adapter.respond_to?(:enqueued_jobs)
         raise Error, "the drain needs ActiveJob's :test adapter (got #{adapter.class})"
       end
@@ -24,6 +26,7 @@ module MonobankFake
       @wait = wait
       @max_jobs = max_jobs
       @max_duration = max_duration
+      @max_follow_ups = max_follow_ups
       @raise_errors = raise_errors
       @log = log
       @now = now
@@ -32,18 +35,17 @@ module MonobankFake
       @kicks = 0
     end
 
-    # Runs until quiet. item: a MonobankItem whose back-offs and remaining windows are
-    # followed up (nil: only the queue).
+    # Runs until quiet. item: a MonobankItem whose failed fetches are followed up (nil:
+    # only the queue).
     def run(item = nil)
       deadline = @now.call + @max_duration
-      idle_kicks = 0
+      follow_ups = 0
 
       loop do
         raise Error, "more than #{@max_jobs} jobs; stopping" if @performed.size >= @max_jobs
 
         if (job = next_due_job)
           perform(job)
-          idle_kicks = 0
           next
         end
 
@@ -60,8 +62,8 @@ module MonobankFake
         wake_at, reason = follow_up(item)
         break unless wake_at
 
-        idle_kicks += 1
-        raise Error, "no progress after #{idle_kicks - 1} follow-up syncs (#{reason})" if idle_kicks > 3
+        follow_ups += 1
+        raise Error, "still not done after #{@max_follow_ups} follow-up syncs (#{reason})" if follow_ups > @max_follow_ups
         raise Error, "#{reason} at #{wake_at} is after the #{@max_duration.inspect} cap" if wake_at > deadline
 
         @wait.call(wake_at) if wake_at > @now.call
@@ -120,12 +122,23 @@ module MonobankFake
 
       # With the queue empty the fetch chain has ended (it reschedules itself while the
       # plan has a window). What is left is an account that skipped its windows after a
-      # failed fetch: the time its back-off ends, when a sync picks it up again. Nothing
-      # else is followed up: an open hold keeps a forward refresh due (FetchPlan), which
-      # the next hourly sync makes, so "a window is due" alone never means "kick a sync".
+      # failed fetch (its failures count until a fetch succeeds): a sync picks it up once
+      # its back-off ends, as the next hourly sync would. The chain may have ended while
+      # the back-off ran and the back-off may be over by now. Nothing else is followed
+      # up: an open hold keeps a forward refresh due (FetchPlan), which the next hourly
+      # sync makes, so "a window is due" alone never means "kick a sync".
       def follow_up(item)
-        backoff = MonobankAccount.where(monobank_item_id: item.id).where("fetch_failures > 0 AND next_fetch_after > ?", @now.call).minimum(:next_fetch_after)
-        [ backoff + 1.second, "an account backs off until #{backoff.iso8601}" ] if backoff
+        backoffs = failed_fetch_backoffs(item)
+        return if backoffs.empty?
+
+        backoff = backoffs.compact.min
+        wake_at = [ backoff ? backoff + 1.second : @now.call, @now.call ].max
+        [ wake_at, "#{backoffs.size} account(s) failed a fetch, retry at #{wake_at.iso8601}" ]
+      end
+
+      # next_fetch_after (Time or nil) of each of the item's accounts whose last fetch failed
+      def failed_fetch_backoffs(item)
+        MonobankAccount.where(monobank_item_id: item.id).where("fetch_failures > 0").pluck(:next_fetch_after)
       end
 
       def say(message)
