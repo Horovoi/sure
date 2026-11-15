@@ -458,4 +458,28 @@ class AccountTest < ActiveSupport::TestCase
     assert_not_includes ids, draft.id
     assert_not_includes ids, deleting.id
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "included_in_reports leaves out accounts excluded from reports" do
+    included = @family.accounts.create! name: "Included", balance: 100, currency: "USD", accountable: Depository.new
+    excluded = @family.accounts.create! name: "Excluded", balance: 200, currency: "USD", accountable: Depository.new, exclude_from_reports: true
+
+    results = @family.accounts.included_in_reports
+    assert_includes results, included
+    assert_not_includes results, excluded
+    assert_includes @family.accounts.excluded_from_reports, excluded
+    assert included.included_in_reports?
+    assert_not excluded.included_in_reports?
+  end
+
+  test "an account is included in reports by default and the raw SQL matches the scope" do
+    account = @family.accounts.create! name: "New", balance: 100, currency: "USD", accountable: Depository.new
+    assert_not account.exclude_from_reports?
+
+    account.update!(exclude_from_reports: true)
+    ids = Account.where(Account.included_in_reports_sql).where(family: @family).pluck(:id)
+    assert_not_includes ids, account.id
+    assert_equal @family.accounts.included_in_reports.pluck(:id).sort, ids.sort
+  end
 end

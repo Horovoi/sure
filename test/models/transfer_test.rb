@@ -280,6 +280,50 @@ class TransferTest < ActiveSupport::TestCase
     assert_equal "standard", transfer.inflow_transaction.reload.kind
   end
 
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "a transfer to or from an account excluded from reports is a plain movement" do
+    depository = accounts(:depository)
+    investment = accounts(:investment)
+    loan = accounts(:loan)
+
+    investment.update!(exclude_from_reports: true)
+    loan.update!(exclude_from_reports: true)
+
+    assert_equal "funds_movement", Transfer.outflow_kind_for(source_account: depository, destination_account: investment)
+    assert_equal "funds_movement", Transfer.outflow_kind_for(source_account: depository, destination_account: loan)
+
+    loan.update!(exclude_from_reports: false)
+    depository.update!(exclude_from_reports: true)
+    assert_equal "funds_movement", Transfer.outflow_kind_for(source_account: depository, destination_account: loan)
+  end
+
+  test "toggling exclude_from_reports sets the kinds of confirmed transfers again" do
+    outflow_entry = create_transaction(date: Date.current, account: accounts(:depository), amount: 500)
+    inflow_entry = create_transaction(date: Date.current, account: accounts(:loan), amount: -500)
+    transfer = Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction, status: "confirmed")
+    assert_equal "loan_payment", transfer.outflow_transaction.reload.kind
+
+    accounts(:loan).update!(exclude_from_reports: true)
+    assert_equal "funds_movement", transfer.outflow_transaction.reload.kind
+    assert_equal "funds_movement", transfer.inflow_transaction.reload.kind
+
+    accounts(:loan).update!(exclude_from_reports: false)
+    assert_equal "loan_payment", transfer.outflow_transaction.reload.kind
+  end
+
+  test "toggling exclude_from_reports leaves a pending match's legs alone" do
+    outflow_entry = create_transaction(date: Date.current, account: accounts(:depository), amount: 500)
+    inflow_entry = create_transaction(date: Date.current, account: accounts(:loan), amount: -500)
+    transfer = Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
+    assert transfer.pending?
+
+    accounts(:loan).update!(exclude_from_reports: true)
+
+    assert_equal "standard", transfer.outflow_transaction.reload.kind
+    assert_equal "standard", transfer.inflow_transaction.reload.kind
+  end
+
   private
     def create_pending_transfer(from:, to:)
       outflow_entry = create_transaction(date: Date.current, account: from, amount: 500)

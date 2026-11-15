@@ -177,6 +177,21 @@ class IncomeStatement::SankeyTest < ActiveSupport::TestCase
     assert_equal Money::Currency.new(@family.currency).symbol, graph[:currency_symbol]
   end
 
+  # --- w3-reports exclude-from-reports ---
+
+  test "an account excluded from reports stays out of the cash flow" do
+    excluded = @family.accounts.create!(name: "Excluded", currency: "USD", balance: 0, accountable: Depository.new, exclude_from_reports: true)
+    transaction(100, @parent)
+    create_transaction(account: excluded, amount: 400, category: @parent, date: @month)
+    create_transaction(account: excluded, amount: -900, category: salary, date: @month)
+
+    result = graph
+
+    assert_equal "100.0", result[:spending]
+    assert_equal "0.0", result[:income]
+    assert_balanced(result)
+  end
+
   private
     def salary
       @salary ||= @family.categories.create!(name: "Salary", color: "#33FF57", classification: "income")

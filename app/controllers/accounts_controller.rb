@@ -1,6 +1,6 @@
 class AccountsController < ApplicationController
   require_bank_connections only: :select_provider
-  before_action :set_account, only: %i[sync sparkline toggle_active show destroy unlink confirm_unlink select_provider clear_filter set_default remove_default]
+  before_action :set_account, only: %i[sync sparkline toggle_active show destroy unlink confirm_unlink select_provider clear_filter set_default remove_default toggle_exclude_from_reports]
   include Periodable
 
   def index
@@ -93,6 +93,23 @@ class AccountsController < ApplicationController
       @account.sync_later
     end
     redirect_to accounts_path
+  end
+
+  # w3-reports exclude-from-reports: keeps the account out of every report and total, or
+  # puts it back. The account stays active and listed.
+  def toggle_exclude_from_reports
+    if @account.pending_deletion?
+      redirect_back_or_to accounts_path, alert: t("accounts.exclude_from_reports.pending_deletion")
+      return
+    end
+
+    @account.update!(exclude_from_reports: !@account.exclude_from_reports?)
+    notice = if @account.exclude_from_reports?
+      t("accounts.exclude_from_reports.excluded", name: @account.name)
+    else
+      t("accounts.exclude_from_reports.included", name: @account.name)
+    end
+    redirect_back_or_to account_path(@account), notice: notice
   end
 
   # w2-transfers default-account: the new-transaction and new-transfer forms preselect it

@@ -185,9 +185,9 @@ class InvestmentStatement
     rate && Money.new(money.amount * rate, family.currency)
   end
 
-  # Investment accounts
+  # Investment accounts, without the ones excluded from reports (w3-reports)
   def investment_accounts
-    @investment_accounts ||= family.accounts.visible.where(accountable_type: %w[Investment Crypto])
+    @investment_accounts ||= family.accounts.visible.included_in_reports.where(accountable_type: %w[Investment Crypto])
   end
 
   private

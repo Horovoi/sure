@@ -171,7 +171,7 @@ module AccountableResource
       params.expect(account: [
         :name, :balance, :subtype, :currency, :accountable_type, :return_to,
         :opening_balance_date,
-        :institution_name, :institution_domain, :notes,
+        :institution_name, :institution_domain, :notes, :exclude_from_reports,
         accountable_attributes: self.class.permitted_accountable_attributes
       ])
     end

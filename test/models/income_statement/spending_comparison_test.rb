@@ -135,6 +135,25 @@ class IncomeStatement::SpendingComparisonTest < ActiveSupport::TestCase
     end
   end
 
+  # --- w3-reports exclude-from-reports ---
+
+  test "an account excluded from reports counts neither in the period nor in normal, nor in the history start" do
+    excluded = @family.accounts.create!(name: "Excluded", currency: @family.currency, balance: 0, accountable: Depository.new, exclude_from_reports: true)
+
+    travel_to Date.new(2026, 3, 20) do
+      create_transaction(account: excluded, currency: @family.currency, amount: 5, date: Date.new(2025, 1, 10), category: @groceries)
+      spend(100, on: Date.new(2026, 1, 10))
+      spend(100, on: Date.new(2026, 2, 10))
+      spend(120, on: Date.new(2026, 3, 10))
+      create_transaction(account: excluded, currency: @family.currency, amount: 1_000, date: Date.new(2026, 3, 11), category: @groceries)
+
+      assert_equal Date.new(2026, 1, 10), IncomeStatement::SpendingComparison.history_start(@family)
+
+      row = row_for(comparison_for(Period.custom(start_date: Date.new(2026, 3, 1), end_date: Date.new(2026, 3, 31))), @groceries)
+      assert_equal 120, row.total
+    end
+  end
+
   private
     def spend(amount, on:, kind: "standard", category: @groceries)
       create_transaction(account: @account, currency: @family.currency, amount: amount, date: on, category: category, kind: kind)

@@ -28,6 +28,13 @@
     <% menu.with_item(variant: "button", text: t(".set_default"), href: set_default_account_path(account), method: :patch, icon: "star", data: { turbo_frame: :_top }) %>
   <% end %>
 
+  <%# w3-reports exclude-from-reports %>
+  <% if account.exclude_from_reports? %>
+    <% menu.with_item(variant: "button", text: t("accounts.exclude_from_reports.menu_include"), href: toggle_exclude_from_reports_account_path(account), method: :patch, icon: "eye", data: { turbo_frame: :_top }) %>
+  <% else %>
+    <% menu.with_item(variant: "button", text: t("accounts.exclude_from_reports.menu_exclude"), href: toggle_exclude_from_reports_account_path(account), method: :patch, icon: "eye-off", data: { turbo_frame: :_top }) %>
+  <% end %>
+
   <% unless account.linked? %>
     <% menu.with_item(
       variant: "button",

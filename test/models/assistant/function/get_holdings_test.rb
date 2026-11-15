@@ -33,6 +33,29 @@ class Assistant::Function::GetHoldingsTest < ActiveSupport::TestCase
     assert_equal 1, @fn.call("page" => 0)[:page]
   end
 
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "holdings of an account excluded from reports are listed with a flag" do
+    @account.update!(exclude_from_reports: true)
+
+    rows = @fn.call("page" => 1)[:holdings]
+
+    assert rows.any?
+    assert(rows.all? { |row| row[:account_excluded_from_reports] == true })
+  end
+
+  test "total_value converts each holding into the family currency, not at 1" do
+    family = @user.family
+    @account.holdings.where(security: securities(:msft)).update_all(currency: "EUR")
+    ExchangeRate.create!(from_currency: "EUR", to_currency: family.currency, date: Date.current, rate: 2)
+
+    result = @fn.call("page" => 1)
+    expected = result[:holdings].sum { |row| row[:currency] == "EUR" ? row[:amount] * 2 : row[:amount] }
+
+    assert_includes result[:holdings].map { |row| row[:currency] }, "EUR"
+    assert_equal Money.new(expected, family.currency).format, result[:total_value]
+  end
+
   private
     def tickers(params)
       @fn.call({ "page" => 1 }.merge(params))[:holdings].map { |row| row[:ticker] }.uniq.sort

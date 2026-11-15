@@ -586,4 +586,65 @@ class IncomeStatementTest < ActiveSupport::TestCase
     assert_equal 30, expense.category_totals.find { |ct| ct.category.uncategorized? }.total
     assert_equal 0, expense.category_totals.find { |ct| ct.category.other_investments? }.total
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "an account excluded from reports is left out of totals, period totals and stats" do
+    excluded_account = @family.accounts.create!(
+      name: "Excluded Checking", currency: @family.currency, balance: 3000,
+      accountable: Depository.new, exclude_from_reports: true
+    )
+    create_transaction(account: excluded_account, amount: 500, category: @groceries_category)
+    create_transaction(account: excluded_account, amount: -300, category: @income_category)
+
+    income_statement = IncomeStatement.new(@family)
+    totals = income_statement.totals(date_range: Period.last_30_days.date_range)
+
+    assert_equal 4, totals.transactions_count
+    assert_equal Money.new(1000, @family.currency), totals.income_money
+    assert_equal Money.new(900, @family.currency), totals.expense_money
+    assert_equal 900, income_statement.expense_totals(period: Period.last_30_days).total
+    assert_equal 1000, income_statement.income_totals(period: Period.last_30_days).total
+    assert_equal 900.0, income_statement.median_expense(interval: "month")
+    assert_equal 900.0, income_statement.median_expense(interval: "month", category: @groceries_category)
+    assert_equal 1000.0, income_statement.median_income(interval: "month")
+  end
+
+  test "an account excluded from reports is left out of the daily spending series" do
+    excluded_account = @family.accounts.create!(
+      name: "Excluded Checking", currency: @family.currency, balance: 3000,
+      accountable: Depository.new, exclude_from_reports: true
+    )
+    create_transaction(account: excluded_account, amount: 500, category: @groceries_category)
+
+    series = IncomeStatement.new(@family).daily_expense_series(period: Period.last_30_days)
+
+    assert_equal 900, series.values.sum
+  end
+
+  test "excluding an account takes effect on the next read (the cached totals are replaced)" do
+    income_statement = IncomeStatement.new(@family)
+    assert_equal 900, income_statement.expense_totals(period: Period.last_30_days).total
+
+    @credit_card_account.update!(exclude_from_reports: true)
+
+    assert_equal 200, IncomeStatement.new(@family).expense_totals(period: Period.last_30_days).total
+  end
+
+  test "a transfer to an account excluded from reports is not spending" do
+    Entry.joins(:account).where(accounts: { family_id: @family.id }).destroy_all
+    brokerage = @family.accounts.create!(
+      name: "Brokerage", currency: @family.currency, balance: 0,
+      accountable: Investment.new, exclude_from_reports: true
+    )
+
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: @checking_account.id, destination_account_id: brokerage.id,
+      date: Date.current, amount: 500
+    ).create
+    assert transfer.persisted?
+    assert_equal "funds_movement", transfer.outflow_transaction.reload.kind
+
+    assert_equal 0, IncomeStatement.new(@family).expense_totals(period: Period.last_30_days).total
+  end
 end

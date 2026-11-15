@@ -247,6 +247,14 @@ Rails.application.routes.draw do
   end
   # --- end w2-transfers default-account ---
 
+  # --- Exclude from reports (w3-reports): keep an account out of every report and total ---
+  resources :accounts, only: [] do
+    member do
+      patch :toggle_exclude_from_reports
+    end
+  end
+  # --- end exclude from reports ---
+
   resources :imports, only: %i[index new show create update destroy] do
     member do
       post :publish

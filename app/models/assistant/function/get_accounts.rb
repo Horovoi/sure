@@ -17,6 +17,11 @@ class Assistant::Function::GetAccounts < Assistant::Function
         entered it, so treat a missing key as unknown rather than as zero.
         `monthly_payment` is computed only for fixed-rate loans.
 
+        An account with excluded_from_reports: true is one the user keeps out of
+        every report and total (net worth, income and expenses, budgets,
+        investments). It is listed so you can name it and read its own data;
+        never add it into a total yourself.
+
         Pass include_balance_series: true only when the user asks about balance
         history; the series is omitted by default to keep responses small.
       INSTRUCTIONS
@@ -63,6 +68,9 @@ class Assistant::Function::GetAccounts < Assistant::Function
           start_date: account.start_date,
           status: account.status
         }.compact
+
+        # w3-reports: stated only when set, like is_linked
+        payload[:excluded_from_reports] = true if account.exclude_from_reports?
 
         # Every account in this install is entered by hand; a linked one is the exception worth stating
         if account.linked?

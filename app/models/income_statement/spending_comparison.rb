@@ -48,6 +48,7 @@ class IncomeStatement::SpendingComparison
   def self.history_start(family)
     family.transactions
       .visible
+      .merge(Account.included_in_reports)
       .excluding_pending
       .where(entries: { excluded: false })
       .where.not(kind: Transaction::BUDGET_EXCLUDED_KINDS)

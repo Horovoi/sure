@@ -47,6 +47,13 @@ class Account < ApplicationRecord
   HISTORICAL_STATUSES = %w[active disabled].freeze
   scope :counted_in_history, -> { where(status: HISTORICAL_STATUSES) }
 
+  # w3-reports exclude-from-reports: accounts the user keeps in reports. An excluded
+  # account stays active and listed (sidebar, accounts page, its own page), but no total
+  # counts it: net worth, cash flow, budgets, investments and the AI read tools. Combine
+  # it with counted_in_totals or counted_in_history; use `included_in_reports_sql` in raw SQL.
+  scope :included_in_reports, -> { where(exclude_from_reports: false) }
+  scope :excluded_from_reports, -> { where(exclude_from_reports: true) }
+
   scope :assets, -> { where(classification: "asset") }
   scope :liabilities, -> { where(classification: "liability") }
   scope :alphabetically, -> { order(:name) }
@@ -71,6 +78,11 @@ class Account < ApplicationRecord
   # it too, so a disabled account is never preselected.
   has_many :default_for_users, class_name: "User", foreign_key: :default_account_id, inverse_of: :default_account, dependent: :nullify
   after_update_commit :release_as_default_account, if: -> { saved_change_to_status? && !active? }
+
+  # w3-reports exclude-from-reports: a confirmed transfer with this account on one side
+  # takes its kinds from the flag (Transfer.outflow_kind_for), so they follow a toggle.
+  # In the same database transaction as the flag, so the two never disagree.
+  after_update :reapply_transfer_kinds, if: :saved_change_to_exclude_from_reports?
 
   delegated_type :accountable, types: Accountable::TYPES, dependent: :destroy
   delegate :subtype, to: :accountable, allow_nil: true
@@ -148,6 +160,12 @@ class Account < ApplicationRecord
     #   Account.visible_status_sql("a") # => %q("a".status IN ('draft','active'))
     def visible_status_sql(table = table_name)
       "#{connection.quote_table_name(table)}.status IN (#{VISIBLE_STATUSES.map { |s| connection.quote(s) }.join(',')})"
+    end
+
+    # SQL condition for `included_in_reports`, for raw SQL that names the accounts table differently.
+    #   Account.included_in_reports_sql("a") # => %q("a".exclude_from_reports = FALSE)
+    def included_in_reports_sql(table = table_name)
+      "#{connection.quote_table_name(table)}.exclude_from_reports = FALSE"
     end
 
     # opening_balance_date: the day the entered balance (or a loan's original
@@ -320,6 +338,11 @@ class Account < ApplicationRecord
     active?
   end
 
+  # Matches the `included_in_reports` scope.
+  def included_in_reports?
+    !exclude_from_reports?
+  end
+
   def first_valuation
     entries.valuations.order(:date).first
   end
@@ -396,6 +419,10 @@ class Account < ApplicationRecord
   private
     def release_as_default_account
       User.where(default_account_id: id).update_all(default_account_id: nil, updated_at: Time.current)
+    end
+
+    def reapply_transfer_kinds
+      Transfer.reapply_kinds_for!(self)
     end
 
     # Runs on every entry to disabled: the disable event, and the restore after a failed

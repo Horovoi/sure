@@ -9,12 +9,13 @@
         <div class="truncate">
           <div class="flex items-center gap-3">
             <h2 class="font-medium text-xl truncate <%= "animate-pulse" if account.syncing? %>"><%= title %></h2>
+            <%= render "accounts/excluded_from_reports_indicator", account: account %>
             <% if account.tax_treatment.present? %>
               <%= render partial: "accounts/tax_treatment_badge", locals: { account: account } %>
             <% end %>
             <% if account.draft? %>
               <%= render DS::Link.new(
-                  text: "Complete setup",
+                  text: t("accounts.account.complete_setup"),
                   href: edit_account_path(account),
                   variant: :outline,
                   size: :sm,

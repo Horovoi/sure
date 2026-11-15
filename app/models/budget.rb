@@ -143,8 +143,9 @@ class Budget < ApplicationRecord
     end
   end
 
+  # The transactions the budget counts: none from an account excluded from reports (w3-reports)
   def transactions
-    family.transactions.visible.in_period(period)
+    family.transactions.visible.merge(Account.included_in_reports).in_period(period)
   end
 
   def name

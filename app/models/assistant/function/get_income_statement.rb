@@ -20,6 +20,8 @@ class Assistant::Function::GetIncomeStatement < Assistant::Function
         The totals are the ones the Sure dashboard and budgets show: transfers
         between the user's own accounts, one-time items and excluded
         transactions are left out, pending transactions are not counted yet.
+        Accounts the user excluded from reports (excluded_from_reports in
+        get_accounts) are never counted.
 
         Spending trends and comparisons:
         - Month over month: pass group_by: "month" for a monthly_series. Months
@@ -87,7 +89,7 @@ class Assistant::Function::GetIncomeStatement < Assistant::Function
       if unknown_ids.any?
         return tool_error(
           "unknown_account_ids",
-          "Some account ids were not found or are not counted in income and expenses (hidden or pending deletion). Call get_accounts for ids and retry once with active accounts.",
+          "Some account ids were not found or are not counted in income and expenses (hidden, pending deletion or excluded from reports). Call get_accounts for ids and retry once with active accounts that are not excluded_from_reports.",
           unknown_ids: unknown_ids
         )
       end
@@ -116,9 +118,9 @@ class Assistant::Function::GetIncomeStatement < Assistant::Function
       @income_statement ||= family.income_statement
     end
 
-    # The accounts IncomeStatement counts: the family's visible ones
+    # The accounts IncomeStatement counts: the family's visible ones not excluded from reports
     def eligible_accounts
-      family.accounts.visible
+      family.accounts.visible.included_in_reports
     end
 
     def full_result(period)

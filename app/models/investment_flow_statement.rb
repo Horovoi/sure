@@ -7,17 +7,19 @@ class InvestmentFlowStatement
     @family = family
   end
 
-  # Get contribution/withdrawal totals for a period
+  # Get contribution/withdrawal totals for a period, in the family currency. Accounts
+  # excluded from reports are left out (w3-reports).
   def period_totals(period: Period.current_month)
     transactions = family.transactions
       .visible
+      .merge(Account.included_in_reports)
       .excluding_pending
       .where(entries: { date: period.date_range })
       .where(kind: %w[standard investment_contribution])
       .where(investment_activity_label: %w[Contribution Withdrawal])
 
-    contributions = transactions.where(investment_activity_label: "Contribution").sum("entries.amount").abs
-    withdrawals = transactions.where(investment_activity_label: "Withdrawal").sum("entries.amount").abs
+    contributions = converted_sum(transactions.where(investment_activity_label: "Contribution")).abs
+    withdrawals = converted_sum(transactions.where(investment_activity_label: "Withdrawal")).abs
 
     PeriodTotals.new(
       contributions: Money.new(contributions, family.currency),
@@ -27,4 +29,17 @@ class InvestmentFlowStatement
   end
 
   PeriodTotals = Data.define(:contributions, :withdrawals, :net_flow)
+
+  private
+    # Each entry at the nearest stored rate of its day. It used to add up the raw amounts
+    # of every currency as if they were the family's; one with no rate at all is left out.
+    def converted_sum(transactions)
+      rate = ExchangeRate.rate_sql(
+        from: "entries.currency",
+        to: ActiveRecord::Base.connection.quote(family.currency),
+        on: "entries.date"
+      )
+
+      transactions.sum(Arel.sql("COALESCE(entries.amount * #{rate}, 0)"))
+    end
 end

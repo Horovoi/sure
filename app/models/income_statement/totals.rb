@@ -68,6 +68,7 @@ class IncomeStatement::Totals
           AND ae.excluded = false
           AND a.family_id = :family_id
           AND #{Account.visible_status_sql("a")}
+          AND #{Account.included_in_reports_sql("a")}
         GROUP BY c.id, c.parent_id, CASE WHEN at.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END;
       SQL
     end
@@ -93,6 +94,7 @@ class IncomeStatement::Totals
           AND ae.excluded = false
           AND a.family_id = :family_id
           AND #{Account.visible_status_sql("a")}
+          AND #{Account.included_in_reports_sql("a")}
         GROUP BY c.id, c.parent_id, CASE WHEN at.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
       SQL
     end

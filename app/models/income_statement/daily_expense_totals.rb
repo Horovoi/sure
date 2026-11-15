@@ -50,6 +50,7 @@ class IncomeStatement::DailyExpenseTotals
           AND ae.date BETWEEN :start_date AND :end_date
           AND a.family_id = :family_id
           AND #{Account.visible_status_sql("a")}
+          AND #{Account.included_in_reports_sql("a")}
         GROUP BY ae.date, at.category_id
         ORDER BY ae.date
       SQL

@@ -132,4 +132,26 @@ class Assistant::Function::GetIncomeStatementTest < ActiveSupport::TestCase
     assert_equal "invalid_date", @fn.call("start_date" => "bogus", "end_date" => "2024-01-01")[:error]
     assert_equal "invalid_date", @fn.call("start_date" => "2025-02-01", "end_date" => "2025-01-01")[:error]
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "an account excluded from reports is rejected as an account filter, not answered with zeros" do
+    excluded = accounts(:depository)
+    excluded.update!(exclude_from_reports: true)
+
+    result = @fn.call(@params.merge("account_ids" => [ excluded.id ]))
+
+    assert_equal "unknown_account_ids", result[:error]
+    assert_equal [ excluded.id ], result[:unknown_ids]
+  end
+
+  test "the full statement leaves out an account excluded from reports" do
+    accounts(:credit_card).entries.create!(name: "Card spend", date: Date.current, amount: 900, currency: "USD", entryable: Transaction.new)
+    with_card = @fn.call(@params)[:expense][:total]
+
+    accounts(:credit_card).update!(exclude_from_reports: true)
+    without_card = Assistant::Function::GetIncomeStatement.new(@user).call(@params)[:expense][:total]
+
+    assert_not_equal with_card, without_card
+  end
 end

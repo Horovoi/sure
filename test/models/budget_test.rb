@@ -513,4 +513,19 @@ class BudgetTest < ActiveSupport::TestCase
     assert_equal 12, budget.budget_category_actual_spending(budget_category)
     assert_equal 12, budget.actual_spending
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "spending in an account excluded from reports does not count in the budget" do
+    groceries = budget_test_category("Groceries")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: groceries, amount: 120)
+    excluded = @family.accounts.create!(name: "Excluded", currency: "USD", balance: 0, accountable: Depository.new, exclude_from_reports: true)
+    excluded_entry = Entry.create!(account: excluded, entryable: Transaction.new(category: groceries), date: Date.current, name: "Elsewhere", amount: 900, currency: "USD")
+
+    budget = Budget.find(budget.id)
+
+    assert_equal 120, budget.actual_spending
+    assert_not_includes budget.transactions.map(&:id), excluded_entry.entryable_id
+  end
 end

@@ -46,6 +46,15 @@
             label: t(".notes_label"),
             placeholder: t(".notes_placeholder"),
             rows: 4 %>
+
+        <%# w3-reports exclude-from-reports %>
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <label for="<%= form.field_id(:exclude_from_reports) %>" class="text-sm text-primary"><%= t("accounts.exclude_from_reports.form_label") %></label>
+            <p class="text-xs text-secondary"><%= t("accounts.exclude_from_reports.form_hint") %></p>
+          </div>
+          <%= form.toggle :exclude_from_reports %>
+        </div>
       </div>
     </details>
   </div>

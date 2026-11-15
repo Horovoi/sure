@@ -62,4 +62,21 @@ class Assistant::Function::GetBalanceSheetTest < ActiveSupport::TestCase
 
     assert_not result[:insights].key?(:debt_to_asset_ratio)
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "an account excluded from reports is left out of net worth and its history" do
+    family = @user.family
+    before = family.balance_sheet.net_worth
+    excluded = accounts(:depository)
+    excluded.update!(exclude_from_reports: true)
+
+    result = Assistant::Function::GetBalanceSheet.new(@user).call("period" => "last_30_days")
+    expected = BalanceSheet.new(family.reload)
+
+    assert_not_equal before, expected.net_worth
+    assert_equal expected.net_worth_money.format, result[:net_worth][:current]
+    assert_equal expected.assets.total_money.format, result[:assets][:current]
+    assert_not_includes BalanceSheet::HistoricalAccountScope.new(family).account_ids, excluded.id
+  end
 end
