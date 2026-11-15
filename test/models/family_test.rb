@@ -109,4 +109,50 @@ class FamilyTest < ActiveSupport::TestCase
   ensure
     Rails.cache = original_cache
   end
+
+  # --- Exchange rate notes and cache key (w1-fx nearest-rate) ---
+
+  test "build_cache_key changes when a new rate into the family currency is stored" do
+    family = families(:empty)
+    family.update_columns(currency: "UAH")
+
+    before = family.build_cache_key("balance_sheet_account_rows")
+
+    travel 1.second do
+      ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: Date.current, rate: 41)
+    end
+
+    assert_not_equal before, family.build_cache_key("balance_sheet_account_rows")
+  end
+
+  test "build_cache_key ignores rates into other currencies" do
+    family = families(:empty)
+    family.update_columns(currency: "UAH")
+
+    before = family.build_cache_key("balance_sheet_account_rows")
+    ExchangeRate.create!(from_currency: "USD", to_currency: "PLN", date: Date.current, rate: 4)
+
+    assert_equal before, family.build_cache_key("balance_sheet_account_rows")
+  end
+
+  test "currencies_without_exchange_rate names currencies in use with no stored rate" do
+    family = families(:empty)
+    family.update_columns(currency: "UAH")
+    family.accounts.create!(name: "USD cash", balance: 100, currency: "USD", accountable: Depository.new)
+    family.accounts.create!(name: "EUR cash", balance: 100, currency: "EUR", accountable: Depository.new)
+    ExchangeRate.create!(from_currency: "EUR", to_currency: "UAH", date: 100.days.ago.to_date, rate: 45)
+
+    assert_difference -> { DebugLogEntry.where(category: "exchange_rates", family: family).count }, 1 do
+      assert_equal [ "USD" ], Family.find(family.id).currencies_without_exchange_rate
+    end
+  end
+
+  test "stale_exchange_rate_dates names a held currency whose newest rate is old" do
+    family = families(:empty)
+    family.update_columns(currency: "UAH")
+    family.accounts.create!(name: "EUR cash", balance: 100, currency: "EUR", accountable: Depository.new)
+    ExchangeRate.create!(from_currency: "EUR", to_currency: "UAH", date: 30.days.ago.to_date, rate: 45)
+
+    assert_equal({ "EUR" => 30.days.ago.to_date }, Family.find(family.id).stale_exchange_rate_dates)
+  end
 end

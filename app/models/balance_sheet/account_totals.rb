@@ -62,15 +62,20 @@ class BalanceSheet::AccountTotals
 
     def query
       @query ||= Rails.cache.fetch(cache_key, expires_in: Family::AGGREGATE_CACHE_TTL) do
+        # Today's balance at the nearest stored rate (not only an exact rate for today). An
+        # account in a currency with no rate at all converts to 0, so it is left out of every
+        # total rather than counted at 1; its row still shows its own balance, and the page
+        # says the currency is missing (shared/_exchange_rate_notes).
+        rate = ExchangeRate.rate_sql(
+          from: "accounts.currency",
+          to: ActiveRecord::Base.connection.quote(family.currency),
+          on: ActiveRecord::Base.connection.quote(Date.current)
+        )
+
         visible_accounts
-          .joins(ActiveRecord::Base.sanitize_sql_array([
-            "LEFT JOIN exchange_rates ON exchange_rates.date = ? AND accounts.currency = exchange_rates.from_currency AND exchange_rates.to_currency = ?",
-            Date.current,
-            family.currency
-          ]))
           .select(
             "accounts.*",
-            "SUM(accounts.balance * COALESCE(exchange_rates.rate, 1)) as converted_balance"
+            "COALESCE(SUM(accounts.balance * #{rate}), 0) as converted_balance"
           )
           .group(:classification, :accountable_type, :id)
           .to_a

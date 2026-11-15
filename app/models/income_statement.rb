@@ -127,7 +127,8 @@ class IncomeStatement
       period_key = current_period_start(interval, today).iso8601
       cache_key = [ interval, fiscal_key, exclude_current_period, period_key ]
       @family_stats[cache_key] ||= Rails.cache.fetch([
-        "income_statement", "family_stats", "v2", family.id, interval, fiscal_key, exclude_current_period, period_key, family.entries_cache_version
+        "income_statement", "family_stats", "v2", family.id, interval, fiscal_key, exclude_current_period, period_key, family.entries_cache_version,
+        ExchangeRate.conversion_cache_key(family.currency)
        ], expires_in: Family::AGGREGATE_CACHE_TTL) { FamilyStats.new(family, interval:, exclude_current_period:, today:).call }
     end
 
@@ -138,7 +139,8 @@ class IncomeStatement
       period_key = current_period_start(interval, today).iso8601
       cache_key = [ interval, fiscal_key, exclude_current_period, period_key ]
       @category_stats[cache_key] ||= Rails.cache.fetch([
-        "income_statement", "category_stats", "v2", family.id, interval, fiscal_key, exclude_current_period, period_key, family.entries_cache_version
+        "income_statement", "category_stats", "v3", family.id, interval, fiscal_key, exclude_current_period, period_key, family.entries_cache_version,
+        ExchangeRate.conversion_cache_key(family.currency)
        ], expires_in: Family::AGGREGATE_CACHE_TTL) { CategoryStats.new(family, interval:, exclude_current_period:, today:).call }
     end
 
@@ -161,7 +163,8 @@ class IncomeStatement
       sql_hash = Digest::MD5.hexdigest(transactions_scope.to_sql)
 
       Rails.cache.fetch([
-        "income_statement", "totals_query", "v2", family.id, sql_hash, family.entries_cache_version
+        "income_statement", "totals_query", "v2", family.id, sql_hash, family.entries_cache_version,
+        ExchangeRate.conversion_cache_key(family.currency)
        ], expires_in: Family::AGGREGATE_CACHE_TTL) { Totals.new(family, transactions_scope: transactions_scope, date_range: date_range).call }
     end
 

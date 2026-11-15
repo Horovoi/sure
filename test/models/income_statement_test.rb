@@ -449,4 +449,54 @@ class IncomeStatementTest < ActiveSupport::TestCase
       end
     end
   end
+
+  # --- Nearest-rate rule (w1-fx nearest-rate) ---
+
+  test "totals and stats leave out an amount whose currency has no exchange rate" do
+    pln_account = @family.accounts.create! name: "PLN cash", currency: "PLN", balance: 0, accountable: Depository.new
+    create_transaction(account: pln_account, amount: 5000, currency: "PLN", category: @groceries_category)
+
+    income_statement = IncomeStatement.new(@family)
+    totals = income_statement.totals(date_range: Period.last_30_days.date_range)
+
+    # The PLN 5000 is left out, never counted at 1
+    assert_equal Money.new(200 + 300 + 400, @family.currency), totals.expense_money
+    assert_equal 900.0, income_statement.median_expense(interval: "month")
+    assert_equal 900.0, income_statement.avg_expense(interval: "month")
+    assert_equal 900.0, income_statement.avg_expense(interval: "month", category: @groceries_category)
+  end
+
+  test "totals convert at the nearest stored rate when the day has none" do
+    pln_account = @family.accounts.create! name: "PLN cash", currency: "PLN", balance: 0, accountable: Depository.new
+    create_transaction(account: pln_account, amount: 100, currency: "PLN", category: @groceries_category)
+    ExchangeRate.create!(from_currency: "PLN", to_currency: @family.currency, date: 40.days.ago.to_date, rate: 0.25)
+
+    totals = IncomeStatement.new(@family).totals(date_range: Period.last_30_days.date_range)
+
+    assert_equal Money.new(900 + 25, @family.currency), totals.expense_money
+  end
+
+  test "a month with nothing convertible between measurable months is left out of the category average" do
+    Entry.joins(:account).where(accounts: { family_id: @family.id }).destroy_all
+    pln_account = @family.accounts.create! name: "PLN cash", currency: "PLN", balance: 0, accountable: Depository.new
+    this_month = Date.current.beginning_of_month
+
+    create_transaction(account: @checking_account, amount: 100, category: @groceries_category, date: this_month.prev_month(2))
+    create_transaction(account: pln_account, amount: 400, currency: "PLN", category: @groceries_category, date: this_month.prev_month)
+    create_transaction(account: @checking_account, amount: 100, category: @groceries_category, date: this_month)
+
+    income_statement = IncomeStatement.new(@family)
+
+    # Two measurable months of 100; the PLN month is skipped, not counted as zero
+    assert_equal 100.0, income_statement.avg_expense(interval: "month", category: @groceries_category)
+    assert_equal 100.0, income_statement.median_expense(interval: "month", category: @groceries_category)
+  end
+
+  test "a category with only unconvertible spending has no average" do
+    Entry.joins(:account).where(accounts: { family_id: @family.id }).destroy_all
+    pln_account = @family.accounts.create! name: "PLN cash", currency: "PLN", balance: 0, accountable: Depository.new
+    create_transaction(account: pln_account, amount: 400, currency: "PLN", category: @groceries_category, date: Date.current.prev_month)
+
+    assert_equal 0, IncomeStatement.new(@family).avg_expense(interval: "month", category: @groceries_category)
+  end
 end

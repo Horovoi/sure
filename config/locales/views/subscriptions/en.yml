@@ -146,10 +146,13 @@ en:
       success: Transaction recorded successfully
       already_exists: Transaction already exists for this period
       no_account: Please set a default account for this subscription first
+      no_exchange_rate: "No exchange rate from %{from} to %{to} is stored yet, so the transaction was not recorded"
       not_due: This subscription is not due yet
     skip_occurrence:
       success: Occurrence skipped
     subscription:
+      about_per_month: "~%{amount}/mo"
+      per_month: "%{amount}/mo"
       record_now: Record now
       link_account_to_record: Link account to record
       skip: Skip this occurrence

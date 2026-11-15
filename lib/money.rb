@@ -10,9 +10,8 @@ class Money
       @to_currency = to_currency
       @date = date
 
-      error_message = message || "Couldn't find exchange rate from #{from_currency} to #{to_currency} on #{date}"
-
-      super(error_message)
+      # Exception#message before super is the class name, so it never stood in for this text
+      super("Couldn't find exchange rate from #{from_currency} to #{to_currency} on #{date}")
     end
   end
 
@@ -39,6 +38,11 @@ class Money
     validate!
   end
 
+  # Converts by the nearest-rate rule (ExchangeRate::Provided): the day's rate, else the
+  # latest stored one before it, else the earliest after it. With no usable rate it uses
+  # fallback_rate when given and raises ConversionError otherwise; callers that total
+  # amounts leave such an amount out (ExchangeRate.convert_or_leave_out) rather than
+  # passing fallback_rate: 1.
   def exchange_to(other_currency, date: Date.current, fallback_rate: nil)
     iso_code = currency.iso_code
     other_iso_code = Money::Currency.new(other_currency).iso_code
@@ -46,7 +50,7 @@ class Money
     if iso_code == other_iso_code
       self
     else
-      exchange_rate = store.find_or_fetch_rate(from: iso_code, to: other_iso_code, date: date)&.rate || fallback_rate
+      exchange_rate = stored_rate(from: iso_code, to: other_iso_code, date: date) || fallback_rate
 
       raise ConversionError.new(from_currency: iso_code, to_currency: other_iso_code, date: date) unless exchange_rate
 
@@ -75,6 +79,17 @@ class Money
   end
 
   private
+    def stored_rate(from:, to:, date:)
+      record = if store.respond_to?(:find_rate)
+        store.find_rate(from: from, to: to, date: date)
+      else
+        store.find_or_fetch_rate(from: from, to: to, date: date)
+      end
+
+      rate = record&.rate
+      rate if rate && rate.to_d.finite? && rate.to_d.positive?
+    end
+
     def source_must_be_of_known_type
       unless @source.is_a?(Money) || @source.is_a?(Numeric) || @source.is_a?(BigDecimal)
         errors.add :source, "must be a Money, Numeric, or BigDecimal"

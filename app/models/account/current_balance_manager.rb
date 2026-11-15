@@ -93,12 +93,18 @@ class Account::CurrentBalanceManager
     # Today's balance as the forward calculation derives it for a cash account with no
     # reconciliations: the opening balance plus the flows of every entry after the opening date,
     # up to today. Unlike the cached accounts.balance, it does not depend on a sync having run
-    # since the last edit.
+    # since the last edit. An entry in a currency with no rate at all is left out (and
+    # logged), never counted at 1.
     def derived_current_balance
       entry_flows = account.entries
         .where.not(entryable_type: "Valuation")
         .where("date > ? AND date <= ?", account.opening_anchor_date, Date.current)
-        .sum { |entry| entry.amount_money.exchange_to(account.currency, date: entry.date, fallback_rate: 1).amount }
+        .sum do |entry|
+          ExchangeRate.convert_or_leave_out(
+            entry.amount_money, to: account.currency, date: entry.date,
+            source: "Account::CurrentBalanceManager", family: account.family
+          )&.amount || 0
+        end
 
       signed_flows = account.asset? ? -entry_flows : entry_flows
       account.opening_anchor_balance + signed_flows

@@ -383,8 +383,8 @@ class RecurringTransaction
         # If entry currency matches account currency, no conversion needed
         return entry.amount if entry.currency == entry.account.currency
 
-        # Fetch exchange rate for the transaction date
-        rate_record = ExchangeRate.find_or_fetch_rate(
+        # The nearest-rate rule for the transaction date
+        rate_record = ExchangeRate.find_rate(
           from: entry.currency,
           to: entry.account.currency,
           date: entry.date
@@ -392,8 +392,7 @@ class RecurringTransaction
 
         return nil unless rate_record  # Skip if no rate available
 
-        rate = rate_record.is_a?(ExchangeRate) ? rate_record.rate : rate_record.rate
-        (entry.amount * rate).round(2)
+        (entry.amount * rate_record.rate).round(2)
       end
 
       # Create amount bucket for tolerance-based grouping

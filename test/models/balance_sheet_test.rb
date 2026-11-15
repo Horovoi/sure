@@ -88,9 +88,26 @@ class BalanceSheetTest < ActiveSupport::TestCase
     assert_equal 3000 + 5000, liability_groups.find { |ag| ag.name == I18n.t("accounts.types.other_liability") }.total
   end
 
+  test "an account in a currency with no exchange rate is left out of net worth, not counted at 1" do
+    @family.update_columns(currency: "UAH")
+    create_account(balance: 1000, currency: "UAH", accountable: Depository.new)
+    create_account(balance: 50, currency: "USD", accountable: Depository.new)
+
+    assert_equal 1000, BalanceSheet.new(@family).net_worth
+  end
+
+  test "an account converts at the nearest stored rate when today's is missing" do
+    @family.update_columns(currency: "UAH")
+    create_account(balance: 1000, currency: "UAH", accountable: Depository.new)
+    create_account(balance: 50, currency: "USD", accountable: Depository.new)
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: 12.days.ago.to_date, rate: 40)
+
+    assert_equal 1000 + 50 * 40, BalanceSheet.new(@family).net_worth
+  end
+
   private
     def create_account(attributes = {})
-      account = @family.accounts.create! name: "Test", currency: "USD", **attributes
+      account = @family.accounts.create! name: "Test", **{ currency: "USD" }.merge(attributes)
       account
     end
 end

@@ -6,6 +6,14 @@ en:
       body_html: "<p>You will not be able to undo this decision</p>"
       cancel: Cancel
       title: Are you sure?
+    exchange_rate_notes:
+      missing:
+        one: "No exchange rate from %{currencies} to %{currency} is stored yet, so some totals leave out amounts in %{currencies}."
+        other: "No exchange rates from %{currencies} to %{currency} are stored yet, so some totals leave out amounts in those currencies."
+      stale:
+        one: "The latest exchange rate to %{currency} is out of date: %{rates}. Today's totals use it."
+        other: "The latest exchange rates to %{currency} are out of date: %{rates}. Today's totals use them."
+      stale_rate: "%{from} from %{date}"
     money_field:
       label: Amount
     require_family_admin:

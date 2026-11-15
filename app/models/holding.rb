@@ -173,29 +173,32 @@ class Holding < ApplicationRecord
         previous: start_amount
     end
 
-    # Calculates weighted average cost from buy trades.
-    # Returns nil if no trades exist (cost basis is unknown).
+    # Calculates weighted average cost from buy trades, each converted into the holding's
+    # currency at the nearest stored rate of its day.
+    # Returns nil if no trades exist, or when a trade's currency has no rate at all: the
+    # cost basis is unknown then, never a figure with that purchase counted at 1.
     def calculate_avg_cost
       trades = account.trades
         .with_entry
-        .joins(ActiveRecord::Base.sanitize_sql_array([
-          "LEFT JOIN exchange_rates ON (
-            exchange_rates.date = entries.date AND
-            exchange_rates.from_currency = trades.currency AND
-            exchange_rates.to_currency = ?
-          )", account.currency
-        ]))
         .where(security_id: security.id)
         .where("trades.qty > 0 AND entries.date <= ?", date)
 
-      total_cost, total_qty = trades.pick(
-        Arel.sql("SUM(trades.price * trades.qty * COALESCE(exchange_rates.rate, 1))"),
-        Arel.sql("SUM(trades.qty)")
+      rate = ExchangeRate.rate_sql(
+        from: "trades.currency",
+        to: ActiveRecord::Base.connection.quote(currency),
+        on: "entries.date"
+      )
+
+      total_cost, total_qty, rate_missing = trades.pick(
+        Arel.sql("SUM(trades.price * trades.qty * #{rate})"),
+        Arel.sql("SUM(trades.qty)"),
+        Arel.sql("COUNT(*) FILTER (WHERE #{rate} IS NULL)")
       )
 
       # Return nil when no trades exist - cost basis is genuinely unknown
       # Previously this fell back to current market price, which was misleading
       return nil unless total_qty && total_qty > 0
+      return nil if rate_missing.to_i.positive?
 
       Money.new(total_cost / total_qty, currency)
     end

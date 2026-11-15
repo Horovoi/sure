@@ -47,16 +47,11 @@ class IncomeStatement::CategoryStats
               CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
             ) as period,
             #{classification_sql} as classification,
-            SUM(CASE WHEN t.kind = 'investment_contribution' THEN ABS(ae.amount * COALESCE(er.rate, 1)) ELSE ae.amount * COALESCE(er.rate, 1) END) as total
+            SUM(CASE WHEN t.kind = 'investment_contribution' THEN ABS(ae.amount * #{rate_sql}) ELSE ae.amount * #{rate_sql} END) as total
           FROM transactions t
           JOIN entries ae ON ae.entryable_id = t.id AND ae.entryable_type = 'Transaction'
           JOIN accounts a ON a.id = ae.account_id
           LEFT JOIN categories c ON c.id = t.category_id
-          LEFT JOIN exchange_rates er ON (
-            er.date = ae.date AND
-            er.from_currency = ae.currency AND
-            er.to_currency = :target_currency
-          )
           WHERE a.family_id = :family_id
             AND #{Account.visible_status_sql("a")}
             AND t.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
@@ -92,34 +87,48 @@ class IncomeStatement::CategoryStats
             SELECT id FROM categories WHERE family_id = :family_id AND parent_id IS NULL
           )
         ),
-        -- last_p: the latest past period with any activity in the family, or the
+        -- A NULL total is a period whose only rows have no exchange rate at all (see
+        -- rate_sql). It has no measurable spending, so it neither starts, ends nor counts
+        -- toward a category's run of periods.
+        -- last_p: the latest past period with measurable activity in the family, or the
         -- period before the current one when there is none
         bounds AS (
           SELECT COALESCE(MAX(period), #{current_period_sql} - CAST('1 ' || :interval AS interval)) AS last_p
           FROM base
-          WHERE period < #{current_period_sql}
+          WHERE period < #{current_period_sql} AND total IS NOT NULL
         ),
-        -- end_p: the category's latest period with spending, or last_p when that is later
+        -- start_p: the category's first period with measurable spending
+        -- end_p: its latest one, or last_p when that is later
         windowed AS (
           SELECT final.*,
-            GREATEST(MAX(period) OVER (PARTITION BY category_id, classification), (SELECT last_p FROM bounds)) AS end_p
+            MIN(period) FILTER (WHERE total IS NOT NULL) OVER (PARTITION BY category_id, classification) AS start_p,
+            GREATEST(
+              MAX(period) FILTER (WHERE total IS NOT NULL) OVER (PARTITION BY category_id, classification),
+              (SELECT last_p FROM bounds)
+            ) AS end_p
           FROM final
         )
         SELECT
           category_id,
           classification,
-          -- The median stays the typical period with spending
+          -- The median stays the typical period with spending (PERCENTILE_CONT skips NULLs)
           ABS(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total)) as median,
-          -- The average runs over every period from the category's first one to end_p,
-          -- at most 12, so a period without spending counts as zero. The unfinished
-          -- current period counts only once it has spending.
-          ABS(COALESCE(SUM(total) FILTER (WHERE period > end_p - CAST('12 ' || :interval AS interval)), 0) / (
-            SELECT COUNT(*) FROM generate_series(
-              GREATEST(MIN(period), MAX(end_p) - CAST('11 ' || :interval AS interval)),
-              MAX(end_p),
-              CAST('1 ' || :interval AS interval)
-            )
-          )) as avg
+          -- The average runs over every period from start_p to end_p, at most 12, so a
+          -- period without spending counts as zero. The unfinished current period counts
+          -- only once it has spending. A period with nothing convertible is left out of
+          -- the count, and a category with no measurable period has no average.
+          CASE WHEN MAX(start_p) IS NOT NULL THEN
+            ABS(COALESCE(SUM(total) FILTER (WHERE period > end_p - CAST('12 ' || :interval AS interval)), 0) / NULLIF((
+              SELECT COUNT(*) FROM generate_series(
+                GREATEST(MAX(start_p), MAX(end_p) - CAST('11 ' || :interval AS interval)),
+                MAX(end_p),
+                CAST('1 ' || :interval AS interval)
+              )
+            ) - COUNT(*) FILTER (
+              WHERE total IS NULL AND period > start_p AND period <= end_p
+                AND period > end_p - CAST('12 ' || :interval AS interval)
+            ), 0))
+          END as avg
         FROM windowed
         GROUP BY category_id, classification;
       SQL
@@ -133,6 +142,12 @@ class IncomeStatement::CategoryStats
           CASE WHEN :offset_days > 0 THEN (CAST(:today AS date) - make_interval(days => :offset_days)) ELSE CAST(:today AS date) END
         )
       SQL
+    end
+
+    # The nearest stored rate of the entry's day. NULL when its currency has no rate at all:
+    # the amount drops out of the SUM, and a period with nothing convertible has a NULL total.
+    def rate_sql
+      ExchangeRate.rate_sql(from: "ae.currency", to: ":target_currency", on: "ae.date")
     end
 
     # Same as IncomeStatement::Totals: an investment contribution is an expense whatever

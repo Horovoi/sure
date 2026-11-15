@@ -44,15 +44,10 @@ class IncomeStatement::FamilyStats
               CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
             ) as period,
             #{classification_sql} as classification,
-            SUM(CASE WHEN t.kind = 'investment_contribution' THEN ABS(ae.amount * COALESCE(er.rate, 1)) ELSE ae.amount * COALESCE(er.rate, 1) END) as total
+            SUM(CASE WHEN t.kind = 'investment_contribution' THEN ABS(ae.amount * #{rate_sql}) ELSE ae.amount * #{rate_sql} END) as total
           FROM transactions t
           JOIN entries ae ON ae.entryable_id = t.id AND ae.entryable_type = 'Transaction'
           JOIN accounts a ON a.id = ae.account_id
-          LEFT JOIN exchange_rates er ON (
-            er.date = ae.date AND
-            er.from_currency = ae.currency AND
-            er.to_currency = :target_currency
-          )
           WHERE a.family_id = :family_id
             AND #{Account.visible_status_sql("a")}
             AND t.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
@@ -76,6 +71,12 @@ class IncomeStatement::FamilyStats
         FROM period_totals
         GROUP BY classification;
       SQL
+    end
+
+    # The nearest stored rate of the entry's day. NULL when its currency has no rate at all:
+    # the amount drops out of the SUM, and a period with nothing convertible has a NULL total.
+    def rate_sql
+      ExchangeRate.rate_sql(from: "ae.currency", to: ":target_currency", on: "ae.date")
     end
 
     # Same as IncomeStatement::Totals: an investment contribution is an expense whatever

@@ -59,7 +59,10 @@ class UI::Account::Chart < ApplicationComponent
   def converted_balance_money
     return nil unless foreign_currency?
 
-    account.balance_money.exchange_to(account.family.currency, fallback_rate: 1)
+    # nil (nothing shown) when the currency has no rate at all, never the balance at 1
+    ExchangeRate.convert_or_leave_out(
+      account.balance_money, to: account.family.currency, source: "UI::Account::Chart", family: account.family
+    )
   end
 
   def view

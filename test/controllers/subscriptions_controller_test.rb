@@ -351,4 +351,40 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to suggestions_subscriptions_path
     assert_match(/previously dismissed/, flash[:notice])
   end
+
+  # --- Nearest-rate rule (w1-fx nearest-rate) ---
+
+  test "a subscription in a currency with no exchange rate is left out of the totals, not counted at 1" do
+    @family.recurring_transactions.create!(
+      merchant: merchants(:amazon), amount: 100, currency: "PLN", expected_day_of_month: 5,
+      last_occurrence_date: Date.current, next_expected_date: 1.month.from_now, status: "active",
+      subscription_state: "subscription", billing_cycle: "monthly"
+    )
+
+    get calendar_subscriptions_url
+
+    assert_response :success
+    assert_equal Money.new(15.99, "USD"), controller.instance_variable_get(:@monthly_total)
+
+    data = JSON.parse(css_select("[data-controller='subscription-calendar']").first["data-subscription-calendar-data-value"])
+    pln = data["dates"].values.flatten.find { |sub| sub["amount"].include?("100") && sub["is_foreign_currency"] }
+    if pln
+      assert_nil pln["converted_amount"]
+      assert_equal 0, pln["converted_amount_raw"]
+    end
+  end
+
+  test "a foreign subscription converts at the nearest stored rate" do
+    @family.recurring_transactions.create!(
+      merchant: merchants(:amazon), amount: 100, currency: "PLN", expected_day_of_month: 5,
+      last_occurrence_date: Date.current, next_expected_date: 1.month.from_now, status: "active",
+      subscription_state: "subscription", billing_cycle: "monthly"
+    )
+    ExchangeRate.create!(from_currency: "PLN", to_currency: "USD", date: 20.days.ago.to_date, rate: 0.25)
+
+    get calendar_subscriptions_url
+
+    assert_response :success
+    assert_equal Money.new(15.99 + 25, "USD"), controller.instance_variable_get(:@monthly_total)
+  end
 end

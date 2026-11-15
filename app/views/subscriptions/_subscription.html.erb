@@ -41,19 +41,23 @@
     <span class="text-sm font-medium text-primary">
       <%= format_money(-subscription.amount_money) %>
     </span>
+    <%# No rate at all: no converted amount is shown, never the amount at 1 %>
     <% if subscription.currency != Current.family.currency %>
-      <% converted = subscription.amount_money.exchange_to(Current.family.currency, fallback_rate: 1).abs * -1 %>
+      <% converted = ExchangeRate.convert_or_leave_out(subscription.amount_money, to: Current.family.currency, source: "subscriptions/_subscription", family: Current.family) %>
+    <% end %>
+    <% if converted %>
+      <% converted = -converted.abs %>
       <span class="text-xs text-secondary flex items-center gap-1">
         <%= format_money(converted) %>
         <% if subscription.billing_cycle_yearly? %>
           <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-container-inset text-subdued">
-            <%= format_money(converted / 12) %>/mo
+            <%= t(".per_month", amount: format_money(converted / 12)) %>
           </span>
         <% end %>
       </span>
     <% elsif subscription.billing_cycle_yearly? %>
       <span class="text-xs text-secondary block">
-        ~<%= format_money(Money.new(subscription.monthly_cost, subscription.currency)) %>/mo
+        <%= t(".about_per_month", amount: format_money(Money.new(subscription.monthly_cost, subscription.currency))) %>
       </span>
     <% end %>
   </td>

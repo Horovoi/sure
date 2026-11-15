@@ -58,8 +58,7 @@ class SubscriptionsController < ApplicationController
     @this_week_data = (Date.current.beginning_of_week..Date.current.end_of_week)
                         .flat_map { |d| @calendar_data[d] || [] }
     @this_week_total = @this_week_data.sum(Money.new(0, Current.family.currency)) do |s|
-      amount = s.amount_money.abs
-      s.currency == Current.family.currency ? amount : amount.exchange_to(Current.family.currency, fallback_rate: 1)
+      subscription_amount_in_family_currency(s.amount_money.abs)
     end
 
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
@@ -166,6 +165,8 @@ class SubscriptionsController < ApplicationController
     entry = @subscription.generate_transaction!
     if entry
       redirect_to subscriptions_path, notice: t(".success")
+    elsif missing_rate_for_default_account?(@subscription)
+      redirect_to subscriptions_path, alert: t(".no_exchange_rate", from: @subscription.currency, to: @subscription.default_account.currency)
     else
       redirect_to subscriptions_path, alert: t(".already_exists")
     end
@@ -262,7 +263,7 @@ class SubscriptionsController < ApplicationController
     return render json: { error: "missing_currency" }, status: :bad_request unless from_currency
     return render json: { rate: 1 } if from_currency == to_currency
 
-    rate = ExchangeRate.find_or_fetch_rate(from: from_currency, to: to_currency, date: Date.current, cache: true)
+    rate = ExchangeRate.find_rate(from: from_currency, to: to_currency, date: Date.current)
 
     if rate
       render json: { from: from_currency, to: to_currency, rate: rate.rate.to_f }
@@ -361,7 +362,7 @@ class SubscriptionsController < ApplicationController
       family_currency = Current.family.currency
       subscriptions.select(&:active?).sum(Money.new(0, family_currency)) do |sub|
         amount = sub.billing_cycle_yearly? ? sub.amount_money / 12 : sub.amount_money
-        sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
+        subscription_amount_in_family_currency(amount)
       end
     end
 
@@ -369,14 +370,32 @@ class SubscriptionsController < ApplicationController
       family_currency = Current.family.currency
       subscriptions.select(&:active?).sum(Money.new(0, family_currency)) do |sub|
         amount = sub.billing_cycle_monthly? ? sub.amount_money * 12 : sub.amount_money
-        sub.currency == family_currency ? amount : amount.exchange_to(family_currency, fallback_rate: 1)
+        subscription_amount_in_family_currency(amount)
       end
     end
 
+    # A subscription in a currency with no rate at all is left out of a total (and logged),
+    # never counted at 1
+    def subscription_amount_in_family_currency(amount)
+      family_currency = Current.family.currency
+      ExchangeRate.convert_or_leave_out(amount, to: family_currency, source: "SubscriptionsController#totals", family: Current.family) ||
+        Money.new(0, family_currency)
+    end
+
+    # generate_transaction! books nothing when the subscription's currency has no rate at all
+    # into its account's currency
+    def missing_rate_for_default_account?(subscription)
+      ExchangeRate.currencies_without_rate([ subscription.currency ], to: subscription.default_account.currency).any?
+    end
+
+    # The latest usable rate on or before today for each currency (the nearest-rate rule),
+    # not only rates stored for today, which are missing until the day's sync has run
     def load_exchange_rates_for_form
-      ExchangeRate.where(to_currency: Current.family.currency, date: Date.current)
-                  .pluck(:from_currency, :rate)
-                  .to_h
+      ExchangeRate.where(to_currency: Current.family.currency)
+                  .where("exchange_rates.date <= ? AND exchange_rates.rate > 0", Date.current)
+                  .select("DISTINCT ON (exchange_rates.from_currency) exchange_rates.from_currency, exchange_rates.rate")
+                  .order(:from_currency, date: :desc)
+                  .to_h { |rate| [ rate.from_currency, rate.rate ] }
     end
 
     def build_calendar_data(subscriptions, month)

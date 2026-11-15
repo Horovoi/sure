@@ -68,10 +68,10 @@ class RecurringTransaction
         variance > VARIANCE_THRESHOLD
       end
 
-      # Convert each entry amount to target currency using historical exchange rates
+      # Convert each entry amount to target currency at the nearest-rate rule for its date
       def convert_to_currency(target_currency)
         entries.filter_map do |entry|
-          rate_record = ExchangeRate.find_or_fetch_rate(
+          rate_record = ExchangeRate.find_rate(
             from: target_currency,
             to: entry.currency,
             date: entry.date
