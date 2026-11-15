@@ -247,4 +247,13 @@ class SyncTest < ActiveSupport::TestCase
 
     assert_equal accounts(:depository).family, DebugLogEntry.order(:created_at).last.family
   end
+
+  # User#purge destroys the last user's family, and its syncs commit with it
+  test "destroying a family with its own sync does not touch the destroyed family" do
+    family = families(:empty)
+    Sync.create!(syncable: family, status: :completed)
+
+    assert_nothing_raised { family.destroy! }
+    assert_not Family.exists?(family.id)
+  end
 end
