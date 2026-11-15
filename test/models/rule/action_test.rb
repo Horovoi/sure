@@ -230,4 +230,61 @@ class Rule::ActionTest < ActiveSupport::TestCase
     assert_equal "loan_payment", @txn1.reload.kind
     assert_equal "funds_movement", @txn1.transfer.inflow_transaction.kind
   end
+
+  test "set_transaction_tags stores several tags and adds them all" do
+    work = @family.tags.create!(name: "Work")
+    travel = @family.tags.create!(name: "Travel")
+    existing = @family.tags.create!(name: "Existing")
+    @txn2.tags << existing
+
+    action = Rule::Action.new(rule: @transaction_rule, action_type: "set_transaction_tags", value: [ "", work.id, travel.id, work.id ])
+
+    assert_equal "#{work.id},#{travel.id}", action.value
+    assert_equal [ work.id, travel.id ], action.execution_value
+
+    action.apply(@rule_scope)
+
+    assert_equal [ existing, travel, work ].map(&:id).sort, @txn2.reload.tag_ids.sort
+    assert_equal [ travel, work ].map(&:id).sort, @txn1.reload.tag_ids.sort
+  end
+
+  test "set_transaction_tags still reads a stored single tag id" do
+    tag = @family.tags.create!(name: "Legacy")
+    action = @transaction_rule.actions.create!(action_type: "set_transaction_tags", value: tag.id)
+    action.reload
+
+    assert_equal [ tag.id ], action.execution_value
+    assert_equal "Legacy", action.value_display
+
+    action.apply(@rule_scope)
+
+    assert_equal [ tag ], @txn3.reload.tags
+  end
+
+  test "set_transaction_tags shows every selected tag" do
+    work = @family.tags.create!(name: "Work")
+    travel = @family.tags.create!(name: "Travel")
+    action = Rule::Action.new(rule: @transaction_rule, action_type: "set_transaction_tags", value: [ work.id, travel.id ])
+
+    assert_equal "Work, Travel", action.value_display
+  end
+
+  test "set_transaction_tags ignores tags that no longer exist" do
+    tag = @family.tags.create!(name: "Kept")
+    action = Rule::Action.new(rule: @transaction_rule, action_type: "set_transaction_tags", value: [ SecureRandom.uuid, tag.id ])
+
+    action.apply(@rule_scope)
+
+    assert_equal [ tag ], @txn1.reload.tags
+  end
+
+  test "multi-value names round-trip, a name with a comma included" do
+    names = [ "Work", "Food, Dining", 'Bob "B"' ]
+    encoded = Rule::Action.encode_multi_value_names(names)
+
+    assert_equal names, Rule::Action.decode_multi_value_names(encoded)
+    assert_equal "Work", Rule::Action.encode_multi_value_names([ "Work" ])
+    assert_equal [ "Work", " Home" ], Rule::Action.decode_multi_value_names("Work, Home")
+    assert_equal [ 'Bob "B"' ], Rule::Action.decode_multi_value_names('Bob "B"')
+  end
 end

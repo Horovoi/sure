@@ -74,6 +74,29 @@ class RulesTest < ApplicationSystemTestCase
     assert_includes find("select[name='rule[conditions_attributes][0][value]']").all("option").map(&:text), "Work trip"
   end
 
+  test "a tag action takes several tags from the tag picker" do
+    work = @family.tags.create!(name: "Work trip")
+    travel = @family.tags.create!(name: "Travel spend")
+    visit edit_rule_path(@first)
+
+    action_type = find("select[name='rule[actions_attributes][0][action_type]']")
+    action_type.select "Set transaction tags"
+
+    action_row = action_type.ancestor("[data-controller~='rule--actions']")
+    within action_row do
+      find("[data-tag-select-target='button']").click
+      find("[data-tag-select-target='option'][data-tag-name='Work trip']").click
+      find("[data-tag-select-target='option'][data-tag-name='Travel spend']").click
+    end
+
+    action_type.ancestor("form").find("[type='submit']").click
+
+    assert_eventually do
+      action = @first.reload.actions.first
+      action.action_type == "set_transaction_tags" && action.execution_value.sort == [ work.id, travel.id ].sort
+    end
+  end
+
   private
     def create_rule(name)
       @family.rules.create!(

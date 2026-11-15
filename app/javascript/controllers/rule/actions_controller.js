@@ -2,12 +2,13 @@ import { Controller } from "@hotwired/stimulus";
 
 // Connects to data-controller="rule--actions"
 export default class extends Controller {
-  static values = { actionExecutors: Array };
+  static values = { actionExecutors: Array, noOptionsLabel: String };
   static targets = [
     "destroyField",
     "actionValue",
     "selectTemplate",
-    "textTemplate"
+    "multiSelectTemplate",
+    "textTemplate",
   ];
 
   remove(e) {
@@ -32,6 +33,8 @@ export default class extends Controller {
 
     if (actionExecutor.type === "select") {
       this.#buildSelectFor(actionExecutor);
+    } else if (actionExecutor.type === "multi_select") {
+      this.#buildMultiSelect();
     } else if (actionExecutor.type === "text") {
       this.#buildTextInputFor();
     } else {
@@ -60,7 +63,7 @@ export default class extends Controller {
       if (!actionExecutor.options || actionExecutor.options.length === 0) {
         selectEl.disabled = true;
         const optionEl = document.createElement("option");
-        optionEl.textContent = "(none)";
+        optionEl.textContent = this.noOptionsLabelValue;
         selectEl.appendChild(optionEl);
       } else {
         selectEl.disabled = false;
@@ -74,6 +77,15 @@ export default class extends Controller {
     }
 
     // Add the template content to the actionValue target and ensure it's visible
+    this.actionValueTarget.appendChild(template);
+    this.actionValueTarget.classList.remove("hidden");
+  }
+
+  #buildMultiSelect() {
+    // The tag picker is rendered into its template on the server; its own
+    // tag-select controller connects once the clone is in the page.
+    const template = this.multiSelectTemplateTarget.content.cloneNode(true);
+
     this.actionValueTarget.appendChild(template);
     this.actionValueTarget.classList.remove("hidden");
   }

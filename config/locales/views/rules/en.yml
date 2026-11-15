@@ -74,6 +74,9 @@ en:
       success: All rules deleted
     actions:
       value_placeholder: Enter a value
+      to_label: to
+      tags_label: Tags
+      no_options: "(none)"
     action_executors:
       bayes_categorize: Categorize with the local classifier (no AI)
     condition_filters:

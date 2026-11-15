@@ -3,7 +3,10 @@
 <% action = form.object %>
 <% rule = action.rule %>
 
-<li data-controller="rule--actions" data-rule--actions-action-executors-value="<%= rule.action_executors.to_json %>" class="flex items-center gap-3">
+<li data-controller="rule--actions"
+    data-rule--actions-action-executors-value="<%= rule.action_executors.to_json %>"
+    data-rule--actions-no-options-label-value="<%= t("rules.actions.no_options") %>"
+    class="flex items-center gap-3">
   <%= form.hidden_field :_destroy, value: false, data: { rule__actions_target: "destroyField" } %>
 
   <div class="grid grid-cols-1 gap-2 items-center h-full w-full">
@@ -15,9 +18,20 @@
                 data: { rule__actions_target: "actionValue" } do %>
       <%# Initial rendering based on the action executor type. %>
       <%# Subsequent renders are injected by the Stimulus controller, which uses the templates from below. %>
-      <span class="font-medium text-primary uppercase text-xs">to</span>
+      <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
       <% if action.executor.type == "select" %>
         <%= form.select :value, action.options || [], {} %>
+      <% elsif action.executor.type == "multi_select" %>
+        <div class="grow min-w-0">
+          <%= render DS::TagSelect.new(
+                form: form,
+                tags: rule.family.tags.alphabetically,
+                selected_ids: action.execution_value,
+                attribute: :value,
+                label: t("rules.actions.tags_label"),
+                show_label: false
+              ) %>
+        </div>
       <% elsif action.executor.type == "text" %>
         <%= form.text_field :value, placeholder: t("rules.actions.value_placeholder") %>
       <% end %>
@@ -32,12 +46,27 @@
 
   <%# Templates for different input types - these will be cloned and used by the Stimulus controller %>
   <template data-rule--actions-target="selectTemplate">
-    <span class="font-medium text-primary uppercase text-xs">to</span>
+    <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
     <%= form.select :value, [], {} %>
   </template>
 
+  <%# The tag list does not depend on the executor, so the picker is rendered here once %>
+  <template data-rule--actions-target="multiSelectTemplate">
+    <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
+    <div class="grow min-w-0">
+      <%= render DS::TagSelect.new(
+            form: form,
+            tags: rule.family.tags.alphabetically,
+            selected_ids: [],
+            attribute: :value,
+            label: t("rules.actions.tags_label"),
+            show_label: false
+          ) %>
+    </div>
+  </template>
+
   <template data-rule--actions-target="textTemplate">
-    <span class="font-medium text-primary uppercase text-xs">to</span>
+    <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
     <%= form.text_field :value, placeholder: t("rules.actions.value_placeholder") %>
   </template>
 

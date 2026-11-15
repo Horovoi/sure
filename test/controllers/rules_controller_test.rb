@@ -379,4 +379,34 @@ class RulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_includes response.body, "Unsupported (name_removed)"
   end
+
+  test "creates a rule whose tag action sets several tags" do
+    work = @user.family.tags.create!(name: "Work trip")
+    travel = @user.family.tags.create!(name: "Travel spend")
+
+    post rules_url, params: {
+      rule: {
+        resource_type: "transaction",
+        conditions_attributes: { "0" => { condition_type: "transaction_name", operator: "like", value: "airline" } },
+        actions_attributes: { "0" => { action_type: "set_transaction_tags", value: [ "", work.id, travel.id ] } }
+      }
+    }
+
+    rule = @user.family.rules.order(:created_at).last
+    assert_equal [ work.id, travel.id ], rule.actions.first.execution_value
+  end
+
+  test "edit renders a stored single-tag action in the tag picker" do
+    tag = @user.family.tags.create!(name: "Legacy single")
+    rule = @user.family.rules.create!(
+      resource_type: "transaction",
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "coffee") ],
+      actions: [ Rule::Action.new(action_type: "set_transaction_tags", value: tag.id) ]
+    )
+
+    get edit_rule_url(rule)
+
+    assert_response :success
+    assert_select "[data-controller='tag-select'] [data-tag-id='#{tag.id}'][aria-selected='true']"
+  end
 end

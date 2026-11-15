@@ -268,9 +268,10 @@ class RuleImport < Import
         return find_or_create_merchant(value).id
       end
 
-      # Map tag names to UUIDs
+      # Map tag names to UUIDs. A multi-tag action lists several names (see
+      # Rule::Action.encode_multi_value_names), each resolved on its own.
       if action_type == "set_transaction_tags"
-        return find_or_create_tag(value).id
+        return resolve_import_tag_ids(value)
       end
 
       value
@@ -302,6 +303,18 @@ class RuleImport < Import
 
     def find_or_create_merchant(name)
       merchants_by_name[name] ||= family.merchants.create!(name: name)
+    end
+
+    # A value that is exactly an existing tag's name stays one tag, so an export
+    # written before multi-tag actions, of a tag whose name holds a comma, still
+    # imports as that tag. A JSON array of names works as well.
+    def resolve_import_tag_ids(value)
+      return find_or_create_tag(value).id if value.is_a?(String) && tags_by_name.key?(value)
+
+      names = Rule::Action.decode_multi_value_names(value).map(&:strip).compact_blank.uniq
+      return value if names.empty?
+
+      names.map { |name| find_or_create_tag(name).id }.join(",")
     end
 
     def find_or_create_tag(name)
