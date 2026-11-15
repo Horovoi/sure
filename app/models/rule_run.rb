@@ -22,8 +22,8 @@ class RuleRun < ApplicationRecord
   scope :stale, -> { where(status: "pending").where(created_at: ...STALE_AFTER.ago) }
 
   # A run is pending while the rule is being applied and while any async job
-  # it queued is outstanding. pending_jobs_count counts both: RuleJob holds one
-  # slot for the apply phase itself, and each async job holds one more.
+  # it queued is outstanding. pending_jobs_count counts both: Rule::Runner holds
+  # one slot for the apply phase itself, and each async job holds one more.
   # Whoever releases the last slot moves the run to success.
   aasm column: :status, requires_lock: true, whiny_persistence: true do
     state :pending, initial: true
@@ -58,6 +58,12 @@ class RuleRun < ApplicationRecord
     end
 
     rule_run.complete_job!(modified_count: modified_count)
+  end
+
+  # Transactions the run tried but did not change, e.g. because a user lock kept
+  # the value or it already had it
+  def transactions_blocked
+    [ transactions_processed - transactions_modified, 0 ].max
   end
 
   # Reserve a slot before an async job is queued, so a job that finishes

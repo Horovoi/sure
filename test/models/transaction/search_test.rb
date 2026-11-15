@@ -422,4 +422,33 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     # Should not match unrelated transactions
     assert_not_includes result_ids, no_match.entryable.id
   end
+
+  test "tag filter matches transactions with any of the filtered tags, once each" do
+    tag_a = @family.tags.create!(name: "TagA")
+    tag_b = @family.tags.create!(name: "TagB")
+    tag_c = @family.tags.create!(name: "TagC")
+
+    double_tagged = create_transaction(account: @checking_account, amount: 100, kind: "standard", tags: [ tag_a, tag_b ])
+    single_tagged = create_transaction(account: @checking_account, amount: 50, kind: "standard", tags: [ tag_a ])
+    unrelated = create_transaction(account: @checking_account, amount: 75, kind: "standard", tags: [ tag_c ])
+
+    result_ids = Transaction::Search.new(@family, filters: { tags: [ "TagA", "TagB" ] }).transactions_scope.pluck(:id)
+
+    assert_equal [ double_tagged.entryable.id, single_tagged.entryable.id ].sort, result_ids.sort
+    assert_not_includes result_ids, unrelated.entryable.id
+  end
+
+  test "totals count and sum a transaction with two filtered tags once" do
+    tag_a = @family.tags.create!(name: "FanA")
+    tag_b = @family.tags.create!(name: "FanB")
+
+    create_transaction(account: @checking_account, amount: 100, kind: "standard", tags: [ tag_a, tag_b ])
+    create_transaction(account: @checking_account, amount: 50, kind: "standard", tags: [ tag_a ])
+
+    search = Transaction::Search.new(@family, filters: { tags: [ "FanA", "FanB" ] })
+
+    assert_equal 2, search.transactions_scope.count
+    assert_equal 2, search.totals.count
+    assert_equal Money.new(150, @family.currency), search.totals.expense_money
+  end
 end

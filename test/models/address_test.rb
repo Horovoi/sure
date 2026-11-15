@@ -39,6 +39,18 @@ class AddressTest < ActiveSupport::TestCase
     assert_equal "", address.to_s
   end
 
+  test "keeps a leading zero in the postal code" do
+    address = addresses(:one)
+    address.update!(postal_code: "01001")
+    assert_equal "01001", address.reload.postal_code
+  end
+
+  test "accepts alphanumeric postal codes" do
+    address = addresses(:one)
+    address.update!(postal_code: "SW1A 2AA")
+    assert_equal "SW1A 2AA", address.reload.postal_code
+  end
+
   test "can strip extras commas and spaces" do
     address = Address.new(
       line1: "123 Main St ,",

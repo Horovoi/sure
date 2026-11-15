@@ -185,11 +185,129 @@ class RulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test "apply_all enqueues job and redirects" do
-    assert_enqueued_with(job: ApplyAllRulesJob) do
+  test "apply_all enqueues one ordered rule run and redirects" do
+    assert_enqueued_with(job: ApplyRulesJob, args: [ @user.family, { execution_type: "manual", ignore_attribute_locks: true } ]) do
       post apply_all_rules_url
     end
 
     assert_redirected_to rules_url
+  end
+
+  test "index renders a rule with an empty compound condition" do
+    rule = @user.family.rules.build(resource_type: "transaction")
+    rule.conditions.build(condition_type: "compound", operator: "and")
+    rule.actions.build(action_type: "exclude_transaction")
+    rule.save!
+
+    get rules_url
+
+    assert_response :success
+    assert_includes response.body, I18n.t("rules.no_condition")
+  end
+
+  test "index shows the next condition when the first compound condition is empty" do
+    rule = @user.family.rules.build(resource_type: "transaction")
+    rule.conditions.build(condition_type: "compound", operator: "and")
+    rule.conditions.build(condition_type: "transaction_name", operator: "like", value: "edge-case-name")
+    rule.actions.build(action_type: "exclude_transaction")
+    rule.save!
+
+    get rules_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(rule)}" do
+      assert_select "span", text: /edge-case-name/
+      assert_select "span", text: /#{Regexp.escape(I18n.t("rules.no_condition"))}/, count: 0
+      assert_select "p", text: /more condition/, count: 0
+    end
+  end
+
+  test "index lists rules in run order with the stop badge" do
+    family = @user.family
+    family.rules.destroy_all
+    second = family.rules.create!(name: "Second", resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    first = family.rules.create!(name: "First", resource_type: "transaction", stop_processing: true, actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    Rule.update_positions!(family, [ first.id, second.id ])
+
+    get rules_url
+
+    assert_response :success
+    keys = css_select("#rules_list [data-section-key]").map { |node| node["data-section-key"] }
+    assert_equal [ first.id, second.id ], keys
+    assert_select "##{ActionView::RecordIdentifier.dom_id(first)}", text: /#{I18n.t("rules.rule.stop_processing")}/
+  end
+
+  test "reorder saves the new run order" do
+    family = @user.family
+    family.rules.destroy_all
+    a = family.rules.create!(name: "A", resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    b = family.rules.create!(name: "B", resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+
+    patch reorder_rules_url, params: { rule_ids: [ b.id, a.id ] }, as: :json
+
+    assert_response :no_content
+    assert_equal [ b, a ], family.rules.ordered.to_a
+  end
+
+  test "reorder refuses a list that does not name every rule once" do
+    family = @user.family
+    family.rules.destroy_all
+    a = family.rules.create!(name: "A", resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    family.rules.create!(name: "B", resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+
+    patch reorder_rules_url, params: { rule_ids: [ a.id ] }, as: :json
+
+    assert_response :unprocessable_entity
+  end
+
+  test "reorder cannot move another family's rule" do
+    other_rule = families(:empty).rules.create!(resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    own_ids = @user.family.rules.pluck(:id)
+
+    patch reorder_rules_url, params: { rule_ids: own_ids + [ other_rule.id ] }, as: :json
+
+    assert_response :unprocessable_entity
+  end
+
+  test "update saves stop processing" do
+    rule = rules(:one)
+
+    patch rule_url(rule), params: { rule: { stop_processing: "1" } }
+
+    assert rule.reload.stop_processing?
+  end
+
+  test "apply enqueues the rule after the active rules above it" do
+    rule = rules(:one)
+
+    assert_enqueued_with(job: ApplyRulesJob, args: [ rule.family, { rule_ids: [ rule.id ], ignore_attribute_locks: true, execution_type: "manual" } ]) do
+      post apply_rule_url(rule)
+    end
+
+    assert rule.reload.active?
+  end
+
+  test "confirm says how many active rules above run first" do
+    family = @user.family
+    family.rules.destroy_all
+    family.rules.create!(name: "Above", resource_type: "transaction", active: true, actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    rule = family.rules.create!(name: "Below", resource_type: "transaction", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+
+    get confirm_rule_url(rule)
+
+    assert_response :success
+    assert_includes response.body, I18n.t("rules.confirm.rules_above_notice", count: 1)
+  end
+
+  test "recent runs show the blocked count" do
+    rule = rules(:one)
+    RuleRun.create!(rule: rule, rule_name: "Blocked", execution_type: "manual", status: "success",
+                    transactions_queued: 5, transactions_processed: 5, transactions_modified: 2, pending_jobs_count: 0, executed_at: Time.current)
+
+    get rules_url
+
+    assert_response :success
+    assert_includes response.body, I18n.t("rules.recent_runs.columns.transactions_counts.blocked")
+    assert_includes response.body, "5 / 5 / 2 / 3"
   end
 end

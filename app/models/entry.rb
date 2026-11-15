@@ -1,12 +1,21 @@
 class Entry < ApplicationRecord
   include Monetizable, Enrichable
 
+  # Attributes that only describe an entry. Balance materialization and transfer
+  # matching never read them, so an edit limited to them needs no account sync.
+  # Reports and budgets pick such an edit up through Family#entries_cache_version:
+  # the save bumps the entry's updated_at (a transaction's save touches its entry).
+  DESCRIPTIVE_ATTRIBUTES = %w[name notes updated_at].freeze
+  DESCRIPTIVE_TRANSACTION_ATTRIBUTES = %w[category_id merchant_id updated_at].freeze
+
   monetize :amount
 
   belongs_to :account
   belongs_to :import, optional: true
 
-  delegated_type :entryable, types: Entryable::TYPES, dependent: :destroy
+  # inverse_of: an entryable preloaded with `includes(:entryable)` knows its entry, so
+  # entryable.entry (Transfer legs, category checks) runs no query per row
+  delegated_type :entryable, types: Entryable::TYPES, dependent: :destroy, inverse_of: :entry
   accepts_nested_attributes_for :entryable
 
   validates :date, :name, :amount, :currency, presence: true
@@ -28,7 +37,8 @@ class Entry < ApplicationRecord
     order(
       date: :asc,
       Arel.sql("CASE WHEN entries.entryable_type = 'Valuation' THEN 1 ELSE 0 END") => :asc,
-      created_at: :asc
+      created_at: :asc,
+      id: :asc # tie-break, so paging never skips or repeats entries created in the same instant
     )
   }
 
@@ -36,7 +46,8 @@ class Entry < ApplicationRecord
     order(
       date: :desc,
       Arel.sql("CASE WHEN entries.entryable_type = 'Valuation' THEN 1 ELSE 0 END") => :desc,
-      created_at: :desc
+      created_at: :desc,
+      id: :desc # tie-break, so paging never skips or repeats entries created in the same instant
     )
   }
 
@@ -80,6 +91,24 @@ class Entry < ApplicationRecord
   def sync_account_later
     sync_start_date = [ date_previously_was, date ].compact.min unless destroyed?
     account.sync_later(window_start_date: sync_start_date)
+  end
+
+  # Whether the last save changed anything a sync depends on. Call it right after
+  # the save, before a follow-up write (lock_saved_attributes!, mark_user_modified!)
+  # resets saved_changes.
+  def saved_changes_affect_balances?
+    return true if (saved_changes.keys - DESCRIPTIVE_ATTRIBUTES).any?
+
+    descriptive = transaction? ? DESCRIPTIVE_TRANSACTION_ATTRIBUTES : %w[updated_at]
+    (entryable.saved_changes.keys - descriptive).any?
+  end
+
+  # Whether the last save changed what recurring-pattern detection groups by. A sync
+  # runs the detection when it finishes; an edit that skips the sync asks for it here.
+  def saved_changes_affect_recurring_patterns?
+    return true if saved_change_to_name?
+
+    transaction? && (entryable.saved_change_to_category_id? || entryable.saved_change_to_merchant_id?)
   end
 
   def entryable_name_short
@@ -135,12 +164,20 @@ class Entry < ApplicationRecord
       # A date change moves the entry in the balance history, so its account must
       # resync from the earlier of the two dates, as a single update does.
       sync_windows = {}
+      recurring_account_ids = Set.new
 
       transaction do
         all.each do |entry|
-          if bulk_attributes.present?
-            bulk_attributes[:entryable_attributes][:id] = entry.entryable_id if bulk_attributes[:entryable_attributes].present?
-            entry.update! bulk_attributes
+          attrs = bulk_attributes_for(entry, bulk_attributes)
+          update_entry_tags = update_tags && entry.transaction?
+          next if attrs.blank? && !update_entry_tags
+
+          if attrs.present?
+            entry.update! attrs
+
+            # A category or merchant change skips the sync, which is what runs the
+            # recurring-pattern detection; ask for it once per family instead.
+            recurring_account_ids << entry.account_id if entry.saved_changes_affect_recurring_patterns?
 
             if entry.saved_change_to_date?
               start_date = [ entry.date_previously_was, entry.date ].compact.min
@@ -149,7 +186,7 @@ class Entry < ApplicationRecord
             end
           end
 
-          if update_tags && entry.transaction?
+          if update_entry_tags
             entry.transaction.tag_ids = tag_ids
             entry.transaction.save!
             entry.entryable.lock_attr!(:tag_ids) if entry.transaction.tags.any?
@@ -164,8 +201,31 @@ class Entry < ApplicationRecord
         account.sync_later(window_start_date: start_date)
       end
 
+      # Debounced, so one call per family; a date-change sync above runs it again when it finishes
+      if recurring_account_ids.any?
+        Family.where(id: Account.where(id: recurring_account_ids.to_a).select(:family_id)).find_each do |family|
+          RecurringTransaction.identify_patterns_for(family)
+        end
+      end
+
       all.size
     end
+
+    private
+      # Category and merchant belong to a transaction: a valuation or trade in the
+      # selection gets only the entry fields. Each entry gets its own copy with its
+      # own entryable id.
+      def bulk_attributes_for(entry, bulk_attributes)
+        attrs = bulk_attributes.deep_dup
+
+        if entry.transaction? && attrs[:entryable_attributes].present?
+          attrs[:entryable_attributes][:id] = entry.entryable_id
+        else
+          attrs.delete(:entryable_attributes)
+        end
+
+        attrs
+      end
   end
 
   private

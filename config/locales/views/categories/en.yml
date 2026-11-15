@@ -13,7 +13,9 @@ en:
     edit:
       edit: Edit category
     form:
+      auto_adjust: auto-adjust.
       placeholder: Category name
+      poor_contrast: Poor contrast, choose darker color or
     index:
       bootstrap: Use defaults (recommended)
       categories: Categories

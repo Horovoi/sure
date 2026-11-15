@@ -152,9 +152,11 @@ class Transaction::Search
       query.joins(:merchant).where(merchants: { name: merchants })
     end
 
+    # A subquery, not a join: joining tags gives one row per matching tag, so a
+    # transaction with two of the filtered tags was counted and summed twice in totals.
     def apply_tag_filter(query, tags)
       return query unless tags.present?
-      query.joins(:tags).where(tags: { name: tags })
+      query.where(id: EntrySearch.tagged_transaction_ids(tags))
     end
 
     def apply_status_filter(query, statuses)

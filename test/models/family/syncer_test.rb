@@ -42,40 +42,30 @@ class Family::SyncerTest < ActiveSupport::TestCase
     assert_equal "completed", family_sync.reload.status
   end
 
-  test "only applies active rules during sync" do
-    family_sync = syncs(:family)
+  test "post-sync enqueues one ordered rule run for the family" do
+    @family.rules.destroy_all
+    2.times do
+      @family.rules.create!(resource_type: "transaction", active: true, actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    end
+    @family.rules.create!(resource_type: "transaction", active: false, actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+    Family.any_instance.stubs(:auto_match_transfers!)
 
-    # Create an active rule
-    active_rule = @family.rules.create!(
-      resource_type: "transaction",
-      active: true,
-      actions: [ Rule::Action.new(action_type: "exclude_transaction") ]
-    )
+    assert_enqueued_jobs 1, only: ApplyRulesJob do
+      assert_no_enqueued_jobs only: RuleJob do
+        Family::Syncer.new(@family).perform_post_sync
+      end
+    end
 
-    # Create a disabled rule
-    disabled_rule = @family.rules.create!(
-      resource_type: "transaction",
-      active: false,
-      actions: [ Rule::Action.new(action_type: "exclude_transaction") ]
-    )
+    assert_enqueued_with(job: ApplyRulesJob, args: [ @family, { execution_type: "scheduled" } ])
+  end
 
-    syncer = Family::Syncer.new(@family)
+  test "post-sync enqueues no rule run when the family has no active rules" do
+    @family.rules.update_all(active: false)
+    Family.any_instance.stubs(:auto_match_transfers!)
 
-    # Stub the relation to return our specific instances so expectations work
-    @family.rules.stubs(:where).with(active: true).returns([ active_rule ])
-
-    # Expect apply_later to be called only for the active rule
-    active_rule.expects(:apply_later).with(execution_type: "scheduled").once
-    disabled_rule.expects(:apply_later).never
-
-    # Mock the account and plaid item syncs to avoid side effects
-    Account.any_instance.stubs(:sync_later)
-    PlaidItem.any_instance.stubs(:sync_later)
-    LunchflowItem.any_instance.stubs(:sync_later)
-    EnableBankingItem.any_instance.stubs(:sync_later)
-
-    syncer.perform_sync(family_sync)
-    syncer.perform_post_sync
+    assert_no_enqueued_jobs only: ApplyRulesJob do
+      Family::Syncer.new(@family).perform_post_sync
+    end
   end
 
   test "syncs every active provider item type while bank connections are on" do

@@ -15,6 +15,16 @@
       <%= form.money_field :balance, label: t(".balance"), required: true, default_currency: Current.family.currency %>
     <% end %>
 
+    <% if account.new_record? && !account.linked? %>
+      <%= form.date_field :opening_balance_date,
+          label: t(".opening_balance_date_label"),
+          label_tooltip: t(".opening_balance_date_hint"),
+          value: params.dig(:account, :opening_balance_date).presence || (Date.current - 2.years),
+          min: Entry.min_supported_date + 1.day,
+          max: Date.current,
+          required: true %>
+    <% end %>
+
     <%= yield form %>
 
     <details class="group">

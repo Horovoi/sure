@@ -203,7 +203,7 @@ class Transfer < ApplicationRecord
     end
 
     def transfer_within_date_range
-      return unless inflow_transaction&.entry && outflow_transaction&.entry
+      return unless inflow_transaction&.entry&.date && outflow_transaction&.entry&.date
 
       date_diff = (inflow_transaction.entry.date - outflow_transaction.entry.date).abs
       max_days = confirmed? ? 30 : 4

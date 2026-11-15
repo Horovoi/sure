@@ -95,6 +95,26 @@ class AccountsTest < ApplicationSystemTestCase
     assert_account_created("OtherLiability")
   end
 
+  test "manual depository keeps its subtype and the balance start date" do
+    click_link Depository.display_name.singularize
+
+    start_date = 3.months.ago.to_date
+    fill_in "Account name*", with: "[system test] Savings"
+    fill_in "account[balance]", with: 2500
+    fill_in "account[opening_balance_date]", with: start_date
+    select "Savings", from: "account[subtype]"
+
+    click_button "Create Account"
+
+    assert_text "[system test] Savings"
+
+    created_account = Account.order(:created_at).last
+    assert_equal "savings", created_account.subtype
+    opening_anchor = created_account.valuations.opening_anchor.first
+    assert_equal start_date, opening_anchor.entry.date
+    assert_equal 2500, opening_anchor.entry.amount
+  end
+
   private
 
     def open_new_account_modal

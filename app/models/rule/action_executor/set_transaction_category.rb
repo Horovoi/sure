@@ -7,6 +7,14 @@ class Rule::ActionExecutor::SetTransactionCategory < Rule::ActionExecutor
     family.categories.alphabetically.pluck(:name, :id)
   end
 
+  def claimed_attributes
+    [ :category_id ]
+  end
+
+  def actionable?(value)
+    family.categories.exists?(id: value)
+  end
+
   def execute(transaction_scope, value: nil, ignore_attribute_locks: false, rule_run: nil)
     category = family.categories.find_by_id(value)
     return 0 unless category

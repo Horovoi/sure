@@ -29,6 +29,16 @@ class Rule::ActionExecutor::AutoCategorize < Rule::ActionExecutor
     end
   end
 
+  def claimed_attributes
+    [ :category_id ]
+  end
+
+  # The AI runs later and only fills fields it can classify, so it leaves them to
+  # rules further down, as it did before rules had an order.
+  def reserves_claimed_attributes?
+    false
+  end
+
   def execute(transaction_scope, value: nil, ignore_attribute_locks: false, rule_run: nil)
     enrichable_transactions = transaction_scope.enrichable(:category_id)
 

@@ -157,4 +157,19 @@ class EntrySearchTest < ActiveSupport::TestCase
         entryable: transaction
       )
     end
+
+    test "tag filter returns an entry with two of the filtered tags once" do
+      tag_a = @family.tags.create!(name: "EntryTagA")
+      tag_b = @family.tags.create!(name: "EntryTagB")
+
+      double_tagged = create_transaction(account: @account, name: "Double", tags: [ tag_a, tag_b ])
+      single_tagged = create_transaction(account: @account, name: "Single", tags: [ tag_b ])
+      untagged = create_transaction(account: @account, name: "Untagged")
+
+      results = @account.entries.search(tags: [ "EntryTagA", "EntryTagB" ])
+
+      assert_equal [ double_tagged.id, single_tagged.id ].sort, results.pluck(:id).sort
+      assert_equal 2, results.count
+      assert_not_includes results, untagged
+    end
 end

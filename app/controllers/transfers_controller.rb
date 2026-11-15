@@ -13,16 +13,27 @@ class TransfersController < ApplicationController
   end
 
   def create
+    date = parse_transfer_date
+
+    if date.nil?
+      # Without a date the creator cannot convert the amount or compare the legs' dates,
+      # so show the form again with the error instead of building the legs.
+      @transfer = Transfer.new
+      @transfer.errors.add(:date, transfer_params[:date].blank? ? :blank : :invalid)
+      render :new, status: :unprocessable_entity
+      return
+    end
+
     @transfer = Transfer::Creator.new(
       family: Current.family,
       source_account_id: transfer_params[:from_account_id],
       destination_account_id: transfer_params[:to_account_id],
-      date: transfer_params[:date],
+      date: date,
       amount: transfer_params[:amount].to_d
     ).create
 
     if @transfer.persisted?
-      success_message = "Transfer created"
+      success_message = t(".success")
       respond_to do |format|
         format.html { redirect_back_or_to transactions_path, notice: success_message }
         format.turbo_stream { stream_redirect_back_or_to transactions_path, notice: success_message }
@@ -62,6 +73,16 @@ class TransfersController < ApplicationController
 
     def transfer_params
       params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded ])
+    end
+
+    # Parsing raises on a bad value, which would be a 500; a blank or bad date is nil.
+    def parse_transfer_date
+      value = transfer_params[:date]
+      return if value.blank?
+
+      Date.iso8601(value.to_s)
+    rescue ArgumentError # Date::Error, and the error for an over-long string
+      nil
     end
 
     def transfer_update_params

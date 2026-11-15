@@ -5,7 +5,7 @@ class Rule::ConditionFilter
 
   OPERATORS_MAP = {
     "text" => [ [ "Contains", "like" ], [ "Equal to", "=" ], [ "Is empty", "is_null" ] ],
-    "number" => [ [ "Greater than", ">" ], [ "Greater or equal to", ">=" ], [ "Less than", "<" ], [ "Less than or equal to", "<=" ], [ "Is equal to", "=" ] ],
+    "number" => [ [ "Greater than", ">" ], [ "Greater or equal to", ">=" ], [ "Less than", "<" ], [ "Less than or equal to", "<=" ], [ "Is equal to", "=" ], [ "Is not equal to", "!=" ] ],
     "select" => [ [ "Equal to", "=" ], [ "Is empty", "is_null" ] ]
   }
 
@@ -22,8 +22,12 @@ class Rule::ConditionFilter
     family_currency.step
   end
 
+  def self.key
+    name.demodulize.underscore
+  end
+
   def key
-    self.class.name.demodulize.underscore
+    self.class.key
   end
 
   def label
@@ -72,10 +76,12 @@ class Rule::ConditionFilter
           "#{field} #{sanitize_operator(operator)}"
         )
       else
-        sanitized_value = operator == "like" ? "%#{ActiveRecord::Base.sanitize_sql_like(value)}%" : value
+        normalized_value = normalize_value(value)
+        normalized_field = normalize_field(field)
+        sanitized_value = operator == "like" ? "%#{ActiveRecord::Base.sanitize_sql_like(normalized_value)}%" : normalized_value
 
         ActiveRecord::Base.sanitize_sql_for_conditions([
-          "#{field} #{sanitize_operator(operator)} ?",
+          "#{normalized_field} #{sanitize_operator(operator)} ?",
           sanitized_value
         ])
       end
@@ -92,5 +98,18 @@ class Rule::ConditionFilter
       else
         operator
       end
+    end
+
+    def normalize_value(value)
+      return value unless type == "text"
+
+      # Collapse whitespace the way normalize_field does on the SQL side
+      value.to_s.gsub(/[[:space:]]+/, " ").strip
+    end
+
+    def normalize_field(field)
+      return field unless type == "text"
+
+      "BTRIM(REGEXP_REPLACE(#{field}, '[[:space:]]+', ' ', 'g'))"
     end
 end

@@ -1,17 +1,12 @@
 class RulesController < ApplicationController
   include StreamExtensions
 
-  before_action :set_rule, only: [  :edit, :update, :destroy, :apply, :confirm ]
+  before_action :set_rule, only: [ :edit, :update, :destroy, :apply, :confirm ]
 
   def index
-    @sort_by = params[:sort_by] || "name"
-    @direction = params[:direction] || "asc"
-
-    allowed_columns = [ "name", "updated_at" ]
-    @sort_by = "name" unless allowed_columns.include?(@sort_by)
-    @direction = "asc" unless [ "asc", "desc" ].include?(@direction)
-
-    @rules = Current.family.rules.order(@sort_by => @direction)
+    # Listed in run order (Rule::Runner), sharing one set of option lists
+    @rules = Current.family.rules.includes(:actions, conditions: :sub_conditions).ordered.to_a
+    Rule.share_option_lists(@rules)
 
     # Fetch recent rule runs with pagination
     recent_runs_scope = RuleRun
@@ -60,10 +55,12 @@ class RulesController < ApplicationController
   def apply
     @rule.update!(active: true)
     @rule.apply_later(ignore_attribute_locks: true)
-    redirect_back_or_to rules_path, notice: "#{@rule.resource_type.humanize} rule activated"
+    redirect_back_or_to rules_path, notice: t(".success", resource: @rule.resource_type.humanize)
   end
 
   def confirm
+    @active_rules_above_count = @rule.active_rules_above.count
+
     # Compute provider, model, and cost estimation for auto-categorize actions
     if @rule.actions.any? { |a| a.action_type == "auto_categorize" }
       # Use the same provider determination logic as Family::AutoCategorizer
@@ -86,8 +83,8 @@ class RulesController < ApplicationController
   def update
     if @rule.update(rule_params)
       respond_to do |format|
-        format.html { redirect_back_or_to rules_path, notice: "Rule updated" }
-        format.turbo_stream { stream_redirect_back_or_to rules_path, notice: "Rule updated" }
+        format.html { redirect_back_or_to rules_path, notice: t(".success") }
+        format.turbo_stream { stream_redirect_back_or_to rules_path, notice: t(".success") }
       end
     else
       render :edit, status: :unprocessable_entity
@@ -96,17 +93,26 @@ class RulesController < ApplicationController
 
   def destroy
     @rule.destroy
-    redirect_to rules_path, notice: "Rule deleted"
+    redirect_to rules_path, notice: t(".success")
+  end
+
+  # Saves the run order the rules page was dragged into. The ids must list every rule
+  # of the family once; a stale page gets 422 and reloads.
+  def reorder
+    Rule.update_positions!(Current.family, params.expect(rule_ids: []))
+    head :no_content
+  rescue ArgumentError
+    head :unprocessable_entity
   end
 
   def destroy_all
     Current.family.rules.destroy_all
-    redirect_to rules_path, notice: "All rules deleted"
+    redirect_to rules_path, notice: t(".success")
   end
 
   def confirm_all
     # Apply-all only applies active rules, so the preview counts only those.
-    @rules = Current.family.rules.where(active: true)
+    @rules = Current.family.rules.where(active: true).ordered
     @total_affected_count = Rule.total_affected_resource_count(@rules)
 
     # Compute AI cost estimation if any rule has auto_categorize action
@@ -125,7 +131,7 @@ class RulesController < ApplicationController
   end
 
   def apply_all
-    ApplyAllRulesJob.perform_later(Current.family)
+    ApplyRulesJob.perform_later(Current.family, execution_type: "manual", ignore_attribute_locks: true)
     redirect_back_or_to rules_path, notice: t("rules.apply_all.success")
   end
 
@@ -138,7 +144,7 @@ class RulesController < ApplicationController
       # Double brackets mark a collection: the form sends conditions and actions as
       # indexed hashes ("0" => {...}), and expect takes a list of them only in this form
       params.expect(rule: [
-        :resource_type, :effective_date, :active, :name,
+        :resource_type, :effective_date, :active, :name, :stop_processing,
         conditions_attributes: [ [
           :id, :condition_type, :operator, :value, :_destroy,
           sub_conditions_attributes: [ [ :id, :condition_type, :operator, :value, :_destroy ] ]

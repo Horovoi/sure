@@ -58,10 +58,34 @@ class Account < ApplicationRecord
   delegated_type :accountable, types: Accountable::TYPES, dependent: :destroy
   delegate :subtype, to: :accountable, allow_nil: true
 
-  # Writer for subtype that delegates to the accountable
-  # This allows forms to set subtype directly on the account
+  # Writer for subtype that delegates to the accountable, so forms can set
+  # `account[subtype]` directly.
+  #
+  # On create the accountable is not built yet, and mass assignment applies
+  # attributes in the order they arrive. Two cases:
+  #
+  #   1. The type is already known: build the accountable now so the value lands
+  #      on it. A later `accountable_attributes` assignment (update_only) updates
+  #      that same record instead of building a new one.
+  #   2. `subtype` comes before `accountable_type` (the order `account_params`
+  #      permits them): hold the value and apply it from `accountable_type=`.
   def subtype=(value)
-    accountable&.subtype = value
+    self.accountable = accountable_class.new if accountable.nil? && accountable_type.present?
+
+    if accountable
+      accountable.subtype = value
+    else
+      @deferred_subtype = value
+    end
+  end
+
+  def accountable_type=(value)
+    super
+
+    if defined?(@deferred_subtype)
+      pending = remove_instance_variable(:@deferred_subtype)
+      self.subtype = pending
+    end
   end
 
   accepts_nested_attributes_for :accountable, update_only: true
@@ -109,20 +133,43 @@ class Account < ApplicationRecord
       "#{connection.quote_table_name(table)}.status IN (#{VISIBLE_STATUSES.map { |s| connection.quote(s) }.join(',')})"
     end
 
-    def create_and_sync(attributes, skip_initial_sync: false)
+    # opening_balance_date: the day the entered balance (or a loan's original
+    # balance) applies to. nil keeps the manager's default, two years ago.
+    def create_and_sync(attributes, skip_initial_sync: false, opening_balance_date: nil)
       attributes[:accountable_attributes] ||= {} # Ensure accountable is created, even if empty
       # Default cash_balance to balance unless explicitly provided (e.g., Crypto sets it to 0)
       attrs = attributes.dup
       attrs[:cash_balance] = attrs[:balance] unless attrs.key?(:cash_balance)
       account = new(attrs)
-      initial_balance = attributes.dig(:accountable_attributes, :initial_balance)&.to_d
+      # Presence is read from the raw value: a blank form field arrives as "" and
+      # would convert to a present-looking 0.
+      raw_initial_balance = attributes.dig(:accountable_attributes, :initial_balance)
+      initial_balance = raw_initial_balance.to_d if raw_initial_balance.present?
 
       transaction do
         account.save!
 
         manager = Account::OpeningBalanceManager.new(account)
-        result = manager.set_opening_balance(balance: initial_balance || account.balance)
+        result = manager.set_opening_balance(
+          balance: initial_balance || account.balance,
+          date: opening_balance_date
+        )
         raise result.error if result.error
+
+        # A loan created with its original principal opens at that principal, and the
+        # opening anchor is its only entry: the first sync would walk forward from it and
+        # replace the current balance the user typed. Anchor today's balance too.
+        #
+        # Only when the opening anchor is on an earlier day. A reconciliation on the
+        # anchor's own date is refused (an anchor is never overwritten), so on that day
+        # the opening balance wins.
+        if initial_balance && initial_balance != account.balance && manager.opening_date < Date.current
+          reconciliation = Account::ReconciliationManager.new(account).reconcile_balance(
+            balance: account.balance,
+            date: Date.current
+          )
+          raise reconciliation.error_message unless reconciliation.success?
+        end
       end
 
       # Skip initial sync for linked accounts - the provider sync will handle balance creation

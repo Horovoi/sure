@@ -93,7 +93,7 @@ class TransactionsController < ApplicationController
       @entry.lock_saved_attributes!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
 
-      flash[:notice] = "Transaction created"
+      flash[:notice] = t(".success")
 
       respond_to do |format|
         format.html { redirect_back_or_to account_path(@entry.account) }
@@ -106,6 +106,9 @@ class TransactionsController < ApplicationController
 
   def update
     if @entry.update(entry_params)
+      # Read before the writes below reset saved_changes
+      sync_needed = @entry.saved_changes_affect_balances?
+      recurring_changed = @entry.saved_changes_affect_recurring_patterns?
       transaction = @entry.transaction
 
       if needs_rule_notification?(transaction)
@@ -119,10 +122,17 @@ class TransactionsController < ApplicationController
       @entry.lock_saved_attributes!
       @entry.mark_user_modified!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
-      @entry.sync_account_later
+
+      # A name, notes, category, merchant or tag edit changes no balance. The sync
+      # would also have run the recurring-pattern detection, so ask for it directly.
+      if sync_needed
+        @entry.sync_account_later
+      elsif recurring_changed
+        RecurringTransaction.identify_patterns_for(Current.family)
+      end
 
       respond_to do |format|
-        format.html { redirect_back_or_to account_path(@entry.account), notice: "Transaction updated" }
+        format.html { redirect_back_or_to account_path(@entry.account), notice: t(".success") }
         format.turbo_stream do
           render turbo_stream: [
             turbo_stream.replace(
@@ -385,6 +395,12 @@ class TransactionsController < ApplicationController
       ])
 
       nature = entry_params.delete(:nature)
+
+      # A blank amount or date would set the saved value to nil, and the page shown again
+      # needs both. Dropping it keeps the saved value on update; on create the entry's
+      # presence validation still shows the form again.
+      entry_params.delete(:amount) if entry_params[:amount].blank?
+      entry_params.delete(:date) if entry_params[:date].blank?
 
       # A user can only toggle "one-time". Transfer kinds are written by Transfer alone, so a
       # transfer leg keeps its kind.

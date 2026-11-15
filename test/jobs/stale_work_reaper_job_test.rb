@@ -74,4 +74,27 @@ class StaleWorkReaperJobTest < ActiveJob::TestCase
     assert_equal "StaleWorkReaperJob", schedule.dig("reap_stale_work", "class")
     assert_equal "15 * * * *", schedule.dig("reap_stale_work", "cron")
   end
+
+  test "fails a rule run the ordered runner left pending when its AI job was lost" do
+    family = families(:empty)
+    account = family.accounts.create!(name: "Reaper", balance: 0, currency: "USD", accountable: Depository.new)
+    account.entries.create!(name: "Whole Foods", date: Date.current, amount: 10, currency: "USD", entryable: Transaction.new)
+    Provider::Registry.stubs(:get_provider).with(:openai).returns(stub("llm"))
+    rule = family.rules.create!(
+      resource_type: "transaction",
+      active: true,
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "like", value: "Whole Foods") ],
+      actions: [ Rule::Action.new(action_type: "auto_categorize") ]
+    )
+    # The AI job is queued and then lost (worker restart): it never reports back
+    Family.any_instance.stubs(:auto_categorize_transactions_later)
+
+    run = Rule::Runner.new(family, rules: [ rule ], execution_type: "scheduled").run.sole
+    assert run.reload.pending?
+    run.update_columns(created_at: (RuleRun::STALE_AFTER + 1.hour).ago)
+
+    StaleWorkReaperJob.perform_now
+
+    assert_equal "failed", run.reload.status
+  end
 end

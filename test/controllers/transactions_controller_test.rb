@@ -369,4 +369,132 @@ end
 
     assert_response :bad_request
   end
+
+  test "pagination does not duplicate or skip transactions with the same date and timestamp" do
+    family = families(:empty)
+    sign_in users(:empty)
+    family.accounts.each { |account| account.entries.delete_all }
+
+    account = family.accounts.create! name: "Same day", balance: 0, currency: "USD", accountable: Depository.new
+    timestamp = 3.days.ago.change(usec: 0)
+
+    entries = 13.times.map do |index|
+      create_transaction(
+        account: account,
+        name: "Same day #{index + 1}",
+        amount: 100 + index,
+        date: timestamp.to_date,
+        created_at: timestamp,
+        updated_at: timestamp
+      )
+    end
+
+    expected_ids = Entry.where(id: entries.map(&:id)).reverse_chronological.pluck(:id).map(&:to_s)
+    rendered_ids = -> { css_select("turbo-frame[id^='entry_']").map { |node| node["id"].delete_prefix("entry_") } }
+
+    get transactions_url(page: 1, per_page: 10)
+    assert_response :success
+    page_1_ids = rendered_ids.call
+
+    get transactions_url(page: 2, per_page: 10)
+    assert_response :success
+    page_2_ids = rendered_ids.call
+
+    assert_equal expected_ids.first(10), page_1_ids
+    assert_equal expected_ids.drop(10), page_2_ids
+  end
+
+  test "a blank amount or date in an update keeps the saved values" do
+    original_amount = @entry.amount
+    original_date = @entry.date
+
+    patch transaction_url(@entry), params: { entry: { name: "Renamed with blanks", amount: "", date: "", nature: "outflow" } }
+
+    @entry.reload
+    assert_equal "Renamed with blanks", @entry.name
+    assert_equal original_amount, @entry.amount
+    assert_equal original_date, @entry.date
+  end
+
+  test "creating with a blank amount or date shows the form again" do
+    assert_no_difference [ "Entry.count", "Transaction.count" ] do
+      post transactions_url, params: {
+        entry: {
+          account_id: @entry.account_id,
+          name: "Blank amount",
+          date: Date.current,
+          currency: "USD",
+          amount: "",
+          nature: "outflow",
+          entryable_type: "Transaction"
+        }
+      }
+    end
+    assert_response :unprocessable_entity
+
+    assert_no_difference [ "Entry.count", "Transaction.count" ] do
+      post transactions_url, params: {
+        entry: {
+          account_id: @entry.account_id,
+          name: "Blank date",
+          date: "",
+          currency: "USD",
+          amount: 10,
+          nature: "outflow",
+          entryable_type: "Transaction"
+        }
+      }
+    end
+    assert_response :unprocessable_entity
+  end
+
+  test "a category-only edit skips the sync and asks for recurring detection" do
+    assert_no_enqueued_jobs only: SyncJob do
+      assert_enqueued_with(job: IdentifyRecurringTransactionsJob) do
+        patch transaction_url(@entry), params: {
+          entry: { entryable_attributes: { id: @entry.entryable_id, category_id: categories(:subscriptions).id } }
+        }
+      end
+    end
+
+    assert_equal categories(:subscriptions), @entry.reload.transaction.category
+  end
+
+  test "a notes-only edit neither syncs nor asks for recurring detection" do
+    assert_no_enqueued_jobs only: [ SyncJob, IdentifyRecurringTransactionsJob ] do
+      patch transaction_url(@entry), params: { entry: { notes: "Only a note" } }
+    end
+
+    assert_equal "Only a note", @entry.reload.notes
+  end
+
+  test "an amount edit syncs" do
+    assert_enqueued_with(job: SyncJob) do
+      patch transaction_url(@entry), params: { entry: { amount: @entry.amount + 5 } }
+    end
+  end
+
+  test "a date edit syncs" do
+    assert_enqueued_with(job: SyncJob) do
+      patch transaction_url(@entry), params: { entry: { date: @entry.date - 3.days } }
+    end
+  end
+
+  test "a descriptive edit together with an amount edit still syncs" do
+    assert_enqueued_with(job: SyncJob) do
+      patch transaction_url(@entry), params: { entry: { notes: "With amount", amount: @entry.amount + 1 } }
+    end
+  end
+
+  test "a category-only edit changes the family's entries cache version" do
+    before = Family.find(@entry.account.family_id).entries_cache_version
+
+    travel 1.second do
+      patch transaction_url(@entry), params: {
+        entry: { entryable_attributes: { id: @entry.entryable_id, category_id: categories(:subscriptions).id } }
+      }
+    end
+
+    assert_not_equal before, Family.find(@entry.account.family_id).entries_cache_version
+  end
 end

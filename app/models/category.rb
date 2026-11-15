@@ -9,12 +9,15 @@ class Category < ApplicationRecord
   belongs_to :parent, class_name: "Category", optional: true
 
   validates :name, :color, :lucide_icon, :family, presence: true
+  # Checked only when the colour changes, so an old row with another colour can still be renamed
+  validates :color, format: { with: /\A#[0-9A-Fa-f]{6}\z/ }, if: :will_save_change_to_color?
   validates :name, uniqueness: { scope: :family_id }
 
   validate :category_level_limit
   validate :nested_category_matches_parent_classification
 
   before_save :inherit_color_from_parent
+  after_update :propagate_color_to_subcategories, if: :saved_change_to_color?
 
   scope :alphabetically, -> { order(:name) }
   scope :alphabetically_by_hierarchy, -> {
@@ -220,6 +223,12 @@ class Category < ApplicationRecord
   end
 
   private
+    # Subcategories take their parent's colour only when they are saved, so push a
+    # parent's new colour to the existing ones.
+    def propagate_color_to_subcategories
+      subcategories.update_all(color: color, updated_at: Time.current)
+    end
+
     def category_level_limit
       if (subcategory? && parent.subcategory?) || (parent? && subcategory?)
         errors.add(:parent, "can't have more than 2 levels of subcategories")

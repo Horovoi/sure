@@ -72,6 +72,206 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal 1000, opening_anchor.entry.amount
   end
 
+  test "create_and_sync uses provided opening balance date" do
+    Account.any_instance.stubs(:sync_later)
+    opening_date = 3.months.ago.to_date
+
+    account = Account.create_and_sync(
+      {
+        family: @family,
+        name: "Test Account",
+        balance: 1000,
+        currency: "USD",
+        accountable_type: "Depository",
+        accountable_attributes: {}
+      },
+      skip_initial_sync: true,
+      opening_balance_date: opening_date
+    )
+
+    opening_anchor = account.valuations.opening_anchor.first
+    assert_equal opening_date, opening_anchor.entry.date
+    assert_equal 1000, opening_anchor.entry.amount
+  end
+
+  test "create_and_sync keeps the entered current balance when it differs from the opening balance" do
+    Account.any_instance.stubs(:sync_later)
+
+    account = Account.create_and_sync(
+      {
+        family: @family,
+        name: "Student Loan",
+        balance: 8_000,
+        currency: "USD",
+        accountable_type: "Loan",
+        accountable_attributes: { initial_balance: 20_000, rate_type: "fixed", interest_rate: 4.5, term_months: 120 }
+      },
+      skip_initial_sync: true
+    )
+
+    assert_equal 20_000, account.valuations.opening_anchor.first.entry.amount
+    # Without an anchor today, the first sync would walk forward from the opening
+    # valuation and replace the entered 8,000 with 20,000.
+    today_valuation = account.entries.valuations.find_by(date: Date.current)
+    assert_not_nil today_valuation
+    assert_equal 8_000, today_valuation.amount
+    assert today_valuation.entryable.reconciliation?
+  end
+
+  test "create_and_sync leaves the opening anchor alone when the opening balance date is today" do
+    Account.any_instance.stubs(:sync_later)
+
+    account = Account.create_and_sync(
+      {
+        family: @family,
+        name: "Student Loan",
+        balance: 8_000,
+        currency: "USD",
+        accountable_type: "Loan",
+        accountable_attributes: { initial_balance: 20_000, rate_type: "fixed", interest_rate: 4.5, term_months: 120 }
+      },
+      skip_initial_sync: true,
+      opening_balance_date: Date.current
+    )
+
+    valuations = account.entries.valuations.where(date: Date.current)
+    assert_equal 1, valuations.count
+    assert_equal 20_000, valuations.first.amount
+    assert valuations.first.entryable.opening_anchor?
+  end
+
+  test "create_and_sync treats a blank initial balance as absent" do
+    Account.any_instance.stubs(:sync_later)
+
+    account = Account.create_and_sync(
+      {
+        family: @family,
+        name: "Student Loan",
+        balance: 8_000,
+        currency: "USD",
+        accountable_type: "Loan",
+        accountable_attributes: { initial_balance: "", rate_type: "fixed", interest_rate: 4.5, term_months: 120 }
+      },
+      skip_initial_sync: true
+    )
+
+    assert_equal 8_000, account.valuations.opening_anchor.first.entry.amount
+    assert_nil account.entries.valuations.find_by(date: Date.current)
+  end
+
+  test "create_and_sync treats a zero initial balance as a real opening balance" do
+    Account.any_instance.stubs(:sync_later)
+
+    account = Account.create_and_sync(
+      {
+        family: @family,
+        name: "Student Loan",
+        balance: 8_000,
+        currency: "USD",
+        accountable_type: "Loan",
+        accountable_attributes: { initial_balance: 0, rate_type: "fixed", interest_rate: 4.5, term_months: 120 }
+      },
+      skip_initial_sync: true
+    )
+
+    assert_equal 0, account.valuations.opening_anchor.first.entry.amount
+    assert_equal 8_000, account.entries.valuations.find_by(date: Date.current)&.amount
+  end
+
+  test "a later entry before the start date moves the opening anchor, not the today anchor" do
+    Account.any_instance.stubs(:sync_later)
+    opening_date = 1.month.ago.to_date
+
+    account = Account.create_and_sync(
+      {
+        family: @family,
+        name: "Car Loan",
+        balance: 8_000,
+        currency: "USD",
+        accountable_type: "Loan",
+        accountable_attributes: { initial_balance: 10_000 }
+      },
+      skip_initial_sync: true,
+      opening_balance_date: opening_date
+    )
+    create_transaction(account: account, date: opening_date - 10.days, amount: 100)
+
+    assert account.move_opening_anchor_before_oldest_entry!
+    assert_equal opening_date - 11.days, account.valuations.opening_anchor.first.entry.date
+    assert_equal 8_000, account.entries.valuations.find_by(date: Date.current).amount
+  end
+
+  {
+    "Depository" => "savings",
+    "Investment" => "brokerage",
+    "Crypto" => "wallet",
+    "Loan" => "mortgage",
+    "Property" => "single_family_home"
+  }.each do |type, subtype|
+    test "#{type} subtype persists on create when it comes after the type" do
+      Account.any_instance.stubs(:sync_later)
+
+      account = Account.create_and_sync({
+        family: @family,
+        name: "#{type} account",
+        balance: 100,
+        currency: "USD",
+        accountable_type: type,
+        subtype: subtype
+      })
+
+      assert account.persisted?
+      assert_equal subtype, account.reload.subtype
+    end
+
+    test "#{type} subtype persists on create when it comes before the type" do
+      Account.any_instance.stubs(:sync_later)
+
+      # The order account_params permits them in
+      account = Account.create_and_sync({
+        family: @family,
+        name: "#{type} account",
+        balance: 100,
+        subtype: subtype,
+        currency: "USD",
+        accountable_type: type
+      })
+
+      assert account.persisted?
+      assert_equal subtype, account.reload.subtype
+      assert_kind_of type.constantize, account.accountable
+    end
+  end
+
+  test "subtype assigned before the accountable is built is not dropped" do
+    account = Account.new
+    account.accountable_type = "Depository"
+    account.subtype = "checking"
+
+    assert_not_nil account.accountable
+    assert_equal "checking", account.subtype
+  end
+
+  test "subtype assigned before accountable_type is not dropped" do
+    account = Account.new
+    account.subtype = "savings"
+    account.accountable_type = "Depository"
+
+    assert_kind_of Depository, account.accountable
+    assert_equal "savings", account.accountable.subtype
+  end
+
+  test "subtype and nested accountable attributes land on one accountable" do
+    account = Account.new(
+      family: @family, name: "Mortgage", balance: 100, currency: "USD",
+      subtype: "mortgage", accountable_type: "Loan",
+      accountable_attributes: { interest_rate: 4.5 }
+    )
+
+    assert_equal "mortgage", account.accountable.subtype
+    assert_equal 4.5, account.accountable.interest_rate
+  end
+
   test "gets short/long subtype label" do
     investment = Investment.new(subtype: "hsa")
     account = @family.accounts.create!(

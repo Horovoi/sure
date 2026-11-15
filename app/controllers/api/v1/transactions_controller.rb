@@ -105,13 +105,22 @@ end
   def update
     Entry.transaction do
       if @entry.update(entry_params_for_update)
+        # Read before the writes below reset saved_changes
+        sync_needed = @entry.saved_changes_affect_balances?
+        recurring_changed = @entry.saved_changes_affect_recurring_patterns?
+
         if tags_provided?
           @entry.transaction.tag_ids = transaction_params[:tag_ids] || []
           @entry.transaction.save!
           @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
         end
 
-        @entry.sync_account_later
+        # A descriptive edit changes no balance (see Entry#saved_changes_affect_balances?)
+        if sync_needed
+          @entry.sync_account_later
+        elsif recurring_changed
+          RecurringTransaction.identify_patterns_for(@entry.account.family)
+        end
         @entry.lock_saved_attributes!
 
         @transaction = @entry.transaction

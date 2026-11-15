@@ -23,6 +23,32 @@ en:
       year_built_placeholder: '2000'
     new:
       title: Enter property details
+    overview_fields:
+      area_label: Area (optional)
+      area_placeholder: '1200'
+      area_unit_label: Area Unit
+      name_label: Name
+      name_placeholder: Vacation home
+      property_type_label: Property type
+      square_feet: Square Feet
+      square_meters: Square Meters
+      subtype_prompt: Select type
+      year_built_label: Year Built (optional)
+      year_built_placeholder: '1990'
+    balances:
+      market_value_label: Estimated market value
+      market_value_tooltip: The estimated market value of your property. This number can often be found on property listing sites, and is never an exact number.
+      next: Next
+      save: Save
+    update:
+      success: Property details updated successfully.
+      failure: Unable to update property details.
+    update_balances:
+      success: Balance updated successfully.
+    update_address:
+      success: Address updated successfully.
+      failure: Unable to update address. Please check the required fields.
+      balance_required: Enter the property's value before its address.
     tabs:
       overview:
         living_area: Living Area
@@ -31,5 +57,3 @@ en:
         trend: Trend
         unknown: Unknown
         year_built: Year Built
-    update_address:
-      balance_required: Enter the property's value before its address.

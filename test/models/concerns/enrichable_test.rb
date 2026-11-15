@@ -143,4 +143,80 @@ class EnrichableTest < ActiveSupport::TestCase
 
     assert_equal "Second", DataEnrichment.find_by(enrichable: @enrichable, attribute_name: "name", source: "rule").value
   end
+
+  test "a refused save rolls back the join rows a virtual setter wrote, inside a caller's transaction" do
+    txn = transactions(:one)
+    tag = tags(:three)
+    tags_before = txn.tag_ids.sort
+    refute_includes tags_before, tag.id
+
+    txn.stubs(:save).returns(false)
+
+    result = nil
+    assert_no_difference -> { DataEnrichment.where(enrichable: txn).count } do
+      Transaction.transaction do
+        result = txn.enrich_attribute(:tag_ids, tags_before + [ tag.id ], source: "rule")
+      end
+    end
+
+    assert_equal false, result
+    assert_equal tags_before, Transaction.find(txn.id).tag_ids.sort
+  end
+
+  test "a refused tag_ids save leaves the instance reading the stored tags, and a retry writes" do
+    txn = transactions(:one)
+    tag = tags(:three)
+    tags_before = txn.tag_ids.sort
+    taggings_before = txn.taggings.map(&:tag_id).sort
+    wanted = tags_before + [ tag.id ]
+
+    txn.stubs(:save).returns(false)
+    assert_no_difference "DataEnrichment.count" do
+      assert_equal false, txn.enrich_attribute(:tag_ids, wanted, source: "rule")
+    end
+
+    assert_equal tags_before, txn.tag_ids.sort
+    assert_equal taggings_before, txn.taggings.map(&:tag_id).sort
+
+    txn.unstub(:save)
+    assert_difference "DataEnrichment.count", 1 do
+      assert txn.enrich_attribute(:tag_ids, wanted, source: "rule")
+    end
+    assert_equal wanted.sort, Transaction.find(txn.id).tag_ids.sort
+  end
+
+  test "a refused save keeps the previously accepted provenance value" do
+    @enrichable.enrich_attribute(:name, "Accepted Name", source: "plaid")
+    row = DataEnrichment.find_by!(enrichable: @enrichable, attribute_name: "name", source: "plaid")
+
+    assert_equal false, @enrichable.enrich_attribute(:name, nil, source: "plaid")
+
+    assert_equal "Accepted Name", row.reload.value
+    assert_equal "Accepted Name", Account.find(@enrichable.id).name
+  end
+
+  test "a soft bayes lock blocks no enrichment, forced or not, and is released by it" do
+    @enrichable.lock_attr!(:name, source: "bayes")
+    assert @enrichable.soft_locked?(:name)
+    assert @enrichable.enrichable?(:name)
+
+    assert @enrichable.enrich_attribute(:name, "From a rule", source: "rule")
+
+    @enrichable.reload
+    assert_equal "From a rule", @enrichable.name
+    assert_not @enrichable.locked?(:name)
+  end
+
+  test "the enrichable scope counts a soft bayes lock as unlocked, unlike AI and user locks" do
+    soft = accounts(:depository)
+    ai = accounts(:investment)
+    user = accounts(:credit_card)
+    soft.lock_attr!(:name, source: "bayes")
+    ai.lock_attr!(:name, source: "ai")
+    user.lock_attr!(:name)
+    ids = [ soft.id, ai.id, user.id ]
+
+    assert_equal [ soft.id ], Account.where(id: ids).enrichable(:name).pluck(:id)
+    assert_equal [ soft.id, ai.id ].sort, Account.where(id: ids).enrichable(:name, force: true).pluck(:id).sort
+  end
 end

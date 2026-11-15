@@ -353,6 +353,29 @@ end
     assert transaction_data["transfer"].key?("other_account")
   end
 
+  test "a category-only update skips the sync" do
+    category = @family.categories.where.not(id: @transaction.category_id).first
+
+    assert_no_enqueued_jobs only: SyncJob do
+      put api_v1_transaction_url(@transaction),
+          params: { transaction: { category_id: category.id } },
+          headers: api_headers(@api_key)
+    end
+
+    assert_response :success
+    assert_equal category, @transaction.reload.category
+  end
+
+  test "an amount update syncs" do
+    assert_enqueued_with(job: SyncJob) do
+      put api_v1_transaction_url(@transaction),
+          params: { transaction: { amount: @transaction.entry.amount.abs + 7, nature: "expense" } },
+          headers: api_headers(@api_key)
+    end
+
+    assert_response :success
+  end
+
   private
 
     def api_headers(api_key)

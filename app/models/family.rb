@@ -62,9 +62,33 @@ class Family < ApplicationRecord
     AutoCategorizeJob.perform_later(self, transaction_ids: transactions.pluck(:id), rule_run_id: rule_run_id)
   end
 
+  # --- Bayes categorizer (bayes-categorizer) ---------------------------------
+  # The local classifier goes first; the LLM gets only what it was not sure of,
+  # and only when an LLM provider is configured. Returns the modified count.
   def auto_categorize_transactions(transaction_ids)
-    AutoCategorizer.new(self, transaction_ids: transaction_ids).auto_categorize
+    bayes_result = BayesCategorizer.new(self).classify_and_apply(transaction_ids)
+    remaining_ids = Array(transaction_ids) - bayes_result.categorized_ids
+    return bayes_result.modified_count if remaining_ids.empty?
+
+    llm = AutoCategorizer.new(self, transaction_ids: remaining_ids)
+    unless llm.provider_available?
+      # Nothing at all was categorized and nothing could be: report it like before,
+      # so the rule run shows the missing provider instead of "success, 0 modified"
+      raise AutoCategorizer::Error, "No LLM provider for auto-categorization" if bayes_result.categorized_ids.empty?
+
+      Rails.logger.info("Bayes categorized #{bayes_result.categorized_ids.size} transactions for family #{id}; no LLM provider for the other #{remaining_ids.size}")
+      return bayes_result.modified_count
+    end
+
+    bayes_result.modified_count + llm.auto_categorize
   end
+
+  # Runs the local classifier over a transaction scope (the "Categorize with the
+  # local classifier" rule action). Returns the modified count.
+  def bayes_categorize(transaction_scope)
+    BayesCategorizer.new(self).classify_and_apply(transaction_scope.select(:id)).modified_count
+  end
+  # --- end Bayes categorizer -------------------------------------------------
 
   def auto_detect_transaction_merchants_later(transactions, rule_run_id: nil)
     AutoDetectMerchantsJob.perform_later(self, transaction_ids: transactions.pluck(:id), rule_run_id: rule_run_id)

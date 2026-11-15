@@ -7,6 +7,71 @@ class EntryTest < ActiveSupport::TestCase
     @entry = entries :transaction
   end
 
+  test "an entryable preloaded from its entry reads that entry without a query" do
+    entry = create_transaction(account: accounts(:depository), name: "Preloaded", date: 1.month.ago.to_date)
+
+    loaded = Entry.where(id: entry.id).includes(:entryable).first
+
+    assert_queries_count(0) do
+      assert_same loaded, loaded.entryable.entry
+    end
+  end
+
+  test "an entry loaded from its entryable reads that entryable without a query" do
+    entry = create_transaction(account: accounts(:depository), name: "Inverse", date: 1.month.ago.to_date)
+
+    transaction = Transaction.includes(:entry).find(entry.entryable_id)
+
+    assert_queries_count(0) do
+      assert_same transaction, transaction.entry.entryable
+    end
+  end
+
+  test "saved_changes_affect_balances? is false only for descriptive edits" do
+    category = categories(:subscriptions)
+    merchant = merchants(:netflix)
+
+    {
+      { name: "Renamed" } => false,
+      { notes: "A note" } => false,
+      { entryable_attributes: { id: @entry.entryable_id, category_id: category.id } } => false,
+      { entryable_attributes: { id: @entry.entryable_id, merchant_id: merchant.id } } => false,
+      { amount: @entry.amount + 1 } => true,
+      { date: @entry.date - 1.day } => true,
+      { excluded: !@entry.excluded } => true,
+      { notes: "With amount", amount: @entry.amount + 2 } => true
+    }.each do |attributes, expected|
+      entry = Entry.find(@entry.id)
+      entry.update!(attributes)
+
+      assert_equal expected, entry.saved_changes_affect_balances?, "for #{attributes.inspect}"
+    end
+  end
+
+  test "saved_changes_affect_recurring_patterns? follows name, category and merchant" do
+    entry = Entry.find(@entry.id)
+    entry.update!(notes: "Only notes")
+    assert_not entry.saved_changes_affect_recurring_patterns?
+
+    entry = Entry.find(@entry.id)
+    entry.update!(name: "New name")
+    assert entry.saved_changes_affect_recurring_patterns?
+
+    entry = Entry.find(@entry.id)
+    entry.update!(entryable_attributes: { id: entry.entryable_id, category_id: categories(:subscriptions).id })
+    assert entry.saved_changes_affect_recurring_patterns?
+  end
+
+  test "a category-only save touches the entry" do
+    entry = Entry.find(@entry.id)
+
+    travel 1.second do
+      assert_changes -> { entry.reload.updated_at } do
+        entry.update!(entryable_attributes: { id: entry.entryable_id, category_id: categories(:subscriptions).id })
+      end
+    end
+  end
+
   test "an opening anchor cannot be destroyed on its own, but goes with its account" do
     account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
     anchor = account.entries.create!(date: 1.year.ago.to_date, name: "Opening", amount: 100, currency: "USD", entryable: Valuation.new(kind: "opening_anchor"))
@@ -171,5 +236,45 @@ class EntryTest < ActiveSupport::TestCase
         amount: 100,
         entryable: transaction
       )
+    end
+
+    test "chronological order breaks a date and created_at tie by id" do
+      account = families(:empty).accounts.create!(name: "Cash", balance: 100, currency: "USD", accountable: Depository.new)
+      created_at = Time.current.change(usec: 0)
+      entries = 3.times.map do |i|
+        create_transaction(account: account, name: "Tie #{i}", date: Date.current, created_at: created_at)
+      end
+      ids = entries.map(&:id).sort
+
+      assert_equal ids, account.entries.where(id: ids).chronological.pluck(:id)
+      assert_equal ids.reverse, account.entries.where(id: ids).reverse_chronological.pluck(:id)
+    end
+
+    test "bulk_update! gives a balance update only the entry fields" do
+      account = accounts(:depository)
+      transaction_entry = create_transaction(account: account, name: "Bulk transaction")
+      valuation_entry = create_valuation(account: account, date: 3.days.ago.to_date)
+      category = categories(:food_and_drink)
+
+      updated = Entry.where(id: [ transaction_entry.id, valuation_entry.id ])
+                     .bulk_update!({ notes: "Bulk note", category_id: category.id })
+
+      assert_equal 2, updated
+      assert_equal "Bulk note", valuation_entry.reload.notes
+      assert_equal "Bulk note", transaction_entry.reload.notes
+      assert_equal category, transaction_entry.transaction.category
+    end
+
+    test "bulk_update! with only a category leaves a balance update untouched" do
+      account = accounts(:depository)
+      transaction_entry = create_transaction(account: account, name: "Category only")
+      valuation_entry = create_valuation(account: account, date: 6.days.ago.to_date)
+      category = categories(:food_and_drink)
+
+      assert_no_changes -> { valuation_entry.reload.updated_at } do
+        Entry.where(id: [ transaction_entry.id, valuation_entry.id ]).bulk_update!({ category_id: category.id })
+      end
+
+      assert_equal category, transaction_entry.reload.transaction.category
     end
 end

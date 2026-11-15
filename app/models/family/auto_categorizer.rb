@@ -56,6 +56,12 @@ class Family::AutoCategorizer
     modified_count
   end
 
+  # Whether an LLM can be asked at all (Family#auto_categorize_transactions asks
+  # before handing over what the local classifier left)
+  def provider_available?
+    llm_provider.present?
+  end
+
   private
     attr_reader :family, :transaction_ids
 
