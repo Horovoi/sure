@@ -517,6 +517,61 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # --- Subscription tools ----------------------------------------------------------------------------------
+
+  SUBSCRIPTION_WRITE_TOOLS = %w[create_subscription update_subscription review_subscription_suggestion
+                                skip_subscription_occurrence record_subscription_charge].freeze
+
+  test "the full-scope tools/list has the subscription read and write tools" do
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      tools = rpc_result["tools"].index_by { |tool| tool["name"] }
+      assert_equal true, tools["get_subscriptions"].dig("annotations", "readOnlyHint")
+      SUBSCRIPTION_WRITE_TOOLS.each do |name|
+        assert tools.key?(name), name
+        assert_equal false, tools[name].dig("annotations", "readOnlyHint"), name
+      end
+      assert_equal true, tools["update_subscription"].dig("annotations", "idempotentHint")
+      assert_not tools.key?("delete_subscription")
+    end
+  end
+
+  test "a read-scope credential lists get_subscriptions and none of the subscription writes" do
+    Mcp::Credential.stubs(:static).returns(Mcp::Credential.new(user: @user, kind: :static, scope: :read))
+
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      names = rpc_result["tools"].map { |tool| tool["name"] }
+      assert_includes names, "get_subscriptions"
+      SUBSCRIPTION_WRITE_TOOLS.each { |name| assert_not_includes names, name }
+    end
+  end
+
+  test "the in-app chat gets the subscription write tools too" do
+    names = Assistant.config_for(chats(:two))[:functions].map(&:name)
+
+    assert_includes names, "get_subscriptions"
+    SUBSCRIPTION_WRITE_TOOLS.each { |name| assert_includes names, name }
+  end
+
+  test "tools/call create_subscription audits the new row" do
+    with_mcp_env do
+      mcp_post "tools/call", params: { name: "create_subscription", arguments: { name: "Gym", amount: 1200, currency: "UAH", expected_day_of_month: 10 } }
+
+      assert_response :success
+      assert_equal false, rpc_result["isError"]
+    end
+
+    row = @user.family.recurring_transactions.find_by!(name: "Gym")
+    assert row.subscription?
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "create_subscription", audit.tool_name
+    assert_equal "RecurringTransaction", audit.result_record_type
+    assert_equal [ row.id ], audit.result_record_ids
+  end
+
   # --- Turn token (the in-app Claude chat) -----------------------------------------------------------------
   # The turn token always has scope :full: the chat gets every tool with no approval prompt (owner answer 2).
   # No test may assert that the Claude chat lacks write, delete, rule or transfer tools.

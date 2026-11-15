@@ -40,7 +40,15 @@ class Assistant
         Assistant::Function::CreateTag,
         Assistant::Function::UpdateTag,
         Assistant::Function::SetOpeningBalance,
-        Assistant::Function::RecordBalance
+        Assistant::Function::RecordBalance,
+
+        # Subscriptions and other recurring bills: the list, then writes (no delete tool)
+        Assistant::Function::GetSubscriptions,
+        Assistant::Function::CreateSubscription,
+        Assistant::Function::UpdateSubscription,
+        Assistant::Function::ReviewSubscriptionSuggestion,
+        Assistant::Function::SkipSubscriptionOccurrence,
+        Assistant::Function::RecordSubscriptionCharge
       ]
     end
 

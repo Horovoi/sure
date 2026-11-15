@@ -716,6 +716,74 @@ class RecurringTransaction < ApplicationRecord
     entry
   end
 
+  # What record_charge! did: the entry it booked, or why it booked none
+  # (:no_account, :not_due, :no_exchange_rate, :already_exists).
+  ChargeResult = Data.define(:entry, :error) do
+    def recorded?
+      entry.present?
+    end
+  end
+
+  # "Record" on Subscriptions (and the record_subscription_charge tool): books
+  # the charge that is due today or overdue on the default account. Booking it
+  # twice gives one entry: the second call finds the period recorded, or the
+  # row no longer due.
+  def record_charge!
+    return ChargeResult.new(entry: nil, error: :no_account) if default_account.blank?
+    return ChargeResult.new(entry: nil, error: :not_due) unless actionable?
+
+    entry = generate_transaction!
+    if entry
+      # The balance follows now, as after a transaction entered by hand, not at the next nightly sync
+      entry.sync_account_later
+      return ChargeResult.new(entry: entry, error: nil)
+    end
+
+    missing_rate = ExchangeRate.currencies_without_rate([ currency ], to: default_account.currency).any?
+    ChargeResult.new(entry: nil, error: missing_rate ? :no_exchange_rate : :already_exists)
+  end
+
+  # "Skip" on Subscriptions (and the skip_subscription_occurrence tool):
+  # advances one period from the current expected date, without a charge.
+  # (Computing from last_occurrence_date could land on the date it already
+  # has.) Returns the date that was skipped.
+  def skip_occurrence!
+    skipped = next_expected_date
+    update!(next_expected_date: calculate_next_expected_date(next_expected_date))
+    skipped
+  end
+
+  # The first billing date of a subscription created or rescheduled by the
+  # user: today or later, in the billing month of a yearly cycle.
+  def first_expected_date(today: Date.current)
+    expected_day = expected_day_of_month || today.day
+
+    if billing_cycle_yearly? && expected_month.present?
+      [ today.year, today.year + 1 ].each do |year|
+        date = begin
+          Date.new(year, expected_month, expected_day)
+        rescue ArgumentError
+          Date.new(year, expected_month, 1).end_of_month
+        end
+        return date if date >= today
+      end
+    end
+
+    this_month = begin
+      Date.new(today.year, today.month, expected_day)
+    rescue ArgumentError
+      today.end_of_month
+    end
+    return this_month if this_month >= today
+
+    next_period = billing_cycle_yearly? ? today.next_year : today.next_month
+    begin
+      Date.new(next_period.year, next_period.month, expected_day)
+    rescue ArgumentError
+      next_period.end_of_month
+    end
+  end
+
   # Generate all due/overdue transactions up to today
   # Returns array of created entries
   def generate_overdue_transactions!

@@ -206,20 +206,16 @@ class SubscriptionsController < ApplicationController
   end
 
   def record_transaction
-    if @subscription.default_account.blank?
-      redirect_to edit_subscription_path(@subscription), alert: t(".no_account")
-      return
-    end
+    result = @subscription.record_charge!
 
-    unless @subscription.actionable?
-      redirect_to subscriptions_path, alert: t(".not_due")
-      return
-    end
-
-    entry = @subscription.generate_transaction!
-    if entry
+    case result.error
+    when nil
       redirect_to subscriptions_path, notice: t(".success")
-    elsif missing_rate_for_default_account?(@subscription)
+    when :no_account
+      redirect_to edit_subscription_path(@subscription), alert: t(".no_account")
+    when :not_due
+      redirect_to subscriptions_path, alert: t(".not_due")
+    when :no_exchange_rate
       redirect_to subscriptions_path, alert: t(".no_exchange_rate", from: @subscription.currency, to: @subscription.default_account.currency)
     else
       redirect_to subscriptions_path, alert: t(".already_exists")
@@ -227,12 +223,7 @@ class SubscriptionsController < ApplicationController
   end
 
   def skip_occurrence
-    # Skip by advancing one period from the current expected date, without
-    # creating a transaction. (Computing from last_occurrence_date could land
-    # on the date it already has.)
-    @subscription.update!(
-      next_expected_date: @subscription.calculate_next_expected_date(@subscription.next_expected_date)
-    )
+    @subscription.skip_occurrence!
     redirect_to subscriptions_path, notice: t(".success")
   end
 
@@ -375,55 +366,7 @@ class SubscriptionsController < ApplicationController
     end
 
     def calculate_next_expected_date(subscription)
-      today = Date.current
-      expected_day = subscription.expected_day_of_month || today.day
-
-      # For yearly subscriptions with expected_month, use specific month
-      if subscription.billing_cycle_yearly? && subscription.expected_month.present?
-        target_year = today.year
-        expected_month = subscription.expected_month
-
-        # Try this year first
-        begin
-          this_year_date = Date.new(target_year, expected_month, expected_day)
-          return this_year_date if this_year_date >= today
-        rescue ArgumentError
-          # Day doesn't exist, use end of month
-          end_of_month = Date.new(target_year, expected_month, 1).end_of_month
-          return end_of_month if end_of_month >= today
-        end
-
-        # Use next year
-        target_year += 1
-        begin
-          Date.new(target_year, expected_month, expected_day)
-        rescue ArgumentError
-          Date.new(target_year, expected_month, 1).end_of_month
-        end
-      else
-        # Monthly subscriptions or yearly without expected_month
-        # Try this month first
-        begin
-          this_month_date = Date.new(today.year, today.month, expected_day)
-          return this_month_date if this_month_date >= today
-        rescue ArgumentError
-          # Day doesn't exist in this month, use end of month
-          return today.end_of_month if today.end_of_month >= today
-        end
-
-        # Use next period based on billing cycle
-        if subscription.billing_cycle_yearly?
-          next_period = today.next_year
-        else
-          next_period = today.next_month
-        end
-
-        begin
-          Date.new(next_period.year, next_period.month, expected_day)
-        rescue ArgumentError
-          next_period.end_of_month
-        end
-      end
+      subscription.first_expected_date
     end
 
     # Totals are computed from the subscriptions already loaded for the page,
@@ -450,12 +393,6 @@ class SubscriptionsController < ApplicationController
       family_currency = Current.family.currency
       ExchangeRate.convert_or_leave_out(amount, to: family_currency, source: "SubscriptionsController#totals", family: Current.family) ||
         Money.new(0, family_currency)
-    end
-
-    # generate_transaction! books nothing when the subscription's currency has no rate at all
-    # into its account's currency
-    def missing_rate_for_default_account?(subscription)
-      ExchangeRate.currencies_without_rate([ subscription.currency ], to: subscription.default_account.currency).any?
     end
 
     # The latest usable rate on or before today for each currency (the nearest-rate rule),
