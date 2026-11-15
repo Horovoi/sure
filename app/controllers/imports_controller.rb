@@ -60,9 +60,16 @@ class ImportsController < ApplicationController
       return
     end
 
+    # A document upload needs its file. When the multipart part is dropped (an empty
+    # iPhone upload) do not fall through to a bogus pending TransactionImport.
+    if file.blank? && document_upload_request?
+      redirect_to new_import_path, alert: t(".missing_upload")
+      return
+    end
+
     if file.present? && Import::ALLOWED_PDF_MIME_TYPES.include?(file.content_type)
       unless valid_pdf_file?(file)
-        redirect_to new_import_path, alert: "Invalid PDF file."
+        redirect_to new_import_path, alert: t(".invalid_pdf")
         return
       end
 
@@ -83,23 +90,26 @@ class ImportsController < ApplicationController
     if file.present?
       if file.size > Import::MAX_CSV_SIZE
         import.destroy
-        redirect_to new_import_path, alert: "File is too large. Maximum size is #{Import::MAX_CSV_SIZE / 1.megabyte}MB."
+        redirect_to new_import_path, alert: t(".file_too_large", max_size: Import::MAX_CSV_SIZE / 1.megabyte)
         return
       end
 
       unless Import::ALLOWED_CSV_MIME_TYPES.include?(file.content_type)
         import.destroy
-        redirect_to new_import_path, alert: "Invalid file type. Please upload a CSV file."
+        redirect_to new_import_path, alert: t(".invalid_csv_type")
         return
       end
 
       # Stream reading is not fully applicable here as we store the raw string in the DB,
       # but we have validated size beforehand to prevent memory exhaustion from massive files.
       import.update!(raw_file_str: file.read)
-      redirect_to import_configuration_path(import), notice: "CSV uploaded successfully."
+      redirect_to import_configuration_path(import), notice: t(".csv_uploaded")
     else
       redirect_to import_upload_path(import)
     end
+  rescue ActionController::ParameterMissing
+    # An empty request body: iOS WebKit can drop a natively submitted multipart form
+    redirect_to new_import_path, alert: t(".missing_upload")
   end
 
   def show
@@ -167,7 +177,7 @@ class ImportsController < ApplicationController
 
     def create_pdf_import(file)
       if file.size > Import::MAX_PDF_SIZE
-        redirect_to new_import_path, alert: "PDF is too large. Maximum size is #{Import::MAX_PDF_SIZE / 1.megabyte}MB."
+        redirect_to new_import_path, alert: t("imports.create.pdf_too_large", max_size: Import::MAX_PDF_SIZE / 1.megabyte)
         return
       end
 
@@ -178,18 +188,18 @@ class ImportsController < ApplicationController
       pdf_import.pdf_file.attach(file)
       pdf_import.process_with_ai_later
 
-      redirect_to import_path(pdf_import), notice: "PDF uploaded. AI processing has started."
+      redirect_to import_path(pdf_import), notice: t("imports.create.pdf_uploaded")
     end
 
     def create_document_import(file)
       adapter = VectorStore.adapter
       unless adapter
-        redirect_to new_import_path, alert: "Document upload is not configured."
+        redirect_to new_import_path, alert: t("imports.create.document_upload_unavailable")
         return
       end
 
       if file.size > Import::MAX_PDF_SIZE
-        redirect_to new_import_path, alert: "File is too large. Maximum size is #{Import::MAX_PDF_SIZE / 1.megabyte}MB."
+        redirect_to new_import_path, alert: t("imports.create.file_too_large", max_size: Import::MAX_PDF_SIZE / 1.megabyte)
         return
       end
 
@@ -198,13 +208,13 @@ class ImportsController < ApplicationController
       supported_extensions = adapter.supported_extensions.map(&:downcase)
 
       unless supported_extensions.include?(ext)
-        redirect_to new_import_path, alert: "Unsupported document file type."
+        redirect_to new_import_path, alert: t("imports.create.unsupported_document_type")
         return
       end
 
       if ext == ".pdf"
         unless valid_pdf_file?(file)
-          redirect_to new_import_path, alert: "Invalid PDF file."
+          redirect_to new_import_path, alert: t("imports.create.invalid_pdf")
           return
         end
 
@@ -218,9 +228,9 @@ class ImportsController < ApplicationController
       )
 
       if family_document
-        redirect_to new_import_path, notice: "Document uploaded successfully."
+        redirect_to new_import_path, notice: t("imports.create.document_uploaded")
       else
-        redirect_to new_import_path, alert: "Document upload failed."
+        redirect_to new_import_path, alert: t("imports.create.document_upload_failed")
       end
     end
 

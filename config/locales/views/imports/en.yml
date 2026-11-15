@@ -73,6 +73,18 @@ en:
         success: CSV uploaded successfully.
   imports:
     not_editable: This import can no longer be changed.
+    create:
+      csv_uploaded: CSV uploaded successfully.
+      document_upload_failed: Document upload failed.
+      document_upload_unavailable: Document upload is not configured.
+      document_uploaded: Document uploaded successfully.
+      file_too_large: File is too large. Maximum size is %{max_size}MB.
+      invalid_csv_type: Invalid file type. Please upload a CSV file.
+      invalid_pdf: Invalid PDF file.
+      missing_upload: We didn't receive your file. Please try uploading it again.
+      pdf_too_large: PDF is too large. Maximum size is %{max_size}MB.
+      pdf_uploaded: PDF uploaded. AI processing has started.
+      unsupported_document_type: Unsupported document file type.
     destroy:
       not_deletable: This import can't be deleted while it is running or still published. Revert it first.
     index:
@@ -197,10 +209,13 @@ en:
         of our import templates like Mint.
       import_accounts: Import accounts
       import_categories: Import categories
+      import_file: Import file
+      import_file_description: Upload PDFs and other searchable documents to the family vault.
       import_mint: Import from Mint
       import_portfolio: Import investments
       import_rules: Import rules
       import_transactions: Import transactions
+      requires_account: Create an account first to unlock this import type.
       resume: Resume %{type}
       sources: Sources
       title: New CSV Import

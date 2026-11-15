@@ -23,6 +23,37 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "turbo-frame#modal"
   end
 
+  test "the document upload on the new page submits through Turbo" do
+    adapter = mock("vector_store_adapter")
+    adapter.stubs(:supported_extensions).returns(%w[.pdf .txt])
+    VectorStore.stubs(:adapter).returns(adapter)
+
+    get new_import_url
+
+    assert_response :success
+    assert_select "form[data-turbo-frame=_top] input[type=file][onchange='this.form.requestSubmit()']", count: 1
+    assert_select "input[type=file][onchange='this.form.submit()']", count: 0
+    assert_includes response.body, I18n.t("imports.new.import_file")
+  end
+
+  test "create with an empty request body redirects back with an alert" do
+    assert_no_difference "Import.count" do
+      post imports_url
+    end
+
+    assert_redirected_to new_import_url
+    assert_equal I18n.t("imports.create.missing_upload"), flash[:alert]
+  end
+
+  test "a DocumentImport without its file creates no import and redirects with an alert" do
+    assert_no_difference "Import.count" do
+      post imports_url, params: { import: { type: "DocumentImport" } }
+    end
+
+    assert_redirected_to new_import_url
+    assert_equal I18n.t("imports.create.missing_upload"), flash[:alert]
+  end
+
   test "creates import" do
     assert_difference "Import.count", 1 do
       post imports_url, params: {
