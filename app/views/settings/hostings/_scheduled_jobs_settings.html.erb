@@ -44,7 +44,7 @@
         <span class="text-secondary"><%= t(".jobs.#{job_key}") %>:</span>
         <span class="font-medium"><%= time %></span>
         <% if ScheduledJobsManager.has_custom_times? && Setting.public_send("#{job_key}_time").present? %>
-          <span class="text-xs text-warning-600 bg-warning-50 px-1.5 py-0.5 rounded"><%= t(".custom") %></span>
+          <span class="text-xs text-warning bg-warning/10 px-1.5 py-0.5 rounded"><%= t(".custom") %></span>
         <% end %>
       </div>
     <% end %>
@@ -57,10 +57,8 @@
       <%= t(".advanced_settings") %>
     </summary>
     <div class="px-4 pb-4 space-y-4">
-      <div class="bg-warning-50 border border-warning-200 rounded-lg p-3 text-sm text-warning-800">
-        <%= icon "alert-triangle", class: "inline w-4 h-4" %>
-        <%= t(".avoid_same_time_warning") %>
-      </div>
+      <%# DS::Alert: the warning-50/200/800 classes this used are not in the design system %>
+      <%= render DS::Alert.new(variant: :warning, message: t(".avoid_same_time_warning")) %>
 
       <% ScheduledJobsManager::CONFIGURABLE_JOBS.keys.each do |job_key| %>
         <div class="flex items-center justify-between gap-4">
@@ -81,10 +79,11 @@
       <% end %>
 
       <% if ScheduledJobsManager.has_custom_times? %>
-        <%= button_to t(".reset_to_defaults"),
-                      reset_scheduled_jobs_settings_hosting_path,
-                      method: :post,
-                      class: "btn btn--ghost text-sm" %>
+        <%= render DS::Button.new(text: t(".reset_to_defaults"),
+                                  href: reset_scheduled_jobs_settings_hosting_path,
+                                  method: :post,
+                                  variant: :ghost,
+                                  size: :sm) %>
       <% end %>
     </div>
   </details>

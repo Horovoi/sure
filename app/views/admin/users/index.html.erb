@@ -63,9 +63,7 @@
         <p class="text-secondary"><%= t(".role_descriptions.admin") %></p>
       </div>
       <div class="flex items-start gap-3">
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 shrink-0">
-          <%= t(".roles.super_admin") %>
-        </span>
+        <%= render DS::Pill.new(label: t(".roles.super_admin"), tone: :success, marker: false) %>
         <p class="text-secondary"><%= t(".role_descriptions.super_admin") %></p>
       </div>
     </div>

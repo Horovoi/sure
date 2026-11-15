@@ -39,10 +39,10 @@
     </div>
 
     <% if ENV["EXCHANGE_RATE_PROVIDER"].present? || ENV["SECURITIES_PROVIDER"].present? %>
-      <div class="mt-4 bg-warning-50 border border-warning-200 rounded-lg p-3">
+      <div class="mt-4 bg-warning/10 border border-warning/20 rounded-lg p-3">
         <div class="flex items-start gap-2">
-          <%= icon("alert-circle", class: "w-5 h-5 text-warning-600 mt-0.5 shrink-0") %>
-          <p class="text-sm text-warning-800">
+          <%= icon("alert-circle", class: "w-5 h-5 text-warning mt-0.5 shrink-0") %>
+          <p class="text-sm text-primary">
             <%= t(".env_configured_message") %>
           </p>
         </div>
