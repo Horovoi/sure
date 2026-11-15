@@ -182,6 +182,31 @@ Rails.application.routes.draw do
     resources :budget_categories, only: %i[index show update]
   end
 
+  # --- Savings goals (w2-goals): goals, their lifecycle, spending and pledges ---
+  resources :goals do
+    member do
+      patch :pause
+      patch :resume
+      patch :complete
+      patch :archive
+      patch :unarchive
+      patch :reopen
+      # Spending from a goal (goal-spending). Two actions on one path, not one action
+      # branching on the verb: HEAD routes like GET but is not request.get?. A goal can be
+      # spent from more than once, so the write is a POST.
+      get :consume
+      post :consume, action: :record_consumption, as: nil
+    end
+
+    # Pledges (goal-pledges): delete cancels the pledge, renew extends its window
+    resources :pledges, only: %i[new create destroy], controller: "goal_pledges" do
+      member do
+        patch :renew
+      end
+    end
+  end
+  # --- end savings goals ---
+
   resources :family_merchants, only: %i[index new create edit update destroy] do
     collection do
       get :merge

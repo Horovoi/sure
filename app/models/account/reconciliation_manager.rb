@@ -9,9 +9,16 @@ class Account::ReconciliationManager
   def reconcile_balance(balance:, date: Date.current, dry_run: false, existing_valuation_entry: nil)
     old_balance_components = old_balance_components(reconciliation_date: date, existing_valuation_entry: existing_valuation_entry)
     prepared_valuation = prepare_reconciliation(balance, date, existing_valuation_entry)
+    # Read before save!: the amount this valuation already had (nil for a new one)
+    prior_valuation_amount = prepared_valuation.amount_in_database
 
     unless dry_run
       prepared_valuation.save!
+      # goal-pledges: a balance that rose may keep an open manual_save pledge
+      GoalPledge::Reconciler.new(
+        prepared_valuation,
+        valuation_delta: valuation_contribution(prepared_valuation, prior_valuation_amount, old_balance_components)
+      ).run
     end
 
     ReconciliationResult.new(
@@ -40,6 +47,15 @@ class Account::ReconciliationManager
       :error_message,
       keyword_init: true
     )
+
+    # How much this reconciliation moved the balance: what a manual_save GoalPledge
+    # matches, not the full new balance. The prior balance is, in order: the valuation's
+    # own amount before this save (immune to a sync still running), the balances row for
+    # the date, or 0 for an account with no balance yet.
+    def valuation_contribution(valuation, prior_valuation_amount, old_balance_components)
+      prior_balance = prior_valuation_amount || old_balance_components[:balance] || 0
+      valuation.amount.to_d - prior_balance.to_d
+    end
 
     def prepare_reconciliation(balance, date, existing_valuation)
       # In case of conflict, where existing valuation is not passed as arg, but one exists.

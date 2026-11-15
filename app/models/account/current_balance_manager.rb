@@ -115,6 +115,10 @@ class Account::CurrentBalanceManager
 
       result = opening_balance_manager.set_opening_balance(balance: account.opening_anchor_balance + delta)
 
+      # goal-pledges: the balance moved today by delta, though the entry written is the
+      # opening anchor; an open manual_save pledge may be kept by it
+      GoalPledge::Reconciler.for_balance_change(account: account, delta: delta, date: Date.current).run if result.success?
+
       # Normalize to expected result format
       Result.new(success?: result.success?, changes_made?: true, error: result.error)
     end

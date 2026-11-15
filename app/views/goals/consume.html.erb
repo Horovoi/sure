@@ -1,0 +1,47 @@
+<%# The "I used some of this money" dialog, rendered into the modal frame from the
+    goal page menu or its lifecycle panel. %>
+<%= render DS::Dialog.new(width: "sm") do |dialog| %>
+  <% dialog.with_header(title: t(".title"), subtitle: t(".subtitle", goal: @goal.name)) %>
+
+  <% dialog.with_body do %>
+    <%= styled_form_with url: consume_goal_path(@goal), method: :post, class: "space-y-4" do |f| %>
+      <div class="space-y-1.5">
+        <%= f.money_field :amount,
+                          label: t(".amount_label"),
+                          currency_value_override: @goal.currency,
+                          hide_currency: true,
+                          min: Money::Currency.new(@goal.currency).step,
+                          max: (@goal.target_amount.to_d - @goal.consumed_amount.to_d).to_f,
+                          required: true,
+                          autofocus: true,
+                          input_class: "privacy-sensitive" %>
+        <p class="text-xs text-secondary privacy-sensitive">
+          <%= t(".amount_hint", saved: @goal.current_balance_money.format(precision: 0)) %>
+        </p>
+        <% if @consumption_accounts.any? { |account| account.currency != @goal.currency } %>
+          <p class="text-xs text-secondary"><%= t(".goal_currency_hint", currency: @goal.currency) %></p>
+        <% end %>
+      </div>
+
+      <%# Asked only when there is a choice: with one link the model takes it %>
+      <% if @consumption_accounts.size > 1 %>
+        <%= render DS::Select.new(
+              form: f,
+              method: :account_id,
+              items: @consumption_accounts.map { |account| { label: goal_account_label(account, @goal), value: account.id } },
+              label: t(".account_label")
+            ) %>
+      <% end %>
+
+      <p class="text-xs text-secondary"><%= t(".earmark_note") %></p>
+
+      <div class="flex justify-end gap-2 pt-1">
+        <%= render DS::Button.new(text: t(".cancel"),
+                                  variant: "secondary",
+                                  type: "button",
+                                  data: { action: "DS--dialog#close" }) %>
+        <%= render DS::Button.new(text: t(".submit"), type: "submit") %>
+      </div>
+    <% end %>
+  <% end %>
+<% end %>

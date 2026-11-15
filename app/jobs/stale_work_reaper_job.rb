@@ -3,7 +3,8 @@
 # Scheduled hourly (config/schedule.yml).
 #
 # Each model owns its own definition of "stale" (a scope) and its terminal transition;
-# this job only drives them. Syncs are handled first because they also finalize parents.
+# this job only drives them. A rule marked quiet: true is counted but not written to the
+# debug log, for work whose normal end is to time out. Syncs are handled first because they also finalize parents.
 class StaleWorkReaperJob < ApplicationJob
   queue_as :scheduled
 
@@ -39,6 +40,14 @@ class StaleWorkReaperJob < ApplicationJob
     "Eval::Run" => {
       stale: -> { Eval::Run.stale },
       reap: ->(run) { run.fail! if run.may_fail? }
+    },
+    # goal-pledges: a pledge nothing kept within its window expires. In place of
+    # upstream's 15-minute sweep job; hourly is soon enough for a 7-day window. Quiet:
+    # an expiry is the normal end of a pledge, not lost work for the debug log.
+    "GoalPledge" => {
+      stale: -> { GoalPledge.stale },
+      reap: ->(pledge) { pledge.expire! if pledge.may_expire? },
+      quiet: true
     }
   }.freeze
 
@@ -68,7 +77,7 @@ class StaleWorkReaperJob < ApplicationJob
         end
         if reaped
           count += 1
-          capture_reap(name, record, before)
+          capture_reap(name, record, before) unless rule[:quiet]
         end
       rescue AASM::InvalidTransition
         # Its job finished between the query and the transition: nothing to do

@@ -34,6 +34,16 @@ class Transaction < ApplicationRecord
   # stored market rate.
   validate :exchange_rate_must_be_positive
 
+  # --- Goal pledges (w2-goals goal-pledges) ---
+  # extra["goal"] holds pledge_id (the pledge this inflow kept) and consumed_goal_id
+  # (the goal this outflow was spent from), beside the other extra keys.
+  # A manual inflow (a deposit, a transfer in) may keep an open pledge. After commit,
+  # so the entry is there and a failure cannot roll the transaction back.
+  after_create_commit :keep_goal_pledge
+  # The pledge it kept goes back to open (or to expired once its window has passed)
+  before_destroy :release_goal_pledge
+  # --- end goal pledges ---
+
   enum :kind, {
     standard: "standard", # A regular transaction, included in budget analytics
     funds_movement: "funds_movement", # Movement of funds between accounts, excluded from budget analytics
@@ -390,6 +400,19 @@ class Transaction < ApplicationRecord
   end
 
   private
+    # --- Goal pledges (w2-goals goal-pledges) ---
+    def keep_goal_pledge
+      return unless entry && entry.amount.to_d.negative?
+      return unless GoalPledge::Reconciler.pending_on?(entry.account_id)
+
+      GoalPledge::Reconciler.new(entry).run
+    end
+
+    def release_goal_pledge
+      pledge = GoalPledge.find_by(matched_transaction_id: id)
+      pledge.release! if pledge&.may_release?
+    end
+    # --- end goal pledges ---
 
     # Copies what the generated charge carries onto this real transaction and
     # stores the generated charge's values, with what was carried over so a

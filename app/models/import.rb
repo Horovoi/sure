@@ -55,6 +55,14 @@ class Import < ApplicationRecord
   # How long an import may sit in an in-progress state before the stale work reaper
   # moves it to its failure state with #mark_stale!.
   STALE_AFTER = 15.minutes
+
+  # Run in order after a publish commits, each with the import. One line per feature
+  # (hotspot rule: the subscription reconciler and the pledge resolver each add one).
+  # A failing hook is logged and reported; the import stays published.
+  AFTER_PUBLISH_HOOKS = [
+    ->(import) { RecurringTransaction.reconcile_charges_for(import.family) }, # subscription-reconciler: real charges replace generated ones
+    ->(import) { GoalPledge::Reconciler.reconcile_import(import) } # goal-pledges: rows bulk-inserted without callbacks
+  ].freeze
   IN_PROGRESS_STATES = %w[processing importing reverting].freeze
 
   # pending           - being configured (CSV wizard), or a PDF ready for review
@@ -194,6 +202,15 @@ class Import < ApplicationRecord
     family.sync_later
   rescue => error
     record_failure(:fail_import, error)
+  end
+
+  def run_after_publish_hooks
+    AFTER_PUBLISH_HOOKS.each do |hook|
+      hook.call(self)
+    rescue => error
+      Rails.logger.error("Import #{id} after-publish hook failed: #{error.class}: #{error.message}")
+      Sentry.capture_exception(error) if defined?(Sentry)
+    end
   end
 
   def revert_later
@@ -467,12 +484,6 @@ class Import < ApplicationRecord
 
     def refresh_rows_count!
       update_column(:rows_count, rows.count)
-    end
-
-    # Work that follows a published import, after its entries are committed. Each
-    # feature adds one line.
-    def run_after_publish_hooks
-      RecurringTransaction.reconcile_charges_for(family)
     end
 
     # Puts back the generated subscription charges that this import's own entries
