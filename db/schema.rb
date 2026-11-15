@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_16_100004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -931,6 +931,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
     t.index ["status"], name: "index_lunchflow_items_on_status"
   end
 
+  create_table "mcc_category_mappings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "group_key", null: false
+    t.uuid "category_id"
+    t.boolean "disabled", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category_id"], name: "index_mcc_category_mappings_on_category_id"
+    t.index ["family_id", "group_key"], name: "index_mcc_category_mappings_on_family_id_and_group_key", unique: true
+  end
+
   create_table "merchants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "name", null: false
     t.string "color"
@@ -1539,6 +1550,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
   add_foreign_key "llm_usages", "families"
   add_foreign_key "lunchflow_accounts", "lunchflow_items"
   add_foreign_key "lunchflow_items", "families"
+  add_foreign_key "mcc_category_mappings", "categories", on_delete: :nullify
+  add_foreign_key "mcc_category_mappings", "families", on_delete: :cascade
   add_foreign_key "merchants", "families"
   add_foreign_key "messages", "chats"
   add_foreign_key "mobile_devices", "users"
