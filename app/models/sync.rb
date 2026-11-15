@@ -314,8 +314,11 @@ class Sync < ApplicationRecord
       end
     end
 
+    # A family destroyed with its syncs (User#purge) commits them with it: there is
+    # nothing left to touch, and touch raises on a destroyed record
     def update_family_sync_timestamp
-      family&.touch(:latest_sync_activity_at)
+      sync_family = family
+      sync_family.touch(:latest_sync_activity_at) if sync_family&.persisted?
     end
 
     def family

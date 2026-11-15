@@ -432,7 +432,8 @@ class Rule::ConditionTest < ActiveSupport::TestCase
     @family.tags.create!(name: "Alpha")
     rule = @family.rules.build(resource_type: "transaction")
 
-    assert_equal [ "Alpha", "Zeta" ], rule.registry.get_filter!("transaction_tag").options.map(&:first)
+    # "Test" is the empty family's fixture tag; another family's tags are not offered
+    assert_equal [ "Alpha", "Test", "Zeta" ], rule.registry.get_filter!("transaction_tag").options.map(&:first)
   end
 
   test "operator labels come from the locale" do

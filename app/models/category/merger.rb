@@ -165,7 +165,7 @@ class Category::Merger
       return if mismatched.empty?
 
       raise ClassificationMismatchError, I18n.t(
-        "category.merger.errors.classification_mismatch",
+        "models.category.merger.errors.classification_mismatch",
         names: mismatched.map(&:name).to_sentence,
         target: target_category.name
       )

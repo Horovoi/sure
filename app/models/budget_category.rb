@@ -150,6 +150,10 @@ class BudgetCategory < ApplicationRecord
       if subcategory?
         update!(budgeted_spending: new_amount)
         sync_parent_budgeted_spending!(previous_budgeted_spending: previous_budgeted_spending)
+      elsif new_amount.negative?
+        # Not raised to the subcategories' sum: a negative amount is refused by the
+        # validation, as it is for a subcategory
+        update!(budgeted_spending: new_amount)
       else
         update!(budgeted_spending: [ new_amount, subcategories_budgeted_total ].max)
       end

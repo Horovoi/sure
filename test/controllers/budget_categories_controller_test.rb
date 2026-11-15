@@ -21,7 +21,8 @@ class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "the categories step of a month outside the budget range is not found" do
-    get budget_budget_categories_path(Budget.date_to_param(3.months.from_now, family: @family))
+    # Budgets reach two years ahead (future-budgets), so the month is past that
+    get budget_budget_categories_path(Budget.date_to_param(3.years.from_now, family: @family))
 
     assert_response :not_found
   end

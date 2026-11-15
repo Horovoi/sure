@@ -23,7 +23,7 @@ class Family::AutoCategorizeTransactionsTest < ActiveSupport::TestCase
       assert_equal 1, @family.auto_categorize_transactions([ txn.id ])
     end
     assert_equal @coffee, txn.reload.category
-    assert_equal "bayes", DataEnrichment.find_by(enrichable: txn, attribute_name: "category_id").source
+    assert_equal "bayes", DataEnrichment.find_by!(enrichable: txn, attribute_name: "category_id").source
   end
 
   test "Bayes runs before the LLM, which gets only the rest" do

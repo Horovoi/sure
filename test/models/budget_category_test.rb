@@ -513,6 +513,15 @@ class BudgetCategoryTest < ActiveSupport::TestCase
     assert_equal 500, @parent_budget_category.reload.budgeted_spending
   end
 
+  # The raise to the subcategories' sum must not turn a negative amount into a valid one
+  test "a negative amount on a parent is refused, not raised to the subcategories' sum" do
+    assert_raises(ActiveRecord::RecordInvalid) do
+      @parent_budget_category.update_budgeted_spending!(-10)
+    end
+
+    assert_equal 1000, @parent_budget_category.reload.budgeted_spending
+  end
+
   test "a parent set above its subcategories keeps the amount" do
     @parent_budget_category.update_budgeted_spending!(1500)
 

@@ -103,7 +103,10 @@ class GoalPledge::ReconcilerTest < ActiveSupport::TestCase
 
   test "a reconciliation keeps a manual_save pledge by the balance change, not the full balance" do
     assert_equal "manual_save", @pledge.kind
-    @account.balances.create!(date: Date.current, balance: 2_000, cash_balance: 2_000, currency: "USD")
+    # end_balance is a generated column (start + flows + adjustments), so the prior
+    # balance of 2,000 goes in start_cash_balance; `balance` alone leaves it at 0
+    @account.balances.create!(date: Date.current, balance: 2_000, cash_balance: 2_000,
+                              start_cash_balance: 2_000, currency: "USD")
 
     result = Account::ReconciliationManager.new(@account).reconcile_balance(balance: 2_200, date: Date.current)
 

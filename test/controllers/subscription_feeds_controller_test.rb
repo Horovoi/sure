@@ -146,6 +146,7 @@ class SubscriptionFeedsControllerTest < ActionDispatch::IntegrationTest
 
     get subscriptions_feed_url(token: @token)
 
-    assert_includes unfolded(response.body), "SUMMARY:Salary: +$1,000.00"
+    # The thousands comma is escaped in iCal text (RFC 5545 3.3.11)
+    assert_includes unfolded(response.body), "SUMMARY:Salary: +$1\\,000.00"
   end
 end

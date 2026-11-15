@@ -1280,6 +1280,8 @@ class GoalTest < ActiveSupport::TestCase
   end
 
   test "destroying the family deletes its goals" do
+    # The family's Plaid item would call Plaid on destroy (test_helper configures it)
+    Provider::Registry.stubs(:plaid_provider_for_region).returns(nil)
     goal_ids = @family.goals.pluck(:id)
     assert_not_empty goal_ids
 
@@ -1342,9 +1344,10 @@ class GoalTest < ActiveSupport::TestCase
       goal = @family.goals.create!(name: "Trip", target_amount: 5_000, currency: @family.currency) do |g|
         g.goal_accounts.build(account: account, allocated_amount: 5_000)
       end
-      # goal-spending records this through Goal#consume!; the column is here already
-      goal.update_columns(consumed_amount: 2_000)
-      goal
+      # 5,000 saved, 2,000 of it since spent on the thing itself: consume! records the
+      # spend and gives up the same amount of the earmark, as a real spend does
+      goal.consume!(2_000)
+      goal.reload
     end
 
     # Its own account, so the shared-pool haircut does not make the frozen
