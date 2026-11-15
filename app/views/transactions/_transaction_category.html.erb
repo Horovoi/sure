@@ -1,13 +1,13 @@
 <%# locals: (transaction:, variant:) %>
 
-<div id="<%= dom_id(transaction, "category_menu_#{variant}") %>">
+<div id="<%= dom_id(transaction, "category_menu_#{variant}") %>" class="min-w-0 max-w-full">
   <% if transaction.category_editable? %>
     <%= render "categories/menu", transaction: transaction %>
   <% else %>
     <% category = read_only_category(transaction) %>
     <% set_on_outflow = transaction.category_set_on_transfer_outflow? %>
     <div class="hidden lg:flex items-center gap-1 min-w-0">
-      <div class="<%= "opacity-60 cursor-not-allowed" if set_on_outflow %>">
+      <div class="min-w-0 <%= "opacity-60 cursor-not-allowed" if set_on_outflow %>">
         <%= render "categories/badge", category: category %>
       </div>
       <% if set_on_outflow %>

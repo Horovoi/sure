@@ -1,8 +1,9 @@
 <%# locals: (transaction:) %>
 
 <%= render DS::Popover.new(variant: "button") do |popover| %>
-  <% popover.with_button do %>
-    <div class="hidden lg:flex">
+  <%# max-w-full: a button sizes to its content, so without it a long badge ran past its column %>
+  <% popover.with_button(class: "max-w-full text-left") do %>
+    <div class="hidden lg:flex min-w-0">
       <%= render partial: "categories/badge", locals: { category: transaction.category } %>
     </div>
     <div class="flex lg:hidden">

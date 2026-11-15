@@ -131,6 +131,8 @@ en:
       potential_duplicate_tooltip: This may be a duplicate of another transaction
       review_recommended: Review
       review_recommended_tooltip: Large amount difference — review recommended to check if this is a duplicate
+      one_time_income_tooltip: One-time income (excluded from averages)
+      one_time_expense_tooltip: One-time expense (excluded from averages)
     transaction_category:
       set_on_outflow: The category belongs to the outgoing side of this transfer and can
         only be changed there
@@ -303,6 +305,8 @@ en:
           placeholder: Filter merchants
         tag_filter:
           placeholder: Filter tags
+      filters_bar:
+        clear_all: Clear all
       menu:
         account_filter: Account
         amount_filter: Amount

@@ -4,7 +4,7 @@
 
 <%= turbo_frame_tag dom_id(entry) do %>
   <%= turbo_frame_tag dom_id(transaction) do %>
-    <div class="flex lg:grid lg:grid-cols-12 items-center text-primary text-sm font-medium p-3 lg:p-4 <%= entry.excluded ? "opacity-50 text-gray-400" : "" %>">
+    <div class="flex lg:grid lg:grid-cols-12 items-center text-primary text-sm font-medium p-3 lg:p-4 <%= entry.excluded ? "opacity-50 text-subdued" : "" %>">
 
       <div class="pr-4 lg:pr-10 flex items-center gap-3 lg:gap-4 col-span-8 min-w-0">
         <%= check_box_tag dom_id(entry, "selection"),
@@ -82,7 +82,7 @@
                   <div class="flex items-center gap-1 flex-shrink-0">
                     <%= render "transactions/reconcile_badge", entry: entry, compact: true %><%# w3-toolstrx %>
                     <% if transaction.one_time? %>
-                      <span class="text-orange-500" title="One-time <%= entry.amount.negative? ? "income" : "expense" %> (excluded from averages)">
+                      <span class="text-warning" title="<%= t(entry.amount.negative? ? "transactions.transaction.one_time_income_tooltip" : "transactions.transaction.one_time_expense_tooltip") %>">
                         <%= icon "asterisk", size: "sm", color: "current" %>
                       </span>
                     <% end %>
@@ -149,7 +149,7 @@
         <%= render "tags/menu", entry: entry, transaction: transaction %>
       </div>
 
-      <div class="hidden md:flex items-center gap-1 col-span-2">
+      <div class="hidden md:flex items-center gap-1 col-span-2 min-w-0">
         <% if entry.account.investment? && !transaction.transfer? %>
           <%# For investment accounts, show activity label instead of category %>
           <%= render "investment_activity/quick_edit_badge", entry: entry, entryable: transaction %>
