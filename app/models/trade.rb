@@ -9,6 +9,14 @@ class Trade < ApplicationRecord
   # Use the same activity labels as Transaction
   ACTIVITY_LABELS = Transaction::ACTIVITY_LABELS.dup.freeze
 
+  # The labels that mean the asset went to another account you own, not that it was
+  # bought or sold. Not Transaction::INTERNAL_MOVEMENT_LABELS: that list also holds
+  # "Exchange", which on a security can be a security-for-security exchange that
+  # disposes of an appreciated asset. A movement listed as a sale is visible and can be
+  # corrected; a realized gain that silently disappears cannot, so only the labels that
+  # clearly keep ownership are here.
+  INTERNAL_MOVEMENT_LABELS = [ "Transfer", "Sweep In", "Sweep Out" ].freeze
+
   validates :qty, presence: true
   validates :price, :currency, presence: true
   validates :investment_activity_label, inclusion: { in: ACTIVITY_LABELS }, allow_nil: true
@@ -20,6 +28,12 @@ class Trade < ApplicationRecord
 
   def sell?
     qty.negative?
+  end
+
+  # A negative quantity that left for another account you own. It has the same shape as
+  # a sale; only the label tells them apart.
+  def internal_movement?
+    INTERNAL_MOVEMENT_LABELS.include?(investment_activity_label)
   end
 
   class << self
@@ -145,6 +159,9 @@ class Trade < ApplicationRecord
 
     def calculate_realized_gain_loss
       return nil unless sell?
+      # Moving an asset to another account you own realizes nothing. Without this the
+      # cost basis is compared with the day's price and the difference is booked as a gain.
+      return nil if internal_movement?
 
       holding = basis_holding
 

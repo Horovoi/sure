@@ -100,6 +100,38 @@ class TradeTest < ActiveSupport::TestCase
     assert_not sale.realized_gain_unconvertible?
   end
 
+  test "a transfer out realizes nothing, however it is priced" do
+    account, security = position_with_known_cost_basis
+
+    moved = build_negative_trade(account, security, label: "Transfer")
+    sold = build_negative_trade(account, security, label: "Sell")
+
+    assert_nil moved.realized_gain_loss
+    assert_not_nil sold.realized_gain_loss
+  end
+
+  test "every internal movement label realizes nothing" do
+    account, security = position_with_known_cost_basis
+
+    Trade::INTERNAL_MOVEMENT_LABELS.each do |label|
+      assert_nil build_negative_trade(account, security, label: label).realized_gain_loss, "#{label} should not realize a gain"
+    end
+  end
+
+  # On a security "Exchange" can be a security-for-security exchange that disposes of an
+  # appreciated asset, so it stays a sale
+  test "an exchange is not an internal movement on a trade" do
+    assert_not Trade.new(investment_activity_label: "Exchange").internal_movement?
+    assert_includes Transaction::INTERNAL_MOVEMENT_LABELS, "Exchange"
+    assert_not_includes Trade::INTERNAL_MOVEMENT_LABELS, "Exchange"
+  end
+
+  test "transfer and sweep labels are internal movements" do
+    [ "Transfer", "Sweep In", "Sweep Out" ].each do |label|
+      assert Trade.new(investment_activity_label: label).internal_movement?, label
+    end
+  end
+
   private
     def usd_sale_from_uah_position(sale_date:, sale_currency: "USD", sale_price: 110)
       account = families(:empty).accounts.create!(name: "UAH Brokerage", balance: 0, currency: "UAH", accountable: Investment.new)
@@ -110,5 +142,22 @@ class TradeTest < ActiveSupport::TestCase
       trade = Trade.new(security: security, qty: -2, price: sale_price, currency: sale_currency, investment_activity_label: "Sell")
       account.entries.create!(name: "Sell", date: sale_date, amount: -2 * sale_price, currency: sale_currency, entryable: trade)
       trade
+    end
+
+    # A position with a known cost basis: without one realized_gain_loss is nil anyway
+    def position_with_known_cost_basis
+      account = families(:empty).accounts.create!(name: "Wallet", balance: 100, currency: "USD", accountable: Investment.new)
+      security = Security.create!(ticker: "MOVE#{SecureRandom.hex(3)}", name: "Movable")
+      Holding.create!(account: account, security: security, date: 10.days.ago.to_date,
+                      qty: 100, price: 2, amount: 200, currency: "USD", cost_basis: 1)
+
+      [ account, security ]
+    end
+
+    def build_negative_trade(account, security, label:)
+      account.entries.create!(
+        date: 3.days.ago.to_date, name: "out #{label}", amount: 0, currency: "USD",
+        entryable: Trade.new(security: security, qty: -40, price: 3, currency: "USD", investment_activity_label: label)
+      ).entryable
     end
 end
