@@ -15,11 +15,3 @@ de:
       minimum_payment_placeholder: '100'
     new:
       title: Kreditkartendaten eingeben
-    overview:
-      amount_owed: Geschuldeter Betrag
-      annual_fee: Jahresgebühr
-      apr: Effektiver Jahreszins
-      available_credit: Verfügbarer Kreditrahmen
-      expiration_date: Ablaufdatum
-      minimum_payment: Mindestzahlung
-      unknown: Unbekannt

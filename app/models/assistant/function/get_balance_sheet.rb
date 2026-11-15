@@ -116,11 +116,15 @@ class Assistant::Function::GetBalanceSheet < Assistant::Function
     def historical_data(period, interval, classification: nil)
       return [] if period.start_date == Date.current
 
-      scope = family.accounts.visible
+      # The same accounts as the dashboard net worth chart: active ones, and disabled
+      # ones for the days before they were disabled. Drafts are not counted yet.
+      scope = family.accounts
       scope = scope.where(classification: classification) if classification.present?
+      historical = BalanceSheet::HistoricalAccountScope.new(family, accounts: scope)
 
       builder = Balance::ChartSeriesBuilder.new(
-        account_ids: scope.pluck(:id),
+        account_ids: historical.account_ids,
+        account_active_until_dates: historical.active_until_dates,
         currency: family.currency,
         period: period,
         favorable_direction: "up",

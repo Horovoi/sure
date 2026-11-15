@@ -37,6 +37,21 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       find("a", text: "Sign in")
     end
 
+    # Drags horizontally across the full width of `element` (a chart brush
+    # overlay). Driven off the element's own rendered width, since chart widths
+    # vary with viewport and font metrics; a start point outside the element
+    # never begins the gesture.
+    def drag_across(element, inset: 20)
+      width = element.native.rect.width
+
+      page.driver.browser.action
+        .move_to(element.native, -(width / 2 - inset).round, 0)
+        .click_and_hold
+        .move_by((width - (2 * inset)).round, 0)
+        .release
+        .perform
+    end
+
     def within_testid(testid)
       within "[data-testid='#{testid}']" do
         yield

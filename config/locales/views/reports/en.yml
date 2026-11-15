@@ -15,14 +15,23 @@ en:
         six_months: 6 Months
         custom: Custom
       toggles:
-        current: Current
-        last: Last
         calendar: Calendar
         fiscal: Fiscal
       date_range:
         from: From
         to: To
       showing_period: "Showing data from %{start} to %{end}"
+      insights_for: "Financial insights for %{start} – %{end}"
+      period_nav:
+        previous: Previous period
+        next: Next period
+        current: Current
+        shortcut_hint: "%{action} (%{key})"
+        label:
+          quarterly: "Q%{quarter} %{year}"
+          half_year: "H%{half} %{year}"
+          year_to_date: "%{year} to date"
+          custom: "%{start} – %{end}"
     invalid_date_range: "End date cannot be before start date. The dates have been swapped."
     summary:
       total_income: Total Income
@@ -136,6 +145,9 @@ en:
       net_worth_total: Net Worth
       no_assets: No assets
       no_liabilities: No liabilities
+      chart:
+        title: Net worth over time
+        aria_label: Monthly net worth chart. Hover a month to see each account group.
     treemap:
       txn: txn
       txns: txns

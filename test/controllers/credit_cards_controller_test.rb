@@ -2,6 +2,7 @@ require "test_helper"
 
 class CreditCardsControllerTest < ActionDispatch::IntegrationTest
   include AccountableResourceInterfaceTest
+  include BalanceTestHelper
 
   setup do
     sign_in @user = users(:family_admin)
@@ -91,5 +92,74 @@ class CreditCardsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to @account
     assert_equal "Credit card account updated", flash[:notice]
     assert_enqueued_with(job: SyncJob)
+  end
+  test "creates with the statement cycle days" do
+    post credit_cards_path, params: {
+      account: {
+        name: "Cycle Card",
+        balance: 500,
+        currency: "USD",
+        accountable_type: "CreditCard",
+        accountable_attributes: { statement_close_day: 31, due_day: 20 }
+      }
+    }
+
+    card = Account.order(:created_at).last.accountable
+    assert_equal 31, card.statement_close_day
+    assert_equal 20, card.due_day
+  end
+
+  test "updates and clears the statement cycle days" do
+    patch credit_card_path(@account), params: {
+      account: { accountable_attributes: { id: @account.accountable_id, statement_close_day: 25, due_day: 5 } }
+    }
+
+    assert_redirected_to @account
+    assert_equal [ 25, 5 ], [ @account.accountable.reload.statement_close_day, @account.accountable.due_day ]
+
+    patch credit_card_path(@account), params: {
+      account: { accountable_attributes: { id: @account.accountable_id, statement_close_day: "", due_day: "" } }
+    }
+
+    assert_equal [ nil, nil ], [ @account.accountable.reload.statement_close_day, @account.accountable.due_day ]
+  end
+
+  test "the edit form has the statement cycle days" do
+    get edit_credit_card_path(@account)
+
+    assert_response :ok
+    assert_select "select[name='account[accountable_attributes][statement_close_day]'] option[value='31']", text: "31st"
+    assert_select "select[name='account[accountable_attributes][due_day]'] option[value='1']", text: "1st"
+  end
+
+  test "the overview tab shows the statement figures" do
+    travel_to Time.utc(2026, 10, 16, 12) do
+      @account.accountable.update!(statement_close_day: 25, due_day: 5, apr: 18, minimum_payment: 100)
+      create_balance(account: @account, date: Date.new(2026, 9, 1), balance: 1_000)
+      create_balance(account: @account, date: Date.new(2026, 10, 1), balance: 1_200)
+      @account.entries.create!(name: "Groceries", date: Date.new(2026, 10, 1), amount: 200, currency: "USD", entryable: Transaction.new)
+
+      get credit_card_path(@account)
+
+      assert_response :ok
+      assert_select "[role='tab'], button, a", text: I18n.t("UI.account_page.tabs.overview")
+      assert_select "[data-testid='credit-card-statement-balance']" do
+        assert_select "h4", text: I18n.t("credit_cards.tabs.overview.statement_balance")
+        assert_select "p", text: /\$1,000\.00/
+        assert_select "span", text: I18n.t("credit_cards.tabs.overview.due_on", date: I18n.l(Date.new(2026, 10, 5), format: :long))
+        assert_select "span", text: I18n.t("credit_cards.due.overdue", count: 11)
+      end
+      assert_select "[data-testid='credit-card-since-last-statement'] p", text: /\$200\.00/
+      assert_select "[data-testid='credit-card-apr'] span", text: I18n.t("credit_cards.tabs.overview.per_month", amount: "$15.00")
+    end
+  end
+
+  test "the overview tab asks for the cycle when none is set" do
+    @account.accountable.update!(statement_close_day: nil, due_day: nil)
+
+    get credit_card_path(@account)
+
+    assert_response :ok
+    assert_match I18n.t("credit_cards.tabs.overview.no_cycle_title"), response.body
   end
 end

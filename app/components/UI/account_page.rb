@@ -40,7 +40,7 @@ class UI::AccountPage < ApplicationComponent
     case account.accountable_type
     when "Investment", "Crypto"
       [ :activity, :holdings ]
-    when "Property", "Vehicle", "Loan"
+    when "Property", "Vehicle", "Loan", "CreditCard"
       [ :activity, :overview ]
     else
       [ :activity ]
@@ -53,7 +53,15 @@ class UI::AccountPage < ApplicationComponent
       activity_feed
     when :holdings, :overview
       # Accountable is responsible for implementing the partial in the correct folder
-      render "#{account.accountable_type.downcase.pluralize}/tabs/#{tab}", account: account
+      render "#{accountable_view_folder}/tabs/#{tab}", account: account
     end
   end
+
+  private
+    # The app/views folder of the accountable's tab partials. Not
+    # accountable_type.downcase.pluralize, which turns "CreditCard" into
+    # "creditcards".
+    def accountable_view_folder
+      account.accountable_type.underscore.pluralize
+    end
 end

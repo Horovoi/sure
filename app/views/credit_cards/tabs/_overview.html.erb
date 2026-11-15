@@ -1,0 +1,138 @@
+<%# locals: (account:, as_of: Date.current) %>
+
+<%# One reference date for every figure on this tab %>
+<% card = account.credit_card %>
+
+<% if (summary = card.statement_summary(as_of: as_of)) %>
+  <% due_for_last_balance = summary.due_date.present? && summary.due_date == summary.last_due_date %>
+  <% show_apr = card.apr.present? %>
+
+  <div class="@container">
+    <div class="<%= show_apr ? "grid grid-cols-1 gap-2 sm:grid-cols-2 @3xl:grid-cols-3" : "grid grid-cols-1 gap-2 sm:grid-cols-2" %>" data-testid="credit-card-summary-grid">
+      <%# The statement that closed (the bill) and what came after it split the
+          debt in the page header into two parts that add up to it. %>
+      <div data-testid="credit-card-statement-balance">
+        <%= summary_card title: t(".statement_balance") do %>
+          <%= summary.balance ? format_money(summary.balance) : t(".unknown") %>
+          <span class="mt-2 block space-y-1 text-sm text-secondary">
+            <% if summary.due_date && due_for_last_balance %>
+              <span class="block"><%= t(".due_on", date: l(summary.due_date, format: :long)) %></span>
+              <span class="block <%= summary.status == :overdue ? "text-destructive" : "" %>">
+                <%= credit_card_due_countdown((summary.due_date - as_of).to_i) %>
+              </span>
+            <% end %>
+            <% if summary.remaining&.positive? && summary.balance && summary.remaining.amount < summary.balance.amount %>
+              <span class="block"><%= t(".remaining_due", amount: format_money(summary.remaining)) %></span>
+            <% end %>
+            <% if summary.status == :paid %>
+              <span class="block text-success"><%= t(".status_paid") %></span>
+            <% elsif summary.status == :partial %>
+              <span class="block"><%= t(".status_partial") %></span>
+            <% end %>
+          </span>
+        <% end %>
+      </div>
+
+      <%# A negative amount is a credit: payments since the close are larger than
+          the charges, and the credit reduces the next statement. A due date of
+          the statement still building is not shown with a credit, because that
+          statement may not have a bill. %>
+      <div data-testid="credit-card-since-last-statement">
+        <%= summary_card title: t(".since_last_statement") do %>
+          <%= summary.accrued ? format_money(summary.accrued) : t(".unknown") %>
+          <span class="mt-2 block space-y-1 text-sm text-secondary">
+            <% if summary.accrued&.negative? %>
+              <span class="block"><%= t(".credit_toward_next") %></span>
+            <% elsif summary.due_date && !due_for_last_balance %>
+              <span class="block"><%= t(".due_on", date: l(summary.due_date, format: :long)) %></span>
+              <span class="block"><%= credit_card_due_countdown((summary.due_date - as_of).to_i) %></span>
+            <% elsif summary.next_close %>
+              <span class="block"><%= t(".closes_on", date: l(summary.next_close, format: :long)) %></span>
+            <% end %>
+            <% if summary.charges && summary.credits %>
+              <span class="flex items-center justify-between gap-4">
+                <span><%= t(".charges") %></span>
+                <span class="font-medium text-primary"><%= format_money(summary.charges) %></span>
+              </span>
+              <span class="flex items-center justify-between gap-4">
+                <span><%= t(".payments_credits") %></span>
+                <span class="font-medium text-primary"><%= format_money(summary.credits.abs) %></span>
+              </span>
+            <% end %>
+          </span>
+        <% end %>
+      </div>
+
+      <% if show_apr %>
+        <div class="col-span-full @3xl:col-span-1" data-testid="credit-card-apr">
+          <%= summary_card title: t(".annual_percentage_rate") do %>
+            <%= number_to_percentage(card.apr, precision: 3) %>
+            <span class="mt-2 block space-y-1 text-sm text-secondary">
+              <span class="flex items-center justify-between gap-4">
+                <span><%= t(".monthly_rate_label") %></span>
+                <span class="font-medium text-primary"><%= number_to_percentage(summary.monthly_rate, precision: 3) %></span>
+              </span>
+              <span class="flex items-center justify-between gap-4">
+                <span><%= t(".estimated_interest_label") %></span>
+                <span class="font-medium text-primary">
+                  <%= summary.estimated_interest ? t(".per_month", amount: format_money(summary.estimated_interest)) : t(".unknown") %>
+                </span>
+              </span>
+              <span class="flex items-center justify-between gap-4">
+                <span><%= t(".balance_carried_label") %></span>
+                <span class="font-medium text-primary"><%= summary.remaining ? format_money(summary.remaining) : t(".unknown") %></span>
+              </span>
+            </span>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <%# The minimum payment is shown only against the statement it is part of %>
+  <% if card.minimum_payment_shortfall?(as_of: as_of) %>
+    <div class="mt-2">
+      <%= render DS::Alert.new(
+        variant: :warning,
+        message: t(".above_minimum",
+                   balance: format_money(summary.balance),
+                   minimum: format_money(card.minimum_payment_money))
+      ) %>
+    </div>
+  <% end %>
+
+  <%# An unknown figure is not shown as zero %>
+  <% if summary.balance.nil? %>
+    <div class="mt-2">
+      <%= render DS::Alert.new(variant: :info, message: t(".balances_unavailable")) %>
+    </div>
+  <% elsif summary.charges.nil? %>
+    <div class="mt-2">
+      <%= render DS::Alert.new(variant: :info, message: t(".other_currency_entries")) %>
+    </div>
+  <% end %>
+
+  <div class="flex justify-center py-8">
+    <%= render DS::Link.new(
+      text: t(".edit_card_details"),
+      variant: "ghost",
+      href: edit_credit_card_path(account),
+      frame: :modal
+    ) %>
+  </div>
+<% else %>
+  <%= render DS::EmptyState.new(
+    icon: "calendar",
+    title: t(".no_cycle_title"),
+    description: t(".no_cycle_description")
+  ) %>
+
+  <div class="flex justify-center pb-8">
+    <%= render DS::Link.new(
+      text: t(".edit_card_details"),
+      variant: "secondary",
+      href: edit_credit_card_path(account),
+      frame: :modal
+    ) %>
+  </div>
+<% end %>

@@ -1,6 +1,8 @@
 require "test_helper"
 
 class BalanceSheetTest < ActiveSupport::TestCase
+  include BalanceTestHelper
+
   setup do
     @family = families(:empty)
   end
@@ -103,6 +105,75 @@ class BalanceSheetTest < ActiveSupport::TestCase
     ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: 12.days.ago.to_date, rate: 40)
 
     assert_equal 1000 + 50 * 40, BalanceSheet.new(@family).net_worth
+  end
+
+  # -- Past net worth and disabled accounts -----------------------------------
+
+  test "past net worth counts a disabled account before it was disabled, not after" do
+    zone = @family.resolved_time_zone
+    period = Period.custom(start_date: Date.new(2026, 3, 8), end_date: Date.new(2026, 3, 10))
+
+    active = create_account(balance: 10_000, accountable: Depository.new)
+    disabled = create_account(balance: 5_000, accountable: Depository.new)
+    draft = create_account(balance: 1_000, accountable: Property.new, status: "draft")
+    deleting = create_account(balance: 7_000, accountable: Depository.new)
+
+    [ active, disabled, draft, deleting ].each do |account|
+      create_balance(account: account, date: Date.new(2026, 3, 7), balance: account.balance)
+    end
+
+    travel_to(zone.local(2026, 3, 9, 12)) { disabled.disable! }
+    deleting.mark_for_deletion!
+
+    travel_to zone.local(2026, 3, 10, 12) do
+      balance_sheet = BalanceSheet.new(@family)
+      values = balance_sheet.net_worth_series(period: period).values.to_h { |v| [ v.date, v.value.amount ] }
+
+      # Counted on the days before it was disabled; its last balance is not
+      # carried into the days after. The draft and the deletion never count.
+      assert_equal 15_000, values.fetch(Date.new(2026, 3, 8))
+      assert_equal 10_000, values.fetch(Date.new(2026, 3, 9))
+      assert_equal 10_000, values.fetch(Date.new(2026, 3, 10))
+      assert_equal 10_000, balance_sheet.net_worth
+    end
+  end
+
+  test "an enabled account counts in past net worth on every day again" do
+    zone = @family.resolved_time_zone
+    period = Period.custom(start_date: Date.new(2026, 3, 8), end_date: Date.new(2026, 3, 10))
+
+    account = create_account(balance: 5_000, accountable: Depository.new)
+    create_balance(account: account, date: Date.new(2026, 3, 7), balance: 5_000)
+
+    travel_to(zone.local(2026, 3, 9, 12)) { account.disable! }
+    account.enable!
+
+    travel_to zone.local(2026, 3, 10, 12) do
+      values = BalanceSheet.new(@family).net_worth_series(period: period).values.map { |v| v.value.amount }
+      assert_equal [ 5_000, 5_000, 5_000 ], values
+    end
+  end
+
+  test "a disabled account without disabled_at falls back to its last update" do
+    zone = @family.resolved_time_zone
+    account = create_account(balance: 5_000, accountable: Depository.new)
+    account.disable!
+    account.update_columns(disabled_at: nil, updated_at: zone.local(2026, 3, 9, 12))
+
+    dates = BalanceSheet::HistoricalAccountScope.new(@family).active_until_dates
+
+    assert_equal({ account.id => Date.new(2026, 3, 8) }, dates)
+  end
+
+  test "the disabled day is the family's local day" do
+    @family.update!(timezone: "Europe/Kyiv")
+    account = create_account(balance: 5_000, accountable: Depository.new)
+    # 23:30 UTC on Mar 8 is 01:30 on Mar 9 in Kyiv
+    travel_to(Time.utc(2026, 3, 8, 23, 30)) { account.disable! }
+
+    dates = BalanceSheet::HistoricalAccountScope.new(@family).active_until_dates
+
+    assert_equal Date.new(2026, 3, 8), dates.fetch(account.id)
   end
 
   private

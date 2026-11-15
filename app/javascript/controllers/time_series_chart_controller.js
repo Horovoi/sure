@@ -13,6 +13,12 @@ export default class extends Controller {
     showYGuides: { type: Boolean, default: false },
     endpointMarkers: { type: Boolean, default: false },
     fullscreen: { type: Boolean, default: false },
+    // Drag across the chart to pick a date range. On release the page visits
+    // the same URL with the range in the widget's own query params.
+    selectable: { type: Boolean, default: false },
+    selectPeriodParam: { type: String, default: "period" },
+    selectStartParam: { type: String, default: "start_date" },
+    selectEndParam: { type: String, default: "end_date" },
   };
 
   _d3SvgMemo = null;
@@ -22,6 +28,18 @@ export default class extends Controller {
   _d3InitialContainerHeight = 0;
   _normalDataPoints = [];
   _resizeObserver = null;
+  _d3DragSelectBrush = null;
+  _d3DragSelectGroup = null;
+  // d3 only nulls a truly zero-width selection, so 1-3px of jitter on a click
+  // still arrives as a real drag. Treat anything this small as a click.
+  _dragSelectMinPx = 4;
+
+  // y-axis domain tuning. Both are relative to the data, so the scale is
+  // resolution-independent: a chart looks the same on a phone and a 4K
+  // display, only pixel density changes.
+  _yAxisPadding = 0.12; // breathing room above and below the series
+  _yAxisMinRelSpan = 0.015; // smallest movement allowed to fill the chart,
+  // as a fraction of the average balance
 
   connect() {
     this._install();
@@ -66,6 +84,8 @@ export default class extends Controller {
     this._d3GroupMemo = null;
     this._d3Tooltip = null;
     this._normalDataPoints = [];
+    this._d3DragSelectBrush = null;
+    this._d3DragSelectGroup = null;
 
     this._d3Container.selectAll("*").remove();
   }
@@ -160,7 +180,12 @@ export default class extends Controller {
 
     if (this.useTooltipValue) {
       this._drawTooltip();
-      this._trackMouseForShowingTooltip();
+    }
+
+    // Drawn last, so the brush or hover surface sits on top of every mark.
+    // A theme:change or resize redraw runs this again, so the brush stays.
+    if (this.useTooltipValue || this.selectableValue) {
+      this._drawInteractionOverlay();
     }
   }
 
@@ -266,7 +291,17 @@ export default class extends Controller {
       .attr("d", this._d3Line)
       .attr("stroke-linejoin", "round")
       .attr("stroke-linecap", "round")
-      .attr("stroke-width", this.strokeWidthValue);
+      // A flat series (a single valuation or an unchanged balance) would
+      // otherwise draw a full-width heavy rule across the card. A faint
+      // hairline reads as "no change" in light and dark.
+      .attr("stroke-width", this._isFlatSeries ? 1 : this.strokeWidthValue)
+      .attr("stroke-opacity", this._isFlatSeries ? 0.4 : 1);
+  }
+
+  get _isFlatSeries() {
+    const min = d3.min(this._normalDataPoints, this._getDatumValue);
+    const max = d3.max(this._normalDataPoints, this._getDatumValue);
+    return min === max;
   }
 
   _installTrendlineSplit() {
@@ -488,95 +523,225 @@ export default class extends Controller {
       );
   }
 
-  _trackMouseForShowingTooltip() {
-    const bisectDate = d3.bisector((d) => d.date).left;
+  // The interaction surface is a plain full-size rect on hover-only charts,
+  // or a d3-brush overlay on selectable charts. The tooltip handlers bind to
+  // whichever is on top, so hover and drag never fight over pointer events.
+  _drawInteractionOverlay() {
+    if (this.selectableValue) {
+      this._drawDragSelectOverlay();
+    } else {
+      this._drawHoverOverlay();
+    }
+  }
 
-    this._d3Group
+  _drawHoverOverlay() {
+    const rect = this._d3Group
       .append("rect")
       .attr("class", "bg-container")
       .attr("width", this._d3ContainerWidth)
       .attr("height", this._d3ContainerHeight)
       .attr("fill", "none")
-      .attr("pointer-events", "all")
+      .attr("pointer-events", "all");
+
+    this._bindTooltipHandlers(rect);
+  }
+
+  _drawDragSelectOverlay() {
+    const brush = d3
+      .brushX()
+      .extent([
+        [0, 0],
+        [this._d3ContainerWidth, this._d3ContainerHeight],
+      ])
+      // By default d3-brush binds touch events and sets touch-action: none on
+      // touch devices, which blocks page scroll over a full-width chart.
+      // Drag-select is a mouse gesture, so leave touch alone.
+      .touchable(false)
+      .on("start brush", (event) => this._handleDragSelectMove(event))
+      .on("end", (event) => this._handleDragSelectEnd(event));
+
+    const brushGroup = this._d3Group
+      .append("g")
+      .attr("class", "drag-select-brush")
+      .call(brush);
+
+    brushGroup
+      .select(".selection")
+      .attr("fill", this._trendColor)
+      .attr("fill-opacity", 0.12)
+      .attr("stroke", this._trendColor)
+      .attr("stroke-opacity", 0.5);
+
+    // Hovering before a mousedown still goes through the overlay's own
+    // mousemove. Only a drag in progress needs the brush events above.
+    if (this.useTooltipValue) {
+      this._bindTooltipHandlers(brushGroup.select(".overlay"));
+    }
+
+    this._d3DragSelectBrush = brush;
+    this._d3DragSelectGroup = brushGroup;
+  }
+
+  // While dragging, d3-brush captures mousemove on the window, so the
+  // overlay's own mousemove never fires. Drive the tooltip from the brush
+  // events instead, so it stays on the data point under the pointer.
+  _handleDragSelectMove(event) {
+    const sourceEvent = event.sourceEvent;
+    if (!sourceEvent || typeof sourceEvent.pageX !== "number") return;
+
+    const [xPos] = d3.pointer(sourceEvent, this._d3Group.node());
+    const datum = this._nearestDataPointForPixel(xPos);
+
+    this._renderTooltipAt(datum, sourceEvent.pageX, sourceEvent.pageY);
+  }
+
+  _handleDragSelectEnd(event) {
+    this._hideTooltip();
+
+    if (!event.selection) return;
+
+    const [x0, x1] = event.selection;
+
+    if (x1 - x0 < this._dragSelectMinPx) {
+      this._clearDragSelection();
+      return;
+    }
+
+    // Snap to the plotted data points (the ones the tooltip showed during the
+    // drag), not the raw pixel-to-time value, which can land days away on a
+    // wide chart.
+    const startDatum = this._nearestDataPointForPixel(x0);
+    const endDatum = this._nearestDataPointForPixel(x1);
+
+    // Reject after snapping: a drag can clear the pixel floor and still
+    // collapse to one date. A one-value range draws the empty state, which
+    // has no brush to drag back out of.
+    if (startDatum === endDatum) {
+      this._clearDragSelection();
+      return;
+    }
+
+    this._navigateToDateRange(startDatum.date, endDatum.date);
+  }
+
+  _clearDragSelection() {
+    this._d3DragSelectGroup?.call(this._d3DragSelectBrush.move, null);
+  }
+
+  // Visits the current URL with the range in this chart's own params: the
+  // dashboard net worth widget uses net_worth_period/net_worth_start_date/
+  // net_worth_end_date, the account chart period/start_date/end_date.
+  _navigateToDateRange(startDate, endDate) {
+    const formatDate = d3.timeFormat("%Y-%m-%d");
+    const url = new URL(window.location.href);
+
+    url.searchParams.set(this.selectPeriodParamValue, "custom");
+    url.searchParams.set(this.selectStartParamValue, formatDate(startDate));
+    url.searchParams.set(this.selectEndParamValue, formatDate(endDate));
+
+    Turbo.visit(url.toString());
+  }
+
+  _nearestDataPointForPixel(xPos) {
+    const bisectDate = d3.bisector((d) => d.date).left;
+    const clampedX = Math.max(0, Math.min(xPos, this._d3ContainerWidth));
+    const x0 = bisectDate(
+      this._normalDataPoints,
+      this._d3XScale.invert(clampedX),
+      1,
+    );
+    const d0 = this._normalDataPoints[Math.max(x0 - 1, 0)];
+    const d1 =
+      this._normalDataPoints[Math.min(x0, this._normalDataPoints.length - 1)];
+
+    return clampedX - this._d3XScale(d0.date) >
+      this._d3XScale(d1.date) - clampedX
+      ? d1
+      : d0;
+  }
+
+  _bindTooltipHandlers(selection) {
+    selection
       .on("mousemove", (event) => {
-        const estimatedTooltipWidth = 250;
-        const pageWidth = document.body.clientWidth;
-        const tooltipX = event.pageX + 10;
-        const overflowX = tooltipX + estimatedTooltipWidth - pageWidth;
-        const adjustedX =
-          overflowX > 0 ? event.pageX - overflowX - 20 : tooltipX;
+        const [xPos] = d3.pointer(event, this._d3Group.node());
+        const datum = this._nearestDataPointForPixel(xPos);
 
-        const [xPos] = d3.pointer(event);
-        const x0 = bisectDate(
-          this._normalDataPoints,
-          this._d3XScale.invert(xPos),
-          1,
-        );
-        const d0 = this._normalDataPoints[x0 - 1];
-        const d1 = this._normalDataPoints[x0];
-        const d =
-          xPos - this._d3XScale(d0.date) > this._d3XScale(d1.date) - xPos
-            ? d1
-            : d0;
-        const xPercent = this._d3XScale(d.date) / this._d3ContainerWidth;
-
-        this._setTrendlineSplitAt(xPercent);
-
-        // Reset (do not touch endpoint markers)
-        this._d3Group.selectAll(".data-point-circle").remove();
-        this._d3Group.selectAll(".guideline").remove();
-
-        // Guideline
-        this._d3Group
-          .append("line")
-          .attr("class", "guideline fg-subdued")
-          .attr("x1", this._d3XScale(d.date))
-          .attr("y1", 0)
-          .attr("x2", this._d3XScale(d.date))
-          .attr("y2", this._d3ContainerHeight)
-          .attr("stroke", "currentColor")
-          .attr("stroke-dasharray", "4, 4");
-
-        // Big circle
-        this._d3Group
-          .append("circle")
-          .attr("class", "data-point-circle")
-          .attr("cx", this._d3XScale(d.date))
-          .attr("cy", this._d3YScale(this._getDatumValue(d)))
-          .attr("r", 10)
-          .attr("fill", this._trendColor)
-          .attr("fill-opacity", "0.1")
-          .attr("pointer-events", "none");
-
-        // Small circle
-        this._d3Group
-          .append("circle")
-          .attr("class", "data-point-circle")
-          .attr("cx", this._d3XScale(d.date))
-          .attr("cy", this._d3YScale(this._getDatumValue(d)))
-          .attr("r", 5)
-          .attr("fill", this._trendColor)
-          .attr("pointer-events", "none");
-
-        // Render tooltip
-        this._d3Tooltip
-          .html(this._tooltipTemplate(d))
-          .style("opacity", 1)
-          .style("z-index", 999)
-          .style("left", `${adjustedX}px`)
-          .style("top", `${event.pageY - 10}px`);
+        this._renderTooltipAt(datum, event.pageX, event.pageY);
       })
       .on("mouseout", (event) => {
         const hoveringOnGuideline =
           event.toElement?.classList.contains("guideline");
 
         if (!hoveringOnGuideline) {
-          this._d3Group.selectAll(".guideline").remove();
-          this._d3Group.selectAll(".data-point-circle").remove();
-          this._d3Tooltip.style("opacity", 0);
-          this._setTrendlineSplitAt(1);
+          this._hideTooltip();
         }
       });
+  }
+
+  _renderTooltipAt(datum, pageX, pageY) {
+    const estimatedTooltipWidth = 250;
+    const pageWidth = document.body.clientWidth;
+    const tooltipX = pageX + 10;
+    const overflowX = tooltipX + estimatedTooltipWidth - pageWidth;
+    const adjustedX = overflowX > 0 ? pageX - overflowX - 20 : tooltipX;
+
+    const xPercent = this._d3XScale(datum.date) / this._d3ContainerWidth;
+
+    this._setTrendlineSplitAt(xPercent);
+
+    // Reset (do not touch endpoint markers)
+    this._d3Group.selectAll(".data-point-circle").remove();
+    this._d3Group.selectAll(".guideline").remove();
+
+    // Guideline. pointer-events none, so it never steals the overlay's
+    // mouse events.
+    this._d3Group
+      .append("line")
+      .attr("class", "guideline fg-subdued")
+      .attr("x1", this._d3XScale(datum.date))
+      .attr("y1", 0)
+      .attr("x2", this._d3XScale(datum.date))
+      .attr("y2", this._d3ContainerHeight)
+      .attr("stroke", "currentColor")
+      .attr("stroke-dasharray", "4, 4")
+      .attr("pointer-events", "none");
+
+    // Big circle
+    this._d3Group
+      .append("circle")
+      .attr("class", "data-point-circle")
+      .attr("cx", this._d3XScale(datum.date))
+      .attr("cy", this._d3YScale(this._getDatumValue(datum)))
+      .attr("r", 10)
+      .attr("fill", this._trendColor)
+      .attr("fill-opacity", "0.1")
+      .attr("pointer-events", "none");
+
+    // Small circle
+    this._d3Group
+      .append("circle")
+      .attr("class", "data-point-circle")
+      .attr("cx", this._d3XScale(datum.date))
+      .attr("cy", this._d3YScale(this._getDatumValue(datum)))
+      .attr("r", 5)
+      .attr("fill", this._trendColor)
+      .attr("pointer-events", "none");
+
+    // A selectable chart with use_tooltip=false has no tooltip node, but the
+    // brush still drives this method for the guideline and circles.
+    this._d3Tooltip
+      ?.html(this._tooltipTemplate(datum))
+      .style("opacity", 1)
+      .style("z-index", 999)
+      .style("left", `${adjustedX}px`)
+      .style("top", `${pageY - 10}px`);
+  }
+
+  _hideTooltip() {
+    this._d3Group.selectAll(".guideline").remove();
+    this._d3Group.selectAll(".data-point-circle").remove();
+    this._d3Tooltip?.style("opacity", 0);
+    this._setTrendlineSplitAt(1);
   }
 
   // Draw subtle horizontal guide lines at min/mid/max values with right-side labels
@@ -958,29 +1123,25 @@ export default class extends Controller {
     const dataRange = dataMax - dataMin;
     const avgValue = (dataMax + dataMin) / 2;
 
-    // Calculate relative change as a percentage
-    const relativeChange = avgValue !== 0 ? dataRange / Math.abs(avgValue) : 1;
+    // Honesty floor: a movement smaller than _yAxisMinRelSpan of the average
+    // balance never fills the chart, so trivial noise on a large balance
+    // stays flat. Anything larger shows at full amplitude, centered, with the
+    // same padding above and below.
+    const minSpan = Math.abs(avgValue) * this._yAxisMinRelSpan;
+    const effectiveRange = Math.max(dataRange, minSpan);
 
-    // Dynamic baseline calculation
-    let yMin;
-    let yMax;
+    const padding = effectiveRange * this._yAxisPadding;
+    let yMin = avgValue - effectiveRange / 2 - padding;
+    let yMax = avgValue + effectiveRange / 2 + padding;
 
-    // For small relative changes (< 10%), use a tighter scale
-    if (relativeChange < 0.1 && dataMin > 0) {
-      // Start axis at a percentage below the minimum, not at 0
-      const baselinePadding = dataRange * 2; // Show 2x the data range below min
-      yMin = Math.max(0, dataMin - baselinePadding);
-      yMax = dataMax + dataRange * 0.6; // Slightly more padding above for labels
-    } else {
-      // For larger changes or when data crosses zero, use more context
-      // Always include 0 when data is negative or close to 0
-      if (dataMin < 0 || (dataMin >= 0 && dataMin < avgValue * 0.1)) {
-        yMin = Math.min(0, dataMin * 1.1);
-      } else {
-        // Otherwise use dynamic baseline
-        yMin = dataMin - dataRange * 0.35;
-      }
-      yMax = dataMax + dataRange * 0.15;
+    // Pull the nearer bound to zero only when the data sits close to zero
+    // relative to its own scale, so a balance far from zero (positive or
+    // negative) still fills the chart with its movement. A series that
+    // crosses zero keeps zero in view on its own.
+    if (dataMin >= 0 && dataMin < avgValue * 0.1) {
+      yMin = Math.min(0, yMin);
+    } else if (dataMax <= 0 && dataMax > avgValue * 0.1) {
+      yMax = Math.max(0, yMax);
     }
 
     // Adjust padding for labels if needed

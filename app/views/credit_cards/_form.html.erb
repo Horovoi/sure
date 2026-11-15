@@ -33,6 +33,20 @@
                                         placeholder: t("credit_cards.form.annual_fee_placeholder"),
                                         min: 0 %>
       </div>
+
+      <%# The two days of the statement cycle %>
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <%= credit_card_form.select :statement_close_day,
+                                      credit_card_day_of_month_options,
+                                      { include_blank: true, label: t("credit_cards.form.statement_close_day") } %>
+
+          <%= credit_card_form.select :due_day,
+                                      credit_card_day_of_month_options,
+                                      { include_blank: true, label: t("credit_cards.form.due_day") } %>
+        </div>
+        <p class="text-secondary text-xs"><%= t("credit_cards.form.statement_cycle_description") %></p>
+      </div>
     <% end %>
   </div>
 <% end %>

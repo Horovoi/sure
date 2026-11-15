@@ -366,4 +366,50 @@ class Balance::ChartSeriesBuilderTest < ActiveSupport::TestCase
 
     assert_equal "1 day", builder.balance_series.interval
   end
+
+  test "an account active until date stops the carry-forward and keeps the dates" do
+    account = accounts(:depository)
+    account.balances.destroy_all
+
+    period = Period.custom(start_date: 2.days.ago.to_date, end_date: Date.current)
+    create_balance(account: account, date: period.start_date, balance: 1000)
+
+    builder = Balance::ChartSeriesBuilder.new(
+      account_ids: [ account.id ],
+      account_active_until_dates: { account.id => 1.day.ago.to_date },
+      currency: "USD",
+      period: period,
+      interval: "1 day"
+    )
+
+    assert_equal [ 1000, 1000, 0 ], builder.balance_series.map { |v| v.value.amount }
+  end
+
+  test "accounts without an active until date count on every day" do
+    account = accounts(:depository)
+    other = accounts(:credit_card)
+    account.balances.destroy_all
+    other.balances.destroy_all
+
+    period = Period.custom(start_date: 2.days.ago.to_date, end_date: Date.current)
+    create_balance(account: account, date: period.start_date, balance: 1000)
+    create_balance(account: other, date: period.start_date, balance: 300)
+
+    builder = Balance::ChartSeriesBuilder.new(
+      account_ids: [ account.id, other.id ],
+      account_active_until_dates: { other.id => period.start_date },
+      currency: "USD",
+      period: period,
+      interval: "1 day"
+    )
+
+    # The credit card (a liability) counts on the first day only
+    assert_equal [ 700, 1000, 1000 ], builder.balance_series.map { |v| v.value.amount }
+  end
+
+  test "no accounts give an empty series" do
+    builder = Balance::ChartSeriesBuilder.new(account_ids: [], currency: "USD", period: Period.last_30_days)
+
+    assert_empty builder.balance_series.values
+  end
 end

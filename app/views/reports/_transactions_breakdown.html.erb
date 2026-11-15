@@ -46,8 +46,9 @@
       # Toggle sort direction: if currently sorting by amount desc, switch to asc; otherwise default to desc
       next_sort_direction = (current_sort_by == "amount" && current_sort_direction == "desc") ? "asc" : "desc"
 
-      # Build params for amount sort link
-      amount_sort_params = base_params.merge(sort_by: "amount", sort_direction: next_sort_direction)
+      # Build params for amount sort link. They keep the period, its fiscal
+      # mode and its arrows (report_period_params), not only the dates.
+      amount_sort_params = report_period_params.merge(sort_by: "amount", sort_direction: next_sort_direction)
     %>
 
     <div class="space-y-8">

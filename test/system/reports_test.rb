@@ -2,6 +2,7 @@ require "application_system_test_case"
 
 class ReportsTest < ApplicationSystemTestCase
   include EntriesTestHelper
+  include BalanceTestHelper
 
   setup do
     @user = users(:family_admin)
@@ -69,6 +70,102 @@ class ReportsTest < ApplicationSystemTestCase
     assert_no_text "Corner shop"
   end
 
+  # --- w2-netw ---
+
+  test "the arrows step through periods and Current goes back" do
+    visit reports_path(period_type: :monthly)
+    current_label = find("[data-testid='report-period-label']").text
+    assert_selector "button[disabled][aria-label='#{I18n.t("reports.index.period_nav.next")}']"
+
+    find("a[aria-keyshortcuts='ArrowLeft']").click
+    assert_current_path(/period_offset=-1/)
+    assert_no_selector "[data-testid='report-period-label']", text: current_label, exact_text: true
+
+    find("a[aria-keyshortcuts='ArrowRight']").click
+    assert_no_current_path(/period_offset/)
+    assert_selector "[data-testid='report-period-label']", text: current_label, exact_text: true
+
+    find("a[aria-keyshortcuts='ArrowLeft']").click
+    find("a[aria-keyshortcuts='ArrowLeft']").click
+    assert_current_path(/period_offset=-2/)
+    within("[data-testid='report-period-nav']") { click_link I18n.t("reports.index.period_nav.current") }
+    assert_no_current_path(/period_offset/)
+    assert_selector "[data-testid='report-period-label']", text: current_label, exact_text: true
+  end
+
+  test "the left and right arrow keys change the period" do
+    visit reports_path(period_type: :quarterly)
+    wait_for_hotkeys
+
+    page.send_keys(:arrow_left)
+    assert_current_path(/period_offset=-1/)
+    wait_for_hotkeys
+
+    page.send_keys(:arrow_left)
+    assert_current_path(/period_offset=-2/)
+    wait_for_hotkeys
+
+    page.send_keys(:arrow_right)
+    assert_current_path(/period_offset=-1/)
+  end
+
+  test "the arrow keys leave section moves and dialogs alone" do
+    visit reports_path(period_type: :monthly)
+    wait_for_hotkeys
+    record_hotkey_clicks
+
+    find("section[data-section-key]", match: :first).send_keys(:enter)
+    page.send_keys(:arrow_left)
+    assert_empty clicked_hotkeys
+    page.send_keys(:escape)
+
+    click_link I18n.t("reports.transactions_breakdown.export.google_sheets")
+    assert_selector "dialog[open]"
+    page.send_keys(:arrow_left)
+    assert_empty clicked_hotkeys
+
+    page.send_keys(:escape)
+    assert_no_selector "dialog[open]"
+    page.send_keys(:arrow_left)
+    assert_equal %w[ArrowLeft], clicked_hotkeys
+  end
+
+  test "a held arrow key steps one period" do
+    visit reports_path(period_type: :monthly)
+    wait_for_hotkeys
+    record_hotkey_clicks
+
+    page.execute_script(<<~JS)
+      for (const repeat of [false, true, true]) {
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", repeat, bubbles: true }));
+      }
+    JS
+
+    assert_equal %w[ArrowLeft], clicked_hotkeys
+  end
+
+  test "the net worth chart lists each account group in its tooltip" do
+    create_balance(account: accounts(:depository), date: 4.months.ago.to_date, balance: 4_000)
+    create_balance(account: accounts(:credit_card), date: 4.months.ago.to_date, balance: 900)
+
+    visit reports_path(period_type: :custom, start_date: 6.months.ago.to_date.iso8601, end_date: Date.current.iso8601)
+
+    within "[data-testid='net-worth-over-time']" do
+      assert_text I18n.t("reports.net_worth.chart.title")
+      assert_selector "#reportsNetWorthChart svg"
+    end
+
+    # The middle of the chart is three months back, after the balances above
+    find("#reportsNetWorthChart svg").hover
+
+    within "#reportsNetWorthChart [data-testid='net-worth-breakdown']" do
+      assert_text(/#{Regexp.escape(I18n.t("reports.net_worth.total_assets"))}/i)
+      assert_text(/#{Regexp.escape(I18n.t("reports.net_worth.total_liabilities"))}/i)
+      assert_text I18n.t("accounts.types.depository")
+      assert_text I18n.t("accounts.types.credit_card")
+    end
+  end
+
   private
     def visit_breakdown
       visit reports_path(period_type: :custom, start_date: 30.days.ago.to_date, end_date: Date.current)
@@ -77,5 +174,32 @@ class ReportsTest < ApplicationSystemTestCase
       within "[data-section-key='transactions_breakdown']" do
         all("summary", text: /View category details/).each(&:click)
       end
+    end
+
+    # The tooltip only shows once the page's controllers are connected, so
+    # keys pressed after this reach an installed hotkey.
+    def wait_for_hotkeys
+      find("a[aria-keyshortcuts='ArrowLeft']").hover
+      assert_selector "[role='tooltip']", text: "Previous period (←)"
+      # Move the pointer away so the tooltip does not cover the page
+      find("h1").hover
+    end
+
+    # Records the links the hotkeys click instead of following them. A hotkey
+    # clicks synchronously, so the list is complete when the key returns.
+    def record_hotkey_clicks
+      page.execute_script(<<~JS)
+        window.clickedHotkeys = [];
+        document.addEventListener("click", (event) => {
+          const link = event.target.closest("a[data-hotkey]");
+          if (!link) return;
+          window.clickedHotkeys.push(link.dataset.hotkey);
+          event.preventDefault();
+        }, true);
+      JS
+    end
+
+    def clicked_hotkeys
+      page.evaluate_script("window.clickedHotkeys")
     end
 end

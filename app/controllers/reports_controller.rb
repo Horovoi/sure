@@ -1,6 +1,17 @@
 class ReportsController < ApplicationController
   include Periodable
 
+  PERIOD_TYPES = %w[monthly quarterly last_6_months ytd custom].freeze
+
+  # How many months one step of the period arrows moves, per period type.
+  # A custom range steps by its own length instead.
+  PERIOD_STEP_MONTHS = { monthly: 1, quarterly: 3, last_6_months: 6, ytd: 12 }.freeze
+
+  # The arrows only go back. Fifty years is far more than any history here.
+  MIN_PERIOD_OFFSET = -600
+
+  helper_method :report_period_params
+
   # Allow API key authentication for exports (for Google Sheets integration)
   # Note: We run authentication_for_export which handles both session and API key auth
   skip_authentication only: :export_transactions
@@ -34,7 +45,7 @@ class ReportsController < ApplicationController
   end
 
   def export_transactions
-    @period_type = params[:period_type]&.to_sym || :monthly
+    @period_type = parse_period_type
     @start_date = parse_date_param(:start_date) || default_start_date
     @end_date = parse_date_param(:end_date) || default_end_date
 
@@ -94,14 +105,21 @@ class ReportsController < ApplicationController
 
   private
     def setup_report_data(show_flash: false)
-      @period_type = params[:period_type]&.to_sym || :monthly
-      @period_mode = params[:period_mode] || "current"
+      @period_type = parse_period_type
       @fiscal_mode = params[:fiscal_mode] || default_fiscal_mode
+      @period_offset = parse_period_offset
       @start_date = parse_date_param(:start_date) || default_start_date
       @end_date = parse_date_param(:end_date) || default_end_date
 
       # Validate and fix date range if end_date is before start_date
       validate_and_fix_date_range(show_flash: show_flash)
+
+      # A custom range is the anchor of its arrows: an offset moves it back by
+      # whole range lengths.
+      @custom_anchor = [ @start_date, @end_date ]
+      shift_custom_range if @period_type == :custom
+
+      @period_nav = build_period_nav
 
       # Build the period
       @period = Period.custom(start_date: @start_date, end_date: @end_date)
@@ -251,98 +269,142 @@ class ReportsController < ApplicationController
       nil
     end
 
+    def parse_period_type
+      params[:period_type].to_s.presence_in(PERIOD_TYPES)&.to_sym || :monthly
+    end
+
+    # Steps back from the current period: 0 is the current one, -1 the one
+    # before. Old links with period_mode=last mean -1. A future period has no
+    # data yet, so a positive offset counts as 0.
+    def parse_period_offset
+      raw = params[:period_offset]
+      return -1 if raw.blank? && params[:period_mode] == "last"
+
+      Integer(raw.to_s, 10, exception: false).to_i.clamp(MIN_PERIOD_OFFSET, 0)
+    end
+
+    def period_offset
+      @period_offset.to_i
+    end
+
+    def use_fiscal_periods?
+      @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+    end
+
+    def period_step_months
+      PERIOD_STEP_MONTHS.fetch(@period_type, 1)
+    end
+
     def default_start_date
-      is_last = @period_mode == "last"
-      use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
+      return 1.month.ago.to_date if @period_type == :custom
+
+      shift_period_start(current_period_start, period_offset * period_step_months)
+    end
+
+    # The current period runs to today. A past period runs to its last day.
+    def default_end_date
+      return Date.current if @period_type == :custom || period_offset.zero?
+
+      shift_period_start(default_start_date, period_step_months) - 1.day
+    end
+
+    # The start of the period that contains today, fiscal or calendar.
+    def current_period_start
       family = Current.family
+      today = Date.current
+      fiscal = use_fiscal_periods?
 
       case @period_type
-      when :monthly
-        if use_fiscal
-          base = is_last ? 1.month.ago : Date.current
-          family.budget_period_start_for(base)
-        else
-          is_last ? 1.month.ago.beginning_of_month.to_date : Date.current.beginning_of_month.to_date
-        end
       when :quarterly
-        if use_fiscal
-          fiscal_quarter_start(is_last ? 3.months.ago : Date.current, family)
-        else
-          is_last ? 3.months.ago.beginning_of_quarter.to_date : Date.current.beginning_of_quarter.to_date
-        end
+        fiscal ? fiscal_quarter_start(today, family) : today.beginning_of_quarter
       when :ytd
-        if use_fiscal
-          fiscal_year_start(is_last ? 1.year.ago : Date.current, family)
-        else
-          is_last ? 1.year.ago.beginning_of_year.to_date : Date.current.beginning_of_year.to_date
-        end
+        fiscal ? fiscal_year_start(today, family) : today.beginning_of_year
       when :last_6_months
-        if use_fiscal
-          fiscal_half_year_start(is_last ? 6.months.ago : Date.current, family)
-        else
-          is_last ? beginning_of_half_year(Date.current - 6.months) : beginning_of_half_year(Date.current)
-        end
-      when :custom
-        1.month.ago.to_date
+        fiscal ? fiscal_half_year_start(today, family) : beginning_of_half_year(today)
       else
-        Date.current.beginning_of_month.to_date
+        fiscal ? family.budget_period_start_for(today) : today.beginning_of_month
       end
     end
 
-    def default_end_date
-      is_last = @period_mode == "last"
-      use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
-      family = Current.family
+    # Moves a period start by whole months and keeps it on a period boundary.
+    # A fiscal start goes back to the fiscal start day in the new month, so a
+    # start clamped in a short month (Feb 28 for day 31) does not stay clamped.
+    def shift_period_start(start, months)
+      month = start.beginning_of_month >> months
+      return month unless use_fiscal_periods?
+
+      Date.new(month.year, month.month, [ Current.family.fiscal_start_day, month.end_of_month.day ].min)
+    end
+
+    def shift_custom_range
+      return if period_offset.zero?
+
+      length = (@end_date - @start_date).to_i + 1
+      @start_date += period_offset * length
+      @end_date += period_offset * length
+    end
+
+    # The previous and next arrows, the period label, and the link back to
+    # the current period. The next arrow is off on the current period.
+    def build_period_nav
+      at_current = period_offset.zero?
+
+      {
+        label: period_label,
+        previous_params: period_nav_params(period_offset - 1),
+        next_params: at_current ? nil : period_nav_params(period_offset + 1),
+        current_params: at_current ? nil : period_nav_params(0)
+      }
+    end
+
+    def period_nav_params(offset)
+      nav_params = if @period_type == :custom
+        { period_type: :custom, start_date: @custom_anchor.first, end_date: @custom_anchor.last }
+      else
+        { period_type: @period_type, fiscal_mode: @fiscal_mode }
+      end
+
+      offset.zero? ? nav_params : nav_params.merge(period_offset: offset)
+    end
+
+    # The params that show the current report again (print, sort links).
+    # Dates win over the offset, so they never move twice; the offset only
+    # keeps the arrows in place.
+    def report_period_params
+      if @period_type == :custom
+        { period_type: :custom, start_date: @start_date, end_date: @end_date }
+      else
+        {
+          period_type: @period_type,
+          fiscal_mode: @fiscal_mode,
+          period_offset: period_offset.nonzero?,
+          start_date: @start_date,
+          end_date: @end_date
+        }.compact
+      end
+    end
+
+    def period_label
+      year = @start_date.year
 
       case @period_type
       when :monthly
-        if use_fiscal
-          base = is_last ? 1.month.ago : Date.current
-          start = family.budget_period_start_for(base)
-          is_last ? family.budget_period_end_for(start) : Date.current
-        else
-          is_last ? 1.month.ago.end_of_month.to_date : Date.current
-        end
+        I18n.l(@start_date, format: "%B %Y")
       when :quarterly
-        if use_fiscal
-          q_start = fiscal_quarter_start(is_last ? 3.months.ago : Date.current, family)
-          # End of 3rd fiscal month in the quarter
-          third_month_start = family.budget_period_start_for(q_start >> 2)
-          is_last ? family.budget_period_end_for(third_month_start) : Date.current
-        else
-          is_last ? 3.months.ago.end_of_quarter.to_date : Date.current
-        end
-      when :ytd
-        if use_fiscal
-          y_start = fiscal_year_start(is_last ? 1.year.ago : Date.current, family)
-          # End of 12th fiscal month in the year
-          twelfth_month_start = family.budget_period_start_for(y_start >> 11)
-          is_last ? family.budget_period_end_for(twelfth_month_start) : Date.current
-        else
-          is_last ? 1.year.ago.end_of_year.to_date : Date.current
-        end
+        t("reports.index.period_nav.label.quarterly", quarter: (@start_date.month - 1) / 3 + 1, year: year)
       when :last_6_months
-        if use_fiscal
-          h_start = fiscal_half_year_start(is_last ? 6.months.ago : Date.current, family)
-          # End of 6th fiscal month in the half
-          sixth_month_start = family.budget_period_start_for(h_start >> 5)
-          is_last ? family.budget_period_end_for(sixth_month_start) : Date.current
-        else
-          is_last ? end_of_half_year(Date.current - 6.months) : Date.current
-        end
-      when :custom
-        Date.current
+        t("reports.index.period_nav.label.half_year", half: @start_date.month <= 6 ? 1 : 2, year: year)
+      when :ytd
+        period_offset.zero? ? t("reports.index.period_nav.label.year_to_date", year: year) : year.to_s
       else
-        Date.current
+        t("reports.index.period_nav.label.custom",
+          start: I18n.l(@start_date, format: "%b %-d, %Y"),
+          end: I18n.l(@end_date, format: "%b %-d, %Y"))
       end
     end
 
     def beginning_of_half_year(date)
       date.month <= 6 ? Date.new(date.year, 1, 1) : Date.new(date.year, 7, 1)
-    end
-
-    def end_of_half_year(date)
-      date.month <= 6 ? Date.new(date.year, 6, 30) : Date.new(date.year, 12, 31)
     end
 
     # Fiscal quarter: find the quarter boundary month (Jan/Apr/Jul/Oct) that
@@ -812,13 +874,17 @@ class ReportsController < ApplicationController
         { name: group.name, total: Money.new(group.total, currency) }
       end.reject { |g| g[:total].zero? }
 
+      # Monthly net worth with the account group balances, for the chart tooltip
+      breakdown_series = balance_sheet.net_worth_breakdown_series(period: @period)
+
       {
         current_net_worth: Money.new(current_net_worth, currency),
         total_assets: Money.new(total_assets, currency),
         total_liabilities: Money.new(total_liabilities, currency),
         trend: trend,
         asset_groups: asset_groups,
-        liability_groups: liability_groups
+        liability_groups: liability_groups,
+        breakdown_series: breakdown_series
       }
     end
 

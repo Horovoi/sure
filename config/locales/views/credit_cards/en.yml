@@ -1,6 +1,14 @@
 ---
 en:
   credit_cards:
+    due:
+      in_days:
+        zero: Due today
+        one: Due tomorrow
+        other: Due in %{count} days
+      overdue:
+        one: 1 day overdue
+        other: "%{count} days overdue"
     edit:
       edit: Edit %{account}
     form:
@@ -10,16 +18,43 @@ en:
       apr_placeholder: '15.99'
       available_credit: Available credit
       available_credit_placeholder: '10000'
+      due_day: Payment due day
       expiration_date: Expiration date
       minimum_payment: Minimum payment
       minimum_payment_placeholder: '100'
+      statement_close_day: Statement closes on
+      statement_cycle_description: The day of the month your statement closes and
+        the day the payment is due. With these days set, the Overview tab shows the
+        amount of your last statement and what you spent since it closed.
     new:
       title: Enter credit card details
-    overview:
-      amount_owed: Amount Owed
-      annual_fee: Annual Fee
-      apr: APR
-      available_credit: Available Credit
-      expiration_date: Expiration Date
-      minimum_payment: Minimum Payment
-      unknown: Unknown
+    tabs:
+      overview:
+        above_minimum: This statement is %{balance}, more than the %{minimum} minimum
+          payment. If you pay only the minimum, the remaining balance stays on the
+          card at this APR.
+        annual_percentage_rate: Annual Percentage Rate
+        balance_carried_label: Balance carried
+        balances_unavailable: The balance history of this card is not calculated
+          yet. The statement figures show after the next sync.
+        charges: Charges
+        closes_on: Next statement closes %{date}
+        credit_toward_next: Credit toward the next statement
+        due_on: Due %{date}
+        edit_card_details: Edit card details
+        estimated_interest_label: Estimated interest
+        monthly_rate_label: Monthly rate
+        no_cycle_description: Set the day your statement closes and the day the
+          payment is due. Then this tab shows the amount of your last statement and
+          what you spent since it closed.
+        no_cycle_title: No statement cycle set
+        other_currency_entries: Some entries since the statement closed are in a
+          different currency, so the charges and credits are not totalled here.
+        payments_credits: Payments/Credits
+        per_month: "%{amount}/month"
+        remaining_due: Remaining due %{amount}
+        since_last_statement: Since Last Statement
+        statement_balance: Statement Balance
+        status_paid: Paid
+        status_partial: Partially paid
+        unknown: Unknown

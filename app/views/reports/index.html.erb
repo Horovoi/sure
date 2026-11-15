@@ -5,7 +5,7 @@
         <%= t("reports.index.title") %>
       </h1>
       <p class="text-sm lg:text-base text-secondary">
-        Financial insights for <%= @start_date.strftime("%b %-d") %> – <%= @end_date.strftime("%b %-d, %Y") %>
+        <%= t("reports.index.insights_for", start: l(@start_date, format: "%b %-d"), end: l(@end_date, format: "%b %-d, %Y")) %>
       </p>
     </div>
 
@@ -23,25 +23,25 @@
         <%= render DS::Link.new(
           text: t("reports.index.periods.month"),
           variant: @period_type == :monthly ? "secondary" : "ghost",
-          href: reports_path(period_type: :monthly, period_mode: @period_mode, fiscal_mode: @fiscal_mode),
+          href: reports_path(period_type: :monthly, fiscal_mode: @fiscal_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
           text: t("reports.index.periods.quarter"),
           variant: @period_type == :quarterly ? "secondary" : "ghost",
-          href: reports_path(period_type: :quarterly, period_mode: @period_mode),
+          href: reports_path(period_type: :quarterly, fiscal_mode: @fiscal_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
           text: t("reports.index.periods.six_months"),
           variant: @period_type == :last_6_months ? "secondary" : "ghost",
-          href: reports_path(period_type: :last_6_months, period_mode: @period_mode),
+          href: reports_path(period_type: :last_6_months, fiscal_mode: @fiscal_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
           text: t("reports.index.periods.year"),
           variant: @period_type == :ytd ? "secondary" : "ghost",
-          href: reports_path(period_type: :ytd, period_mode: @period_mode),
+          href: reports_path(period_type: :ytd, fiscal_mode: @fiscal_mode),
           size: :sm
         ) %>
         <%= render DS::Link.new(
@@ -52,29 +52,65 @@
         ) %>
       </div>
 
-      <%# Filter Bar: Toggles + Date + Print %>
+      <%# Filter Bar: Period arrows + Toggles + Date + Print %>
       <div class="flex flex-wrap items-center gap-3">
-        <% if @period_type != :custom %>
-          <%# Current/Last Toggle %>
-          <div class="inline-flex rounded-md border border-secondary p-0.5 bg-surface-inset">
-            <%= link_to reports_path(period_type: @period_type, period_mode: "current", fiscal_mode: @fiscal_mode),
-                class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@period_mode == 'current' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
-              <%= t("reports.index.toggles.current") %>
+        <%# Period arrows: step back and forth through periods of the selected type %>
+        <% nav = @period_nav %>
+        <div class="flex items-center gap-1" data-testid="report-period-nav">
+          <%= render DS::Tooltip.new(text: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.previous"), key: "←")) do |tooltip| %>
+            <% tooltip.with_trigger do %>
+              <%= render DS::Link.new(
+                variant: "icon",
+                icon: "chevron-left",
+                href: reports_path(nav[:previous_params]),
+                aria: { label: t("reports.index.period_nav.previous"), keyshortcuts: "ArrowLeft" },
+                data: { controller: "hotkey", hotkey: "ArrowLeft" }
+              ) %>
             <% end %>
-            <%= link_to reports_path(period_type: @period_type, period_mode: "last", fiscal_mode: @fiscal_mode),
-                class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@period_mode == 'last' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
-              <%= t("reports.index.toggles.last") %>
-            <% end %>
-          </div>
+          <% end %>
 
+          <span class="text-sm font-medium text-primary px-1 text-center whitespace-nowrap" data-testid="report-period-label"><%= nav[:label] %></span>
+
+          <% if nav[:next_params] %>
+            <%= render DS::Tooltip.new(text: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.next"), key: "→")) do |tooltip| %>
+              <% tooltip.with_trigger do %>
+                <%= render DS::Link.new(
+                  variant: "icon",
+                  icon: "chevron-right",
+                  href: reports_path(nav[:next_params]),
+                  aria: { label: t("reports.index.period_nav.next"), keyshortcuts: "ArrowRight" },
+                  data: { controller: "hotkey", hotkey: "ArrowRight" }
+                ) %>
+              <% end %>
+            <% end %>
+          <% else %>
+            <%= render DS::Button.new(
+              variant: "icon",
+              icon: "chevron-right",
+              disabled: true,
+              aria: { label: t("reports.index.period_nav.next") }
+            ) %>
+          <% end %>
+
+          <% if nav[:current_params] %>
+            <%= render DS::Link.new(
+              text: t("reports.index.period_nav.current"),
+              variant: "ghost",
+              size: :sm,
+              href: reports_path(nav[:current_params])
+            ) %>
+          <% end %>
+        </div>
+
+        <% if @period_type != :custom %>
           <%# Fiscal Toggle - for all period tabs (except custom) when fiscal enabled %>
-          <% if @period_type != :custom && Current.family.fiscal_month_enabled? %>
+          <% if Current.family.fiscal_month_enabled? %>
             <div class="inline-flex rounded-md border border-secondary p-0.5 bg-surface-inset">
-              <%= link_to reports_path(period_type: @period_type, period_mode: @period_mode, fiscal_mode: "false"),
+              <%= link_to reports_path(period_type: @period_type, fiscal_mode: "false", period_offset: @period_offset.nonzero?),
                   class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode != 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
                 <%= t("reports.index.toggles.calendar") %>
               <% end %>
-              <%= link_to reports_path(period_type: @period_type, period_mode: @period_mode, fiscal_mode: "true"),
+              <%= link_to reports_path(period_type: @period_type, fiscal_mode: "true", period_offset: @period_offset.nonzero?),
                   class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode == 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
                 <%= t("reports.index.toggles.fiscal") %>
               <% end %>
@@ -102,7 +138,7 @@
         <div class="flex-1"></div>
 
         <%# Print Report Button %>
-        <%= link_to print_reports_path(period_type: @period_type, period_mode: @period_mode, fiscal_mode: @fiscal_mode, start_date: @start_date, end_date: @end_date),
+        <%= link_to print_reports_path(report_period_params),
                     target: "_blank",
                     rel: "noopener",
                     aria: { label: t("reports.index.print_report") },

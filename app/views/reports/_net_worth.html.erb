@@ -31,13 +31,32 @@
     <%# Assets vs Liabilities %>
     <div class="p-4 bg-surface-inset rounded-lg">
       <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.assets_vs_liabilities") %></p>
-      <div class="flex items-baseline gap-2">
-        <span class="text-lg font-semibold text-success"><%= net_worth_metrics[:total_assets].format %></span>
-        <span class="text-xs text-subdued">-</span>
-        <span class="text-lg font-semibold text-destructive"><%= net_worth_metrics[:total_liabilities].format %></span>
+      <%# Large amounts wrap rather than overflow the card when the side panel is open %>
+      <div class="flex items-baseline gap-2 flex-wrap">
+        <span class="text-lg font-semibold text-success break-words"><%= net_worth_metrics[:total_assets].format %></span>
+        <span class="text-xs text-subdued shrink-0">-</span>
+        <span class="text-lg font-semibold text-destructive break-words"><%= net_worth_metrics[:total_liabilities].format %></span>
       </div>
     </div>
   </div>
+
+  <%# Net worth over time, one point per month, with each account group in the tooltip %>
+  <% breakdown_series = net_worth_metrics[:breakdown_series] %>
+  <% if breakdown_series && breakdown_series[:values].size >= 2 %>
+    <div class="space-y-2" data-testid="net-worth-over-time">
+      <p class="text-sm text-secondary"><%= t("reports.net_worth.chart.title") %></p>
+      <div
+        id="reportsNetWorthChart"
+        class="w-full h-72"
+        role="img"
+        aria-label="<%= t("reports.net_worth.chart.aria_label") %>"
+        draggable="false"
+        data-controller="net-worth-chart"
+        data-net-worth-chart-data-value="<%= breakdown_series.to_json %>"
+        data-net-worth-chart-assets-label-value="<%= t("reports.net_worth.total_assets") %>"
+        data-net-worth-chart-liabilities-label-value="<%= t("reports.net_worth.total_liabilities") %>"></div>
+    </div>
+  <% end %>
 
   <%# Waterfall Chart %>
   <% if net_worth_metrics[:asset_groups].any? || net_worth_metrics[:liability_groups].any? %>
