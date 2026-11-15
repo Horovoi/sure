@@ -351,4 +351,218 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to suggestions_subscriptions_path
     assert_match(/previously dismissed/, flash[:notice])
   end
+
+  # w1-budrec: the Other recurring tab and the detection toggle (decision 54)
+
+  def create_other_recurring_row(**attrs)
+    @family.recurring_transactions.create!({
+      name: "Rent", amount: 800, currency: "USD", expected_day_of_month: 1,
+      last_occurrence_date: Date.current.beginning_of_month, next_expected_date: Date.current.next_month.beginning_of_month,
+      status: "active", manual: true, occurrence_count: 3
+    }.merge(attrs))
+  end
+
+  test "the old recurring transactions page does not route" do
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("/recurring_transactions", method: :get)
+    end
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("/recurring_transactions/update_settings", method: :patch)
+    end
+  end
+
+  test "update_detection_settings turns automatic detection off" do
+    patch update_detection_settings_subscriptions_url, params: { recurring_detection_enabled: "0" }
+
+    assert_redirected_to suggestions_subscriptions_path
+    assert @family.reload.recurring_transactions_disabled?
+    assert_equal I18n.t("subscriptions.update_detection_settings.disabled"), flash[:notice]
+  end
+
+  test "update_detection_settings turns automatic detection on and schedules a run" do
+    @family.update!(recurring_transactions_disabled: true)
+    IdentifyRecurringTransactionsJob.expects(:schedule_for).with(@family).once
+
+    patch update_detection_settings_subscriptions_url, params: { recurring_detection_enabled: "1" }
+
+    assert_redirected_to suggestions_subscriptions_path
+    assert_not @family.reload.recurring_transactions_disabled?
+    assert_equal I18n.t("subscriptions.update_detection_settings.enabled"), flash[:notice]
+  end
+
+  test "update_detection_settings needs the toggle value" do
+    patch update_detection_settings_subscriptions_url
+
+    assert_response :bad_request
+    assert_not @family.reload.recurring_transactions_disabled?
+  end
+
+  test "suggestions page shows the detection toggle in its saved state" do
+    @family.update!(recurring_transactions_disabled: true)
+
+    get suggestions_subscriptions_url
+
+    assert_response :success
+    assert_select "[data-testid='recurring-detection-settings'] input[type=checkbox][name='recurring_detection_enabled']:not([checked])"
+  end
+
+  test "Other recurring lists manual rows that are not subscriptions" do
+    rent = create_other_recurring_row
+    @family.recurring_transactions.create!(
+      name: "Detected noise", amount: 5, currency: "USD", expected_day_of_month: 9,
+      last_occurrence_date: Date.current, next_expected_date: 1.month.from_now, status: "active"
+    )
+    manual_subscription = create_other_recurring_row(name: "Gym", amount: 30, subscription_state: "subscription")
+
+    get subscriptions_url(kind: "other")
+
+    assert_response :success
+    assert_select "tr##{ActionView::RecordIdentifier.dom_id(rent)}"
+    assert_select "[data-testid='other-recurring-row']", count: 1
+    assert_select "td", text: /Detected noise/, count: 0
+    assert_select "tr##{ActionView::RecordIdentifier.dom_id(manual_subscription)}", count: 0
+
+    get subscriptions_url
+    assert_select "tr##{ActionView::RecordIdentifier.dom_id(rent)}", count: 0
+    assert_select "tr##{ActionView::RecordIdentifier.dom_id(manual_subscription)}"
+  end
+
+  test "Other recurring filters by status and keeps the subscription totals in the header" do
+    create_other_recurring_row
+    paused = create_other_recurring_row(name: "Water", amount: 40, status: "inactive", inactive_reason: "user")
+
+    get subscriptions_url(kind: "other", status: "inactive")
+
+    assert_response :success
+    assert_select "[data-testid='other-recurring-row']", count: 1
+    assert_select "tr##{ActionView::RecordIdentifier.dom_id(paused)}"
+    # The header sums the one active Netflix subscription, not the rent
+    assert_select "header p", text: /\$15\.99/
+  end
+
+  test "Other recurring shows an empty state" do
+    get subscriptions_url(kind: "other")
+
+    assert_response :success
+    assert_select "[data-testid='other-recurring-empty']"
+  end
+
+  test "toggle_status pauses and resumes a manual row" do
+    rent = create_other_recurring_row
+
+    post toggle_status_subscription_url(rent), as: :turbo_stream
+    assert_response :success
+    assert_match ActionView::RecordIdentifier.dom_id(rent), response.body
+    rent.reload
+    assert rent.inactive?
+    assert_equal "user", rent.inactive_reason
+
+    post toggle_status_subscription_url(rent)
+    assert_redirected_to subscriptions_path
+    assert rent.reload.active?
+    assert_nil rent.inactive_reason
+  end
+
+  test "destroy deletes a manual row and returns to Other recurring" do
+    rent = create_other_recurring_row
+
+    assert_difference "@family.recurring_transactions.count", -1 do
+      delete subscription_url(rent)
+    end
+
+    assert_redirected_to subscriptions_path(kind: "other")
+    assert_equal I18n.t("subscriptions.destroy.other_recurring_deleted"), flash[:notice]
+  end
+
+  test "make_subscription turns a manual row into a subscription" do
+    rent = create_other_recurring_row(inferred_account: accounts(:depository), next_expected_date: 3.days.ago.to_date)
+
+    post make_subscription_subscription_url(rent)
+
+    assert_redirected_to edit_subscription_path(rent)
+    rent.reload
+    assert rent.subscription?
+    assert rent.manual?
+    assert_equal accounts(:depository), rent.default_account
+    assert rent.next_expected_date > Date.current, "starts from the next future date"
+  end
+
+  test "make_subscription refuses a row that is already a subscription" do
+    post make_subscription_subscription_url(@subscription)
+
+    assert_redirected_to subscriptions_path(kind: "other")
+    assert_equal I18n.t("subscriptions.make_subscription.failed"), flash[:alert]
+  end
+
+  test "detected patterns cannot be paused, deleted or promoted from Subscriptions" do
+    pattern = @family.recurring_transactions.create!(
+      name: "Detected", amount: 5, currency: "USD", expected_day_of_month: 9,
+      last_occurrence_date: Date.current, next_expected_date: 1.month.from_now, status: "active"
+    )
+
+    post toggle_status_subscription_url(pattern)
+    assert_response :not_found
+    delete subscription_url(pattern)
+    assert_response :not_found
+    post make_subscription_subscription_url(pattern)
+    assert_response :not_found
+    assert pattern.reload.active?
+  end
+
+  test "edit and record stay limited to subscriptions" do
+    rent = create_other_recurring_row
+
+    get edit_subscription_url(rent)
+    assert_response :not_found
+    post record_transaction_subscription_url(rent)
+    assert_response :not_found
+  end
+
+  # w1-budrec: subscriptions iCal feed controls on the calendar page (decision 41)
+
+  test "the calendar page offers to turn the feed on and shows no link while it is off" do
+    get calendar_subscriptions_url
+
+    assert_response :success
+    assert_select "[data-testid='subscriptions-feed'] button", text: I18n.t("subscriptions.feed_settings.enable")
+    assert_select "[data-testid='subscriptions-feed-url']", count: 0
+    assert_select "[data-testid='subscriptions-feed']", text: /#{Regexp.escape(I18n.t("subscriptions.feed_settings.lan_note").first(40))}/
+  end
+
+  test "enable_feed turns the feed on and the calendar page shows its link" do
+    post enable_feed_subscriptions_url
+
+    assert_redirected_to calendar_subscriptions_path(anchor: "subscriptions-feed")
+    token = @family.reload.subscriptions_feed_token
+    assert token.present?
+
+    get calendar_subscriptions_url
+    assert_select "[data-testid='subscriptions-feed-url']", text: subscriptions_feed_url(token: token)
+    assert_select "a[href='#{subscriptions_feed_url(token: token).sub(/\Ahttps?:/, "webcal:")}']"
+  end
+
+  test "reset_feed replaces the token" do
+    old_token = @family.enable_subscriptions_feed!
+
+    post reset_feed_subscriptions_url
+
+    assert_redirected_to calendar_subscriptions_path(anchor: "subscriptions-feed")
+    assert_not_equal old_token, @family.reload.subscriptions_feed_token
+    assert_equal I18n.t("subscriptions.reset_feed.success"), flash[:notice]
+  end
+
+  test "disable_feed turns the feed off" do
+    @family.enable_subscriptions_feed!
+
+    delete disable_feed_subscriptions_url
+
+    assert_redirected_to calendar_subscriptions_path(anchor: "subscriptions-feed")
+    assert_nil @family.reload.subscriptions_feed_token
+  end
+
+  test "calendar with a month that is not a date shows the current month" do
+    get calendar_subscriptions_url(month: "not-a-date")
+
+    assert_response :success
+  end
 end

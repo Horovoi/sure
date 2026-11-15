@@ -37,20 +37,23 @@ class Budget < ApplicationRecord
       Date.new(parsed.year, parsed.month, [ day, last_dom ].min)
     end
 
+    # Budgets reach back to the oldest entry (or two years, whichever is earlier) and
+    # forward two years, so the coming months can be planned.
     def budget_date_valid?(date, family:)
       start = family.budget_period_start_for(date)
       earliest_start = family.budget_period_start_for(oldest_valid_budget_date(family))
-      current_start = family.budget_period_start_for(Date.current)
+      latest_start = family.budget_period_start_for(Date.current.advance(years: 2))
 
-      start >= earliest_start && start <= current_start
+      start >= earliest_start && start <= latest_start
     end
 
     # Read-only: the budget whose period contains the date, or nil. Unlike
     # find_or_bootstrap it never creates, moves or syncs a budget, so pages
     # that only show a figure from it can call it on every GET.
+    # The start date alone names a budget, so a budget saved with a wrong end date
+    # (see budget_starting_on) is still found.
     def find_for_date(family, date)
-      period_start = family.budget_period_start_for(date)
-      family.budgets.find_by(start_date: period_start, end_date: family.budget_period_end_for(period_start))
+      family.budgets.find_by(start_date: family.budget_period_start_for(date))
     end
 
     def find_or_bootstrap(family, start_date:)
@@ -60,7 +63,7 @@ class Budget < ApplicationRecord
       period_end = family.budget_period_end_for(period_start)
 
       Budget.transaction do
-        budget = family.budgets.find_by(start_date: period_start, end_date: period_end) ||
+        budget = budget_starting_on(family, period_start, period_end) ||
           adopt_budget_from_other_fiscal_start_day(family, period_start, period_end) ||
           family.budgets.create!(start_date: period_start, end_date: period_end, currency: family.currency)
 
@@ -71,6 +74,17 @@ class Budget < ApplicationRecord
     end
 
     private
+      # The start date alone names a budget (it is unique per family). A budget saved
+      # while a fiscal start day past the end of a short month (29 to 31) gave periods
+      # a wrong end date gets the right one here.
+      def budget_starting_on(family, period_start, period_end)
+        budget = family.budgets.find_by(start_date: period_start)
+        return nil unless budget
+
+        budget.update(end_date: period_end) unless budget.end_date == period_end
+        budget
+      end
+
       # A budget's period comes from the family's fiscal start day. After that day changes,
       # the budget for a month (say Mar 1 - Mar 31) no longer matches the month's new
       # period (Mar 10 - Apr 9). Move it to the new period instead of starting an empty
@@ -122,6 +136,8 @@ class Budget < ApplicationRecord
 
   def uncategorized_budget_category
     budget_categories.uncategorized.tap do |bc|
+      # This budget, not a copy loaded again, so the row reads the totals loaded here.
+      bc.budget = self
       bc.budgeted_spending = [ available_to_allocate, 0 ].max
       bc.currency = family.currency
     end
@@ -139,29 +155,85 @@ class Budget < ApplicationRecord
     budgeted_spending.present?
   end
 
-  def income_category_totals
-    income_totals.category_totals.reject { |ct| ct.category.subcategory? || ct.total.zero? }.sort_by(&:weight).reverse
+  # =============================================================================
+  # Copy a previous budget
+  # =============================================================================
+
+  # The newest set-up budget of the family that starts before this one: what an
+  # empty month offers to copy.
+  def most_recent_initialized_budget
+    family.budgets
+      .includes(:budget_categories)
+      .where(start_date: ...start_date)
+      .where.not(budgeted_spending: nil)
+      .order(start_date: :desc)
+      .first
   end
 
+  # Copies the total, the expected income and each expense row's amount from an
+  # earlier budget of the family. Amounts are written to each row as they are, never
+  # added up from subcategories, so a parent and its subcategory keep the source
+  # amounts. Rows of categories that are now income stay hidden and untouched. The
+  # rollover carry is not copied: the rollover code calculates it.
+  def copy_from!(source_budget)
+    raise ArgumentError, "source budget must belong to the same family" unless source_budget.family_id == family_id
+    raise ArgumentError, "source budget must precede target budget" unless source_budget.start_date < start_date
+
+    Budget.transaction do
+      sync_budget_categories
+
+      update!(
+        budgeted_spending: source_budget.budgeted_spending,
+        expected_income: source_budget.expected_income || 0
+      )
+
+      target_by_category = budget_categories.index_by(&:category_id)
+
+      source_budget.budget_categories.each do |source_bc|
+        target_bc = target_by_category[source_bc.category_id]
+        next unless target_bc
+
+        target_bc.update!(budgeted_spending: source_bc[:budgeted_spending])
+      end
+    end
+  end
+
+  # Income by category, without the refunds of expense categories: those lower the
+  # spending of their category instead (see #refunds_in_expense_categories), so
+  # counting them here as well would count them twice.
+  def income_category_totals
+    totals = income_totals.category_totals.select do |ct|
+      !ct.category.subcategory? && (ct.category.uncategorized? || (ct.category.persisted? && ct.category.classification == "income"))
+    end
+
+    with_weights(totals)
+  end
+
+  # Spending by top-level category, net of the category's refunds and never below 0.
   def expense_category_totals
-    expense_totals.category_totals.reject { |ct| ct.category.subcategory? || ct.total.zero? }.sort_by(&:weight).reverse
+    totals = expense_totals.category_totals.reject { |ct| ct.category.subcategory? }.map do |ct|
+      ct.with(total: net_category_spending(ct.category, ct.total))
+    end
+
+    with_weights(totals)
   end
 
   def current?
     start_date == family.budget_period_start_for(Date.current) && end_date == family.budget_period_end_for(start_date)
   end
 
+  # The neighbours are the periods just before the first day and just after the last
+  # day. Stepping a month from the start date would skip or repeat a period when the
+  # fiscal start day is past the end of a short month (day 31 and February).
   def previous_budget_param
-    previous_date = start_date - 1.month
+    previous_date = start_date - 1.day
     return nil unless self.class.budget_date_valid?(previous_date, family: family)
 
     self.class.date_to_param(previous_date, family: family)
   end
 
   def next_budget_param
-    return nil if current?
-
-    next_date = start_date + 1.month
+    next_date = end_date + 1.day
     return nil unless self.class.budget_date_valid?(next_date, family: family)
 
     self.class.date_to_param(next_date, family: family)
@@ -170,10 +242,11 @@ class Budget < ApplicationRecord
   def to_donut_segments_json
     unused_segment_id = "unused"
 
-    # Continuous gray segment for empty budgets
-    return [ { color: "var(--budget-unallocated-fill)", amount: 1, id: unused_segment_id } ] unless allocations_valid?
+    # Continuous gray segment for a budget without an amount yet. A budget with only a
+    # total (nothing allocated) still shows what was spent.
+    return [ { color: "var(--budget-unallocated-fill)", amount: 1, id: unused_segment_id } ] unless initialized? && !over_allocated?
 
-    segments = budget_categories.map do |bc|
+    segments = donut_budget_categories.map do |bc|
       { color: bc.category.color, amount: budget_category_actual_spending(bc), id: bc.id }
     end
 
@@ -184,6 +257,16 @@ class Budget < ApplicationRecord
     segments
   end
 
+  # The rows of the spending donut: top-level categories (a parent's spending already
+  # includes its subcategories) plus the uncategorized row when something was spent
+  # without a category.
+  def donut_budget_categories
+    rows = budget_categories.reject(&:subcategory?)
+    uncategorized = uncategorized_budget_category
+    rows << uncategorized if budget_category_actual_spending(uncategorized).positive?
+    rows
+  end
+
   # =============================================================================
   # Actuals: How much user has spent on each budget category
   # =============================================================================
@@ -191,12 +274,18 @@ class Budget < ApplicationRecord
     income_statement.median_expense(interval: "month")
   end
 
+  # Spending net of the refunds in expense categories, never below 0.
   def actual_spending
-    expense_totals.total
+    [ expense_totals.total - refunds_in_expense_categories, 0 ].max
   end
 
+  # A category's spending net of its refunds, never below 0. A parent's totals
+  # include its subcategories, so a subcategory refund lowers both.
   def budget_category_actual_spending(budget_category)
-    expense_totals.category_totals.find { |ct| ct.category.id == budget_category.category.id }&.total || 0
+    category = budget_category.category
+    expense = expense_totals_by_category[category.totals_key]&.total || 0
+
+    net_category_spending(category, expense)
   end
 
   def category_median_monthly_expense(category)
@@ -271,8 +360,9 @@ class Budget < ApplicationRecord
     family.income_statement.median_income(interval: "month")
   end
 
+  # Income without the refunds of expense categories, which lower spending instead.
   def actual_income
-    family.income_statement.income_totals(period: self.period).total
+    income_totals.total - refunds_in_expense_categories
   end
 
   def actual_income_percent
@@ -301,6 +391,53 @@ class Budget < ApplicationRecord
     end
 
     def income_totals
-      @income_totals ||= family.income_statement.income_totals(period: period)
+      @income_totals ||= income_statement.income_totals(period: period)
+    end
+
+    # =============================================================================
+    # Refund netting
+    #
+    # The income statement classifies each transaction by the sign of its amount, so
+    # a refund in an expense category (an inflow) lands in the income totals under
+    # that category. Budgets net it against the category's spending. Inflows without
+    # a category stay gross: one is as likely to be income as a refund.
+    # =============================================================================
+
+    # Refunds of the budget's top-level expense categories. A parent's total includes
+    # its subcategories, so counting top-level rows only counts each refund once.
+    def refunds_in_expense_categories
+      @refunds_in_expense_categories ||= refund_netted_category_ids.sum do |category_id|
+        income_totals_by_category[category_id]&.total || 0
+      end
+    end
+
+    def refund_netted_category_ids
+      @refund_netted_category_ids ||= budget_categories.reject(&:subcategory?).map(&:category_id).to_set
+    end
+
+    # Spending of one category less its refunds, never below 0. Only persisted expense
+    # categories net their refunds; the uncategorized row stays gross.
+    def net_category_spending(category, expense)
+      return expense unless category.persisted? && category.classification == "expense"
+
+      refund = income_totals_by_category[category.totals_key]&.total || 0
+      [ expense - refund, 0 ].max
+    end
+
+    def expense_totals_by_category
+      @expense_totals_by_category ||= expense_totals.category_totals.index_by { |ct| ct.category.totals_key }
+    end
+
+    def income_totals_by_category
+      @income_totals_by_category ||= income_totals.category_totals.index_by { |ct| ct.category.totals_key }
+    end
+
+    # Drops zero rows and weighs each row against the rows shown, largest first, so
+    # the bars of the actuals summary add up to 100%.
+    def with_weights(category_totals)
+      shown = category_totals.reject { |ct| ct.total.zero? }
+      sum = shown.sum(&:total)
+
+      shown.map { |ct| ct.with(weight: sum.zero? ? 0 : ct.total.to_f / sum * 100) }.sort_by(&:weight).reverse
     end
 end

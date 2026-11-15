@@ -432,7 +432,7 @@ class ReportsController < ApplicationController
             net: income - expenses
           }
 
-          current_start = family.budget_period_start_for(current_start >> 1)
+          current_start = family.budget_period_end_for(current_start) + 1.day
         end
       else
         # Calendar month iteration
@@ -787,7 +787,7 @@ class ReportsController < ApplicationController
         current_start = family.budget_period_start_for(@start_date)
         while current_start <= @end_date
           months << current_start
-          current_start = family.budget_period_start_for(current_start >> 1)
+          current_start = family.budget_period_end_for(current_start) + 1.day
         end
       else
         current_month = @start_date.beginning_of_month

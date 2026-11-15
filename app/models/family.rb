@@ -164,8 +164,10 @@ class Family < ApplicationRecord
     date = date.to_date
     day = fiscal_start_day
 
-    # Determine which month contains the start of period for the given date
-    base_month = if date.day >= day
+    # Determine which month contains the start of period for the given date. The start
+    # day is clamped to the month's length, so with day 31 the November period starts
+    # on November 30.
+    base_month = if date.day >= [ day, date.end_of_month.day ].min
       Date.new(date.year, date.month, 1)
     else
       (date << 1).beginning_of_month
@@ -178,7 +180,11 @@ class Family < ApplicationRecord
 
   # Compute the inclusive end date for the budget period starting at start_date
   def budget_period_end_for(start_date)
-    next_start = budget_period_start_for(start_date >> 1) # +1 month
+    # The next period starts in the month after this one, on the clamped start day.
+    # Stepping the start date by a month instead would keep a clamped day (Feb 28 to
+    # Mar 28) and end the period before it began.
+    next_month = budget_period_start_for(start_date).next_month.beginning_of_month
+    next_start = Date.new(next_month.year, next_month.month, [ fiscal_start_day, next_month.end_of_month.day ].min)
     next_start - 1.day
   end
 
@@ -233,5 +239,32 @@ class Family < ApplicationRecord
 
   def self_hoster?
     Rails.application.config.app_mode.self_hosted?
+  end
+
+  # ---------------------------------------------------------------------------
+  # Subscriptions iCal feed (w1-budrec). Off until enabled; the token in the
+  # feed URL is the only credential, so reset replaces it and disable clears it.
+  # ---------------------------------------------------------------------------
+  def self.find_by_subscriptions_feed_token(token)
+    return nil if token.blank?
+
+    find_by(subscriptions_feed_token: token.to_s)
+  end
+
+  def subscriptions_feed_enabled?
+    subscriptions_feed_token.present?
+  end
+
+  def enable_subscriptions_feed!
+    subscriptions_feed_enabled? ? subscriptions_feed_token : reset_subscriptions_feed!
+  end
+
+  def reset_subscriptions_feed!
+    update!(subscriptions_feed_token: SecureRandom.urlsafe_base64(32))
+    subscriptions_feed_token
+  end
+
+  def disable_subscriptions_feed!
+    update!(subscriptions_feed_token: nil)
   end
 end

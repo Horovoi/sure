@@ -497,4 +497,171 @@ end
 
     assert_not_equal before, Family.find(@entry.account.family_id).entries_cache_version
   end
+
+  def upcoming_test_row(name, manual: false, state: "pattern")
+    families(:dylan_family).recurring_transactions.create!(
+      name: name, amount: 42, currency: "USD", expected_day_of_month: 5.days.from_now.day,
+      last_occurrence_date: 25.days.ago.to_date, next_expected_date: 5.days.from_now.to_date,
+      status: "active", manual: manual, subscription_state: state, occurrence_count: 3
+    )
+  end
+
+  test "upcoming lists only manual recurring rows and subscriptions" do
+    upcoming_test_row("Upcoming manual rent", manual: true)
+    upcoming_test_row("Upcoming streaming plan", state: "subscription")
+    upcoming_test_row("Upcoming detected pattern")
+    upcoming_test_row("Upcoming suggested pattern", state: "suggested")
+    upcoming_test_row("Upcoming dismissed pattern", state: "dismissed")
+
+    get transactions_url
+
+    assert_response :success
+    assert_includes response.body, "Upcoming manual rent"
+    assert_includes response.body, "Upcoming streaming plan"
+    assert_not_includes response.body, "Upcoming detected pattern"
+    assert_not_includes response.body, "Upcoming suggested pattern"
+    assert_not_includes response.body, "Upcoming dismissed pattern"
+  end
+
+  # A transaction in the empty family and a recurring row with its identity.
+  def mark_test_setup(row_attributes = nil)
+    family = families(:empty)
+    sign_in users(:empty)
+    account = family.accounts.create! name: "Mark test", balance: 0, currency: "USD", accountable: Depository.new
+    merchant = family.merchants.create! name: "Mark Test Merchant"
+    entry = create_transaction(account: account, amount: 100, merchant: merchant)
+
+    row = if row_attributes
+      family.recurring_transactions.create!(
+        { merchant: merchant, amount: 95, currency: "USD", expected_day_of_month: entry.date.day,
+          last_occurrence_date: 1.month.ago.to_date, next_expected_date: 1.month.from_now.to_date,
+          status: "active", occurrence_count: 3 }.merge(row_attributes)
+      )
+    end
+
+    [ family, entry.transaction, row ]
+  end
+
+  test "mark_as_recurring converts a detected pattern in place" do
+    family, transaction, row = mark_test_setup(manual: false, subscription_state: "pattern")
+
+    assert_no_difference "RecurringTransaction.count" do
+      post mark_as_recurring_transaction_path(transaction)
+    end
+
+    assert_redirected_to transactions_path
+    assert_equal I18n.t("transactions.mark_as_recurring.converted"), flash[:notice]
+    row.reload
+    assert row.manual?
+    assert_equal 100, row.amount
+    assert row.pattern?
+    assert_equal [ row.id ], family.recurring_transactions.pluck(:id)
+  end
+
+  test "mark_as_recurring converts a stale pattern and makes it active" do
+    _family, transaction, row = mark_test_setup(manual: false, status: "inactive", inactive_reason: "stale")
+
+    post mark_as_recurring_transaction_path(transaction)
+
+    row.reload
+    assert row.manual?
+    assert row.active?
+    assert_nil row.inactive_reason
+  end
+
+  test "mark_as_recurring keeps a suggestion a suggestion and makes it manual" do
+    _family, transaction, row = mark_test_setup(manual: false, subscription_state: "suggested")
+
+    assert_no_difference "RecurringTransaction.count" do
+      post mark_as_recurring_transaction_path(transaction)
+    end
+
+    row.reload
+    assert row.manual?
+    assert row.suggested?
+  end
+
+  test "mark_as_recurring on a subscription shows an alert and changes nothing" do
+    _family, transaction, row = mark_test_setup(manual: false, subscription_state: "subscription")
+
+    assert_no_changes -> { row.reload.attributes.except("updated_at") } do
+      assert_no_difference "RecurringTransaction.count" do
+        post mark_as_recurring_transaction_path(transaction)
+      end
+    end
+
+    assert_redirected_to transactions_path
+    assert_equal I18n.t("transactions.mark_as_recurring.already_subscription"), flash[:alert]
+  end
+
+  test "mark_as_recurring shows an alert when a concurrent request took the identity" do
+    _family, transaction, _row = mark_test_setup
+    RecurringTransaction.expects(:create_from_transaction).raises(ActiveRecord::RecordNotUnique.new("duplicate key"))
+
+    assert_no_difference "RecurringTransaction.count" do
+      post mark_as_recurring_transaction_path(transaction)
+    end
+
+    assert_redirected_to transactions_path
+    assert_equal I18n.t("transactions.mark_as_recurring.duplicate"), flash[:alert]
+  end
+
+  test "mark_as_recurring creates a row when the only row with the identity has a different amount" do
+    family, transaction, _row = mark_test_setup(manual: false, amount: 40)
+
+    assert_difference "family.recurring_transactions.count", 1 do
+      post mark_as_recurring_transaction_path(transaction)
+    end
+
+    assert_equal I18n.t("transactions.mark_as_recurring.success"), flash[:notice]
+  end
+
+  test "mark_as_subscription approves a suggestion in place" do
+    _family, transaction, row = mark_test_setup(manual: false, subscription_state: "suggested")
+
+    assert_no_difference "RecurringTransaction.count" do
+      post mark_as_subscription_transaction_path(transaction)
+    end
+
+    row.reload
+    assert row.subscription?
+    assert row.manual?
+    assert_redirected_to edit_subscription_path(row)
+    assert_equal I18n.t("transactions.mark_as_subscription.success"), flash[:notice]
+  end
+
+  test "mark_as_subscription confirms a manual row as a subscription" do
+    _family, transaction, row = mark_test_setup(manual: true)
+
+    assert_no_difference "RecurringTransaction.count" do
+      post mark_as_subscription_transaction_path(transaction)
+    end
+
+    assert row.reload.subscription?
+    assert_redirected_to edit_subscription_path(row)
+  end
+
+  test "mark_as_subscription on a subscription shows an alert" do
+    _family, transaction, _row = mark_test_setup(manual: false, subscription_state: "subscription")
+
+    assert_no_difference "RecurringTransaction.count" do
+      post mark_as_subscription_transaction_path(transaction)
+    end
+
+    assert_redirected_to transactions_path
+    assert_equal I18n.t("transactions.mark_as_subscription.already_subscription"), flash[:alert]
+  end
+
+  test "mark_as_subscription creates a subscription when nothing has the identity" do
+    family, transaction, _row = mark_test_setup
+
+    assert_difference "family.recurring_transactions.count", 1 do
+      post mark_as_subscription_transaction_path(transaction)
+    end
+
+    row = family.recurring_transactions.last
+    assert row.subscription?
+    assert row.manual?
+    assert_redirected_to edit_subscription_path(row)
+  end
 end

@@ -24,6 +24,10 @@ class RecurringTransaction < ApplicationRecord
   # Why an inactive row is inactive. Only stale rows come back on their own.
   INACTIVE_REASONS = %w[user stale].freeze
 
+  # Transaction kinds that are never a recurring bill or income: transfer legs,
+  # moves into investments, and spending the user marked as one-time.
+  NON_RECURRING_KINDS = (Transaction::TRANSFER_KINDS + %w[investment_contribution one_time]).freeze
+
   # Lifecycle of a recurring row as a subscription:
   #   pattern      - detected recurring pattern, not a subscription
   #   suggested    - suggested to the user as a subscription
@@ -85,6 +89,10 @@ class RecurringTransaction < ApplicationRecord
   scope :expected_soon, -> { active.where("next_expected_date <= ?", 1.month.from_now) }
   scope :subscriptions, -> { where(subscription_state: "subscription") }
   scope :active_subscriptions, -> { subscriptions.active }
+  # Rows the user created or confirmed (see #user_managed?).
+  scope :user_managed, -> { where(manual: true).or(where(subscription_state: "subscription")) }
+  # Manual rows that are not subscriptions ("Other recurring" on Subscriptions).
+  scope :other_recurring, -> { where(manual: true).where.not(subscription_state: "subscription") }
 
   # Rows with the same identity as the given merchant or name and currency.
   # Amount is not part of the identity: it drifts with FX rates and prices.
@@ -155,16 +163,91 @@ class RecurringTransaction < ApplicationRecord
     [ user_managed? ? 0 : 1, state_rank, -(last_occurrence_date&.jd || 0) ]
   end
 
-  # Create a manual recurring transaction from an existing transaction
-  # Automatically calculates amount variance from past 6 months of matching transactions
-  def self.create_from_transaction(transaction, date_variance: 2)
+  # What mark_from_transaction! did: :created a row, :converted a detected
+  # row in place, or found a row the user already manages (:unchanged).
+  MarkResult = Data.define(:recurring_transaction, :outcome) do
+    def unchanged?
+      outcome == :unchanged
+    end
+  end
+
+  MARK_AS = %i[manual subscription].freeze
+
+  # The row with this identity (merchant or name, currency) whose amount is
+  # within the tolerance; the closest one when several match, a subscription
+  # first on a tie. Detection and "Mark as recurring" share it, so both land
+  # on the same row.
+  def self.find_for_identity(family:, merchant_id:, name:, currency:, amount:, excluding: [])
+    family.recurring_transactions
+      .with_identity(merchant_id: merchant_id, name: name, currency: currency)
+      .where.not(id: excluding)
+      .to_a
+      .select { |recurring| recurring.amount_within_tolerance?(amount) }
+      .min_by { |recurring| [ (recurring.amount - amount).abs, recurring.subscription? ? 0 : 1 ] }
+  end
+
+  # The row a transaction already belongs to: the subscription that generated
+  # it, or a row with its identity and amount.
+  def self.find_for_transaction(transaction)
     entry = transaction.entry
     family = entry.account.family
+    linked = transaction.recurring_transaction
+    return linked if linked && linked.family_id == family.id
+
+    find_for_identity(
+      family: family,
+      merchant_id: transaction.merchant_id,
+      name: transaction.merchant_id.present? ? nil : entry.name,
+      currency: entry.currency,
+      amount: entry.amount
+    )
+  end
+
+  # The row the user manages for this transaction, if any (the transaction
+  # drawer shows "Already recurring" for it).
+  def self.user_managed_for_transaction(transaction)
+    row = find_for_transaction(transaction)
+    row if row&.user_managed?
+  end
+
+  # "Mark as recurring" / "Mark as subscription" from a transaction. A row the
+  # user already manages is returned as it is (a manual row marked as a
+  # subscription is confirmed as one). A detected pattern, suggestion or
+  # dismissed suggestion with the same identity becomes the manual row, so
+  # no second row appears. Otherwise a manual row is created.
+  # Raises ActiveRecord::RecordNotUnique when a concurrent write took the identity.
+  def self.mark_from_transaction!(source, as: :manual)
+    raise ArgumentError, "as must be one of #{MARK_AS.join(", ")}" unless MARK_AS.include?(as)
+
+    existing = find_for_transaction(source)
+    if existing&.user_managed? && (as == :manual || existing.subscription?)
+      return MarkResult.new(recurring_transaction: existing, outcome: :unchanged)
+    end
+
+    outcome = existing ? :converted : :created
+    row = nil
+    transaction(requires_new: true) do
+      row = if existing.nil?
+        create_from_transaction(source)
+      elsif existing.manual?
+        existing # a manual row marked as a subscription keeps what the user set
+      else
+        existing.adopt_transaction!(source)
+      end
+      row.confirm_as_subscription! if as == :subscription
+    end
+
+    MarkResult.new(recurring_transaction: row, outcome: outcome)
+  end
+
+  # Attributes of a manual row for a transaction. The amount variance comes
+  # from the matching transactions of the past 6 months.
+  def self.manual_attributes_from_transaction(transaction)
+    entry = transaction.entry
     expected_day = entry.date.day
 
-    # Find matching transactions from the past 6 months
     matching_amounts = find_matching_transaction_amounts(
-      family: family,
+      family: entry.account.family,
       merchant_id: transaction.merchant_id,
       name: transaction.merchant_id.present? ? nil : entry.name,
       currency: entry.currency,
@@ -172,49 +255,88 @@ class RecurringTransaction < ApplicationRecord
       lookback_months: 6
     )
 
-    # Calculate amount variance from historical data
-    expected_min = expected_max = expected_avg = nil
-    if matching_amounts.size > 1
-      # Multiple transactions found - calculate variance
-      expected_min = matching_amounts.min
-      expected_max = matching_amounts.max
-      expected_avg = matching_amounts.sum / matching_amounts.size
-    elsif matching_amounts.size == 1
-      # Single transaction - no variance yet
-      amount = matching_amounts.first
-      expected_min = amount
-      expected_max = amount
-      expected_avg = amount
-    end
+    expected_min = matching_amounts.min
+    expected_max = matching_amounts.max
+    expected_avg = matching_amounts.any? ? matching_amounts.sum / matching_amounts.size : nil
 
-    # Calculate next expected date relative to today, not the transaction date
-    next_expected = calculate_next_expected_date_from_today(expected_day)
-
-    create!(
-      family: family,
+    {
       merchant_id: transaction.merchant_id,
       name: transaction.merchant_id.present? ? nil : entry.name,
       amount: entry.amount,
       currency: entry.currency,
       expected_day_of_month: expected_day,
       last_occurrence_date: entry.date,
-      next_expected_date: next_expected,
+      # Relative to today, not to the transaction date
+      next_expected_date: calculate_next_expected_date_from_today(expected_day),
       status: "active",
+      inactive_reason: nil,
       occurrence_count: matching_amounts.size,
       manual: true,
       expected_amount_min: expected_min,
       expected_amount_max: expected_max,
       expected_amount_avg: expected_avg,
       inferred_account_id: entry.account_id
-    )
+    }
+  end
+
+  # Create a manual recurring transaction from an existing transaction
+  def self.create_from_transaction(transaction)
+    family = transaction.entry.account.family
+    create!(family: family, **manual_attributes_from_transaction(transaction))
+  end
+
+  # Turns a detected row into the manual row for this transaction, keeping its
+  # id, subscription state and the newer of the two last occurrences.
+  def adopt_transaction!(transaction)
+    attributes = self.class.manual_attributes_from_transaction(transaction)
+    attributes[:last_occurrence_date] = [ last_occurrence_date, attributes[:last_occurrence_date] ].compact.max
+    attributes[:next_expected_date] = [ next_expected_date, attributes[:next_expected_date] ].compact.max
+    update!(attributes)
+    self
+  end
+
+  # Confirms the row as a subscription with the billing cycle of the
+  # transaction's history, in the Subscriptions category when there is one.
+  def confirm_as_subscription!
+    assign_detected_subscription_attributes
+    approve!
+  end
+
+  # "Make subscription" on an Other recurring row. Like approving a
+  # suggestion, it starts from the next future date (no charge is generated
+  # for a period nobody confirmed) and pays from the inferred account.
+  # Raises AASM::InvalidTransition for a row that already is a subscription.
+  def make_subscription!
+    assign_detected_subscription_attributes
+    self.default_account_id = inferred_account_id if default_account_id.blank?
+    roll_next_expected_date_forward
+    approve!
+  end
+
+  # Whether amount is within the matching tolerance of this row's amount, or
+  # of the range a manual row has observed.
+  def amount_within_tolerance?(other_amount)
+    tolerance = [ amount.abs, other_amount.abs ].max * AMOUNT_TOLERANCE
+    return true if (amount - other_amount).abs <= tolerance
+
+    has_amount_variance? &&
+      other_amount.between?(expected_amount_min - tolerance, expected_amount_max + tolerance)
+  end
+
+  # The family's transaction entries that can be part of a recurring series:
+  # no transfer legs, investment contributions or one-time spending.
+  def self.recurring_entries_for(family)
+    family.entries
+      .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
+      .where(entryable_type: "Transaction")
+      .where.not(transactions: { kind: NON_RECURRING_KINDS })
   end
 
   # Find matching transaction entries for variance calculation
   def self.find_matching_transaction_entries(family:, merchant_id:, name:, currency:, expected_day:, lookback_months: 6)
     lookback_date = lookback_months.months.ago.to_date
 
-    entries = family.entries
-      .where(entryable_type: "Transaction")
+    entries = recurring_entries_for(family)
       .where(currency: currency)
       .where("entries.date >= ?", lookback_date)
       .where("EXTRACT(DAY FROM entries.date) BETWEEN ? AND ?",
@@ -224,11 +346,7 @@ class RecurringTransaction < ApplicationRecord
 
     # Filter by merchant or name
     if merchant_id.present?
-      # Join with transactions table to filter by merchant_id in SQL (avoids N+1)
-      entries
-        .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
-        .where(transactions: { merchant_id: merchant_id })
-        .to_a
+      entries.where(transactions: { merchant_id: merchant_id }).to_a
     else
       entries.where(name: name).to_a
     end
@@ -281,8 +399,7 @@ class RecurringTransaction < ApplicationRecord
     # For manual recurring with amount variance, match within range
     # For automatic recurring, use tolerance-based matching to handle exchange rate fluctuations
     entries = if manual? && has_amount_variance?
-      family.entries
-        .where(entryable_type: "Transaction")
+      self.class.recurring_entries_for(family)
         .where(currency: currency)
         .where("entries.amount BETWEEN ? AND ?", expected_amount_min, expected_amount_max)
         .where("EXTRACT(DAY FROM entries.date) BETWEEN ? AND ?",
@@ -291,11 +408,10 @@ class RecurringTransaction < ApplicationRecord
         .order(date: :desc)
     else
       # Use tolerance-based matching (±15%) to handle multi-currency exchange rate fluctuations
-      tolerance_min = amount * (1 - AMOUNT_TOLERANCE)
-      tolerance_max = amount * (1 + AMOUNT_TOLERANCE)
+      # minmax: for an income row (negative amount) the -15% bound is the larger one.
+      tolerance_min, tolerance_max = [ amount * (1 - AMOUNT_TOLERANCE), amount * (1 + AMOUNT_TOLERANCE) ].minmax
 
-      family.entries
-        .where(entryable_type: "Transaction")
+      self.class.recurring_entries_for(family)
         .where(currency: currency)
         .where("entries.amount BETWEEN ? AND ?", tolerance_min, tolerance_max)
         .where("EXTRACT(DAY FROM entries.date) BETWEEN ? AND ?",
@@ -306,10 +422,7 @@ class RecurringTransaction < ApplicationRecord
 
     # Filter by merchant or name
     if merchant_id.present?
-      # Match by merchant through the entryable (Transaction)
-      entries.select do |entry|
-        entry.entryable.is_a?(Transaction) && entry.entryable.merchant_id == merchant_id
-      end
+      entries.where(transactions: { merchant_id: merchant_id })
     else
       # Match by entry name
       entries.where(name: name)
@@ -641,6 +754,28 @@ class RecurringTransaction < ApplicationRecord
   private
     def monetizable_currency
       currency
+    end
+
+    # Billing cycle from the transaction history and the Subscriptions
+    # category when there is one. A yearly cycle needs its billing month.
+    def assign_detected_subscription_attributes
+      matching_entries = self.class.find_matching_transaction_entries(
+        family: family,
+        merchant_id: merchant_id,
+        name: name,
+        currency: currency,
+        expected_day: expected_day_of_month,
+        lookback_months: 24
+      )
+      cycle = SubscriptionDetector.detect_billing_cycle(matching_entries.map(&:date))
+
+      assign_attributes(
+        billing_cycle: cycle,
+        category_id: family.categories.find_by("LOWER(name) LIKE ?", "%subscription%")&.id || category_id
+      )
+      if billing_cycle_yearly? && expected_month.blank?
+        self.expected_month = matching_entries.map(&:date).max&.month || last_occurrence_date&.month || Date.current.month
+      end
     end
 
     def write_legacy_subscription_columns

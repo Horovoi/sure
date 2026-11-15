@@ -161,6 +161,9 @@ Rails.application.routes.draw do
   resources :budgets, only: %i[index show edit update], param: :month_year do
     get :picker, on: :collection
 
+    # w1-budrec: copy the previous budget into an empty month
+    post :copy_previous, on: :member
+
     resources :budget_categories, only: %i[index show update]
   end
 
@@ -225,18 +228,6 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :recurring_transactions, only: %i[index destroy] do
-    collection do
-      match :identify, via: [ :get, :post ]
-      match :cleanup, via: [ :get, :post ]
-      patch :update_settings
-    end
-
-    member do
-      match :toggle_status, via: [ :get, :post ]
-    end
-  end
-
   resources :subscriptions, only: %i[index new create show edit update destroy] do
     collection do
       get :calendar
@@ -255,7 +246,20 @@ Rails.application.routes.draw do
       post :dismiss_suggestion
       post :restore_suggestion
     end
+
+    # w1-budrec: detection toggle and manual recurring rows on Subscriptions
+    patch :update_detection_settings, on: :collection
+    post :make_subscription, on: :member
+
+    # w1-budrec: turn the subscriptions iCal feed on, give it a new link, or turn it off
+    post :enable_feed, on: :collection
+    post :reset_feed, on: :collection
+    delete :disable_feed, on: :collection
   end
+
+  # w1-budrec: subscriptions iCal feed, read by calendar apps without a session
+  get "feeds/subscriptions/:token.ics", to: "subscription_feeds#show", as: :subscriptions_feed,
+    format: false, constraints: { token: /[A-Za-z0-9_-]+/ }
 
   resources :subscription_services, only: [ :index ] do
     collection do

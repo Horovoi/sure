@@ -10,7 +10,9 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <%# Budget Donut %>
       <div class="h-[300px] bg-container rounded-xl shadow-border-xs p-8">
-        <% if @budget.over_allocated? %>
+        <% if !@budget.initialized? && @source_budget.present? %>
+          <%= render "budgets/copy_previous_prompt", budget: @budget, source_budget: @source_budget %>
+        <% elsif @budget.over_allocated? %>
           <%= render "budgets/over_allocation_warning", budget: @budget %>
         <% else %>
           <%= render "budgets/budget_donut", budget: @budget %>
@@ -44,24 +46,38 @@
       <% end %>
     </div>
 
-    <%# Bottom Section: Categories full width %>
-    <div class="w-full bg-container rounded-xl shadow-border-xs p-4">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-medium">Categories</h2>
+    <%# Bottom Section: Categories full width. The filter tabs show only for a set-up budget with a row over budget. %>
+    <% has_over_budget = budget_has_over_budget?(@budget) %>
+    <%= tag.div class: "w-full bg-container rounded-xl shadow-border-xs p-4",
+                data: (has_over_budget ? { controller: "budget-filter", budget_filter_filter_value: current_budget_filter } : {}) do %>
+      <div class="flex items-center mb-4 flex-nowrap justify-between gap-2">
+        <h2 class="text-lg font-medium text-primary shrink-0"><%= t("budgets.show.categories.title") %></h2>
 
-        <% if @budget.initialized? %>
-          <%= render DS::Link.new(
-            text: "Edit",
-            variant: "secondary",
-            icon: "settings-2",
-            href: budget_budget_categories_path(@budget)
-          ) %>
+        <% if has_over_budget %>
+          <div class="hidden lg:flex flex-1 min-w-0 px-1">
+            <%= render "budgets/budget_tabs" %>
+          </div>
         <% end %>
+
+        <div class="<%= has_over_budget ? "shrink-0 flex justify-end whitespace-nowrap" : "ml-auto" %>">
+          <% if @budget.initialized? %>
+            <%= render DS::Link.new(
+              text: t("budgets.show.categories.edit"),
+              variant: "secondary",
+              icon: "settings-2",
+              href: budget_budget_categories_path(@budget)
+            ) %>
+          <% end %>
+        </div>
       </div>
 
-      <div class="bg-container-inset rounded-xl p-1">
-        <%= render "budgets/budget_categories", budget: @budget %>
-      </div>
-    </div>
+      <% if has_over_budget %>
+        <div class="flex lg:hidden flex-1 min-w-0 mb-4">
+          <%= render "budgets/budget_tabs" %>
+        </div>
+      <% end %>
+
+      <%= render "budgets/budget_categories", budget: @budget %>
+    <% end %>
   </div>
 </div>

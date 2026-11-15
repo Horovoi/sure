@@ -9,16 +9,21 @@ class RecurringTransaction
     # Amount tolerance for grouping (15% to handle exchange rate fluctuations)
     AMOUNT_TOLERANCE = 0.15
 
+    # Investment and crypto feeds report dividends, reinvestments and
+    # contributions as plain transactions, monthly and in clustered amounts:
+    # the shape detection looks for, yet never a bill or an income source.
+    # accountable_type is nullable and NOT IN never matches NULL, so the query
+    # admits NULL explicitly.
+    NON_RECURRING_ACCOUNTABLE_TYPES = %w[Investment Crypto].freeze
+
+    # Sub-unit amounts (rounding sweeps, penny tests) are noise, not bills.
+    MINIMUM_AMOUNT = 1
+
     # Identify and create/update recurring transactions for the family
     def identify_recurring_patterns
       three_months_ago = 3.months.ago.to_date
 
-      # Get all transactions from the last 3 months
-      entries_with_transactions = family.entries
-        .where(entryable_type: "Transaction")
-        .where("entries.date >= ?", three_months_ago)
-        .includes(:entryable, :account)
-        .to_a
+      entries_with_transactions = candidate_entries(since: three_months_ago).to_a
 
       # Group by merchant (if present) or name, along with normalized amount bucket and account currency
       # This handles multi-currency scenarios (e.g., USD subscriptions from UAH accounts)
@@ -101,7 +106,14 @@ class RecurringTransaction
       claimed_ids = []
       recurring_patterns.each do |pattern|
         begin
-          recurring_transaction = find_existing(pattern, excluding: claimed_ids)
+          recurring_transaction = RecurringTransaction.find_for_identity(
+            family: family,
+            merchant_id: pattern[:merchant_id],
+            name: pattern[:name],
+            currency: pattern[:currency],
+            amount: pattern[:amount],
+            excluding: claimed_ids
+          )
 
           if recurring_transaction
             claimed_ids << recurring_transaction.id
@@ -129,17 +141,16 @@ class RecurringTransaction
       recurring_patterns.size
     end
 
-    # Existing row with the pattern's identity whose amount is within the
-    # tolerance; the closest one when several match.
-    def find_existing(pattern, excluding: [])
-      candidates = family.recurring_transactions
-        .with_identity(merchant_id: pattern[:merchant_id], name: pattern[:name], currency: pattern[:currency])
-        .where.not(id: excluding)
-        .to_a
-
-      candidates
-        .select { |recurring| amount_matches?(recurring, pattern[:amount]) }
-        .min_by { |recurring| [ (recurring.amount - pattern[:amount]).abs, recurring.subscription? ? 0 : 1 ] }
+    # Transactions of the last months that can form a recurring pattern: no
+    # transfer legs, investment contributions or one-time spending (see
+    # RecurringTransaction.recurring_entries_for), nothing on an investment or
+    # crypto account, and nothing below MINIMUM_AMOUNT.
+    def candidate_entries(since:)
+      RecurringTransaction.recurring_entries_for(family)
+        .where("accounts.accountable_type IS NULL OR accounts.accountable_type NOT IN (?)", NON_RECURRING_ACCOUNTABLE_TYPES)
+        .where("ABS(entries.amount) >= ?", MINIMUM_AMOUNT)
+        .where("entries.date >= ?", since)
+        .includes(:entryable, :account)
     end
 
     # Update variance for existing manual recurring transactions
@@ -188,16 +199,6 @@ class RecurringTransaction
     end
 
     private
-      def amount_matches?(recurring, amount)
-        reference = recurring.amount
-        tolerance = [ reference.abs, amount.abs ].max * AMOUNT_TOLERANCE
-        return true if (reference - amount).abs <= tolerance
-
-        # Manual rows track a range of observed amounts
-        recurring.has_amount_variance? &&
-          amount.between?(recurring.expected_amount_min - tolerance, recurring.expected_amount_max + tolerance)
-      end
-
       # next_expected_date only moves forward: moving it back would make an
       # already-handled period overdue again. A subscription may stay overdue
       # (the generation job handles it); any other manual row only projects

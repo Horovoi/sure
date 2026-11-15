@@ -23,6 +23,26 @@
     </div>
   </header>
 
+  <%# Detection toggle (families.recurring_transactions_disabled) %>
+  <div class="bg-container rounded-xl shadow-border-xs p-4" data-testid="recurring-detection-settings">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <p class="text-sm font-medium text-primary"><%= t(".detection.label") %></p>
+        <p class="text-xs text-secondary"><%= t(".detection.description") %></p>
+      </div>
+      <%= form_with url: update_detection_settings_subscriptions_path, method: :patch,
+            data: { turbo_frame: "_top", controller: "auto-submit-form" } do %>
+        <%= render DS::Toggle.new(
+          id: "recurring_detection_enabled",
+          name: "recurring_detection_enabled",
+          checked: @detection_enabled,
+          aria: { label: t(".detection.label") },
+          data: { auto_submit_form_target: "auto" }
+        ) %>
+      <% end %>
+    </div>
+  </div>
+
   <div id="suggestions_container" class="bg-container rounded-xl shadow-border-xs">
     <% if @suggestions.empty? && @dismissed_suggestions.empty? %>
       <%= render "subscriptions/suggestions_empty_state" %>

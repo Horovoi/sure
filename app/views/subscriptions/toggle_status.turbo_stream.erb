@@ -2,6 +2,10 @@
   <%= turbo_stream.remove dom_id(@subscription) %>
 <% else %>
   <%= turbo_stream.replace dom_id(@subscription) do %>
-    <%= render "subscriptions/subscription", subscription: @subscription %>
+    <% if @subscription.subscription? %>
+      <%= render "subscriptions/subscription", subscription: @subscription %>
+    <% else %>
+      <%= render "subscriptions/other_recurring", recurring_transaction: @subscription %>
+    <% end %>
   <% end %>
 <% end %>

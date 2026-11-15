@@ -202,4 +202,103 @@ class BudgetCategoryTest < ActiveSupport::TestCase
     assert_equal 800, @subcategory_with_limit_bc.available_to_spend
     assert_equal 800, @subcategory_inheriting_bc.available_to_spend
   end
+
+  test "the uncategorized row has no subcategories" do
+    assert_equal [], @budget.uncategorized_budget_category.subcategories
+  end
+
+  test "the uncategorized row can spend what is left to allocate, less uncategorized spending" do
+    @budget.stubs(:budget_category_actual_spending).returns(100)
+    @budget.stubs(:budget_category_actual_spending).with { |bc| bc.category_id.nil? }.returns(40)
+
+    uncategorized = @budget.uncategorized_budget_category
+
+    assert_equal [ @budget.available_to_allocate, 0 ].max - 40, uncategorized.available_to_spend
+  end
+
+  test "budgeted? is true only when the displayed budget is positive" do
+    @subcategory_with_limit_bc.stubs(:display_budgeted_spending).returns(100)
+    assert @subcategory_with_limit_bc.budgeted?
+
+    @subcategory_with_limit_bc.stubs(:display_budgeted_spending).returns(0)
+    refute @subcategory_with_limit_bc.budgeted?
+
+    @subcategory_with_limit_bc.stubs(:display_budgeted_spending).returns(nil)
+    refute @subcategory_with_limit_bc.budgeted?
+  end
+
+  test "unbudgeted_with_spending? is true only with spending and no budget" do
+    @subcategory_with_limit_bc.stubs(:budgeted?).returns(false)
+    @subcategory_with_limit_bc.stubs(:actual_spending).returns(10)
+    assert @subcategory_with_limit_bc.unbudgeted_with_spending?
+
+    @subcategory_with_limit_bc.stubs(:budgeted?).returns(true)
+    refute @subcategory_with_limit_bc.unbudgeted_with_spending?
+
+    @subcategory_with_limit_bc.stubs(:budgeted?).returns(false)
+    @subcategory_with_limit_bc.stubs(:actual_spending).returns(0)
+    refute @subcategory_with_limit_bc.unbudgeted_with_spending?
+  end
+
+  test "on_track? and over_budget_with_budget? split the budgeted rows" do
+    @subcategory_with_limit_bc.stubs(:budgeted?).returns(true)
+    @subcategory_with_limit_bc.stubs(:over_budget?).returns(false)
+    assert @subcategory_with_limit_bc.on_track?
+    refute @subcategory_with_limit_bc.over_budget_with_budget?
+
+    @subcategory_with_limit_bc.stubs(:over_budget?).returns(true)
+    refute @subcategory_with_limit_bc.on_track?
+    assert @subcategory_with_limit_bc.over_budget_with_budget?
+
+    @subcategory_with_limit_bc.stubs(:budgeted?).returns(false)
+    refute @subcategory_with_limit_bc.on_track?
+    refute @subcategory_with_limit_bc.over_budget_with_budget?
+  end
+
+  test "a near-limit row is on track" do
+    @budget.stubs(:budget_category_actual_spending).returns(0)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(290)
+
+    assert @subcategory_with_limit_bc.near_limit?
+    assert @subcategory_with_limit_bc.on_track?
+    refute @subcategory_with_limit_bc.any_over_budget?
+  end
+
+  test "any_over_budget? is true for a parent whose shared subcategory overspends it" do
+    # Parent 1000 with 300 ring-fenced: the shared pool is 700, and the inheriting child spent 1000 of it.
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(1100)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(100)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(1000)
+
+    assert @parent_budget_category.any_over_budget?
+    assert @subcategory_inheriting_bc.any_over_budget?
+    refute @subcategory_with_limit_bc.any_over_budget?
+  end
+
+  test "visible_on_track? hides an inheriting subcategory until it has spending" do
+    @subcategory_with_limit_bc.stubs(:on_track?).returns(false)
+    refute @subcategory_with_limit_bc.visible_on_track?
+
+    @parent_budget_category.stubs(:on_track?).returns(true)
+    assert @parent_budget_category.visible_on_track?
+
+    @subcategory_inheriting_bc.stubs(:on_track?).returns(true)
+    @subcategory_inheriting_bc.stubs(:actual_spending).returns(0)
+    refute @subcategory_inheriting_bc.visible_on_track?
+
+    @subcategory_inheriting_bc.stubs(:actual_spending).returns(10)
+    assert @subcategory_inheriting_bc.visible_on_track?
+  end
+
+  test "group other_spending uses every subcategory when the shown ones are filtered" do
+    @budget.stubs(:budget_category_actual_spending).with(@parent_budget_category).returns(500)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_with_limit_bc).returns(100)
+    @budget.stubs(:budget_category_actual_spending).with(@subcategory_inheriting_bc).returns(150)
+
+    group = BudgetCategory::Group.new(
+      @parent_budget_category, [ @subcategory_with_limit_bc ],
+      all_subcategories: [ @subcategory_with_limit_bc, @subcategory_inheriting_bc ]
+    )
+    assert_equal 250, group.other_spending
+  end
 end

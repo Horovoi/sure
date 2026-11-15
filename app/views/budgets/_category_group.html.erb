@@ -1,0 +1,65 @@
+<%# locals: (budget:, group:, parent_visible:, over_budget_mode: false) %>
+
+<% if parent_visible %>
+  <div class="py-2">
+    <%= render "budget_categories/budget_category",
+          budget_category: group.budget_category,
+          show_budget_meta: (over_budget_mode ? group.budget_category.over_budget_with_budget? : true) %>
+  </div>
+<% end %>
+
+<% group.budget_subcategories.each do |budget_subcategory| %>
+  <% if parent_visible %>
+    <div class="py-2 w-full flex items-start">
+      <div class="ml-8 pt-4 flex items-center justify-center text-subdued">
+        <%= icon "corner-down-right" %>
+      </div>
+      <%= render "budget_categories/budget_category",
+            budget_category: budget_subcategory,
+            show_budget_meta: (over_budget_mode ? budget_subcategory.over_budget_with_budget? : true) %>
+    </div>
+  <% else %>
+    <div class="py-2">
+      <%= render "budget_categories/budget_category",
+            budget_category: budget_subcategory,
+            show_budget_meta: (over_budget_mode ? budget_subcategory.over_budget_with_budget? : true) %>
+    </div>
+  <% end %>
+<% end %>
+
+<%# Parent spending that no subcategory accounts for. It belongs to the parent, so it shows only under the parent row. %>
+<% other_spending = parent_visible ? group.other_spending : 0 %>
+<% if other_spending > 0 %>
+  <div class="py-2 w-full flex items-start" data-testid="budget-other-category">
+    <div class="ml-8 pt-4 flex items-center justify-center text-subdued">
+      <%= icon "corner-down-right" %>
+    </div>
+
+    <div class="flex-1 min-w-0 block px-4 py-2">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 flex-shrink-0 rounded-full flex justify-center items-center"
+             style="background-color: color-mix(in oklab, <%= group.color %> 10%, transparent); color: <%= group.color %>;">
+          <% if group.category.lucide_icon %>
+            <%= icon(group.category.lucide_icon, color: "current", size: "sm") %>
+          <% else %>
+            <%= render DS::FilledIcon.new(
+                  variant: :text,
+                  hex_color: group.color,
+                  text: group.name,
+                  size: "sm",
+                  rounded: true
+                ) %>
+          <% end %>
+        </div>
+
+        <p class="flex-1 min-w-0 text-sm font-medium text-primary truncate">
+          <%= t("budgets.budget_categories.other_category", category: group.name) %>
+        </p>
+
+        <p class="ml-auto text-sm font-medium text-primary whitespace-nowrap">
+          <%= format_money(Money.new(other_spending, budget.family.currency)) %>
+        </p>
+      </div>
+    </div>
+  </div>
+<% end %>

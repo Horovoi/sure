@@ -41,14 +41,14 @@
               aria-expanded="<%= !Current.user.transactions_section_collapsed?("upcoming_recurring") %>">
               <%= icon("chevron-down", size: "sm", class: "transition-transform", data: { transactions_section_target: "chevron" }) %>
             </button>
-            <h3 class="text-xs uppercase font-medium text-secondary"><%= t("recurring_transactions.upcoming") %></h3>
+            <h3 class="text-xs uppercase font-medium text-secondary"><%= t(".upcoming") %></h3>
           </div>
           <div data-transactions-section-target="content">
             <% @projected_recurring.group_by(&:next_expected_date).sort.each do |date, transactions| %>
               <div class="space-y-2">
                 <div class="text-xs text-secondary px-2 pt-2"><%= l(date, format: :long) %></div>
                 <% transactions.each do |recurring_transaction| %>
-                  <%= render "recurring_transactions/projected_transaction", recurring_transaction: recurring_transaction %>
+                  <%= render "transactions/projected_recurring", recurring_transaction: recurring_transaction %>
                 <% end %>
               </div>
             <% end %>

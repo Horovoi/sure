@@ -100,6 +100,16 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "the subscriptions feed is throttled per IP" do
+    throttle = Rack::Attack.throttles["subscriptions_feed/ip"]
+    assert throttle
+
+    feed = Rack::Attack::Request.new(Rack::MockRequest.env_for("/feeds/subscriptions/abc.ics", method: "GET", "REMOTE_ADDR" => "10.0.0.7"))
+    other = Rack::Attack::Request.new(Rack::MockRequest.env_for("/subscriptions/calendar", method: "GET", "REMOTE_ADDR" => "10.0.0.7"))
+    assert_equal "10.0.0.7", throttle.block.call(feed)
+    assert_nil throttle.block.call(other)
+  end
+
   private
     def attack_request(path, method:)
       Rack::Attack::Request.new(Rack::MockRequest.env_for(path, method: method, "REMOTE_ADDR" => "10.0.0.7"))

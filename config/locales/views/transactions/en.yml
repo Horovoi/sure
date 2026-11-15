@@ -22,8 +22,37 @@ en:
       transfer: Transfer
     new:
       new_transaction: New transaction
+    mark_recurring:
+      already_button: Already recurring
+      already_recurring: "%{name} is already a recurring transaction."
+      already_subscription: "%{name} is already a subscription."
+      button: Mark as Recurring
+      subtitle: Track this as a recurring transaction. Amount variance is automatically calculated from past 6 months of similar transactions.
+      title: Recurring Transaction
+      view: View
+    mark_as_recurring:
+      already_recurring: A manual recurring transaction already exists for this pattern
+      already_subscription: This transaction already belongs to a subscription
+      converted: Transaction marked as recurring, using the recurring pattern found earlier
+      creation_failed: Failed to create recurring transaction. Please check the transaction details and try again.
+      duplicate: A recurring transaction for this pattern was just created. Reload the page to see it.
+      success: Transaction marked as recurring
+      unexpected_error: An unexpected error occurred while creating the recurring transaction
+    mark_as_subscription:
+      already_subscription: A subscription already exists for this pattern
+      creation_failed: Failed to create subscription
+      duplicate: A subscription for this pattern was just created. Reload the page to see it.
+      success: Transaction marked as subscription
+      unexpected_error: An unexpected error occurred
+    projected_recurring:
+      expected_on: Expected on %{date}
+      projected: Projected
+      recurring: Recurring
+    results:
+      upcoming: Upcoming Recurring Transactions
     show:
       account_label: Account
+      additional_details: Additional details
       amount: Amount
       category_label: Category
       date_label: Date
@@ -41,9 +70,6 @@ en:
       convert_to_trade_title: Convert to Security Trade
       convert_to_trade_description: Convert this transaction into a Buy or Sell trade with security details for portfolio tracking.
       convert_to_trade_button: Convert to Trade
-      mark_recurring: Mark as Recurring
-      mark_recurring_subtitle: Track this as a recurring transaction. Amount variance is automatically calculated from past 6 months of similar transactions.
-      mark_recurring_title: Recurring Transaction
       overview: Overview
       settings: Settings
       name_label: Name

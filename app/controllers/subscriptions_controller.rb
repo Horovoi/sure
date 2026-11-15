@@ -1,11 +1,17 @@
 class SubscriptionsController < ApplicationController
-  before_action :set_subscription, only: %i[show edit update destroy toggle_status record_transaction skip_occurrence]
+  # ?kind= value of the Other recurring tab
+  OTHER_RECURRING_KIND = "other"
+
+  before_action :set_subscription, only: %i[show edit update record_transaction skip_occurrence]
+  before_action :set_recurring_row, only: %i[destroy toggle_status make_subscription]
   before_action :set_suggestion, only: %i[approve_suggestion dismiss_suggestion]
   before_action :set_dismissed_suggestion, only: %i[restore_suggestion]
 
   def index
-    @subscriptions = Current.family.recurring_transactions
-                          .subscriptions
+    # kind=other lists the manual recurring rows that are not subscriptions
+    @other_recurring = params[:kind] == OTHER_RECURRING_KIND
+    rows = Current.family.recurring_transactions
+    @subscriptions = (@other_recurring ? rows.other_recurring : rows.subscriptions)
                           .includes(:merchant, :category, :subscription_service, :default_account)
                           .with_attached_logo
                           .order(status: :asc, next_expected_date: :asc, name: :asc)
@@ -13,10 +19,12 @@ class SubscriptionsController < ApplicationController
     # Apply filters
     @subscriptions = @subscriptions.active if params[:status] == "active"
     @subscriptions = @subscriptions.inactive if params[:status] == "inactive"
-    @subscriptions = @subscriptions.where(billing_cycle: params[:billing_cycle]) if params[:billing_cycle].present?
+    if params[:billing_cycle].present? && !@other_recurring
+      @subscriptions = @subscriptions.where(billing_cycle: params[:billing_cycle])
+    end
 
     if params[:search].present?
-      search_term = "%#{params[:search].downcase}%"
+      search_term = "%#{ActiveRecord::Base.sanitize_sql_like(params[:search].downcase)}%"
       @subscriptions = @subscriptions.joins("LEFT JOIN merchants ON merchants.id = recurring_transactions.merchant_id")
                                      .where("LOWER(recurring_transactions.name) LIKE ? OR LOWER(merchants.name) LIKE ?",
                                             search_term, search_term)
@@ -27,9 +35,12 @@ class SubscriptionsController < ApplicationController
     @active_count = all_subscriptions.active.count
     @inactive_count = all_subscriptions.inactive.count
     @suggestion_count = Current.family.recurring_transactions.suggested.count
+    @other_recurring_count = rows.other_recurring.count
 
-    @monthly_total = calculate_monthly_total(@subscriptions)
-    @yearly_total = calculate_yearly_total(@subscriptions)
+    # The header always sums subscriptions, also on the Other recurring tab
+    totals_source = @other_recurring ? all_subscriptions.active.to_a : @subscriptions
+    @monthly_total = calculate_monthly_total(totals_source)
+    @yearly_total = calculate_yearly_total(totals_source)
     @breadcrumbs = [ [ t(".home"), root_path ], [ t(".title"), nil ] ]
 
     respond_to do |format|
@@ -44,7 +55,7 @@ class SubscriptionsController < ApplicationController
   end
 
   def calendar
-    @month = params[:month].present? ? Date.parse(params[:month]) : Date.current.beginning_of_month
+    @month = parse_calendar_month(params[:month])
     @subscriptions = Current.family.recurring_transactions
                           .active_subscriptions
                           .includes(:merchant, :category, :subscription_service, :default_account)
@@ -62,7 +73,25 @@ class SubscriptionsController < ApplicationController
       s.currency == Current.family.currency ? amount : amount.exchange_to(Current.family.currency, fallback_rate: 1)
     end
 
+    @feed_url = subscriptions_feed_url(token: Current.family.subscriptions_feed_token) if Current.family.subscriptions_feed_enabled?
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
+  end
+
+  # The subscriptions iCal feed (decision 41): off by default. Reset gives a
+  # new link and the old one stops working; disable removes the link.
+  def enable_feed
+    Current.family.enable_subscriptions_feed!
+    redirect_to calendar_subscriptions_path(anchor: "subscriptions-feed"), notice: t(".success")
+  end
+
+  def reset_feed
+    Current.family.reset_subscriptions_feed!
+    redirect_to calendar_subscriptions_path(anchor: "subscriptions-feed"), notice: t(".success")
+  end
+
+  def disable_feed
+    Current.family.disable_subscriptions_feed!
+    redirect_to calendar_subscriptions_path(anchor: "subscriptions-feed"), notice: t(".success")
   end
 
   def new
@@ -134,7 +163,32 @@ class SubscriptionsController < ApplicationController
 
   def destroy
     @subscription.destroy!
-    redirect_to subscriptions_path, notice: t("subscriptions.deleted")
+
+    if @subscription.subscription?
+      redirect_to subscriptions_path, notice: t("subscriptions.deleted")
+    else
+      redirect_to subscriptions_path(kind: OTHER_RECURRING_KIND), notice: t(".other_recurring_deleted")
+    end
+  end
+
+  # Turns an Other recurring row into a subscription, then opens it so the
+  # billing cycle and payment account can be checked.
+  def make_subscription
+    @subscription.make_subscription!
+    redirect_to edit_subscription_path(@subscription), notice: t(".success")
+  rescue AASM::InvalidTransition, ActiveRecord::RecordInvalid => e
+    Rails.logger.warn("make_subscription failed for recurring transaction #{@subscription.id}: #{e.message}")
+    redirect_to subscriptions_path(kind: OTHER_RECURRING_KIND), alert: t(".failed")
+  end
+
+  # The "Detect recurring patterns automatically" toggle on the Suggestions
+  # page. Turning it on schedules a detection run.
+  def update_detection_settings
+    enabled = params.expect(:recurring_detection_enabled) == "1"
+    Current.family.update!(recurring_transactions_disabled: !enabled)
+    RecurringTransaction.identify_patterns_for(Current.family) if enabled
+
+    redirect_to suggestions_subscriptions_path, notice: enabled ? t(".enabled") : t(".disabled")
   end
 
   def toggle_status
@@ -192,6 +246,7 @@ class SubscriptionsController < ApplicationController
                                    .includes(:merchant, :subscription_service)
                                    .order(dismissed_at: :desc)
 
+    @detection_enabled = !Current.family.recurring_transactions_disabled?
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
   end
 
@@ -283,8 +338,23 @@ class SubscriptionsController < ApplicationController
         (status_filter == "inactive" && subscription.active?)
     end
 
+    # A ?month= that is not a date shows the current month instead of failing
+    def parse_calendar_month(value)
+      return Date.current.beginning_of_month if value.blank?
+
+      Date.parse(value.to_s).beginning_of_month
+    rescue Date::Error
+      Date.current.beginning_of_month
+    end
+
     def set_subscription
       @subscription = Current.family.recurring_transactions.subscriptions.find(params[:id])
+    end
+
+    # Pause, resume, delete and "Make subscription" also work on manual
+    # recurring rows (the Other recurring tab).
+    def set_recurring_row
+      @subscription = Current.family.recurring_transactions.user_managed.find(params[:id])
     end
 
     def set_suggestion
