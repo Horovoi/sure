@@ -309,6 +309,49 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "a subscription match is merged into the real charge and restored again" do
+    account = accounts(:depository)
+    recurring = @user.family.recurring_transactions.create!(
+      name: "Streaming club", amount: 20, currency: "USD", expected_day_of_month: Date.current.day,
+      last_occurrence_date: Date.current, next_expected_date: Date.current.next_month,
+      status: "active", subscription_state: "subscription", default_account: account
+    )
+    generated = account.entries.create!(
+      date: Date.current, amount: 20, currency: "USD", name: "Streaming club", source: "subscription",
+      entryable: Transaction.new(category: categories(:subscriptions), recurring_transaction: recurring)
+    )
+    real = account.entries.create!(date: Date.current, amount: 23, currency: "USD", name: "STREAMING CLUB PAYMENT", entryable: Transaction.new)
+    generated.transaction.flag_potential_duplicate!(posted_entry: real, reason: "subscription_charge", posted_amount: real.amount)
+
+    visit transactions_url(per_page: @page_size)
+
+    within "#" + dom_id(generated) do
+      assert_selector "[data-testid='subscription-match-badge']", text: I18n.t("transactions.subscription_match_badge.label")
+      click_link generated.name, exact: true
+    end
+
+    assert_text I18n.t("transactions.subscription_match.potential_duplicate_title")
+    click_button I18n.t("transactions.show.merge_duplicate")
+
+    assert_text I18n.t("transactions.merge_duplicate.success")
+    assert_no_selector "#" + dom_id(generated)
+    assert_equal recurring.id, real.reload.transaction.recurring_transaction_id
+
+    within "#" + dom_id(real) do
+      click_link real.name, exact: true
+    end
+
+    within_testid("replaced-subscription-charge") do
+      assert_text I18n.t("transactions.replaced_subscription_charge.title", date: I18n.l(Date.current, format: :long))
+      click_button I18n.t("transactions.replaced_subscription_charge.restore")
+    end
+
+    assert_text I18n.t("transactions.restore_subscription_charge.success")
+    restored = account.entries.find_by!(source: "subscription", name: "Streaming club")
+    assert_selector "#" + dom_id(restored)
+    assert_nil real.reload.transaction.recurring_transaction_id
+  end
+
   def open_settings_in_drawer(entry)
     within "#" + dom_id(entry) do
       click_link entry.name, exact: true

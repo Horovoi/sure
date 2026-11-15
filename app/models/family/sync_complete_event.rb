@@ -44,6 +44,14 @@ class Family::SyncCompleteEvent
       Rails.logger.error("Family::SyncCompleteEvent sync_toast broadcast failed: #{e.message}\n#{e.backtrace&.join("\n")}")
     end
 
+    # Replace generated subscription charges with their real charges (debounced). Scheduled
+    # first, so pattern identification sees the real charges.
+    begin
+      RecurringTransaction.reconcile_charges_for(family)
+    rescue => e
+      Rails.logger.error("Family::SyncCompleteEvent recurring charge reconciliation failed: #{e.message}\n#{e.backtrace&.join("\n")}")
+    end
+
     # Schedule recurring transaction pattern identification (debounced to run after all syncs complete)
     begin
       RecurringTransaction.identify_patterns_for(family)

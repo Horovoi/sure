@@ -1,0 +1,7 @@
+<%# The generated charge of a subscription may have a real charge: merge or keep both in the drawer %>
+<span class="inline-flex items-center gap-1 text-xs font-medium rounded-full px-1.5 py-0.5 border border-warning bg-warning/10 text-warning"
+      title="<%= t("transactions.subscription_match_badge.tooltip") %>"
+      data-testid="subscription-match-badge">
+  <%= icon "repeat", size: "sm", color: "current" %>
+  <%= t("transactions.subscription_match_badge.label") %>
+</span>

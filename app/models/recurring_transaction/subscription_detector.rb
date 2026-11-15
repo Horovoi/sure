@@ -1,6 +1,26 @@
 class RecurringTransaction
   class SubscriptionDetector
+    # A transaction name names a service when it contains the service's full
+    # name. Shorter names would match by accident ("TV", "App").
+    MIN_SERVICE_NAME_LENGTH = 4
+
     class << self
+      # The form names are compared in: lower case, no surrounding spaces
+      def normalize_service_name(name)
+        name.to_s.downcase.strip
+      end
+
+      # Whether a transaction or merchant name contains the full service (or
+      # subscription display) name. The rule of find_matching_service's last
+      # step; the subscription reconciler uses it to tell a real charge of the
+      # same service.
+      def name_contains_service_name?(name, service_name)
+        normalized_service = normalize_service_name(service_name)
+        return false if normalized_service.length < MIN_SERVICE_NAME_LENGTH
+
+        normalize_service_name(name).include?(normalized_service)
+      end
+
       # Check if a recurring transaction is likely a subscription
       # Only suggests if it matches a known service in the database
       def likely_subscription?(recurring_transaction)
@@ -82,7 +102,7 @@ class RecurringTransaction
         name = recurring.merchant&.name || recurring.name
         return nil if name.blank?
 
-        normalized = name.downcase.strip
+        normalized = normalize_service_name(name)
 
         # 1. Exact match
         service = SubscriptionService.where("LOWER(name) = ?", normalized).first
@@ -92,9 +112,9 @@ class RecurringTransaction
         service = SubscriptionService.where("LOWER(name) LIKE ?", "%#{normalized}%").first
         return service if service
 
-        # 3. Transaction name contains full service name (min 4 chars to avoid false positives)
+        # 3. Transaction name contains full service name (name_contains_service_name? in SQL)
         service = SubscriptionService
-          .where("LENGTH(name) >= 4")
+          .where("LENGTH(name) >= ?", MIN_SERVICE_NAME_LENGTH)
           .where("? LIKE '%' || LOWER(name) || '%'", normalized)
           .order("LENGTH(name) DESC")
           .first

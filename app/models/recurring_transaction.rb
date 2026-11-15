@@ -753,6 +753,30 @@ class RecurringTransaction < ApplicationRecord
       .exists?
   end
 
+  # ---------------------------------------------------------------------------
+  # Reconciling generated charges with real ones (RecurringTransaction::Reconciler)
+  # ---------------------------------------------------------------------------
+
+  # Schedules the reconciler (debounced, one run per family at a time). It runs
+  # whether or not recurring_transactions_disabled is set: charge generation
+  # does not check that switch either.
+  def self.reconcile_charges_for(family)
+    ReconcileJob.schedule_for(family)
+  end
+
+  # Whether a charge generated for this row (source "subscription", on any
+  # account) falls in the billing period of date. Real charges linked to the
+  # row do not count: a restore puts the generated charge back beside them.
+  def generated_charge_in_period?(date)
+    date_range = billing_cycle_yearly? ? date.all_year : date.all_month
+
+    family.entries
+      .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+      .where(transactions: { recurring_transaction_id: id })
+      .where(source: "subscription", date: date_range)
+      .exists?
+  end
+
   private
     def monetizable_currency
       currency

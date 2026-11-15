@@ -190,6 +190,7 @@ class Import < ApplicationRecord
       complete_import!
     end
 
+    run_after_publish_hooks
     family.sync_later
   rescue => error
     record_failure(:fail_import, error)
@@ -212,6 +213,7 @@ class Import < ApplicationRecord
 
       release_claimed_entries!
       remove_created_accounts!
+      restore_replaced_subscription_charges!
       entries.destroy_all
       finish_revert!
     end
@@ -465,6 +467,24 @@ class Import < ApplicationRecord
 
     def refresh_rows_count!
       update_column(:rows_count, rows.count)
+    end
+
+    # Work that follows a published import, after its entries are committed. Each
+    # feature adds one line.
+    def run_after_publish_hooks
+      RecurringTransaction.reconcile_charges_for(family)
+    end
+
+    # Puts back the generated subscription charges that this import's own entries
+    # replaced (Transaction#replace_subscription_charge!), before those entries go.
+    # Entries the import only claimed stay, and keep what they replaced.
+    def restore_replaced_subscription_charges!
+      Transaction
+        .joins(:entry)
+        .where(entries: { import_id: id })
+        .where("transactions.extra -> ? IS NOT NULL", Transaction::REPLACED_SUBSCRIPTION_CHARGE_KEY)
+        .includes(entry: :account)
+        .find_each { |transaction| transaction.restore_replaced_subscription_charge!(dismiss_pair: false) }
     end
 
     # Restores entries this import took over as duplicates. An entry whose previous
