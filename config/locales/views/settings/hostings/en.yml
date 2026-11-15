@@ -108,15 +108,40 @@ en:
         advanced_settings: Advanced - Configure individual job times
         avoid_same_time_warning: Avoid scheduling multiple jobs at the same time to prevent resource conflicts.
         reset_to_defaults: Reset to defaults
-        non_configurable_title: Non-configurable jobs
         jobs:
           data_cleaner: Data cleanup
           security_health_check: Security health check
           subscription_transactions: Subscription transactions
-        non_configurable:
-          import_market_data: "Market data import: Runs at 5 PM EST after market close"
-          sync_hourly: "Hourly sync: Runs every hour (required for crypto sync)"
-          sync_cleaner: "Sync cleaner: Runs every hour (maintenance)"
+        status:
+          title: Job status
+          description: "Every scheduled job, with its last and next run. Times are in %{timezone}."
+          open_sidekiq: Open Sidekiq cron
+          columns:
+            job: Job
+            last_run: Last run
+            next_run: Next run
+          states:
+            overdue: Overdue
+            disabled: Disabled
+            not_scheduled: Not scheduled
+          never: Never
+          no_next_run: "—"
+          ago: "%{time} ago"
+          unavailable_title: Job status is unavailable
+          unavailable_message: Could not read the schedule from Redis. Check that Redis is running, then reload this page.
+          worker_down_title: No worker is running
+          worker_down_message: No Sidekiq worker sent a heartbeat in the last minute, so scheduled jobs do not run. Check the worker container.
+          job_names:
+            import_market_data: Market data import
+            reap_stale_work: Stale work reaper
+            clean_up_recurring_transactions: Recurring transaction cleanup
+            sync_hourly: Hourly sync
+            clean_debug_log_entries: Debug log cleanup
+            full_backup: Daily full backup
+            clean_data: Data cleanup
+            run_security_health_checks: Security health check
+            generate_subscription_transactions: Subscription transactions
+            sync_all_accounts: Daily sync of all accounts
       mcp_settings:
         title: MCP Server
         enabled_label: Allow MCP clients

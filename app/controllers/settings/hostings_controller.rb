@@ -183,6 +183,9 @@ class Settings::HostingsController < ApplicationController
       if @show_yahoo_finance_settings
         @yahoo_finance_provider = Provider::Registry.get_provider(:yahoo_finance)
       end
+
+      # Read lazily by the scheduled jobs section; a Redis outage shows there instead of failing the page
+      @scheduled_jobs_status = ScheduledJobs::Status.new
     end
 
     # What the MCP section shows: whether the env file opts in and which user the static token acts as
