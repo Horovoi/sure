@@ -355,27 +355,24 @@ export default class SortableSectionsController extends Controller {
     if (order.join("\n") === this.requestedOrder.join("\n")) return;
     this.requestedOrder = order;
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    // The meta tag is missing when forgery protection is off (as in tests); the
+    // server still refuses a request without a valid token when it is on
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    const headers = { "Content-Type": "application/json" };
+    if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
     const requestId = ++this.saveRequestId;
     let ok = false;
 
-    if (csrfToken) {
-      try {
-        const response = await fetch(this.preferencesUrl, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-Token": csrfToken.content,
-          },
-          body: JSON.stringify(this.requestBody(order)),
-        });
-        ok = response.ok;
-        if (!ok) console.error("Failed to save section order:", response.status);
-      } catch (error) {
-        console.error("Network error saving section order:", error);
-      }
-    } else {
-      console.error("CSRF token not found. Cannot save section order.");
+    try {
+      const response = await fetch(this.preferencesUrl, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(this.requestBody(order)),
+      });
+      ok = response.ok;
+      if (!ok) console.error("Failed to save section order:", response.status);
+    } catch (error) {
+      console.error("Network error saving section order:", error);
     }
 
     if (ok) {
