@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -50,6 +50,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.text "notes"
     t.jsonb "holdings_snapshot_data"
     t.datetime "holdings_snapshot_at"
+    t.datetime "disabled_at"
+    t.boolean "exclude_from_reports", default: false, null: false
     t.index ["accountable_id", "accountable_type"], name: "index_accounts_on_accountable_id_and_accountable_type"
     t.index ["accountable_type"], name: "index_accounts_on_accountable_type"
     t.index ["currency"], name: "index_accounts_on_currency"
@@ -99,10 +101,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.string "locality"
     t.string "region"
     t.string "country"
-    t.integer "postal_code"
+    t.string "postal_code"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["addressable_type", "addressable_id"], name: "index_addresses_on_addressable"
+  end
+
+  create_table "ai_tool_audits", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.uuid "user_id"
+    t.string "source", null: false
+    t.string "client_name"
+    t.uuid "chat_id"
+    t.uuid "assistant_message_id"
+    t.string "tool_name", null: false
+    t.string "scope_tag", null: false
+    t.jsonb "arguments", default: {}, null: false
+    t.jsonb "audit_before"
+    t.string "status", default: "running", null: false
+    t.string "error_message"
+    t.string "result_record_type"
+    t.string "result_record_ids", default: [], null: false, array: true
+    t.integer "duration_ms"
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assistant_message_id"], name: "index_ai_tool_audits_on_assistant_message_id"
+    t.index ["family_id", "created_at"], name: "index_ai_tool_audits_on_family_id_and_created_at"
+    t.index ["family_id", "tool_name"], name: "index_ai_tool_audits_on_family_id_and_tool_name"
+    t.index ["user_id"], name: "index_ai_tool_audits_on_user_id"
+    t.check_constraint "scope_tag::text = ANY (ARRAY['read'::character varying, 'write'::character varying, 'destructive'::character varying]::text[])", name: "ai_tool_audits_scope_tag_check"
+    t.check_constraint "source::text = ANY (ARRAY['builtin_chat'::character varying, 'claude_chat'::character varying, 'mcp'::character varying]::text[])", name: "ai_tool_audits_source_check"
+    t.check_constraint "status::text = ANY (ARRAY['running'::character varying, 'ok'::character varying, 'error'::character varying]::text[])", name: "ai_tool_audits_status_check"
   end
 
   create_table "api_keys", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -156,9 +186,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.string "currency", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "rollover_enabled", default: false, null: false
+    t.decimal "rolled_over_amount", precision: 19, scale: 4, default: "0.0", null: false
     t.index ["budget_id", "category_id"], name: "index_budget_categories_on_budget_id_and_category_id", unique: true
     t.index ["budget_id"], name: "index_budget_categories_on_budget_id"
     t.index ["category_id"], name: "index_budget_categories_on_category_id"
+    t.check_constraint "rolled_over_amount >= 0::numeric", name: "chk_budget_categories_rolled_over_amount_non_negative"
   end
 
   create_table "budgets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -183,6 +216,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.uuid "parent_id"
     t.string "classification", default: "expense", null: false
     t.string "lucide_icon", default: "layers", null: false
+    t.datetime "last_used_at"
+    t.index ["family_id", "last_used_at"], name: "index_categories_on_family_id_and_last_used_at"
+    t.index ["family_id", "name"], name: "index_categories_on_family_id_and_name", unique: true
     t.index ["family_id"], name: "index_categories_on_family_id"
   end
 
@@ -287,6 +323,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.decimal "annual_fee", precision: 10, scale: 2
     t.jsonb "locked_attributes", default: {}
     t.string "subtype"
+    t.integer "statement_close_day"
+    t.integer "due_day"
+    t.check_constraint "due_day >= 1 AND due_day <= 31", name: "chk_credit_cards_due_day"
+    t.check_constraint "statement_close_day >= 1 AND statement_close_day <= 31", name: "chk_credit_cards_statement_close_day"
   end
 
   create_table "cryptos", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -308,6 +348,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.datetime "updated_at", null: false
     t.index ["enrichable_id", "enrichable_type", "source", "attribute_name"], name: "idx_on_enrichable_id_enrichable_type_source_attribu_5be5f63e08", unique: true
     t.index ["enrichable_type", "enrichable_id"], name: "index_data_enrichments_on_enrichable"
+  end
+
+  create_table "debug_log_entries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "category", null: false
+    t.string "level", null: false
+    t.text "message", null: false
+    t.string "source", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.uuid "family_id"
+    t.uuid "account_id"
+    t.uuid "user_id"
+    t.string "provider_key"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_debug_log_entries_on_account_id"
+    t.index ["category", "created_at"], name: "index_debug_log_entries_on_category_and_created_at"
+    t.index ["created_at"], name: "index_debug_log_entries_on_created_at"
+    t.index ["family_id"], name: "index_debug_log_entries_on_family_id"
+    t.index ["level"], name: "index_debug_log_entries_on_level"
+    t.index ["user_id"], name: "index_debug_log_entries_on_user_id"
+    t.check_constraint "level::text = ANY (ARRAY['debug'::character varying, 'info'::character varying, 'warn'::character varying, 'error'::character varying]::text[])", name: "chk_debug_log_entries_level"
   end
 
   create_table "depositories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -384,8 +445,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.string "source"
     t.boolean "user_modified", default: false, null: false
     t.boolean "import_locked", default: false, null: false
+    t.string "reconciled_status", default: "unreconciled", null: false
     t.index "lower((name)::text)", name: "index_entries_on_lower_name"
     t.index ["account_id", "date"], name: "index_entries_on_account_id_and_date"
+    t.index ["account_id", "reconciled_status"], name: "index_entries_on_account_id_and_reconciled_status"
     t.index ["account_id", "source", "external_id"], name: "index_entries_on_account_source_and_external_id", unique: true, where: "((external_id IS NOT NULL) AND (source IS NOT NULL))"
     t.index ["account_id"], name: "index_entries_on_account_id"
     t.index ["date"], name: "index_entries_on_date"
@@ -393,6 +456,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.index ["import_id"], name: "index_entries_on_import_id"
     t.index ["import_locked"], name: "index_entries_on_import_locked_true", where: "(import_locked = true)"
     t.index ["user_modified"], name: "index_entries_on_user_modified_true", where: "(user_modified = true)"
+    t.check_constraint "reconciled_status::text = ANY (ARRAY['unreconciled'::character varying, 'cleared'::character varying, 'reconciled'::character varying]::text[])", name: "chk_entries_reconciled_status"
   end
 
   create_table "eval_datasets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -479,7 +543,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.boolean "provisional", default: false, null: false
     t.index ["from_currency", "to_currency", "date"], name: "index_exchange_rates_on_base_converted_date_unique", unique: true
     t.index ["from_currency"], name: "index_exchange_rates_on_from_currency"
-    t.index ["to_currency"], name: "index_exchange_rates_on_to_currency"
+    t.index ["to_currency", "updated_at"], name: "index_exchange_rates_on_to_currency_and_updated_at"
+    t.index ["updated_at"], name: "index_exchange_rates_on_updated_at"
+    t.check_constraint "rate > 0::numeric AND rate <> 'NaN'::numeric AND rate::text <> 'Infinity'::text", name: "chk_exchange_rates_rate_positive"
   end
 
   create_table "families", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -500,6 +566,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.boolean "use_fiscal_months", default: false, null: false
     t.integer "fiscal_month_start_day", default: 1, null: false
     t.string "vector_store_id"
+    t.string "enabled_currencies", array: true
+    t.string "subscriptions_feed_token"
+    t.boolean "auto_match_transfers_disabled", default: false, null: false
+    t.index ["subscriptions_feed_token"], name: "index_families_on_subscriptions_feed_token", unique: true, where: "(subscriptions_feed_token IS NOT NULL)"
     t.check_constraint "fiscal_month_start_day >= 1 AND fiscal_month_start_day <= 31", name: "fiscal_month_start_day_range"
   end
 
@@ -537,20 +607,69 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.index ["merchant_id"], name: "index_family_merchant_associations_on_merchant_id"
   end
 
-  create_table "flipper_features", force: :cascade do |t|
-    t.string "key", null: false
+  create_table "goal_accounts", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "goal_id", null: false
+    t.uuid "account_id", null: false
+    t.decimal "allocated_amount", precision: 19, scale: 4
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["key"], name: "index_flipper_features_on_key", unique: true
+    t.index ["account_id"], name: "index_goal_accounts_on_account_id"
+    t.index ["goal_id", "account_id"], name: "index_goal_accounts_on_goal_and_account", unique: true
+    t.index ["goal_id"], name: "index_goal_accounts_on_goal_id"
+    t.check_constraint "allocated_amount IS NULL OR allocated_amount >= 0::numeric", name: "chk_goal_accounts_allocation_non_negative"
   end
 
-  create_table "flipper_gates", force: :cascade do |t|
-    t.string "feature_key", null: false
-    t.string "key", null: false
-    t.text "value"
+  create_table "goal_pledges", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "goal_id", null: false
+    t.uuid "account_id", null: false
+    t.decimal "amount", precision: 19, scale: 4, null: false
+    t.string "currency", null: false
+    t.string "kind", null: false
+    t.string "status", default: "open", null: false
+    t.datetime "expires_at", null: false
+    t.uuid "matched_transaction_id"
+    t.date "matched_on"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["feature_key", "key", "value"], name: "index_flipper_gates_on_feature_key_and_key_and_value", unique: true
+    t.index ["account_id"], name: "index_goal_pledges_on_account_id"
+    t.index ["goal_id", "status"], name: "index_goal_pledges_on_goal_id_and_status"
+    t.index ["goal_id"], name: "index_goal_pledges_on_goal_id"
+    t.index ["matched_transaction_id"], name: "index_goal_pledges_on_matched_transaction_id", unique: true, where: "(matched_transaction_id IS NOT NULL)"
+    t.index ["status", "expires_at"], name: "index_goal_pledges_open_by_expiry", where: "((status)::text = 'open'::text)"
+    t.check_constraint "amount > 0::numeric", name: "chk_goal_pledges_amount_positive"
+    t.check_constraint "kind::text = ANY (ARRAY['transfer'::character varying, 'manual_save'::character varying]::text[])", name: "chk_goal_pledges_kind_enum"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'matched'::character varying, 'cancelled'::character varying, 'expired'::character varying]::text[])", name: "chk_goal_pledges_status_enum"
+  end
+
+  create_table "goals", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "name", null: false
+    t.decimal "target_amount", precision: 19, scale: 4, null: false
+    t.string "currency", null: false
+    t.date "target_date"
+    t.string "color"
+    t.string "icon"
+    t.text "notes"
+    t.string "state", default: "active", null: false
+    t.string "kind", default: "one_off", null: false
+    t.string "progress_basis", default: "balance", null: false
+    t.string "target_mode", default: "fixed", null: false
+    t.integer "target_months"
+    t.decimal "completed_amount", precision: 19, scale: 4
+    t.datetime "completed_at"
+    t.decimal "consumed_amount", precision: 19, scale: 4, default: "0.0", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id", "state"], name: "index_goals_on_family_id_and_state"
+    t.index ["family_id"], name: "index_goals_on_family_id"
+    t.check_constraint "char_length(name::text) <= 255", name: "chk_goals_name_length"
+    t.check_constraint "consumed_amount >= 0::numeric", name: "chk_goals_consumed_amount_non_negative"
+    t.check_constraint "kind::text = ANY (ARRAY['one_off'::character varying, 'maintained'::character varying]::text[])", name: "chk_goals_kind_enum"
+    t.check_constraint "progress_basis::text = ANY (ARRAY['balance'::character varying, 'contributions'::character varying]::text[])", name: "chk_goals_progress_basis_enum"
+    t.check_constraint "state::text = ANY (ARRAY['active'::character varying, 'paused'::character varying, 'completed'::character varying, 'archived'::character varying]::text[])", name: "chk_goals_state_enum"
+    t.check_constraint "target_amount > 0::numeric", name: "chk_goals_target_amount_positive"
+    t.check_constraint "target_mode::text = ANY (ARRAY['fixed'::character varying, 'months_of_expenses'::character varying]::text[])", name: "chk_goals_target_mode_enum"
+    t.check_constraint "target_months IS NULL OR target_months > 0", name: "chk_goals_target_months_positive"
   end
 
   create_table "holdings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -690,7 +809,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.text "ai_summary"
     t.string "document_type"
     t.jsonb "extracted_data", default: {}, null: false
+    t.string "amount_type_outflow_value"
     t.index ["family_id"], name: "index_imports_on_family_id"
+  end
+
+  create_table "insights", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "kind", null: false
+    t.string "dedupe_key", null: false
+    t.date "period_start"
+    t.string "priority", default: "medium", null: false
+    t.string "template_key", null: false
+    t.jsonb "facts", default: {}, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "dismissed_at"
+    t.datetime "generated_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id", "kind", "dedupe_key", "period_start"], name: "index_insights_on_family_kind_dedupe_key_period", unique: true, nulls_not_distinct: true
+    t.check_constraint "priority::text = ANY (ARRAY['high'::character varying, 'medium'::character varying, 'low'::character varying]::text[])", name: "chk_insights_priority_enum"
   end
 
   create_table "investments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1071,6 +1208,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "name"
+    t.integer "position", default: 0, null: false
+    t.boolean "stop_processing", default: false, null: false
+    t.index ["family_id", "position"], name: "index_rules_on_family_id_and_position"
     t.index ["family_id"], name: "index_rules_on_family_id"
   end
 
@@ -1214,6 +1354,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.uuid "family_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["family_id", "name"], name: "index_tags_on_family_id_and_name", unique: true
     t.index ["family_id"], name: "index_tags_on_family_id"
   end
 
@@ -1261,9 +1402,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.jsonb "extra", default: {}, null: false
     t.string "investment_activity_label"
     t.uuid "recurring_transaction_id"
+    t.uuid "fee_transfer_id"
+    t.index "(((extra -> 'goal'::text) ->> 'pledge_id'::text))", name: "ix_transactions_extra_goal_pledge_id", unique: true, where: "(((extra -> 'goal'::text) ->> 'pledge_id'::text) IS NOT NULL)"
     t.index ["category_id"], name: "index_transactions_on_category_id"
     t.index ["external_id"], name: "index_transactions_on_external_id"
     t.index ["extra"], name: "index_transactions_on_extra", using: :gin
+    t.index ["fee_transfer_id"], name: "index_transactions_on_fee_transfer_id"
     t.index ["investment_activity_label"], name: "index_transactions_on_investment_activity_label"
     t.index ["kind"], name: "index_transactions_on_kind"
     t.index ["merchant_id"], name: "index_transactions_on_merchant_id"
@@ -1311,6 +1455,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
     t.datetime "set_onboarding_goals_at"
     t.string "default_account_order", default: "name_asc"
     t.jsonb "preferences", default: {}, null: false
+    t.uuid "default_account_id"
+    t.index ["default_account_id"], name: "index_users_on_default_account_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["family_id"], name: "index_users_on_family_id"
     t.index ["last_viewed_chat_id"], name: "index_users_on_last_viewed_chat_id"
@@ -1343,6 +1489,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
   add_foreign_key "accounts", "plaid_accounts"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "ai_tool_audits", "families", on_delete: :cascade
+  add_foreign_key "ai_tool_audits", "users", on_delete: :nullify
   add_foreign_key "api_keys", "users"
   add_foreign_key "balances", "accounts", on_delete: :cascade
   add_foreign_key "budget_categories", "budgets"
@@ -1354,6 +1502,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
   add_foreign_key "coinbase_items", "families"
   add_foreign_key "coinstats_accounts", "coinstats_items"
   add_foreign_key "coinstats_items", "families"
+  add_foreign_key "debug_log_entries", "accounts", on_delete: :nullify
+  add_foreign_key "debug_log_entries", "families", on_delete: :nullify
+  add_foreign_key "debug_log_entries", "users", on_delete: :nullify
   add_foreign_key "enable_banking_accounts", "enable_banking_items"
   add_foreign_key "enable_banking_items", "families"
   add_foreign_key "entries", "accounts", on_delete: :cascade
@@ -1366,6 +1517,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
   add_foreign_key "family_exports", "families"
   add_foreign_key "family_merchant_associations", "families"
   add_foreign_key "family_merchant_associations", "merchants"
+  add_foreign_key "goal_accounts", "accounts", on_delete: :restrict
+  add_foreign_key "goal_accounts", "goals", on_delete: :cascade
+  add_foreign_key "goal_pledges", "accounts", on_delete: :restrict
+  add_foreign_key "goal_pledges", "goals", on_delete: :cascade
+  add_foreign_key "goal_pledges", "transactions", column: "matched_transaction_id", on_delete: :nullify
+  add_foreign_key "goals", "families", on_delete: :cascade
   add_foreign_key "holdings", "account_providers"
   add_foreign_key "holdings", "accounts", on_delete: :cascade
   add_foreign_key "holdings", "securities"
@@ -1376,6 +1533,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
   add_foreign_key "import_claimed_entries", "imports", on_delete: :cascade
   add_foreign_key "import_rows", "imports"
   add_foreign_key "imports", "families"
+  add_foreign_key "insights", "families", on_delete: :cascade
   add_foreign_key "invitations", "families"
   add_foreign_key "invitations", "users", column: "inviter_id"
   add_foreign_key "llm_usages", "families"
@@ -1414,8 +1572,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_100000) do
   add_foreign_key "transactions", "categories", on_delete: :nullify
   add_foreign_key "transactions", "merchants"
   add_foreign_key "transactions", "recurring_transactions"
+  add_foreign_key "transactions", "transfers", column: "fee_transfer_id", on_delete: :nullify
   add_foreign_key "transfers", "transactions", column: "inflow_transaction_id", on_delete: :cascade
   add_foreign_key "transfers", "transactions", column: "outflow_transaction_id", on_delete: :cascade
+  add_foreign_key "users", "accounts", column: "default_account_id", on_delete: :nullify
   add_foreign_key "users", "chats", column: "last_viewed_chat_id"
   add_foreign_key "users", "families"
 end
