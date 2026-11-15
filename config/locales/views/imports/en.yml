@@ -141,6 +141,19 @@ en:
       imported: Imported
       new: New
       title: Transactions
+    pdf_statement_balance_check:
+      account_amount: "Account: %{amount}"
+      difference: "Differs by %{amount}"
+      match: Matches the account
+      missing: The statement does not show this balance or its date.
+      not_available: Not available
+      not_synced: The account balance for this day is not calculated yet. Refresh
+        once the account has synced.
+      sides:
+        closing: Closing balance
+        opening: Opening balance
+      statement_amount: "Statement: %{amount}"
+      title: Statement balances
     update:
       account_not_found: Account not found.
       account_saved: Account saved.

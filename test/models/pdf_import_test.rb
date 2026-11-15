@@ -132,8 +132,115 @@ class PdfImportTest < ActiveSupport::TestCase
     assert_equal 1, @import.rows.count
   end
 
+  test "statement balance check matches both balances" do
+    with_statement(opening: 1000, closing: "1 150,00")
+    set_balance(@account, Date.new(2024, 2, 29), 1000)
+    set_balance(@account, Date.new(2024, 3, 31), 1150.004)
+
+    opening, closing = PdfImport.find(@import.id).statement_balance_check
+
+    assert_equal :opening, opening.side
+    assert_equal Date.new(2024, 3, 1), opening.date
+    assert_equal :match, opening.status
+    assert_equal :closing, closing.side
+    assert_equal :match, closing.status
+    assert_equal Money.new(1150, "USD"), closing.statement_amount
+  end
+
+  test "statement balance check reports the difference when a balance does not match" do
+    with_statement(opening: 1000, closing: 1150)
+    set_balance(@account, Date.new(2024, 2, 29), 1000)
+    set_balance(@account, Date.new(2024, 3, 31), 1100)
+
+    opening, closing = PdfImport.find(@import.id).statement_balance_check
+
+    assert_equal :match, opening.status
+    assert_equal :mismatch, closing.status
+    assert_equal Money.new(1100, "USD"), closing.account_amount
+    assert_equal Money.new(-50, "USD"), closing.difference
+  end
+
+  test "statement balance check uses the start balance of the first day when the day before has no balance" do
+    with_statement(opening: 1000, closing: 1000)
+    set_balance(@account, Date.new(2024, 3, 1), 1000)
+    set_balance(@account, Date.new(2024, 3, 31), 1000)
+
+    opening, _closing = PdfImport.find(@import.id).statement_balance_check
+
+    assert_equal :match, opening.status
+  end
+
+  test "statement balance check is missing when the statement has no period or balance" do
+    @import.update!(extracted_data: { "period" => { "end_date" => "2024-03-31" }, "closing_balance" => nil })
+
+    opening, closing = PdfImport.find(@import.id).statement_balance_check
+
+    assert_equal :missing, opening.status
+    assert_nil opening.date
+    assert_equal :missing, closing.status
+    assert_nil closing.account_amount
+  end
+
+  test "statement balance check is empty without an account and treats an unparseable amount as missing" do
+    with_statement(opening: "n/a", closing: 1150)
+
+    assert_equal :missing, PdfImport.find(@import.id).statement_balance_check.first.status
+
+    @import.update!(account: nil)
+    assert_empty PdfImport.find(@import.id).statement_balance_check
+  end
+
+  test "statement balance check is not synced when the account has no balance for the day yet" do
+    with_statement(opening: 1000, closing: 1150)
+    set_balance(@account, Date.new(2024, 2, 29), 1000)
+
+    opening, closing = PdfImport.find(@import.id).statement_balance_check
+
+    assert_equal :match, opening.status
+    assert_equal :not_synced, closing.status
+    assert_nil closing.account_amount
+  end
+
+  test "statement balance check waits while the account is syncing" do
+    with_statement(opening: 1000, closing: 1150)
+    set_balance(@account, Date.new(2024, 2, 29), 1000)
+    set_balance(@account, Date.new(2024, 3, 31), 1150)
+    @account.syncs.create!(status: "pending")
+
+    assert_equal [ :not_synced, :not_synced ], PdfImport.find(@import.id).statement_balance_check.map(&:status)
+  end
+
+  test "statement balance check compares liability balances by absolute value" do
+    card = accounts(:credit_card)
+    @import.update!(account: card)
+    with_statement(opening: -500, closing: -650.5)
+    set_balance(card, Date.new(2024, 2, 29), 500)
+    set_balance(card, Date.new(2024, 3, 31), 650.5)
+
+    opening, closing = PdfImport.find(@import.id).statement_balance_check
+
+    assert_equal :match, opening.status
+    assert_equal :match, closing.status
+    assert_equal Money.new(650.5, "USD"), closing.statement_amount
+  end
+
   private
     def add_row(date:, amount:, name:)
       @import.rows.create!(date: date, amount: amount, name: name, currency: "USD")
+    end
+
+    def with_statement(opening:, closing:, start_date: "2024-03-01", end_date: "2024-03-31")
+      @import.update!(extracted_data: {
+        "period" => { "start_date" => start_date, "end_date" => end_date },
+        "opening_balance" => opening,
+        "closing_balance" => closing,
+        "transactions" => []
+      })
+    end
+
+    # end_balance is a generated column: with no flows it equals the start balance
+    def set_balance(account, date, amount)
+      account.balances.where(date: date).delete_all
+      account.balances.create!(date: date, balance: amount, currency: account.currency, start_cash_balance: amount, cash_balance: amount)
     end
 end

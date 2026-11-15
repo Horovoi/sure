@@ -1,0 +1,41 @@
+<%# locals: (import:) %>
+<%# The statement's opening and closing balances against the account's own balances %>
+
+<% checks = import.statement_balance_check %>
+
+<% if checks.any? %>
+  <div id="statement_balance_check" class="space-y-2">
+    <h2 class="font-medium text-primary"><%= t("imports.pdf_statement_balance_check.title") %></h2>
+
+    <dl class="text-sm bg-gray-500/5 rounded-lg divide-y divide-primary">
+      <% checks.each do |check| %>
+        <div id="statement_balance_check_<%= check.side %>" class="flex items-start justify-between gap-4 px-3 py-2" data-status="<%= check.status %>">
+          <dt class="text-secondary">
+            <%= t("imports.pdf_statement_balance_check.sides.#{check.side}") %>
+            <% if check.date %>
+              <span class="block text-xs"><%= l(check.date, format: :long) %></span>
+            <% end %>
+          </dt>
+
+          <dd class="text-right">
+            <% case check.status %>
+            <% when :match %>
+              <p class="text-success font-medium"><%= t("imports.pdf_statement_balance_check.match") %></p>
+              <p class="text-xs text-secondary"><%= format_money(check.statement_amount) %></p>
+            <% when :mismatch %>
+              <p class="text-warning font-medium"><%= t("imports.pdf_statement_balance_check.difference", amount: format_money(check.difference.abs)) %></p>
+              <p class="text-xs text-secondary"><%= t("imports.pdf_statement_balance_check.statement_amount", amount: format_money(check.statement_amount)) %></p>
+              <p class="text-xs text-secondary"><%= t("imports.pdf_statement_balance_check.account_amount", amount: format_money(check.account_amount)) %></p>
+            <% when :not_synced %>
+              <p class="text-secondary font-medium"><%= t("imports.pdf_statement_balance_check.not_available") %></p>
+              <p class="text-xs text-secondary"><%= t("imports.pdf_statement_balance_check.not_synced") %></p>
+            <% else %>
+              <p class="text-secondary font-medium"><%= t("imports.pdf_statement_balance_check.not_available") %></p>
+              <p class="text-xs text-secondary"><%= t("imports.pdf_statement_balance_check.missing") %></p>
+            <% end %>
+          </dd>
+        </div>
+      <% end %>
+    </dl>
+  </div>
+<% end %>

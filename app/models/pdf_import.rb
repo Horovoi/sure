@@ -57,6 +57,38 @@ class PdfImport < Import
     rows_count - already_recorded.size
   end
 
+  # One side of the statement balance check: the balance the statement prints
+  # (opening or closing) against the account's own balance on that day.
+  #   status: :match, :mismatch, :missing (the statement gives no date or amount)
+  #           or :not_synced (the account has no balance for that day yet, or is syncing)
+  BalanceCheck = Data.define(:side, :date, :status, :statement_amount, :account_amount) do
+    def difference
+      account_amount - statement_amount if account_amount && statement_amount
+    end
+  end
+
+  BALANCE_CHECK_TOLERANCE = BigDecimal("0.01")
+
+  # [opening, closing] checks of the statement against the account balances, in the
+  # account currency. Liabilities (a card, a loan) are compared by absolute value,
+  # since banks print the debt with either sign. Empty until an account is chosen.
+  def statement_balance_check
+    return [] if account.blank?
+
+    @statement_balance_check ||= begin
+      period = extracted_data.is_a?(Hash) ? extracted_data["period"] : nil
+      period = {} unless period.is_a?(Hash)
+      start_date = parse_statement_date(period["start_date"])
+      end_date = parse_statement_date(period["end_date"])
+      end_date = nil if start_date && end_date && end_date < start_date
+
+      [
+        build_balance_check(:opening, start_date, extracted_data_value("opening_balance")) { account_opening_balance_on(start_date) },
+        build_balance_check(:closing, end_date, extracted_data_value("closing_balance")) { account_closing_balance_on(end_date) }
+      ]
+    end
+  end
+
   def pdf_uploaded?
     pdf_file.attached?
   end
@@ -216,6 +248,89 @@ class PdfImport < Import
     # (everything was already recorded) the state change is the last write.
     def published_at
       entries.minimum(:created_at) || updated_at
+    end
+
+    def build_balance_check(side, date, raw_amount)
+      statement_value = parse_statement_amount(raw_amount)
+      if date.nil? || statement_value.nil?
+        return BalanceCheck.new(side: side, date: date, status: :missing, statement_amount: statement_value && Money.new(statement_value, account.currency), account_amount: nil)
+      end
+
+      account_value = account_balances_syncing? ? nil : yield
+      if account.liability?
+        statement_value = statement_value.abs
+        account_value = account_value&.abs
+      end
+
+      status =
+        if account_value.nil?
+          :not_synced
+        elsif (account_value - statement_value).abs <= BALANCE_CHECK_TOLERANCE
+          :match
+        else
+          :mismatch
+        end
+
+      BalanceCheck.new(
+        side: side,
+        date: date,
+        status: status,
+        statement_amount: Money.new(statement_value, account.currency),
+        account_amount: account_value && Money.new(account_value, account.currency)
+      )
+    end
+
+    # The balance at the start of the first statement day: the end of the day before,
+    # or, when the account starts on that day, the start balance of that day.
+    def account_opening_balance_on(date)
+      balances = account_balances_on([ date - 1, date ])
+      balances[date - 1]&.end_balance || balances[date]&.start_balance
+    end
+
+    def account_closing_balance_on(date)
+      account_balances_on([ date ])[date]&.end_balance
+    end
+
+    def account_balances_on(dates)
+      account.balances.where(currency: account.currency, date: dates).index_by(&:date)
+    end
+
+    # Publishing schedules a sync. Until it finishes the stored balances do not
+    # include the new entries, so they are not compared yet.
+    def account_balances_syncing?
+      return @account_balances_syncing if defined?(@account_balances_syncing)
+
+      @account_balances_syncing = account.syncing?
+    end
+
+    def extracted_data_value(key)
+      extracted_data[key] if extracted_data.is_a?(Hash)
+    end
+
+    def parse_statement_date(value)
+      return value if value.is_a?(Date)
+      return nil if value.blank?
+
+      Date.iso8601(value.to_s)
+    rescue ArgumentError
+      begin
+        Date.parse(value.to_s)
+      rescue ArgumentError
+        nil
+      end
+    end
+
+    # The extractor asks for a number, but a model can still answer "1 234,56"
+    def parse_statement_amount(value)
+      case value
+      when Numeric
+        value.to_d
+      when String
+        cleaned = value.gsub(/[\s  ]/, "")
+        cleaned = cleaned.include?(".") ? cleaned.delete(",") : cleaned.tr(",", ".")
+        cleaned = cleaned.gsub(/[^\d.\-]/, "")
+        cleaned.match?(/\A-?\d+(\.\d+)?\z/) ? BigDecimal(cleaned) : nil
+      end
     end
 
     def awaiting_processing?

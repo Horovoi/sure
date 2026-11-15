@@ -87,6 +87,7 @@
 
       <div class="bg-container border border-primary rounded-xl p-4 space-y-4">
         <%= render "imports/pdf_import_counts", import: import, already_recorded: already_recorded %>
+        <%= render "imports/pdf_statement_balance_check", import: import %>
       </div>
 
       <%= render "imports/already_recorded", import: import, matches: already_recorded %>
