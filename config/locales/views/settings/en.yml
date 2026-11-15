@@ -20,6 +20,44 @@ en:
         merchant_detector:
           title: Merchant Detector
           subtitle: AI identifies and enriches transaction data with merchant information
+    llm_usages:
+      show:
+        page_title: LLM Usage
+        breadcrumb_home: Home
+        breadcrumb: LLM Usage
+        title: LLM Usage & Costs
+        subtitle: Track your AI usage and estimated costs
+        start_date: Start Date
+        end_date: End Date
+        filter: Filter
+        total_requests: Total Requests
+        total_tokens: Total Tokens
+        token_split: "%{prompt} prompt / %{completion} completion"
+        total_cost: Total Cost
+        subscription_total:
+          one: "Plus 1 Claude subscription request (API-equivalent %{cost}, not billed per token)"
+          other: "Plus %{count} Claude subscription requests (API-equivalent %{cost}, not billed per token)"
+        avg_cost: Avg Cost/Request
+        avg_cost_basis: "Based on %{with_cost} of %{total} billed requests with cost data"
+        cost_by_operation: Cost by Operation
+        cost_by_model: Cost by Model
+        recent_usage: Recent Usage
+        columns:
+          date: Date
+          operation: Operation
+          model: Model
+          tokens: Tokens
+          cost: Cost
+        failed: Failed
+        http_status: "HTTP Status: %{status}"
+        subscription_cost: "subscription (API-equivalent %{cost})"
+        not_available: N/A
+        empty: No usage data found for the selected period
+        pricing_note: >-
+          Costs are estimates from published per-token API prices (per 1 million tokens, varying by model),
+          last reviewed on %{verified_on}. Actual costs may vary. Custom or self-hosted models show "N/A" and are
+          not counted. Claude subscription requests show what the same tokens would cost on the API and are not
+          added to the total cost.
     payments:
       show:
         page_title: Payments
