@@ -1,0 +1,40 @@
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(title: t(".title", account_name: @account.name), subtitle: t(".subtitle")) %>
+
+  <% dialog.with_body do %>
+    <% if @monobank_accounts.empty? %>
+      <p class="text-sm text-secondary"><%= t(".no_accounts", currency: @account.currency) %></p>
+    <% else %>
+      <%= form_with url: link_existing_account_monobank_items_path, scope: :link, method: :post, data: { turbo_frame: "_top" }, class: "space-y-4" do |form| %>
+        <%= form.hidden_field :monobank_item_id, value: @monobank_item.id %>
+        <%= form.hidden_field :account_id, value: @account.id %>
+        <%= hidden_field_tag :return_to, @return_to %>
+
+        <div class="space-y-2">
+          <% @monobank_accounts.each_with_index do |monobank_account, index| %>
+            <label class="flex items-start gap-3 p-3 border border-primary rounded-lg hover:bg-surface-hover cursor-pointer">
+              <%= form.radio_button :monobank_account_id, monobank_account.id, checked: index.zero?, required: true, class: "mt-1" %>
+              <span>
+                <span class="block font-medium text-sm text-primary"><%= monobank_account.name %></span>
+                <span class="block text-xs text-secondary"><%= [ monobank_account.type_label, monobank_account.currency ].join(" · ") %></span>
+              </span>
+            </label>
+          <% end %>
+        </div>
+
+        <div class="form-field">
+          <%= form.label :cutover_date, t(".cutover_label"), class: "form-field__label" %>
+          <%= form.date_field :cutover_date, value: @cutover_date, max: Date.current, autocomplete: "off", class: "form-field__input" %>
+        </div>
+        <p class="text-xs text-secondary">
+          <%= @cutover_date ? t(".cutover_text", date: format_date(@cutover_date)) : t(".cutover_none") %>
+        </p>
+
+        <div class="flex gap-2 justify-end">
+          <%= render DS::Link.new(text: t(".cancel"), variant: "secondary", href: @return_to || account_path(@account), data: { turbo_frame: "_top" }) %>
+          <%= render DS::Button.new(text: t(".submit"), type: "submit") %>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+<% end %>

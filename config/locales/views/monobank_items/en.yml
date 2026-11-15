@@ -1,0 +1,97 @@
+---
+en:
+  monobank_items:
+    connection_form:
+      name_label: Connection name
+      token_label: Personal token
+      token_placeholder: Paste the token from api.monobank.ua
+      token_keep_placeholder: Leave empty to keep the saved token
+      history_start_label: Import history from
+      history_start_hint: Leave empty to import the last %{days} days. Accounts you link to an account you already keep start where your own entries end.
+      include_pending_label: Import pending holds
+      include_pending_hint: Card payments that are not settled yet show as pending until monobank settles them.
+      apply_mcc_label: Categorise by MCC
+      apply_mcc_hint: Uncategorised transactions get a category from the merchant code. Your rules and your own categories always win.
+      connect: Connect monobank
+      save: Save
+    progress:
+      windows_left:
+        one: "1 statement page left to fetch (about %{minutes} min)"
+        other: "%{count} statement pages left to fetch (about %{minutes} min)"
+    panel:
+      steps_title: "To connect monobank:"
+      step_1_html: Open %{link}, sign in with the QR code in the monobank app and copy your personal token.
+      step_2: Paste the token below and connect.
+      step_3: Set up accounts to link each card, currency account, FOP account and jar to a Sure account.
+      rate_limit_notice: monobank answers one request per minute. The first import of a year of history takes about an hour per product; new transactions arrive every hour.
+      disconnect: Disconnect
+      disconnect_title: Disconnect %{name}?
+      disconnect_body: The linked accounts stay in Sure with their history and become manual accounts. The token is deleted.
+      linked_to: Linked to %{account}
+      skipped: Skipped
+      not_linked: Not set up
+      jar_goal: "goal %{goal}"
+      setup_accounts: Set up accounts
+      sync_now: Sync now
+      add_connection: Add another connection
+    monobank_item:
+      sync_now: Sync now
+      settings: Connection settings
+      setup_needed: Accounts to set up
+      setup_description: "%{linked} of %{total} monobank accounts are linked."
+      setup_action: Set up accounts
+      no_accounts: No monobank accounts loaded yet. They appear after the first sync.
+    new:
+      title: Connect monobank
+      subtitle: Use a personal token from api.monobank.ua
+    create:
+      success: monobank connected. Your accounts load in a minute.
+    update:
+      success: monobank connection saved.
+    destroy:
+      success: monobank disconnected. The linked accounts are manual accounts now.
+      unlink_failed: Some accounts could not be unlinked, so the connection was kept. Try again.
+    setup_accounts:
+      title: Set up monobank accounts
+      subtitle: Choose what each monobank account becomes in Sure.
+      nothing_to_set_up: Every monobank account is set up
+      nothing_to_set_up_hint: New cards and jars show up here after a sync.
+      choice_label: In Sure
+      cutover_label: Take over from
+      cutover_text: Transactions from %{date} come from monobank; earlier history of %{account} stays as you entered it.
+      cutover_hint: When you link an account you already keep, transactions from the day after its last entry come from monobank. Pick another day here if you want.
+      cancel: Cancel
+      submit: Save
+    complete_account_setup:
+      success: "Done: %{created} created, %{linked} linked, %{skipped} skipped."
+      product_failed: "%{name}: %{error}"
+    select_accounts:
+      title: Add monobank accounts
+      subtitle: Each selected account becomes a new Sure account.
+      no_accounts: Every monobank account is already linked.
+      cancel: Cancel
+      submit: Add accounts
+    link_accounts:
+      no_accounts_selected: Select at least one monobank account.
+      success:
+        one: Added 1 monobank account.
+        other: "Added %{count} monobank accounts."
+      failed: "Could not add the accounts: %{error}"
+    select_existing_account:
+      title: Link %{account_name} to monobank
+      subtitle: monobank takes over this account's transactions and balance.
+      no_accounts: There is no unlinked monobank account in %{currency}.
+      cutover_label: Take over from
+      cutover_text: Transactions from %{date} come from monobank; earlier history stays as you entered it.
+      cutover_none: This account has no entries yet, so all its transactions come from monobank.
+      cancel: Cancel
+      submit: Link account
+    link_existing_account:
+      success: "%{account_name} is linked to monobank."
+      failed: "Could not link the account: %{error}"
+    setup_choices:
+      create_checking: New cash account
+      create_savings: New savings account
+      create_credit_card: New credit card
+      link: Link to %{account}
+      skip: Skip

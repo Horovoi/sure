@@ -1,0 +1,6 @@
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(title: t(".title"), subtitle: t(".subtitle")) %>
+  <% dialog.with_body do %>
+    <%= render "monobank_items/connection_form", monobank_item: @monobank_item %>
+  <% end %>
+<% end %>

@@ -1,0 +1,32 @@
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(title: t(".title"), subtitle: t(".subtitle")) %>
+
+  <% dialog.with_body do %>
+    <% if @monobank_accounts.empty? %>
+      <p class="text-sm text-secondary"><%= t(".no_accounts") %></p>
+    <% else %>
+      <%= form_with url: link_accounts_monobank_items_path, method: :post, data: { turbo_frame: "_top" }, class: "space-y-4" do %>
+        <%= hidden_field_tag :monobank_item_id, @monobank_item.id %>
+        <%= hidden_field_tag :accountable_type, @accountable_type %>
+        <%= hidden_field_tag :return_to, @return_to %>
+
+        <div class="space-y-2">
+          <% @monobank_accounts.each do |monobank_account| %>
+            <label class="flex items-start gap-3 p-3 border border-primary rounded-lg hover:bg-surface-hover cursor-pointer">
+              <%= check_box_tag "monobank_account_ids[]", monobank_account.id, false, id: "monobank_account_#{monobank_account.id}", class: "mt-1" %>
+              <span>
+                <span class="block font-medium text-sm text-primary"><%= monobank_account.name %></span>
+                <span class="block text-xs text-secondary"><%= [ monobank_account.type_label, monobank_account.currency ].join(" · ") %></span>
+              </span>
+            </label>
+          <% end %>
+        </div>
+
+        <div class="flex gap-2 justify-end">
+          <%= render DS::Link.new(text: t(".cancel"), variant: "secondary", href: @return_to || accounts_path, data: { turbo_frame: "_top" }) %>
+          <%= render DS::Button.new(text: t(".submit"), type: "submit") %>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+<% end %>
