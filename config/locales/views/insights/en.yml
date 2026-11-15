@@ -4,6 +4,12 @@ en:
     dashboard:
       insights_feed:
         title: Insights
+  settings:
+    hostings:
+      scheduled_jobs_settings:
+        status:
+          job_names:
+            generate_insights: Nightly insights
   insights:
     index:
       title: Insights
