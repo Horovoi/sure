@@ -274,6 +274,15 @@ bin/claude-bridge run                     # foreground, for bin/dev or bin/stagi
   against the copy, run `bin/staging dev` and `bin/claude-bridge run` (or the agent).
 - Turns are saved as Claude Code sessions under `~/.claude/projects/` for the folder
   `~/Library/Application Support/sure-claude-bridge/work`; each turn forks the last one.
+- **Sure's side** (`Assistant::Claude`). A turn whose model is a Claude model (`opus`, `sonnet`,
+  `haiku` or a `claude-*` id) goes to the bridge; anything else stays on OpenAI. Settings > AI
+  shows the account, plan, the 5-hour and 7-day windows (reset times in the family time zone) and
+  the chat model select (blank = `sonnet` when the bridge is configured). Each turn sends
+  `CLAUDE_BRIDGE_MCP_URL` (default `http://localhost:$PORT/mcp`) and a 15-minute turn token that
+  `/mcp` accepts only while that message streams and only with the user's AI switch on (the
+  Self-Hosting MCP switch does not apply to it). Usage goes to LLM Usage as
+  `claude_subscription` rows at API-equivalent cost; every tool call to AI tool calls as
+  `claude_chat`.
 
 ## Files
 

@@ -8,7 +8,12 @@
   <% end %>
 
   <div class="flex items-center justify-between gap-2">
-    <p class="text-xs text-red-500"><%= t("chats.error.message") %></p>
+    <div class="space-y-1">
+      <p class="text-xs text-red-500"><%= t("chats.error.message") %></p>
+      <% if (detail = chat.user_facing_error) %>
+        <p class="text-xs text-red-500" data-testid="chat-error-detail"><%= detail %></p>
+      <% end %>
+    </div>
 
     <%= render DS::Button.new(
       text: t("chats.error.retry"),

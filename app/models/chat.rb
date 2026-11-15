@@ -34,9 +34,17 @@ class Chat < ApplicationRecord
       prompt.first(80)
     end
 
-    # Returns the default AI model to use for chats
-    # Priority: ENV variable > Setting > OpenAI default
+    # The model a new turn uses: the Settings > AI choice while its engine is set up, else Claude's "sonnet" when
+    # the bridge is configured, else the OpenAI model (OPENAI_MODEL > Setting > OpenAI default).
     def default_model
+      chosen = Setting.chat_model.presence
+      return chosen if chosen && (!Assistant::Claude.handles?(chosen) || Assistant::Claude.configured?)
+      return Assistant::Claude::DEFAULT_MODEL if Assistant::Claude.configured?
+
+      openai_model
+    end
+
+    def openai_model
       ENV["OPENAI_MODEL"].presence || Setting.openai_model.presence || Provider::Openai::DEFAULT_MODEL
     end
   end
@@ -111,6 +119,15 @@ class Chat < ApplicationRecord
 
   def assistant
     @assistant ||= Assistant.for_chat(self)
+  end
+
+  # The message of the last turn's error when it was written for the user (Assistant::Claude::Error: a usage limit
+  # and when it resets, the bridge command to run), so the chat shows it outside debug mode too
+  def user_facing_error
+    parsed = JSON.parse(error.to_s)
+    parsed["message"].presence if parsed.is_a?(Hash) && parsed["user_facing"]
+  rescue JSON::ParserError
+    nil
   end
 
   def conversation_messages

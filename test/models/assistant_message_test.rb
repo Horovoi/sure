@@ -202,4 +202,68 @@ class AssistantMessageTest < ActiveSupport::TestCase
     assert queued.reload.pending?
     assert streaming.reload.streaming?
   end
+
+  # --- Claude turns -----------------------------------------------------------------------------------------
+
+  test "a Claude turn completes with its session id and leaves the OpenAI pointer alone" do
+    turn = AssistantMessage.create!(chat: @chat, ai_model: "sonnet", status: "streaming", content: "Hi")
+    @chat.update!(error: "old".to_json)
+
+    turn.complete!("sess_claude")
+
+    assert turn.reload.complete?
+    assert_equal "sess_claude", turn.provider_id
+    assert_equal "resp_previous", @chat.reload.latest_assistant_response_id
+    assert_nil @chat.error
+  end
+
+  test "a failed Claude turn shows its message to the user and Retry requeues it" do
+    UserMessage.create!(chat: @chat, content: "Spending?", ai_model: "sonnet")
+    turn = AssistantMessage.create!(chat: @chat, ai_model: "sonnet", status: "streaming", content: "Partial")
+
+    turn.fail_turn(Assistant::Claude::Error.new("unreachable"))
+
+    assert turn.reload.failed?
+    assert_equal I18n.t("assistant.claude.errors.unreachable"), @chat.reload.user_facing_error
+    assert turn.retryable?
+
+    assert_enqueued_with(job: AssistantResponseJob) { assert_equal turn, @chat.retry_last_turn! }
+    assert turn.reload.pending?
+    assert_equal "", turn.content
+    assert_nil turn.provider_id
+    assert_nil @chat.reload.error
+  end
+
+  test "a Claude completion refused after the reaper failed the turn leaves it failed" do
+    turn = AssistantMessage.create!(chat: @chat, ai_model: "sonnet", status: "streaming", content: "Answer")
+    AssistantMessage.where(id: turn.id).update_all(status: "failed")
+
+    error = assert_raises(AASM::InvalidTransition) { turn.complete!("sess_late") }
+    turn.fail_turn(error)
+
+    assert turn.reload.failed?
+    assert_nil turn.provider_id
+  end
+
+  test "a Claude heartbeat keeps a long turn out of the stale scope" do
+    turn = AssistantMessage.create!(chat: @chat, ai_model: "sonnet", status: "streaming")
+    turn.update_column(:updated_at, (AssistantMessage::STALE_AFTER - 1.minute).ago)
+
+    travel 2.minutes do
+      assert_includes AssistantMessage.stale, turn
+
+      turn.update_column(:updated_at, Time.current) # what Assistant::Claude does on a heartbeat
+
+      assert_not_includes AssistantMessage.stale, turn
+      assert turn.reload.live?
+    end
+  end
+
+  test "an OpenAI error is not shown as a user-facing message" do
+    turn = AssistantMessage.create!(chat: @chat, ai_model: "gpt-4.1", status: "streaming")
+
+    turn.fail_turn(StandardError.new("PG::Error secret"))
+
+    assert_nil @chat.reload.user_facing_error
+  end
 end

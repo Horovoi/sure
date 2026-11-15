@@ -8,6 +8,9 @@ en:
     ai_prompts:
       show:
         page_title: AI Prompts
+        breadcrumb_home: Home
+        claude_label: Claude
+        claude_loading: Checking the Claude bridge...
         openai_label: OpenAI
         disable_ai: Disable AI Assistant
         prompt_instructions: Prompt Instructions
@@ -20,6 +23,34 @@ en:
         merchant_detector:
           title: Merchant Detector
           subtitle: AI identifies and enriches transaction data with merchant information
+      claude_card:
+        title: Claude in chat
+        subtitle: Runs on the Mac through the Claude bridge, with your own Claude login
+        not_configured: The Claude chat is off. Run this on the Mac, add the CLAUDE_BRIDGE_URL and CLAUDE_BRIDGE_TOKEN lines it prints to .env.production, then deploy.
+        bridge_up: Bridge running
+        bridge_down: Bridge not running
+        signed_out: Claude is signed out on the Mac
+        start_hint: "Run these on the Mac to find the problem and start the bridge:"
+        account: "Account: %{email}"
+        plan: "Plan: %{plan}"
+        version: "Claude Code %{version}"
+        used: "%{percent}% used"
+        unknown: Usage unknown
+        resets: "resets %{time}"
+        time_zone: "Times in %{zone}"
+        no_usage: The bridge does not report usage windows right now.
+        windows:
+          five_hour: 5-hour window
+          seven_day: 7-day window
+        model_label: Chat model
+        model_automatic: Automatic (Claude Sonnet when the bridge is set up)
+        model_hint: New messages use this model. Claude models run through the bridge; the OpenAI model uses the OpenAI key.
+    ai_chats:
+      not_authorized: Only an admin can change the chat model.
+      openai_option: "OpenAI: %{model}"
+      update:
+        saved: Chat model saved.
+        invalid_model: That model is not available.
     llm_usages:
       show:
         page_title: LLM Usage

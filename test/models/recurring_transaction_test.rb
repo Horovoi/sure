@@ -917,4 +917,78 @@ class RecurringTransactionTest < ActiveSupport::TestCase
 
     assert_raises(AASM::InvalidTransition) { row.make_subscription! }
   end
+
+  # --- Charges, skips and first dates (shared by Subscriptions and the subscription tools) -------------------
+
+  test "record_charge! books the due charge once and syncs the account" do
+    account = accounts(:depository)
+    row = charge_test_row(next_expected_date: Date.current, default_account: account)
+    Account.any_instance.expects(:sync_later).once
+
+    first = row.record_charge!
+    second = row.record_charge!
+
+    assert first.recorded?
+    assert_equal row, first.entry.transaction.recurring_transaction
+    assert_not second.recorded?
+    assert_equal :not_due, second.error
+    assert_equal 1, account.entries.where(source: "subscription").count
+  end
+
+  test "record_charge! says why it booked nothing" do
+    assert_equal :no_account, charge_test_row(next_expected_date: Date.current).record_charge!.error
+    assert_equal :not_due, charge_test_row(name: "Later", next_expected_date: 3.days.from_now.to_date, default_account: accounts(:depository)).record_charge!.error
+    assert_equal :no_exchange_rate,
+      charge_test_row(name: "Swiss", currency: "CHF", next_expected_date: Date.current, default_account: accounts(:depository)).record_charge!.error
+  end
+
+  test "record_charge! for a period already booked is already_exists" do
+    account = accounts(:depository)
+    row = charge_test_row(next_expected_date: Date.current, default_account: account)
+    Account.any_instance.stubs(:sync_later)
+    row.record_charge!
+    row.update_columns(next_expected_date: Date.current)
+
+    assert_equal :already_exists, row.record_charge!.error
+  end
+
+  test "skip_occurrence! advances one period from the current expected date" do
+    row = charge_test_row(expected_day_of_month: 5, next_expected_date: Date.current.change(day: 5))
+
+    skipped = row.skip_occurrence!
+
+    assert_equal Date.current.change(day: 5), skipped
+    assert_equal Date.current.change(day: 5).next_month, row.reload.next_expected_date
+  end
+
+  test "first_expected_date is today or later, in the billing month of a yearly cycle" do
+    today = Date.new(2026, 11, 15)
+    monthly = @family.recurring_transactions.new(expected_day_of_month: 20, billing_cycle: "monthly")
+    assert_equal Date.new(2026, 11, 20), monthly.first_expected_date(today: today)
+
+    monthly.expected_day_of_month = 15
+    assert_equal today, monthly.first_expected_date(today: today)
+
+    monthly.expected_day_of_month = 10
+    assert_equal Date.new(2026, 12, 10), monthly.first_expected_date(today: today)
+
+    monthly.expected_day_of_month = 31
+    assert_equal Date.new(2026, 11, 30), monthly.first_expected_date(today: today)
+
+    yearly = @family.recurring_transactions.new(expected_day_of_month: 1, billing_cycle: "yearly", expected_month: 3)
+    assert_equal Date.new(2027, 3, 1), yearly.first_expected_date(today: today)
+
+    yearly.expected_month = 12
+    assert_equal Date.new(2026, 12, 1), yearly.first_expected_date(today: today)
+  end
+
+  private
+    def charge_test_row(name: "Charge test", currency: "USD", expected_day_of_month: nil, next_expected_date:, default_account: nil)
+      @family.recurring_transactions.create!(
+        name: name, amount: 9.99, currency: currency,
+        expected_day_of_month: expected_day_of_month || next_expected_date.day,
+        last_occurrence_date: 1.month.ago.to_date, next_expected_date: next_expected_date,
+        status: "active", subscription_state: "subscription", billing_cycle: "monthly", default_account: default_account
+      )
+    end
 end

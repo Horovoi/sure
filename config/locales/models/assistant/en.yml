@@ -1,0 +1,25 @@
+---
+en:
+  assistant:
+    thinking:
+      analyzing: Analyzing your data...
+    claude:
+      errors:
+        auth: Claude is signed out on the Mac. Run `claude auth login` in a terminal there, then retry.
+        bad_request: The Claude bridge refused the request. Run `bin/claude-bridge status` on the Mac.
+        bad_response: The Claude bridge sent an answer Sure cannot read. Run `bin/claude-bridge status` on the Mac.
+        budget: The Claude turn hit its spending cap. Ask a shorter question, then retry.
+        busy: Claude is already answering 2 messages. Retry when one of them finishes.
+        empty: Claude finished without an answer. Retry the message.
+        incomplete: The Claude bridge stopped before the answer was complete. Retry the message; if it fails again, run `bin/claude-bridge logs` on the Mac.
+        internal: Claude Code failed on the Mac. Retry the message; if it fails again, run `bin/claude-bridge logs` there.
+        max_turns: Claude used all of its tool rounds without finishing. Ask a narrower question, then retry.
+        mcp_unavailable: Claude could not reach Sure's tools. Check that Sure's MCP endpoint is on and run `bin/claude-bridge status` on the Mac.
+        not_configured: The Claude chat is off. Run `bin/claude-bridge install` on the Mac, add CLAUDE_BRIDGE_URL and CLAUDE_BRIDGE_TOKEN to .env.production, then deploy.
+        overloaded: Claude is overloaded right now. Retry in a minute.
+        session_not_found: The earlier Claude conversation was not found. Retry the message to start a new one.
+        timeout: The Claude turn took too long and was stopped. Retry the message, or ask a narrower question.
+        unauthorized: The Claude bridge refused Sure's token. CLAUDE_BRIDGE_TOKEN in .env.production must match the bridge config; run `bin/claude-bridge status` on the Mac.
+        unreachable: The Claude bridge is not running. Run `bin/claude-bridge status` on the Mac, or start it with `bin/claude-bridge run`.
+        usage_limit: Your Claude usage limit is reached. Retry when the usage window resets.
+        usage_limit_with_reset: Your Claude usage limit is reached. It resets at %{time}.

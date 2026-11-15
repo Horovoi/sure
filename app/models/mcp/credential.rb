@@ -3,7 +3,7 @@
 #
 # Kinds:
 # - :static, the MCP_API_TOKEN bearer used by Claude Code. No assistant message.
-# - :turn, the per-turn token the in-app Claude chat gets (added with the Claude chat adapter), tied to the
+# - :turn, the per-turn token the in-app Claude chat gets (Mcp::TurnToken, minted by Assistant::Claude), tied to the
 #   assistant message being answered.
 #
 # Scope (Assistant.function_classes_for): both kinds get :full, every tool with no approval prompt (owner answer

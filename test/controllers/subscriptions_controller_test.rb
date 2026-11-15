@@ -192,6 +192,38 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal I18n.t("subscriptions.record_transaction.not_due"), flash[:alert]
   end
 
+  test "record_transaction books the due charge once through record_charge!" do
+    @subscription.update!(default_account: accounts(:depository), next_expected_date: Date.current)
+    Account.any_instance.stubs(:sync_later)
+
+    assert_difference "Entry.count", 1 do
+      post record_transaction_subscription_url(@subscription)
+      post record_transaction_subscription_url(@subscription)
+    end
+
+    assert_redirected_to subscriptions_path
+    assert_equal I18n.t("subscriptions.record_transaction.not_due"), flash[:alert]
+  end
+
+  test "record_transaction without a paying account opens the subscription" do
+    @subscription.update!(default_account: nil, next_expected_date: Date.current)
+
+    post record_transaction_subscription_url(@subscription)
+
+    assert_redirected_to edit_subscription_path(@subscription)
+    assert_equal I18n.t("subscriptions.record_transaction.no_account"), flash[:alert]
+  end
+
+  test "create starts a hand-made subscription at its first billing date" do
+    post subscriptions_url, params: {
+      recurring_transaction: { name: "Paper", amount: 5, currency: "USD", billing_cycle: "monthly", expected_day_of_month: Date.current.day }
+    }
+
+    created = @family.recurring_transactions.find_by!(name: "Paper")
+    assert_equal created.first_expected_date, created.next_expected_date
+    assert_equal Date.current, created.next_expected_date
+  end
+
   test "cannot access other family subscriptions" do
     other_family = families(:empty)
     other_subscription = other_family.recurring_transactions.create!(

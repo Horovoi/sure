@@ -1,6 +1,11 @@
 # The /mcp endpoint: MCP protocol 2026-07-28 only, stateless, tools only, served by the official "mcp" gem.
-# Claude Code connects with the static MCP_API_TOKEN; every request is self-contained (no initialize handshake,
-# no Mcp-Session-Id) and runs as the MCP_USER_EMAIL user in the family time zone.
+# Every request is self-contained (no initialize handshake, no Mcp-Session-Id) and runs in the family time zone.
+#
+# Two bearer kinds:
+# - the static MCP_API_TOKEN (Claude Code), which runs as the MCP_USER_EMAIL user and is gated by the
+#   Settings > Self-Hosting MCP switch;
+# - the per-turn token of the in-app Claude chat (Mcp::TurnToken), which runs as the chat's user, only while that
+#   turn streams, and is gated by the user's AI switch instead.
 class McpController < ApplicationController
   SUPPORTED_PROTOCOL_VERSIONS = MCP::Configuration::SUPPORTED_MODERN_PROTOCOL_VERSIONS
   MAX_REQUEST_BYTES = 1.megabyte
@@ -18,6 +23,7 @@ class McpController < ApplicationController
   before_action :authenticate_mcp_token!
   before_action :set_mcp_user
   before_action :require_mcp_enabled!
+  before_action :require_ai_enabled_for_turn!
   before_action :verify_origin!
   before_action :drop_session_headers
   before_action :require_modern_protocol!, if: -> { request.post? }
@@ -53,6 +59,7 @@ class McpController < ApplicationController
       )
     end
 
+    # A turn token sets the credential during authentication; the static token gets it from the MCP user
     def credential
       @credential ||= Mcp::Credential.static(@mcp_user, client_name: client_name)
     end
@@ -77,31 +84,44 @@ class McpController < ApplicationController
     # --- Authentication -------------------------------------------------------------------------------------
 
     def authenticate_mcp_token!
+      token = request.authorization.to_s[/\ABearer\s+(.+)\z/i, 1].to_s.strip
       expected = ENV["MCP_API_TOKEN"].to_s
-      if expected.empty?
-        render_gate_error(:service_unavailable, "MCP endpoint not configured")
+
+      return if token.present? && expected.present? && static_token_matches?(token, expected)
+
+      if token.present? && (turn_credential = Mcp::TurnToken.credential_for(token, client_name: client_name))
+        @credential = turn_credential
         return
       end
 
-      # Comparing digests keeps the comparison constant-time whatever the length of the token sent
-      token = request.authorization.to_s[/\ABearer\s+(.+)\z/i, 1].to_s.strip
-      return if token.present? && ActiveSupport::SecurityUtils.secure_compare(
-        Digest::SHA256.hexdigest(token), Digest::SHA256.hexdigest(expected)
-      )
+      # Without MCP_API_TOKEN only turn tokens can get in; anything else learns the endpoint is not configured
+      if expected.empty? && !Mcp::TurnToken.token_format?(token)
+        render_gate_error(:service_unavailable, "MCP endpoint not configured")
+        return
+      end
 
       response.headers["WWW-Authenticate"] = 'Bearer realm="sure"'
       render_gate_error(:unauthorized, "Unauthorized")
     end
 
-    # The static token acts as one configured user. The user's AI switch gates only the in-app chat, not this
-    # endpoint (decision 13).
-    def set_mcp_user
-      email = ENV["MCP_USER_EMAIL"].presence
-      @mcp_user = User.find_by(email: email) if email
+    # Comparing digests keeps the comparison constant-time whatever the length of the token sent
+    def static_token_matches?(token, expected)
+      ActiveSupport::SecurityUtils.secure_compare(Digest::SHA256.hexdigest(token), Digest::SHA256.hexdigest(expected))
+    end
 
-      unless @mcp_user&.active?
-        render_gate_error(:service_unavailable, "MCP user not configured")
-        return
+    # The static token acts as one configured user, the turn token as the user of its chat. The user's AI switch
+    # gates only the in-app chat (and so the turn token), not the static token (decision 13).
+    def set_mcp_user
+      if @credential&.turn?
+        @mcp_user = @credential.user
+      else
+        email = ENV["MCP_USER_EMAIL"].presence
+        @mcp_user = User.find_by(email: email) if email
+
+        unless @mcp_user&.active?
+          render_gate_error(:service_unavailable, "MCP user not configured")
+          return
+        end
       end
 
       Current.session = Session.ephemeral_for(@mcp_user, request)
@@ -114,6 +134,14 @@ class McpController < ApplicationController
       return if !credential.static? || Setting.mcp_enabled
 
       render_gate_error(:forbidden, "MCP is turned off in Settings > Self-Hosting")
+    end
+
+    # The Claude chat's tools stop working the moment the user turns AI off, even mid-turn
+    def require_ai_enabled_for_turn!
+      return unless credential.turn?
+      return if credential.user.ai_enabled?
+
+      render_gate_error(:forbidden, "AI is disabled for this user")
     end
 
     # --- Transport rules ------------------------------------------------------------------------------------

@@ -13,6 +13,20 @@
   </div>
 <% end %>
 
+<div class="bg-container rounded-xl shadow-border-xs p-4 mb-4">
+  <div class="rounded-xl bg-container-inset space-y-1 p-1">
+    <div class="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-secondary">
+      <p><%= t(".claude_label") %></p>
+    </div>
+
+    <div class="bg-container rounded-lg shadow-border-xs p-4">
+      <%= turbo_frame_tag "claude_card", src: settings_ai_chat_path, loading: "lazy" do %>
+        <p class="text-xs text-secondary animate-pulse"><%= t(".claude_loading") %></p>
+      <% end %>
+    </div>
+  </div>
+</div>
+
 <div class="bg-container rounded-xl shadow-border-xs p-4">
   <div class="rounded-xl bg-container-inset space-y-1 p-1">
     <div class="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-secondary">

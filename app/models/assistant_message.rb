@@ -139,12 +139,19 @@ class AssistantMessage < Message
 
     # The provider conversation pointer moves only when a turn completes, so a failed or abandoned turn never
     # leaves the chat pointing at a response with unresolved function calls.
+    #
+    # A Claude turn's id is its Claude Code session, kept only in provider_id (Assistant::Claude resumes from the
+    # last completed Claude turn). chat.latest_assistant_response_id stays OpenAI's pointer, so the two kinds of
+    # id never mix.
     def move_response_pointer(provider_response_id = nil)
       self.provider_id = provider_response_id
-      chat.update!(
-        latest_assistant_response_id: provider_response_id.presence || chat.latest_assistant_response_id,
-        error: nil
-      )
+
+      attributes = { error: nil }
+      unless Assistant::Claude.handles?(ai_model)
+        attributes[:latest_assistant_response_id] = provider_response_id.presence || chat.latest_assistant_response_id
+      end
+
+      chat.update!(attributes)
     end
 
     def record_error(error = nil)

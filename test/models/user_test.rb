@@ -153,6 +153,26 @@ class UserTest < ActiveSupport::TestCase
     Setting.openai_access_token = previous
   end
 
+  test "ai_available? is true with only the Claude bridge configured" do
+    Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
+    previous = Setting.openai_access_token
+    Setting.openai_access_token = nil
+
+    with_env_overrides OPENAI_ACCESS_TOKEN: nil, CLAUDE_BRIDGE_URL: "http://host.docker.internal:3339", CLAUDE_BRIDGE_TOKEN: "t" * 40 do
+      assert @user.ai_available?
+    end
+
+    with_env_overrides OPENAI_ACCESS_TOKEN: nil, CLAUDE_BRIDGE_URL: "http://host.docker.internal:3339", CLAUDE_BRIDGE_TOKEN: nil do
+      assert_not @user.ai_available?
+    end
+
+    with_env_overrides OPENAI_ACCESS_TOKEN: nil, CLAUDE_BRIDGE_URL: nil, CLAUDE_BRIDGE_TOKEN: nil do
+      assert_not @user.ai_available?
+    end
+  ensure
+    Setting.openai_access_token = previous
+  end
+
   test "update_dashboard_preferences handles concurrent updates atomically" do
     @user.update!(preferences: {})
 
