@@ -68,6 +68,13 @@ Rails.application.configure do
   config.active_record.verbose_query_logs = true
   config.active_job.verbose_enqueue_logs = true
 
+  # Enqueue jobs into Sidekiq, like production. Without this Active Job falls back
+  # to :async and runs every job inside the web process: the Procfile.dev worker
+  # gets nothing, retries and queue lanes never run, and a long job (an LLM call)
+  # holds a Puma thread and its database connection until it ends. bin/dev and
+  # the console therefore need Redis (REDIS_URL, default localhost:6379).
+  config.active_job.queue_adapter = :sidekiq
+
   # Log where each redirect was issued from
   config.action_dispatch.verbose_redirect_logs = true
 

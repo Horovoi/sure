@@ -80,7 +80,8 @@ bin/staging bench <old> <new>   # compare page speed of two versions on the copy
   was. Leave them off for benchmarks.
 - `bin/staging dev` and `bin/staging run` use the staging database on port 5433 and
   Redis on port 6380. They run on the host, which does have internet access; the
-  placeholder credentials are what keeps them safe.
+  placeholder credentials are what keeps them safe. `bin/staging dev` stops the
+  staging worker container if it runs, so bin/dev's own worker runs every job.
 - `bin/staging bench` runs the old version twice and the new one once, taking turns.
   The "old-b vs old-a" column is the difference between two identical containers:
   treat any old-versus-new difference of that size as noise.

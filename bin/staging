@@ -115,6 +115,13 @@ case "$command" in
   dev)
     ensure_copy
     copy_env
+    # bin/dev runs its own Sidekiq worker on the copy's Redis. A staging worker
+    # container would take jobs from the same queues and run the image's code, so
+    # stop it: every job then runs the working tree.
+    if [ -n "$(staging --profile worker ps --status running -q worker 2>/dev/null)" ]; then
+      quiet staging --profile worker stop worker
+      echo "  stopped the staging worker container so bin/dev's worker runs the jobs"
+    fi
     echo "▸ bin/dev on the staging copy (database on port $STAGING_DB_PORT, Redis on $STAGING_REDIS_PORT)"
     exec bin/dev "$@"
     ;;
