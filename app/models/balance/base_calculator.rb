@@ -1,8 +1,9 @@
 class Balance::BaseCalculator
   attr_reader :account
 
-  def initialize(account)
+  def initialize(account, include_pending: false)
     @account = account
+    @include_pending = include_pending
   end
 
   def calculate
@@ -17,7 +18,7 @@ class Balance::BaseCalculator
 
   private
     def sync_cache
-      @sync_cache ||= Balance::SyncCache.new(account)
+      @sync_cache ||= Balance::SyncCache.new(account, include_pending: @include_pending)
     end
 
     # The sync cache already sums and memoizes the holdings value per date

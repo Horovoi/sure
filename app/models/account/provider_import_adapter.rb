@@ -1,14 +1,16 @@
 class Account::ProviderImportAdapter
-  attr_reader :account, :skipped_entries
+  attr_reader :account, :skipped_entries, :claimed_entries
 
   def initialize(account)
     @account = account
     @skipped_entries = []
+    @claimed_entries = []
   end
 
   # Resets skipped entries tracking (call at start of new sync batch)
   def reset_skipped_entries!
     @skipped_entries = []
+    @claimed_entries = []
   end
 
   # Imports a transaction from a provider
@@ -25,17 +27,25 @@ class Account::ProviderImportAdapter
   # @param pending_transaction_id [String, nil] Plaid's linking ID for pending→posted reconciliation
   # @param extra [Hash, nil] Optional provider-specific metadata to merge into transaction.extra
   # @param investment_activity_label [String, nil] Optional activity type label (e.g., "Buy", "Dividend")
-  # @return [Entry] The created or updated entry
-  def import_transaction(external_id:, amount:, currency:, date:, name:, source:, category_id: nil, merchant: nil, notes: nil, pending_transaction_id: nil, extra: nil, investment_activity_label: nil)
+  # @param claimed_entry [Entry, nil, :auto] The existing entry a new posted row takes over
+  #   (from an Account::ProviderEntryClaimer batch), nil for none, or :auto to look one up
+  #   here (Account::ProviderEntryClaimer#match_one). Pending rows never claim.
+  # @param category_id_if_blank [String, nil] Category set only while the transaction has
+  #   none (a guess such as the MCC category, which rules and the user may change)
+  # @param cutover_date [Date, nil] The account's provider cutover date: a new row dated
+  #   before it that claims nothing is not imported (returns nil, skip "before_cutover")
+  # @return [Entry, nil] The created, updated or claimed entry; nil when skipped before cutover
+  def import_transaction(external_id:, amount:, currency:, date:, name:, source:, category_id: nil, merchant: nil, notes: nil, pending_transaction_id: nil, extra: nil, investment_activity_label: nil, claimed_entry: :auto, category_id_if_blank: nil, cutover_date: nil)
     raise ArgumentError, "external_id is required" if external_id.blank?
     raise ArgumentError, "source is required" if source.blank?
 
     Account.transaction do
-      # Find or initialize by both external_id AND source
-      # This allows multiple providers to sync same account with separate entries
-      entry = account.entries.find_or_initialize_by(external_id: external_id, source: source) do |e|
-        e.entryable = Transaction.new
-      end
+      # Find by both external_id AND source
+      # This allows multiple providers to sync same account with separate entries.
+      # A new entry is only built once nothing else (a claim, the cutover) handles the row:
+      # a built entry left on account.entries would be autosaved by a later account save.
+      entry = account.entries.find_by(external_id: external_id, source: source) ||
+        Entry.new(account: account, external_id: external_id, source: source, entryable: Transaction.new)
 
       # === TYPE COLLISION CHECK: Must happen before protection check ===
       # If entry exists but is a different type (e.g., Trade), that's an error.
@@ -46,7 +56,8 @@ class Account::ProviderImportAdapter
 
       # === PROTECTION CHECK: Skip entries that should not be overwritten ===
       # Check persisted Transaction entries for protection flags before making changes.
-      # This prevents sync from overwriting user edits, CSV imports, or excluded entries.
+      # This prevents sync from overwriting user edits, CSV imports, excluded entries,
+      # and entries the provider took over from the user's own history.
       if entry.persisted?
         skip_reason = determine_skip_reason(entry)
         if skip_reason
@@ -55,45 +66,26 @@ class Account::ProviderImportAdapter
         end
       end
 
-      # If this is a new entry, check for subscription-generated matches first
-      # This handles the case where we auto-generated a transaction for a subscription
-      # and the bank sync now brings in the real transaction
-      if entry.new_record?
-        subscription_match = find_subscription_generated_match(
-          date: date,
-          amount: amount,
-          currency: currency
-        )
-        if subscription_match
-          # "Claim" the subscription-generated entry by updating its external_id and source
-          entry = subscription_match
-          entry.assign_attributes(external_id: external_id, source: source)
-          Rails.logger.info(
-            "Matched provider transaction to subscription-generated entry #{subscription_match.id} " \
-            "(#{subscription_match.name}, amount: #{amount})"
-          )
+      incoming_pending = extra.is_a?(Hash) && extra.values.any? do |provider_data|
+        next false unless provider_data.is_a?(Hash)
+        ActiveModel::Type::Boolean.new.cast(provider_data["pending"])
+      end
+
+      # A new posted row may already be recorded by a manual or imported entry (same
+      # signed amount, up to 3 days apart; see Account::ProviderEntryClaimer). The
+      # provider takes that entry over and keeps what the user recorded. Generated
+      # subscription charges are left to RecurringTransaction::Reconciler.
+      if entry.new_record? && !incoming_pending
+        claim = resolve_claim(claimed_entry, key: external_id, date: date, amount: amount, currency: currency, source: source)
+        if claim
+          return claim_entry!(claim, external_id: external_id, source: source, extra: extra, category_id_if_blank: category_id_if_blank)
         end
       end
 
-      # If this is a new entry, check for potential duplicates from manual/CSV imports
-      # This handles the case where a user manually created or CSV imported a transaction
-      # before linking their account to a provider
-      # Note: We don't pass name here to allow matching even when provider formats names differently
-      if entry.new_record?
-        duplicate = find_duplicate_transaction(date: date, amount: amount, currency: currency)
-        if duplicate
-          # Check if duplicate is protected - if so, link but don't modify
-          if duplicate.protected_from_sync?
-            duplicate.update!(external_id: external_id, source: source)
-            record_skip(duplicate, determine_skip_reason(duplicate) || "protected")
-            return duplicate
-          end
-
-          # "Claim" the unprotected duplicate by updating its external_id and source
-          # This prevents future duplicate checks from matching it again
-          entry = duplicate
-          entry.assign_attributes(external_id: external_id, source: source)
-        end
+      # Rows dated before the cutover belong to the history the user kept by hand
+      if entry.new_record? && cutover_date && parse_date(date) < cutover_date.to_date
+        record_skip(nil, "before_cutover", external_id: external_id, date: parse_date(date))
+        return nil
       end
 
       # If still a new entry and this is a POSTED transaction, check for matching pending transactions
@@ -144,6 +136,8 @@ class Account::ProviderImportAdapter
       # Enrich transaction-specific attributes
       if category_id
         entry.transaction.enrich_attribute(:category_id, category_id, source: source)
+      elsif category_id_if_blank && entry.transaction.category_id.blank?
+        entry.transaction.enrich_attribute(:category_id, category_id_if_blank, source: source, metadata: { via: "mcc" })
       end
 
       if merchant
@@ -184,7 +178,8 @@ class Account::ProviderImportAdapter
           entry.transaction.assign_attributes(investment_activity_label: detected_label)
         end
 
-        if auto_kind.present?
+        # Transfer is the only writer of a transfer leg's kind
+        if auto_kind.present? && !transfer_leg?(entry)
           entry.transaction.assign_attributes(kind: auto_kind)
         end
 
@@ -305,11 +300,22 @@ class Account::ProviderImportAdapter
   # @param balance [BigDecimal, Numeric] Total balance
   # @param cash_balance [BigDecimal, Numeric] Cash balance (for investment accounts)
   # @param source [String] Provider name (for logging/debugging)
+  #
+  # The balance is written as the account's current anchor (Account::CurrentBalanceManager),
+  # which the reverse and cutover balance calculations start from, and as accounts.balance.
+  # Does not enqueue a sync: the provider's item sync syncs its accounts afterwards.
+  #
+  # @return [Account::CurrentBalanceManager::Result]
   def update_balance(balance:, cash_balance: nil, source: nil)
-    account.update!(
-      balance: balance,
-      cash_balance: cash_balance || balance
-    )
+    result = Account::CurrentBalanceManager.new(account).set_current_balance(balance)
+
+    if result.success?
+      account.update_columns(cash_balance: cash_balance || balance, updated_at: Time.current)
+    else
+      Rails.logger.error("Failed to update balance of account #{account.id} from #{source}: #{result.error}")
+    end
+
+    result
   end
 
   # Imports or updates a holding (investment position) from a provider
@@ -604,45 +610,6 @@ class Account::ProviderImportAdapter
     false
   end
 
-  # Finds a subscription-generated transaction that matches an incoming provider transaction
-  # Used for deduplication when bank sync imports a transaction we already auto-generated
-  #
-  # Matches on:
-  # - Same account (implicit via account.entries)
-  # - Same currency
-  # - Amount within 10% tolerance (to handle slight variations)
-  # - Date within 3 days
-  # - source = "subscription" (only match auto-generated entries)
-  #
-  # @param date [Date, String] Transaction date from provider
-  # @param amount [BigDecimal, Numeric] Transaction amount
-  # @param currency [String] Currency code
-  # @return [Entry, nil] The matching subscription-generated entry or nil
-  def find_subscription_generated_match(date:, amount:, currency:)
-    date = Date.parse(date.to_s) unless date.is_a?(Date)
-    amount = BigDecimal(amount.to_s)
-
-    # Calculate amount bounds with 10% tolerance
-    abs_amount = amount.abs
-    min_amount = abs_amount * 0.9
-    max_amount = abs_amount * 1.1
-
-    # Look for subscription-generated entries within date range
-    # Date tolerance: 3 days before or after
-    date_range = (date - 3.days)..(date + 3.days)
-
-    candidates = account.entries
-      .where(source: "subscription")
-      .where(currency: currency)
-      .where(date: date_range)
-      .where("ABS(entries.amount) BETWEEN ? AND ?", min_amount, max_amount)
-      .where(external_id: nil) # Only match entries not yet claimed by a provider
-      .order(date: :desc)
-
-    # Return the first match (most recent within the window)
-    candidates.first
-  end
-
   # Finds a potential duplicate transaction from manual entry or CSV import
   # Matches on date, amount, currency, and optionally name
   # Only matches transactions without external_id (manual/CSV imported)
@@ -896,20 +863,80 @@ class Account::ProviderImportAdapter
     return "excluded" if entry.excluded?
     return "user_modified" if entry.user_modified?
     return "import_locked" if entry.import_locked?
+    return "provider_claimed" if entry.entryable.is_a?(Transaction) && entry.transaction.extra.is_a?(Hash) && entry.transaction.extra.key?("provider_claim")
     nil
   end
 
   # Records a skipped entry for stats collection.
   #
-  # @param entry [Entry] The entry that was skipped
+  # @param entry [Entry, nil] The entry that was skipped (nil when no entry was written)
   # @param reason [String] Why it was skipped
-  def record_skip(entry, reason)
+  def record_skip(entry, reason, external_id: nil, date: nil)
     @skipped_entries << {
-      id: entry.id,
-      name: entry.name,
+      id: entry&.id,
+      name: entry&.name,
       reason: reason,
-      external_id: entry.external_id,
-      account_name: entry.account.name
+      external_id: entry&.external_id || external_id,
+      date: entry&.date || date,
+      account_name: account.name
     }
   end
+
+  private
+    def parse_date(date)
+      date.is_a?(Date) ? date : Date.parse(date.to_s)
+    end
+
+    def transfer_leg?(entry)
+      return false if entry.new_record?
+
+      transaction = entry.transaction
+      transaction.transfer_as_inflow.present? || transaction.transfer_as_outflow.present? || transaction.fee_transfer_id.present?
+    end
+
+    # The entry a new posted row takes over, or nil. An entry passed in must belong to
+    # this account and not be owned by a provider yet.
+    def resolve_claim(claimed_entry, key:, date:, amount:, currency:, source:)
+      case claimed_entry
+      when :auto
+        row = Account::ProviderEntryClaimer::Row.new(key: key, date: parse_date(date), amount: amount.to_d, currency: currency, pending: false)
+        Account::ProviderEntryClaimer.new(account, source: source).match_one(row)
+      when Entry
+        claimed_entry.reload
+        claimed_entry if claimed_entry.account_id == account.id && claimed_entry.external_id.nil? && claimed_entry.entryable.is_a?(Transaction)
+      end
+    end
+
+    # The provider takes over an entry the user recorded. It keeps its date, amount, name,
+    # category, merchant, notes and tags (so balances before and after are the same); it
+    # gets the provider's id and metadata and a provider_claim marker, so later syncs leave
+    # it alone ("provider_claimed"). An unprotected entry without a category gets
+    # category_id_if_blank.
+    def claim_entry!(entry, external_id:, source:, extra:, category_id_if_blank:)
+      transaction = entry.transaction
+      previous_source = entry.source
+
+      entry.update!(external_id: external_id, source: source)
+
+      merged = (transaction.extra || {}).deep_dup
+      merged = merged.deep_merge(extra.deep_stringify_keys) if extra.is_a?(Hash)
+      merged["provider_claim"] = {
+        "source" => source.to_s,
+        "claimed_at" => Time.current.iso8601,
+        "import_id" => entry.import_id,
+        "previous_source" => previous_source
+      }
+      transaction.extra = merged
+
+      if category_id_if_blank && transaction.category_id.blank? && !entry.protected_from_sync?
+        transaction.enrich_attribute(:category_id, category_id_if_blank, source: source, metadata: { via: "mcc" })
+      end
+
+      transaction.save! if transaction.changed?
+
+      @claimed_entries << { id: entry.id, external_id: external_id, date: entry.date }
+      Rails.logger.info("#{source} transaction #{external_id} claimed entry #{entry.id} of account #{account.id}")
+
+      entry
+    end
 end

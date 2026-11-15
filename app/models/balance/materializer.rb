@@ -38,8 +38,10 @@ class Balance::Materializer
   end
 
   private
+    # Holdings of a cutover account come from the provider like a linked account's
     def materialize_holdings
-      @holdings = Holding::Materializer.new(account, strategy: strategy).materialize_holdings
+      holding_strategy = strategy == :cutover ? :reverse : strategy
+      @holdings = Holding::Materializer.new(account, strategy: holding_strategy).materialize_holdings
     end
 
     def update_account_info
@@ -99,10 +101,15 @@ class Balance::Materializer
       Rails.logger.info("Purged #{deleted_count} stale balances") if deleted_count > 0
     end
 
-    # Memoized, so the unconverted-amounts report reads the cache the calculation built
+    # Memoized, so the unconverted-amounts report reads the cache the calculation built.
+    # Balances calculated back from a provider balance that counts open holds count the
+    # pending entries too.
     def calculator
-      @calculator ||= if strategy == :reverse
-        Balance::ReverseCalculator.new(account)
+      @calculator ||= case strategy
+      when :reverse
+        Balance::ReverseCalculator.new(account, include_pending: account.provider_balance_includes_pending?)
+      when :cutover
+        Balance::CutoverCalculator.new(account)
       else
         Balance::ForwardCalculator.new(account)
       end

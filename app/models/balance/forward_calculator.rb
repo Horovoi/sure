@@ -1,4 +1,11 @@
 class Balance::ForwardCalculator < Balance::BaseCalculator
+  # end_date: the last day to calculate (default: the latest entry or holding date, else
+  # today). The cutover calculator stops the forward part the day before the cutover.
+  def initialize(account, end_date: nil, include_pending: false)
+    super(account, include_pending: include_pending)
+    @end_date = end_date
+  end
+
   def calculate
     Rails.logger.tagged("Balance::ForwardCalculator") do
       start_cash_balance = derive_cash_balance_on_date_from_total(
@@ -57,6 +64,8 @@ class Balance::ForwardCalculator < Balance::BaseCalculator
     end
 
     def calc_end_date
+      return @end_date if @end_date
+
       [ account.entries.order(:date).last&.date, account.holdings.order(:date).last&.date ].compact.max || Date.current
     end
 
