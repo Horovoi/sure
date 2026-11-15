@@ -5,6 +5,7 @@ class BudgetCategory < ApplicationRecord
   belongs_to :category
 
   validates :budget_id, uniqueness: { scope: :category_id }
+  validates :budgeted_spending, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
 
   monetize :budgeted_spending, :available_to_spend, :avg_monthly_expense, :median_monthly_expense, :actual_spending
 
@@ -63,6 +64,35 @@ class BudgetCategory < ApplicationRecord
     budget.budget_category_actual_spending(self)
   end
 
+  # Sets this row's amount, the one way the Categories step and the update_budget
+  # tool change a category (Budget#copy_from! writes the rows as they are instead).
+  #
+  # Parents are bottom-up: a subcategory's change goes to its parent too, so a
+  # subcategory never has to fit inside what its parent leaves. The parent keeps
+  # any amount set on it beyond its subcategories (its reserve), and is never
+  # below the sum of its subcategories; an amount set on a parent below that sum
+  # is raised to it.
+  def update_budgeted_spending!(new_budgeted_spending)
+    new_amount = new_budgeted_spending.presence&.to_d || 0.to_d
+
+    self.class.transaction do
+      lock!
+      previous_budgeted_spending = self[:budgeted_spending] || 0
+
+      if subcategory?
+        update!(budgeted_spending: new_amount)
+        sync_parent_budgeted_spending!(previous_budgeted_spending: previous_budgeted_spending)
+      else
+        update!(budgeted_spending: [ new_amount, subcategories_budgeted_total ].max)
+      end
+    end
+
+    # The budget's loaded rows and the memoized parent hold the amounts from before
+    budget.budget_categories.reset
+    @parent_budget_category = nil
+    self
+  end
+
   def avg_monthly_expense
     budget.category_avg_monthly_expense(category)
   end
@@ -98,52 +128,37 @@ class BudgetCategory < ApplicationRecord
     @parent_budget_category ||= budget.budget_categories.find { |bc| bc.category.id == category.parent_id }
   end
 
+  # What is left to spend, so a card reads budget minus spending.
+  #
+  # A parent's stored amount already holds its subcategories' amounts (see
+  # #update_budgeted_spending!) and its spending holds theirs, so the parent is
+  # simply its amount less its total spending. A subcategory with its own amount
+  # has its own envelope. A subcategory that shares the parent's amount can use
+  # what the ring-fenced siblings leave of it, less what the parent and the
+  # sharing subcategories spent from that pool; it is over budget by no more than
+  # it spent itself, so a shared subcategory with no spending is never marked
+  # over because its parent or a sibling overspent.
   def available_to_spend
     if inherits_parent_budget?
-      # Subcategories using parent budget share the parent's available_to_spend
       parent = parent_budget_category
       return 0 unless parent
-      parent.available_to_spend
-    elsif subcategory?
-      # Subcategory with individual limit
-      (self[:budgeted_spending] || 0) - actual_spending
+
+      [ parent.shared_pool_budget - parent.shared_pool_spending, -actual_spending ].max
     else
-      # Parent category
-      parent_budget = self[:budgeted_spending] || 0
-
-      # Get subcategories with and without individual limits
-      subcategories_with_limits = subcategories.reject(&:inherits_parent_budget?)
-
-      # Ring-fenced budgets for subcategories with individual limits
-      subcategories_individual_budgets = subcategories_with_limits.sum { |sc| sc[:budgeted_spending] || 0 }
-
-      # Shared pool = parent budget - ring-fenced budgets
-      shared_pool = parent_budget - subcategories_individual_budgets
-
-      # Get actual spending from income statement (includes all subcategories)
-      total_spending = actual_spending
-
-      # Subtract spending from subcategories with individual budgets (they use their ring-fenced money)
-      subcategories_with_limits_spending = subcategories_with_limits.sum(&:actual_spending)
-
-      # Spending from shared pool = total spending - ring-fenced spending
-      shared_pool_spending = total_spending - subcategories_with_limits_spending
-
-      # Available in shared pool
-      shared_pool - shared_pool_spending
+      (self[:budgeted_spending] || 0) - actual_spending
     end
   end
 
   def percent_of_budget_spent
     if inherits_parent_budget?
-      # For subcategories using parent budget, show their spending as percentage of parent's budget
+      # A shared subcategory's spending against the part of the parent's amount it can use
       parent = parent_budget_category
       return 0 unless parent
 
-      parent_budget = parent[:budgeted_spending] || 0
-      return 0 if parent_budget == 0 && actual_spending == 0
-      return 100 if parent_budget == 0 && actual_spending > 0
-      (actual_spending.to_f / parent_budget) * 100
+      shared_budget = [ parent.shared_pool_budget, 0 ].max
+      return 0 if shared_budget == 0 && actual_spending == 0
+      return 100 if shared_budget == 0 && actual_spending > 0
+      (actual_spending.to_f / shared_budget) * 100
     else
       budget_amount = self[:budgeted_spending] || 0
       return 0 if budget_amount == 0 && actual_spending == 0
@@ -151,6 +166,21 @@ class BudgetCategory < ApplicationRecord
       return 100 if budget_amount == 0 && actual_spending > 0
       (actual_spending.to_f / budget_amount) * 100 if budget_amount > 0 && actual_spending > 0
     end
+  end
+
+  # The part of a parent's amount that its sharing subcategories (and the parent's
+  # own transactions) spend from: the amount less the ring-fenced subcategories'.
+  def shared_pool_budget
+    (self[:budgeted_spending] || 0) - ring_fenced_subcategories.sum { |child| child[:budgeted_spending] || 0 }
+  end
+
+  # A parent's spending that does not come from a ring-fenced subcategory.
+  def shared_pool_spending
+    actual_spending - ring_fenced_subcategories.sum(&:actual_spending)
+  end
+
+  def ring_fenced_subcategories
+    subcategories.reject(&:inherits_parent_budget?)
   end
 
   def bar_width_percent
@@ -236,21 +266,6 @@ class BudgetCategory < ApplicationRecord
     budget.budget_categories.select { |bc| bc.category.parent_id == category.parent_id && bc.id != id }
   end
 
-  def max_allocation
-    return nil unless subcategory?
-
-    parent_budget_cat = budget.budget_categories.find { |bc| bc.category.id == category.parent_id }
-    return nil unless parent_budget_cat
-
-    parent_budget = parent_budget_cat[:budgeted_spending] || 0
-
-    # Sum budgets of siblings that have individual limits (excluding those that inherit)
-    siblings_with_limits = siblings.reject(&:inherits_parent_budget?)
-    siblings_budget = siblings_with_limits.sum { |s| s[:budgeted_spending] || 0 }
-
-    [ parent_budget - siblings_budget, 0 ].max
-  end
-
   # =============================================================================
   # Subscription reservations (see Budget#subscription_reservations_by_category_id)
   # =============================================================================
@@ -292,6 +307,30 @@ class BudgetCategory < ApplicationRecord
   end
 
   private
+    # The rows of a parent's subcategories in this budget, read from the database
+    def subcategory_rows_of(parent_category_id)
+      BudgetCategory.where(budget_id: budget_id, category_id: Category.where(parent_id: parent_category_id).select(:id))
+    end
+
+    def subcategories_budgeted_total
+      return 0 if category_id.nil?
+
+      subcategory_rows_of(category_id).sum(:budgeted_spending)
+    end
+
+    # The parent becomes the subcategories' sum plus its reserve: the amount it had
+    # beyond them before this change. A negative reserve (a parent that was below
+    # its subcategories) is not carried, so the parent ends at least at their sum.
+    def sync_parent_budgeted_spending!(previous_budgeted_spending:)
+      parent = BudgetCategory.where(budget_id: budget_id, category_id: category.parent_id).lock.first
+      return unless parent
+
+      siblings_total = subcategory_rows_of(category.parent_id).where.not(id: id).sum(:budgeted_spending)
+      reserve = [ (parent[:budgeted_spending] || 0) - siblings_total - previous_budgeted_spending, 0 ].max
+
+      parent.update!(budgeted_spending: siblings_total + (self[:budgeted_spending] || 0) + reserve)
+    end
+
     def subscription_reservation
       @subscription_reservation ||= begin
         reservations = budget.subscription_reservations_by_category_id

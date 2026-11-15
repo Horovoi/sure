@@ -2,10 +2,9 @@
 # expense category's amount, as the Categories step does (BudgetCategoriesController#update). Fork-native take on
 # upstream 00b7252fb, one amount per call.
 #
-# The category amount is written to budgeted_spending directly, the same model path as the Categories step, and
-# a subcategory is capped at what its parent leaves (BudgetCategory#max_allocation, the form's max). The
-# envelope-budgeting unit switches this to BudgetCategory#update_budgeted_spending!, which grows the parent
-# instead; that unit drops the cap here.
+# The category amount goes through BudgetCategory#update_budgeted_spending!, the same model path as the
+# Categories step: a subcategory's change is added to its parent, and a parent is never below the sum of its
+# subcategories.
 class Assistant::Function::UpdateBudget < Assistant::Function
   include Assistant::Function::BudgetSupport
 
@@ -27,10 +26,12 @@ class Assistant::Function::UpdateBudget < Assistant::Function
         budget changes; call it once per amount.
 
         A period with no total yet takes the total first; category amounts come
-        after it. A subcategory's amount cannot exceed what its parent's amount
-        leaves after the other subcategories; raise the parent first. The
-        uncategorized row cannot be set: it is the part of the total not given
-        to categories.
+        after it. Parents add up from their subcategories: a change to a
+        subcategory's amount changes its parent's amount by the same difference
+        (the result includes the parent), and a parent's amount is never below
+        the sum of its subcategories (a lower amount is raised to that sum;
+        adjusted: true says so). The uncategorized row cannot be set: it is the
+        part of the total not given to categories.
 
         month picks the period as in get_budget (default: the current one).
       INSTRUCTIONS
@@ -123,24 +124,22 @@ class Assistant::Function::UpdateBudget < Assistant::Function
       budget_category = budget.budget_categories.find_by(category_id: category.id)
       return tool_error("category_not_in_budget", "Use a category_id from get_budget for this month.") unless budget_category
 
-      max = budget_category.max_allocation
-      if max && amount > max
-        return tool_error(
-          "over_parent_allocation",
-          "A subcategory's amount cannot exceed what its parent's amount leaves after the other subcategories. Raise the parent's amount first, or pass at most max_amount.",
-          max_amount: budget_amount(max)
-        )
-      end
-
-      budget_category.update!(budgeted_spending: amount)
+      budget_category.update_budgeted_spending!(amount)
       @record_type = "BudgetCategory"
 
-      {
+      result = {
         id: budget_category.id,
         updated: true,
-        budget_category: budget_category_snapshot(budget_category, budget),
-        totals: totals(budget)
+        adjusted: budget_category[:budgeted_spending] != amount,
+        budget_category: budget_category_snapshot(budget_category, budget)
       }
+
+      if budget_category.subcategory?
+        parent = budget.all_budget_categories.find_by(category_id: budget_category.category.parent_id)
+        result[:parent] = budget_category_snapshot(parent, budget) if parent
+      end
+
+      result.merge(totals: totals(budget))
     end
 
     def find_expense_category(value)

@@ -513,4 +513,27 @@ class BudgetTest < ActiveSupport::TestCase
     assert_equal 12, budget.budget_category_actual_spending(budget_category)
     assert_equal 12, budget.actual_spending
   end
+
+  # w3-envelope envelope-budgeting
+  test "copy_from! writes the rows as they are, so copied totals equal the source" do
+    food = budget_test_category("Food")
+    restaurants = budget_test_category("Restaurants", parent: food)
+    groceries = budget_test_category("Groceries", parent: food)
+    source = Budget.find_or_bootstrap(@family, start_date: 1.month.ago)
+    source.update!(budgeted_spending: 2000)
+    source_rows = Budget.find(source.id).budget_categories
+    source_rows.find { |bc| bc.category_id == restaurants.id }.update_budgeted_spending!(200)
+    source_rows.find { |bc| bc.category_id == groceries.id }.update_budgeted_spending!(150)
+    source = Budget.find(source.id)
+    target = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+    BudgetCategory.any_instance.expects(:update_budgeted_spending!).never
+    target.copy_from!(source)
+    target = Budget.find(target.id)
+
+    assert_equal 350, target.budget_categories.find_by!(category: food).budgeted_spending
+    assert_equal source.allocated_spending, target.allocated_spending
+    assert_equal source.budget_categories.to_h { |bc| [ bc.category_id, bc.budgeted_spending ] },
+                 target.budget_categories.to_h { |bc| [ bc.category_id, bc.budgeted_spending ] }
+  end
 end

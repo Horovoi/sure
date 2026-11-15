@@ -24,25 +24,31 @@ class BudgetCategoriesController < ApplicationController
     @recent_transactions = @recent_transactions.order("entries.date DESC, ABS(entries.amount) DESC").take(3)
   end
 
+  # A subcategory's change also changes its parent (BudgetCategory#update_budgeted_spending!),
+  # so the stream re-renders the parent's row with it.
   def update
     @budget_category = @budget.budget_categories.find(params[:id])
+    requested = budgeted_spending_param
+    @budget_category.update_budgeted_spending!(requested)
+    @budget.budget_categories.reset
 
-    if @budget_category.update(budget_category_params)
-      respond_to do |format|
-        format.turbo_stream
-        format.html { redirect_to budget_budget_categories_path(@budget) }
-      end
-    else
-      @budget_categories = @budget.budget_categories.includes(:category)
-      render :index, status: :unprocessable_entity, layout: "wizard"
+    # A parent set below its subcategories is raised to their sum: show the stored amount
+    @budget_category_adjusted = @budget_category[:budgeted_spending] != requested
+
+    respond_to do |format|
+      format.turbo_stream
+      format.html { redirect_to budget_budget_categories_path(@budget) }
     end
+  rescue ActiveRecord::RecordInvalid
+    @budget_categories = @budget.budget_categories.includes(:category)
+    render :index, status: :unprocessable_entity, layout: "wizard"
   end
 
   private
-    def budget_category_params
-      params.expect(budget_category: [ :budgeted_spending ]).tap do |params|
-        params[:budgeted_spending] = params[:budgeted_spending].presence || 0
-      end
+    # A blank amount clears the row (a subcategory then shares its parent's amount)
+    def budgeted_spending_param
+      value = params.expect(budget_category: [ :budgeted_spending ])[:budgeted_spending]
+      value.presence ? value.to_d : 0.to_d
     end
 
     # The Categories step needs a set-up budget. A month outside the budget range is a

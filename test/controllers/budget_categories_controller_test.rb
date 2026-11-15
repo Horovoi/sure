@@ -47,11 +47,11 @@ class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
     budget = budgets(:one)
     Budget.find_or_bootstrap(@family, start_date: budget.start_date)
     budget_category = budget.reload.budget_categories.first
-    BudgetCategory.any_instance.stubs(:update).returns(false)
 
-    patch budget_budget_category_path(budget, budget_category), params: { budget_category: { budgeted_spending: 10 } }
+    patch budget_budget_category_path(budget, budget_category), params: { budget_category: { budgeted_spending: -10 } }
 
     assert_response :unprocessable_entity
+    assert_equal 0, budget_category.reload.budgeted_spending
   end
 
   test "the drilldown leaves out funds movements and card payments and still lists loan payments" do
@@ -93,5 +93,40 @@ class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
     assert_select "##{dom_id(budget, :confirm_button)} button[disabled]"
+  end
+
+  # w3-envelope envelope-budgeting
+  test "a subcategory update raises its parent and streams the parent's row" do
+    budget = budgets(:one)
+    Budget.find_or_bootstrap(@family, start_date: budget.start_date)
+    budget.reload
+    parent = budget.budget_categories.find_by!(category: categories(:food_and_drink))
+    child = budget.budget_categories.find_by!(category: categories(:subcategory))
+    parent.update!(budgeted_spending: 500)
+
+    patch budget_budget_category_path(budget, child), params: { budget_category: { budgeted_spending: 120 } }, as: :turbo_stream
+
+    assert_response :success
+    assert_equal 620, parent.reload.budgeted_spending
+    assert_includes response.body, dom_id(parent, :form)
+    fragment = Nokogiri::HTML.fragment(response.body)
+    assert_equal 620, fragment.at_css("input##{dom_id(parent, :budgeted_spending)}")["value"].to_d
+    assert_nil fragment.at_css("input##{dom_id(parent, :budgeted_spending)}")["max"]
+  end
+
+  test "a parent update below its subcategories stores and streams their sum" do
+    budget = budgets(:one)
+    Budget.find_or_bootstrap(@family, start_date: budget.start_date)
+    budget.reload
+    parent = budget.budget_categories.find_by!(category: categories(:food_and_drink))
+    child = budget.budget_categories.find_by!(category: categories(:subcategory))
+    child.update_budgeted_spending!(300)
+
+    patch budget_budget_category_path(budget, parent), params: { budget_category: { budgeted_spending: 100 } }, as: :turbo_stream
+
+    assert_response :success
+    assert_equal 300, parent.reload.budgeted_spending
+    fragment = Nokogiri::HTML.fragment(response.body)
+    assert_equal 300, fragment.at_css("input##{dom_id(parent, :budgeted_spending)}")["value"].to_d
   end
 end

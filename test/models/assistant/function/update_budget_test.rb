@@ -92,21 +92,35 @@ class Assistant::Function::UpdateBudgetTest < ActiveSupport::TestCase
     end
   end
 
-  test "a subcategory is capped at what its parent leaves" do
+  test "a subcategory edit through the tool raises its parent" do
     travel_to Date.new(2026, 11, 15) do
       budget = set_up_budget(Date.current)
       budget.budget_categories.find_by!(category: @groceries).update!(budgeted_spending: 500)
       budget.budget_categories.find_by!(category: @bakery).update!(budgeted_spending: 200)
 
-      refused = @tool.call("category" => @market.id, "amount" => 301)
-      assert_equal "over_parent_allocation", refused[:error]
-      assert_equal 300.0, refused[:max_amount]
-      assert_equal 0, budget.budget_categories.find_by!(category: @market).budgeted_spending
+      # 500 = 200 (bakery) + 300 reserve; market's 400 is added on top
+      result = @tool.call("category" => @market.id, "amount" => 400)
 
-      result = @tool.call("category" => @market.id, "amount" => 300)
       assert result[:updated]
-      assert_equal 300, budget.budget_categories.find_by!(category: @market).budgeted_spending
-      assert_equal 500, budget.budget_categories.find_by!(category: @groceries).budgeted_spending
+      assert_not result[:adjusted]
+      assert_equal 400, budget.budget_categories.find_by!(category: @market).budgeted_spending
+      assert_equal 900, budget.budget_categories.find_by!(category: @groceries).budgeted_spending
+      assert_equal 900.0, result[:parent][:budgeted_spending]
+      assert_equal 900.0, result[:totals][:allocated_spending]
+    end
+  end
+
+  test "a parent set below its subcategories through the tool is raised to their sum" do
+    travel_to Date.new(2026, 11, 15) do
+      budget = set_up_budget(Date.current)
+      @tool.call("category" => @market.id, "amount" => 150)
+      @tool.call("category" => @bakery.id, "amount" => 100)
+
+      result = @tool.call("category" => @groceries.id, "amount" => 50)
+
+      assert result[:adjusted]
+      assert_equal 250.0, result[:budget_category][:budgeted_spending]
+      assert_equal 250, budget.budget_categories.find_by!(category: @groceries).budgeted_spending
     end
   end
 

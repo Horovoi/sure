@@ -1,6 +1,16 @@
 ---
 en:
   budget_categories:
+    allocation_progress:
+      exceeded_by_html: "Budget exceeded by %{amount}"
+      left_to_allocate: left to allocate
+      over_set: "> 100% set"
+      percent_set: "%{percent} set"
+    budget_category_form:
+      monthly_average: "%{amount}/m avg"
+      parent_title: Includes its subcategories' amounts, and is never less than their sum
+      shared_placeholder: Shared
+      shared_title: Leave empty to share the parent's budget. An amount here is added to the parent's.
     confirm_button:
       confirm: Confirm
     index:

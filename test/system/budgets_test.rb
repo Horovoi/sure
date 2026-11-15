@@ -141,4 +141,29 @@ class BudgetsTest < ApplicationSystemTestCase
     assert_selector "[data-testid='budget-section-on-track']"
     assert_current_path budget_path(budget)
   end
+
+  # w3-envelope envelope-budgeting
+  test "editing a subcategory amount changes its parent's row in the categories step" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 10_000, expected_income: 10_000)
+    parent = budget.budget_categories.find_by!(category: categories(:food_and_drink))
+    child = budget.budget_categories.find_by!(category: categories(:subcategory))
+    parent.update!(budgeted_spending: 400)
+
+    visit budget_budget_categories_path(budget)
+
+    parent_field_id = ActionView::RecordIdentifier.dom_id(parent, :budgeted_spending)
+    child_field_id = ActionView::RecordIdentifier.dom_id(child, :budgeted_spending)
+    assert_equal 400, find_field(id: parent_field_id).value.to_d
+
+    # Number fields submit on change, which the browser fires when the field loses focus
+    child_field = find_field(id: child_field_id)
+    child_field.set("150")
+    child_field.send_keys(:tab)
+
+    assert_selector "##{parent_field_id}" do |field|
+      field.value.to_d == 550
+    end
+    assert_equal 550, parent.reload.budgeted_spending
+  end
 end
