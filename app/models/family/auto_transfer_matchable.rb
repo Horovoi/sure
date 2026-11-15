@@ -81,6 +81,14 @@ module Family::AutoTransferMatchable
       # IN () is invalid SQL, so an empty list binds a NULL that matches nothing
       ids = transaction_ids.to_a.presence || [ nil ]
       scope = scope.where("inflow_candidates.entryable_id IN (:ids) OR outflow_candidates.entryable_id IN (:ids)", ids: ids)
+
+      # The OR above cannot use an index, so without a bound Postgres pairs every inflow
+      # with every outflow of the family first (450k pairs for 1.9k entries). One leg is
+      # among the ids and the other within date_window days of it, so both legs fall in the
+      # ids' date range widened by date_window: a range the (account_id, date) index reads.
+      page_dates = Entry.where(entryable_type: "Transaction", entryable_id: ids)
+      date_range_sql = "BETWEEN (#{page_dates.select('MIN(date)').to_sql}) - CAST(:date_window AS integer) AND (#{page_dates.select('MAX(date)').to_sql}) + CAST(:date_window AS integer)"
+      scope = scope.where("inflow_candidates.date #{date_range_sql} AND outflow_candidates.date #{date_range_sql}", date_window: date_window)
     end
 
     scope.order("match_rank ASC, date_diff ASC")
