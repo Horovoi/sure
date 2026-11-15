@@ -2,17 +2,22 @@ class Provider
   Response = Data.define(:success?, :data, :error)
 
   class Error < StandardError
-    attr_reader :details
+    attr_reader :details, :failure_code
 
-    def initialize(message, details: nil)
+    # details: opaque response metadata (for example the response body).
+    # failure_code: an optional Symbol that names the reason (:rate_limited,
+    # :unauthorized, ...), so callers branch on it instead of on the message.
+    def initialize(message, details: nil, failure_code: nil)
       super(message)
       @details = details
+      @failure_code = failure_code
     end
 
     def as_json
       {
         message: message,
-        details: details
+        details: details,
+        failure_code: failure_code
       }
     end
   end

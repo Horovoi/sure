@@ -27,14 +27,14 @@ class Family::Syncer
   end
 
   private
-    # Only visible (active or draft) manual accounts: disabled ones are hidden from every
-    # total, and accounts pending deletion must not be rebuilt while they are destroyed.
-    # Bank-connection items sync only when that feature is switched on.
+    # Only visible (active or draft) accounts: disabled ones are hidden from every total,
+    # and accounts pending deletion must not be rebuilt while they are destroyed.
+    # Accounts an enabled bank connection syncs are left to its items; every other
+    # account (manual, or linked to a provider that is off) syncs here.
     def child_syncables
-      syncables = family.accounts.visible.manual.to_a
-      return syncables unless BankConnections.enabled?
+      syncables = family.accounts.visible.outside_enabled_providers.to_a
 
-      items = BankConnections::ITEM_ASSOCIATIONS.flat_map { |association| family.public_send(association).active.to_a }
+      items = BankConnections.item_associations(enabled_only: true).flat_map { |association| family.public_send(association).active.to_a }
       items + syncables
     end
 end

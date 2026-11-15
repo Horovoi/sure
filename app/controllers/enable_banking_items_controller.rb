@@ -1,5 +1,5 @@
 class EnableBankingItemsController < ApplicationController
-  require_bank_connections
+  require_bank_connections provider: :enable_banking
   include FamilyAdminRequired
 
   # Connections are managed from the admin-only Sync Providers settings

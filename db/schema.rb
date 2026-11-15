@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_16_100002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -25,6 +25,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
     t.uuid "provider_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.date "cutover_date"
     t.index ["account_id", "provider_type"], name: "index_account_providers_on_account_and_provider_type", unique: true
     t.index ["provider_type", "provider_id"], name: "index_account_providers_on_provider_type_and_provider_id", unique: true
   end
@@ -1102,6 +1103,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_15_130006) do
     t.string "area_unit"
     t.jsonb "locked_attributes", default: {}
     t.string "subtype"
+  end
+
+  create_table "provider_rate_limit_slots", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "provider_key", null: false
+    t.string "scope_key", null: false
+    t.string "bucket", null: false
+    t.datetime "next_free_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider_key", "scope_key", "bucket"], name: "index_provider_rate_limit_slots_on_key", unique: true
   end
 
   create_table "recurring_transactions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
