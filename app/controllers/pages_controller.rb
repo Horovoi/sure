@@ -3,100 +3,45 @@ class PagesController < ApplicationController
 
   skip_authentication only: :redis_configuration_error
 
+  # The widgets whose period a param picks: <prefix>_period, <prefix>_start_date and
+  # <prefix>_end_date
+  DASHBOARD_WIDGET_PERIOD_PREFIXES = %w[cashflow net_worth outflows investment].freeze
+
+  # The dashboard widgets, in their default order when the saved order leaves one out
+  DASHBOARD_SECTION_KEYS = %w[
+    cashflow_sankey outflows_donut spending_trend investment_summary net_worth_chart balance_sheet subscriptions_summary
+  ].freeze
+
+  # A widget's period form reloads only the widget's own turbo frame, so such a request
+  # builds that one widget
+  DASHBOARD_FRAME_SECTIONS = {
+    "cashflow_sankey_section" => "cashflow_sankey",
+    "outflows_donut_section" => "outflows_donut",
+    "spending_trend_section" => "spending_trend",
+    "investment_summary_section" => "investment_summary",
+    "net_worth_section" => "net_worth_chart"
+  }.freeze
+
+  # Query params that shape what the dashboard shows without being saved. Customize mode
+  # carries them through its links and buttons, so the widgets keep their periods.
+  DASHBOARD_VIEW_PARAMS = (
+    %i[period start_date end_date cashflow_show_subcategories spending_period] +
+    DASHBOARD_WIDGET_PERIOD_PREFIXES.flat_map { |prefix| %I[#{prefix}_period #{prefix}_start_date #{prefix}_end_date] }
+  ).freeze
+
+  # The view params that hold a list (the spending curve's category filter)
+  DASHBOARD_VIEW_ARRAY_PARAMS = %i[spending_category_ids].freeze
+
   def dashboard
     @balance_sheet = Current.family.balance_sheet
     @investment_statement = Current.family.investment_statement
     @accounts = Current.family.accounts.visible.with_attached_logo
+    @has_accounts = Current.family.accounts.any?
 
-    period_param = params[:cashflow_period]
-    @cashflow_period = if period_param.present?
-      if period_param == "custom"
-        # Allow users to specify an explicit date range for the cashflow chart
-        last_30 = Period.last_30_days
-        start_date = safe_parse_date(params[:cashflow_start_date]) || last_30.start_date
-        end_date   = safe_parse_date(params[:cashflow_end_date])   || last_30.end_date
-
-        # Ensure start_date <= end_date
-        if start_date > end_date
-          start_date, end_date = end_date, start_date
-        end
-
-        Period.custom(start_date: start_date, end_date: end_date)
-      else
-        begin
-          Period.from_key(period_param)
-        rescue Period::InvalidKeyError
-          # Fall back to the same period used elsewhere (user preference via Periodable)
-          @period
-        end
-      end
-    else
-      # Default to the globally selected period (from Periodable),
-      # which uses the current user's default when not provided via params
-      @period
-    end
-
-    family_currency = Current.family.currency
-
-    # Parse net_worth_period (independent period for net worth chart)
-    net_worth_period_param = params[:net_worth_period]
-    @net_worth_period = if net_worth_period_param.present?
-      if net_worth_period_param == "custom"
-        last_30 = Period.last_30_days
-        start_date = safe_parse_date(params[:net_worth_start_date]) || last_30.start_date
-        end_date   = safe_parse_date(params[:net_worth_end_date])   || last_30.end_date
-        start_date, end_date = end_date, start_date if start_date > end_date
-        Period.custom(start_date: start_date, end_date: end_date)
-      else
-        begin
-          Period.from_key(net_worth_period_param)
-        rescue Period::InvalidKeyError
-          @period
-        end
-      end
-    else
-      @period
-    end
-
-    # Parse outflows_period (independent period for outflows chart)
-    outflows_period_param = params[:outflows_period]
-    @outflows_period = if outflows_period_param.present?
-      if outflows_period_param == "custom"
-        last_30 = Period.last_30_days
-        start_date = safe_parse_date(params[:outflows_start_date]) || last_30.start_date
-        end_date   = safe_parse_date(params[:outflows_end_date])   || last_30.end_date
-        start_date, end_date = end_date, start_date if start_date > end_date
-        Period.custom(start_date: start_date, end_date: end_date)
-      else
-        begin
-          Period.from_key(outflows_period_param)
-        rescue Period::InvalidKeyError
-          @period
-        end
-      end
-    else
-      @period
-    end
-
-    # Parse investment_period (independent period for investment summary)
-    investment_period_param = params[:investment_period]
-    @investment_period = if investment_period_param.present?
-      if investment_period_param == "custom"
-        last_30 = Period.last_30_days
-        start_date = safe_parse_date(params[:investment_start_date]) || last_30.start_date
-        end_date   = safe_parse_date(params[:investment_end_date])   || last_30.end_date
-        start_date, end_date = end_date, start_date if start_date > end_date
-        Period.custom(start_date: start_date, end_date: end_date)
-      else
-        begin
-          Period.from_key(investment_period_param)
-        rescue Period::InvalidKeyError
-          @period
-        end
-      end
-    else
-      @period
-    end
+    @cashflow_period = parse_widget_period("cashflow")
+    @net_worth_period = parse_widget_period("net_worth")
+    @outflows_period = parse_widget_period("outflows")
+    @investment_period = parse_widget_period("investment")
 
     # Toggle: show/hide subcategories in Sankey (default: false)
     @cashflow_show_subcategories = if params.key?(:cashflow_show_subcategories)
@@ -105,59 +50,25 @@ class PagesController < ApplicationController
       false
     end
 
-    # Use IncomeStatement for all cashflow data (now includes categorized trades)
-    income_totals = Current.family.income_statement.income_totals(period: @cashflow_period)
-    expense_totals = Current.family.income_statement.expense_totals(period: @cashflow_period)
+    @dashboard_sections, @hidden_dashboard_sections = build_dashboard_sections
+    @customizing_dashboard = params[:customize].present?
+    @dashboard_view_params = dashboard_view_params
+    @just_hidden_section = params[:hidden_section]
+    @just_shown_section = params[:shown_section]
 
-    # Build both variants for use in fullscreen overlay controls
-    @cashflow_sankey_data_with_subcategories = build_cashflow_sankey_data(
-      income_totals,
-      expense_totals,
-      family_currency,
-      include_subcategories: true
-    )
-
-    @cashflow_sankey_data_without_subcategories = build_cashflow_sankey_data(
-      income_totals,
-      expense_totals,
-      family_currency,
-      include_subcategories: false
-    )
-
-    # Choose the currently selected dataset for compact view
-    @cashflow_sankey_data = @cashflow_show_subcategories ?
-      @cashflow_sankey_data_with_subcategories :
-      @cashflow_sankey_data_without_subcategories
-
-    # Outflows uses its own period
-    outflows_expense_totals = Current.family.income_statement.expense_totals(period: @outflows_period)
-    @outflows_data = build_outflows_donut_data(outflows_expense_totals)
-
-    # Load subscriptions for the summary widget
-    @upcoming_subscriptions = Current.family.recurring_transactions
-                                    .active_subscriptions
-                                    .where("next_expected_date <= ?", 7.days.from_now.to_date)
-                                    .where("next_expected_date >= ?", Date.current)
-                                    .order(:next_expected_date)
-                                    .limit(5)
-                                    .includes(:merchant, :subscription_service)
-                                    .with_attached_logo
-
-    @subscriptions_monthly_total = calculate_subscriptions_monthly_total
-    @subscription_suggestion_count = Current.family.recurring_transactions.suggested.count
-    @subscriptions_due_today = Current.family.recurring_transactions
-                                      .active_subscriptions
-                                      .where(next_expected_date: Date.current)
-                                      .count
-    @subscriptions_this_week_total = calculate_this_week_subscriptions_total
-
-    @dashboard_sections = build_dashboard_sections
-
-    @breadcrumbs = [ [ "Home", root_path ], [ "Dashboard", nil ] ]
+    @breadcrumbs = [ [ t("breadcrumbs.home"), root_path ], [ t("pages.dashboard.breadcrumb"), nil ] ]
   end
 
+  # Saves collapsed, hidden and order preferences. The sortable and collapse controllers
+  # send JSON and get 200. The Customize mode's hide and show buttons are forms with
+  # customize set, and go back to the dashboard.
   def update_preferences
-    if Current.user.update_dashboard_preferences(preferences_params)
+    prefs = dashboard_preferences_params
+    saved = Current.user.update_dashboard_preferences(prefs, laid_out_order: ordered_dashboard_section_keys)
+
+    if params[:customize].present?
+      redirect_to root_path(dashboard_view_params.merge(customize: 1, **changed_section_param(prefs))), status: :see_other
+    elsif saved
       head :ok
     else
       head :unprocessable_entity
@@ -170,348 +81,204 @@ class PagesController < ApplicationController
 
   private
     def preferences_params
-      params.expect(preferences: [ collapsed_sections: {}, section_order: [] ]).to_h
+      params.expect(preferences: [ collapsed_sections: {}, hidden_sections: {}, section_order: [] ]).to_h
     end
 
-    def build_dashboard_sections
-      all_sections = [
-        {
-          key: "cashflow_sankey",
-          title: "pages.dashboard.cashflow_sankey.title",
-          partial: "pages/dashboard/cashflow_sankey",
-          locals: { sankey_data: @cashflow_sankey_data, period: @cashflow_period },
-          visible: Current.family.accounts.any?,
-          collapsible: true
+    # Hidden flags are stored as booleans and only for widgets that exist
+    def dashboard_preferences_params
+      prefs = preferences_params
+      if prefs.key?("hidden_sections")
+        prefs["hidden_sections"] = prefs["hidden_sections"].to_h
+          .slice(*DASHBOARD_SECTION_KEYS)
+          .transform_values { |value| ActiveModel::Type::Boolean.new.cast(value) == true }
+      end
+      prefs
+    end
+
+    # Two param names, so hiding a widget and showing it again never redirect to the same
+    # URL: Turbo morphs a same-URL visit as a refresh, and a morph skips the autofocus
+    # that keeps keyboard users on the widget they changed.
+    def changed_section_param(prefs)
+      key, hidden = prefs["hidden_sections"]&.first
+      return {} unless key
+
+      hidden ? { hidden_section: key } : { shown_section: key }
+    end
+
+    def dashboard_view_params
+      params.slice(*DASHBOARD_VIEW_PARAMS, *DASHBOARD_VIEW_ARRAY_PARAMS)
+        .permit(*DASHBOARD_VIEW_PARAMS, DASHBOARD_VIEW_ARRAY_PARAMS.index_with { [] })
+        .to_h.symbolize_keys
+    end
+
+    # The period one widget shows: its own <prefix>_period param, else the page period.
+    # "custom" reads <prefix>_start_date and <prefix>_end_date, falls back to the last 30
+    # days and swaps a reversed range.
+    def parse_widget_period(prefix)
+      key = params[:"#{prefix}_period"]
+      return @period if key.blank?
+
+      if key == "custom"
+        last_30 = Period.last_30_days
+        start_date = safe_parse_date(params[:"#{prefix}_start_date"]) || last_30.start_date
+        end_date = safe_parse_date(params[:"#{prefix}_end_date"]) || last_30.end_date
+        start_date, end_date = end_date, start_date if start_date > end_date
+        Period.custom(start_date: start_date, end_date: end_date)
+      else
+        Period.from_key(key)
+      end
+    rescue Period::InvalidKeyError
+      @period
+    end
+
+    # Each widget builds its own data, so a hidden widget's builder is never called and
+    # its queries never run
+    def dashboard_section_builders
+      {
+        "cashflow_sankey" => -> {
+          # One payload with subcategories; the chart drops the subcategory column itself
+          # when the toggle is off, so the toggle needs no request
+          sankey_data = IncomeStatement::Sankey.new(Current.family.income_statement, period: @cashflow_period).as_json
+          {
+            key: "cashflow_sankey",
+            title: "pages.dashboard.cashflow_sankey.title",
+            partial: "pages/dashboard/cashflow_sankey",
+            locals: { sankey_data: sankey_data, period: @cashflow_period, show_subcategories: @cashflow_show_subcategories },
+            # Outside the section, so it stays open while the section's frame reloads
+            dialog: {
+              partial: "pages/dashboard/cashflow_sankey_dialog",
+              locals: { sankey_data: sankey_data, period: @cashflow_period, show_subcategories: @cashflow_show_subcategories }
+            },
+            visible: @has_accounts,
+            collapsible: true
+          }
         },
-        {
-          key: "outflows_donut",
-          title: "pages.dashboard.outflows_donut.title",
-          partial: "pages/dashboard/outflows_donut",
-          locals: { outflows_data: @outflows_data, period: @outflows_period },
-          visible: Current.family.accounts.any? && @outflows_data[:categories].present?,
-          collapsible: true
+        "outflows_donut" => -> {
+          outflows_data = build_outflows_donut_data(Current.family.income_statement.expense_totals(period: @outflows_period))
+          {
+            key: "outflows_donut",
+            title: "pages.dashboard.outflows_donut.title",
+            partial: "pages/dashboard/outflows_donut",
+            locals: { outflows_data: outflows_data, period: @outflows_period },
+            visible: @has_accounts && outflows_data[:categories].present?,
+            collapsible: true
+          }
         },
-        {
-          key: "investment_summary",
-          title: "pages.dashboard.investment_summary.title",
-          partial: "pages/dashboard/investment_summary",
-          locals: { investment_statement: @investment_statement, period: @investment_period },
-          visible: Current.family.accounts.any? && @investment_statement.investment_accounts.any?,
-          collapsible: true
+        "spending_trend" => -> {
+          {
+            key: "spending_trend",
+            title: "pages.dashboard.spending_trend.title",
+            partial: "pages/dashboard/spending_trend",
+            locals: { spending_trend_data: build_spending_trend_data },
+            visible: @has_accounts,
+            collapsible: true
+          }
         },
-        {
-          key: "net_worth_chart",
-          title: "pages.dashboard.net_worth_chart.title",
-          partial: "pages/dashboard/net_worth_chart",
-          locals: { balance_sheet: @balance_sheet, period: @net_worth_period },
-          visible: Current.family.accounts.any?,
-          collapsible: true
+        "investment_summary" => -> {
+          {
+            key: "investment_summary",
+            title: "pages.dashboard.investment_summary.title",
+            partial: "pages/dashboard/investment_summary",
+            locals: { investment_statement: @investment_statement, period: @investment_period },
+            visible: investment_summary_available?,
+            collapsible: true
+          }
         },
-        {
-          key: "balance_sheet",
-          title: "pages.dashboard.balance_sheet.title",
-          partial: "pages/dashboard/balance_sheet",
-          locals: { balance_sheet: @balance_sheet },
-          visible: Current.family.accounts.any?,
-          collapsible: true
+        "net_worth_chart" => -> {
+          {
+            key: "net_worth_chart",
+            title: "pages.dashboard.net_worth_chart.title",
+            partial: "pages/dashboard/net_worth_chart",
+            locals: { balance_sheet: @balance_sheet, period: @net_worth_period },
+            dialog: {
+              partial: "pages/dashboard/net_worth_chart_dialog",
+              locals: { balance_sheet: @balance_sheet, period: @net_worth_period }
+            },
+            visible: @has_accounts,
+            collapsible: true
+          }
         },
-        {
-          key: "subscriptions_summary",
-          title: "pages.dashboard.subscriptions_summary.title",
-          partial: "pages/dashboard/subscriptions_summary",
-          locals: {
-            upcoming_subscriptions: @upcoming_subscriptions,
-            monthly_total: @subscriptions_monthly_total,
-            suggestion_count: @subscription_suggestion_count,
-            due_today_count: @subscriptions_due_today,
-            this_week_total: @subscriptions_this_week_total
-          },
-          visible: Current.family.recurring_transactions.subscriptions.any?,
-          collapsible: true
+        "balance_sheet" => -> {
+          {
+            key: "balance_sheet",
+            title: "pages.dashboard.balance_sheet.title",
+            partial: "pages/dashboard/balance_sheet",
+            locals: { balance_sheet: @balance_sheet },
+            visible: @has_accounts,
+            collapsible: true
+          }
+        },
+        "subscriptions_summary" => -> {
+          {
+            key: "subscriptions_summary",
+            title: "pages.dashboard.subscriptions_summary.title",
+            partial: "pages/dashboard/subscriptions_summary",
+            locals: subscriptions_summary_locals,
+            visible: subscriptions_summary_available?,
+            collapsible: true
+          }
         }
-      ]
-
-      # Order sections according to user preference
-      section_order = Current.user.dashboard_section_order
-      ordered_sections = section_order.map do |key|
-        all_sections.find { |s| s[:key] == key }
-      end.compact
-
-      # Add any new sections that aren't in the saved order (future-proofing)
-      all_sections.each do |section|
-        ordered_sections << section unless ordered_sections.include?(section)
-      end
-
-      ordered_sections
+      }
     end
 
-    def build_cashflow_sankey_data(income_totals, expense_totals, currency, include_subcategories: true)
-      nodes = []
-      links = []
-      node_indices = {}
+    # Returns [shown, hidden]. A widget with nothing to show is dropped from both, so the
+    # hidden list never offers back a widget that would not appear.
+    def build_dashboard_sections
+      builders = dashboard_section_builders
+      keys = ordered_dashboard_section_keys
+      frame_key = DASHBOARD_FRAME_SECTIONS[request.headers["Turbo-Frame"]]
+      keys &= [ frame_key ] if frame_key
 
-      add_node = ->(unique_key, display_name, value, percentage, color) {
-        node_indices[unique_key] ||= begin
-          nodes << { name: display_name, value: value.to_f.round(2), percentage: percentage.to_f.round(1), color: color }
-          nodes.size - 1
-        end
+      sections = keys.filter_map do |key|
+        Current.user.dashboard_section_hidden?(key) ? hidden_dashboard_section(key) : builders.fetch(key).call
+      end
+
+      hidden, shown = sections.select { |section| section[:visible] }.partition { |section| section[:hidden] }
+      [ shown, hidden ]
+    end
+
+    # Just enough for the hidden list, without the widget's queries. A widget whose data
+    # depends on the period stays on offer, since another period may have data.
+    def hidden_dashboard_section(key)
+      visible = case key
+      when "investment_summary" then investment_summary_available?
+      when "subscriptions_summary" then subscriptions_summary_available?
+      else @has_accounts
+      end
+
+      { key: key, title: "pages.dashboard.#{key}.title", visible: visible, hidden: true }
+    end
+
+    # The order the dashboard lays its widgets out in: the saved order, then any widget
+    # it leaves out
+    def ordered_dashboard_section_keys
+      saved = Current.user.dashboard_section_order & DASHBOARD_SECTION_KEYS
+      saved + (DASHBOARD_SECTION_KEYS - saved)
+    end
+
+    def investment_summary_available?
+      @has_accounts && @investment_statement.investment_accounts.any?
+    end
+
+    def subscriptions_summary_available?
+      Current.family.recurring_transactions.subscriptions.any?
+    end
+
+    def subscriptions_summary_locals
+      {
+        upcoming_subscriptions: Current.family.recurring_transactions
+          .active_subscriptions
+          .where("next_expected_date <= ?", 7.days.from_now.to_date)
+          .where("next_expected_date >= ?", Date.current)
+          .order(:next_expected_date)
+          .limit(5)
+          .includes(:merchant, :subscription_service)
+          .with_attached_logo,
+        monthly_total: calculate_subscriptions_monthly_total,
+        suggestion_count: Current.family.recurring_transactions.suggested.count,
+        due_today_count: Current.family.recurring_transactions.active_subscriptions.where(next_expected_date: Date.current).count,
+        this_week_total: calculate_this_week_subscriptions_total
       }
-
-      total_income = income_totals.total.to_f.round(2)
-      total_expense = expense_totals.total.to_f.round(2)
-      total_income_val = total_income
-      total_expense_val = total_expense
-
-      # Central Cash Flow node
-      cash_flow_idx = add_node.call("cash_flow_node", "Cash Flow", total_income, 100.0, "var(--color-success)")
-
-      # --- Process Income Side ---
-      if include_subcategories
-        # Parent categories + subcategories
-        grouped_income_totals = income_totals.category_totals.group_by { |ct| ct.category.parent_id }
-        root_income_totals = grouped_income_totals[nil] || []
-
-        root_income_totals.each do |ct|
-          val = ct.total.to_f.round(2)
-          next if val.zero?
-
-          percentage_of_total_income = total_income_val.zero? ? 0 : (val / total_income_val * 100).round(1)
-
-          node_display_name = ct.category.name
-          node_color = ct.category.color.presence || Category::COLORS.sample
-
-          # Parent income category node
-          parent_idx = add_node.call(
-            "income_#{ct.category.id}",
-            node_display_name,
-            val,
-            percentage_of_total_income,
-            node_color
-          )
-
-          # Link: Parent category -> Cash Flow (income flows into cash flow)
-          links << {
-            source: parent_idx,
-            target: cash_flow_idx,
-            value: val,
-            color: node_color,
-            percentage: percentage_of_total_income
-          }
-
-          # Subcategories for this parent (skip for Uncategorized which has no true children)
-          subcategory_totals = node_display_name == "Uncategorized" ? [] : (grouped_income_totals[ct.category.id] || [])
-          subcategory_totals.each do |st|
-            sub_val = st.total.to_f.round(2)
-            next if sub_val.zero?
-
-            sub_percentage = total_income_val.zero? ? 0 : (sub_val / total_income_val * 100).round(1)
-            sub_node_color = st.category.color.presence || node_color
-
-            sub_idx = add_node.call(
-              "income_#{st.category.id}",
-              st.category.name,
-              sub_val,
-              sub_percentage,
-              sub_node_color
-            )
-
-            # Link: Subcategory -> Parent category
-            links << {
-              source: sub_idx,
-              target: parent_idx,
-              value: sub_val,
-              color: sub_node_color,
-              percentage: sub_percentage
-            }
-          end
-
-          # If the parent has direct transactions not assigned to subcategories,
-          # show them as a "Direct" leaf to preserve Sankey flow conservation.
-          if subcategory_totals.any?
-            sum_sub = subcategory_totals.sum { |st| st.total.to_f.round(2) }
-            direct_val = (val - sum_sub).round(2)
-            if direct_val.positive?
-              direct_percentage = total_income_val.zero? ? 0 : (direct_val / total_income_val * 100).round(1)
-              direct_idx = add_node.call(
-                "income_#{ct.category.id}_direct",
-                I18n.t("pages.dashboard.cashflow_sankey.other_category", category: node_display_name),
-                direct_val,
-                direct_percentage,
-                node_color
-              )
-              links << {
-                source: direct_idx,
-                target: parent_idx,
-                value: direct_val,
-                color: node_color,
-                percentage: direct_percentage
-              }
-            end
-          end
-        end
-      else
-        # Top-level categories only
-        income_totals.category_totals.each do |ct|
-          # Skip subcategories – only include root income categories
-          next if ct.category.parent_id.present?
-
-          val = ct.total.to_f.round(2)
-          next if val.zero?
-
-          percentage_of_total_income = total_income_val.zero? ? 0 : (val / total_income_val * 100).round(1)
-
-          node_display_name = ct.category.name
-          node_color = ct.category.color.presence || Category::COLORS.sample
-
-          current_cat_idx = add_node.call(
-            "income_#{ct.category.id}",
-            node_display_name,
-            val,
-            percentage_of_total_income,
-            node_color
-          )
-
-          links << {
-            source: current_cat_idx,
-            target: cash_flow_idx,
-            value: val,
-            color: node_color,
-            percentage: percentage_of_total_income
-          }
-        end
-      end
-
-      if include_subcategories
-        # --- Process Expense Side (Parent categories + subcategories) ---
-        # Group expense category totals by parent_id to build a hierarchy
-        grouped_expense_totals = expense_totals.category_totals.group_by { |ct| ct.category.parent_id }
-        root_expense_totals = grouped_expense_totals[nil] || []
-
-        root_expense_totals.each do |ct|
-          val = ct.total.to_f.round(2)
-          next if val.zero?
-
-          percentage_of_total_expense = total_expense_val.zero? ? 0 : (val / total_expense_val * 100).round(1)
-
-          node_display_name = ct.category.name
-          node_color = ct.category.color.presence || Category::UNCATEGORIZED_COLOR
-
-          # Parent category node
-          parent_idx = add_node.call(
-            "expense_#{ct.category.id}",
-            node_display_name,
-            val,
-            percentage_of_total_expense,
-            node_color
-          )
-
-          # Link: Cash Flow -> Parent category
-          links << {
-            source: cash_flow_idx,
-            target: parent_idx,
-            value: val,
-            color: node_color,
-            percentage: percentage_of_total_expense
-          }
-
-          # Subcategories for this parent (skip for Uncategorized which has no true children)
-          subcategory_totals = node_display_name == "Uncategorized" ? [] : (grouped_expense_totals[ct.category.id] || [])
-          subcategory_totals.each do |st|
-            sub_val = st.total.to_f.round(2)
-            next if sub_val.zero?
-
-            sub_percentage = total_expense_val.zero? ? 0 : (sub_val / total_expense_val * 100).round(1)
-            sub_node_color = st.category.color.presence || node_color
-
-            sub_idx = add_node.call(
-              "expense_#{st.category.id}",
-              st.category.name,
-              sub_val,
-              sub_percentage,
-              sub_node_color
-            )
-
-            # Link: Parent category -> Subcategory
-            links << {
-              source: parent_idx,
-              target: sub_idx,
-              value: sub_val,
-              color: sub_node_color,
-              percentage: sub_percentage
-            }
-          end
-
-          # If the parent has direct transactions not assigned to subcategories,
-          # show them as a "Direct" leaf to preserve Sankey flow conservation.
-          if subcategory_totals.any?
-            sum_sub = subcategory_totals.sum { |st| st.total.to_f.round(2) }
-            direct_val = (val - sum_sub).round(2)
-            if direct_val.positive?
-              direct_percentage = total_expense_val.zero? ? 0 : (direct_val / total_expense_val * 100).round(1)
-              direct_idx = add_node.call(
-                "expense_#{ct.category.id}_direct",
-                I18n.t("pages.dashboard.cashflow_sankey.other_category", category: node_display_name),
-                direct_val,
-                direct_percentage,
-                node_color
-              )
-              links << {
-                source: parent_idx,
-                target: direct_idx,
-                value: direct_val,
-                color: node_color,
-                percentage: direct_percentage
-              }
-            end
-          end
-        end
-      else
-        # --- Process Expense Side (Top-level categories only) ---
-        expense_totals.category_totals.each do |ct|
-          # Only include root expense categories
-          next if ct.category.parent_id.present?
-
-          val = ct.total.to_f.round(2)
-          next if val.zero?
-
-          percentage_of_total_expense = total_expense_val.zero? ? 0 : (val / total_expense_val * 100).round(1)
-
-          node_display_name = ct.category.name
-          node_color = ct.category.color.presence || Category::UNCATEGORIZED_COLOR
-
-          current_cat_idx = add_node.call(
-            "expense_#{ct.category.id}",
-            node_display_name,
-            val,
-            percentage_of_total_expense,
-            node_color
-          )
-
-          links << {
-            source: cash_flow_idx,
-            target: current_cat_idx,
-            value: val,
-            color: node_color,
-            percentage: percentage_of_total_expense
-          }
-        end
-      end
-
-      # --- Process Surplus ---
-      leftover = (total_income_val - total_expense_val).round(2)
-      if leftover.positive?
-        percentage_of_total_income_for_surplus = total_income_val.zero? ? 0 : (leftover / total_income_val * 100).round(1)
-        surplus_idx = add_node.call("surplus_node", "Surplus", leftover, percentage_of_total_income_for_surplus, "var(--color-success)")
-        links << { source: cash_flow_idx, target: surplus_idx, value: leftover, color: "var(--color-success)", percentage: percentage_of_total_income_for_surplus }
-      end
-
-      # Update Cash Flow and Income node percentages (relative to total income)
-      if node_indices["cash_flow_node"]
-        nodes[node_indices["cash_flow_node"]][:percentage] = 100.0
-      end
-      # No primary income node anymore, percentages are on individual income cats relative to total_income_val
-
-      { nodes: nodes, links: links, currency_symbol: Money::Currency.new(currency).symbol }
     end
 
     def build_outflows_donut_data(expense_totals)
@@ -525,6 +292,7 @@ class PagesController < ApplicationController
           {
             id: ct.category.id,
             name: ct.category.name,
+            filter_value: ct.category.filter_value,
             amount: ct.total.to_f.round(2),
             currency: ct.currency,
             percentage: ct.weight.round(1),
@@ -535,6 +303,55 @@ class PagesController < ApplicationController
         end
 
       { categories: categories, total: total.to_f.round(2), currency: expense_totals.currency, currency_symbol: currency_symbol }
+    end
+
+    # The spending curve: the budget period that holds the spending_period date (the
+    # current one by default; a future one is the current one) against the period before
+    # it, both narrowed to the category filter
+    def build_spending_trend_data
+      income_statement = Current.family.income_statement
+      period_date = safe_parse_date(params[:spending_period]) || Date.current
+      periods = IncomeStatement::SpendingTrend.periods(Current.family, period_date)
+
+      filter = IncomeStatement::ExpenseCategoryFilter.new(
+        income_statement,
+        periods: [ periods.current, periods.previous ],
+        values: IncomeStatement::ExpenseCategoryFilter.sanitize(Current.family, params[:spending_category_ids])
+      )
+      trend = IncomeStatement::SpendingTrend.new(income_statement, date: period_date, category_ids: filter.category_ids)
+
+      period_format = t("pages.dashboard.spending_trend.period_format")
+
+      {
+        trend: trend,
+        filter: filter,
+        currency: Current.family.currency,
+        current_label: I18n.l(trend.period_start, format: period_format),
+        previous_label: I18n.l(trend.previous_period.start_date, format: period_format),
+        compact_range: spending_trend_compact_range(trend.current_period),
+        period_options: IncomeStatement::SpendingTrend.recent_period_starts(Current.family).map { |start| [ I18n.l(start, format: period_format), start.iso8601 ] },
+        chart_data: {
+          days: trend.axis_days,
+          # Localized here, one per axis day, so the ticks follow the app locale
+          axis_labels: trend.axis_dates.map { |date| I18n.l(date, format: :short) },
+          current: trend.current_points.map { |point| spending_trend_point_json(point) },
+          previous: trend.previous_axis_points.map { |point| spending_trend_point_json(point) }
+        }
+      }
+    end
+
+    def spending_trend_point_json(point)
+      { day: point[:day], value: point[:value].to_f.round(2), date_formatted: I18n.l(point[:date], format: :short) }
+    end
+
+    # A short range for narrow screens ("Nov 05 - Dec 04, 2026")
+    def spending_trend_compact_range(period)
+      range = period.date_range
+      if range.begin == range.end
+        t("pages.dashboard.spending_trend.date_range_short_single", date: I18n.l(range.begin, format: :short), year: range.end.year)
+      else
+        t("pages.dashboard.spending_trend.date_range_short", start_date: I18n.l(range.begin, format: :short), end_date: I18n.l(range.end, format: :short), year: range.end.year)
+      end
     end
 
     def safe_parse_date(value)

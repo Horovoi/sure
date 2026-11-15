@@ -301,4 +301,40 @@ class BudgetCategoryTest < ActiveSupport::TestCase
     )
     assert_equal 250, group.other_spending
   end
+
+  test "suggested daily spending covers a fiscal period in its second calendar month" do
+    travel_to Time.zone.local(2026, 3, 5, 12) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+      budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+
+      assert_equal Date.new(2026, 2, 10), budget.start_date
+      assert_equal Date.new(2026, 3, 9), budget.end_date
+      assert budget.current?
+      # March 5 through March 9, today included
+      assert_equal 5, budget.days_remaining
+
+      budget_category = budget.budget_categories.first
+      budget_category.stubs(:available_to_spend).returns(500)
+
+      daily = budget_category.suggested_daily_spending
+      assert daily.present?
+      assert_equal 5, daily[:days_remaining]
+      assert_equal 100, daily[:amount].amount
+    end
+  end
+
+  test "suggested daily spending is nil outside the current period" do
+    travel_to Time.zone.local(2026, 3, 5, 12) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+      budget = Budget.find_or_bootstrap(@family, start_date: Date.new(2026, 1, 15))
+
+      refute budget.current?
+      assert_equal 0, budget.days_remaining
+
+      budget_category = budget.budget_categories.first
+      budget_category.stubs(:available_to_spend).returns(500)
+
+      assert_nil budget_category.suggested_daily_spending
+    end
+  end
 end

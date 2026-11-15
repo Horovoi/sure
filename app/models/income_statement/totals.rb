@@ -64,9 +64,9 @@ class IncomeStatement::Totals
         JOIN entries ae ON ae.entryable_id = at.id AND ae.entryable_type = 'Transaction'
         JOIN accounts a ON a.id = ae.account_id
         LEFT JOIN categories c ON c.id = at.category_id
-        WHERE at.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
+        WHERE at.kind NOT IN (#{Transaction.budget_excluded_kinds_sql})
           AND ae.excluded = false
-                    AND a.family_id = :family_id
+          AND a.family_id = :family_id
           AND #{Account.visible_status_sql("a")}
         GROUP BY c.id, c.parent_id, CASE WHEN at.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END;
       SQL
@@ -85,13 +85,13 @@ class IncomeStatement::Totals
         JOIN entries ae ON ae.entryable_id = at.id AND ae.entryable_type = 'Transaction'
         JOIN accounts a ON a.id = ae.account_id
         LEFT JOIN categories c ON c.id = at.category_id
-        WHERE at.kind NOT IN ('funds_movement', 'one_time', 'cc_payment')
+        WHERE at.kind NOT IN (#{Transaction.budget_excluded_kinds_sql})
           AND (
             at.investment_activity_label IS NULL
             OR at.investment_activity_label NOT IN ('Transfer', 'Sweep In', 'Sweep Out', 'Exchange')
           )
           AND ae.excluded = false
-                    AND a.family_id = :family_id
+          AND a.family_id = :family_id
           AND #{Account.visible_status_sql("a")}
         GROUP BY c.id, c.parent_id, CASE WHEN at.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
       SQL

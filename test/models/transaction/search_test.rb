@@ -126,6 +126,31 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_not_includes uncategorized_ids, uncategorized_transfer.entryable.id
   end
 
+  test "the Uncategorized sentinel and the legacy display name both filter for no category" do
+    uncategorized = create_transaction(account: @checking_account, amount: 100, kind: "standard")
+    categorized = create_transaction(account: @checking_account, amount: 50, category: categories(:food_and_drink))
+    transfer = create_transaction(account: @checking_account, amount: 200, kind: "funds_movement")
+
+    [ Category::UNCATEGORIZED_FILTER_VALUE, "Uncategorized" ].each do |value|
+      ids = Transaction::Search.new(@family, filters: { categories: [ value ] }).transactions_scope.pluck(:id)
+
+      assert_includes ids, uncategorized.entryable.id, value
+      assert_not_includes ids, categorized.entryable.id, value
+      assert_not_includes ids, transfer.entryable.id, value
+    end
+  end
+
+  test "the Uncategorized sentinel combines with a named category" do
+    uncategorized = create_transaction(account: @checking_account, amount: 100)
+    categorized = create_transaction(account: @checking_account, amount: 50, category: categories(:food_and_drink))
+
+    ids = Transaction::Search.new(@family, filters: { categories: [ Category::UNCATEGORIZED_FILTER_VALUE, categories(:food_and_drink).name ] })
+      .transactions_scope.pluck(:id)
+
+    assert_includes ids, uncategorized.entryable.id
+    assert_includes ids, categorized.entryable.id
+  end
+
   test "new family-based API works correctly" do
     # Create transactions for testing
     transaction1 = create_transaction(

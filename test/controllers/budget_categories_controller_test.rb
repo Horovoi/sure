@@ -1,6 +1,9 @@
 require "test_helper"
 
 class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
+  include ActionView::RecordIdentifier
+  include EntriesTestHelper
+
   setup do
     sign_in @user = users(:family_admin)
     @family = @user.family
@@ -49,5 +52,46 @@ class BudgetCategoriesControllerTest < ActionDispatch::IntegrationTest
     patch budget_budget_category_path(budget, budget_category), params: { budget_category: { budgeted_spending: 10 } }
 
     assert_response :unprocessable_entity
+  end
+
+  test "the drilldown leaves out funds movements and card payments and still lists loan payments" do
+    budget = budgets(:one)
+    # Large amounts on today, so they sort first among the three rows the drilldown shows
+    create_transaction(account: accounts(:depository), date: Date.current, amount: 9_300, name: "DRILLDOWN_CC_PAYMENT", kind: "cc_payment")
+    create_transaction(account: accounts(:credit_card), date: Date.current, amount: -9_200, name: "DRILLDOWN_FUNDS_MOVEMENT", kind: "funds_movement")
+    create_transaction(account: accounts(:depository), date: Date.current, amount: 9_100, name: "DRILLDOWN_ONE_TIME", kind: "one_time")
+    create_transaction(account: accounts(:depository), date: Date.current, amount: 9_000, name: "DRILLDOWN_LOAN_PAYMENT", kind: "loan_payment")
+
+    get budget_budget_category_path(budget, BudgetCategory.uncategorized.id)
+
+    assert_response :success
+    assert_no_match "DRILLDOWN_CC_PAYMENT", response.body
+    assert_no_match "DRILLDOWN_FUNDS_MOVEMENT", response.body
+    assert_no_match "DRILLDOWN_ONE_TIME", response.body
+    assert_match "DRILLDOWN_LOAN_PAYMENT", response.body
+  end
+
+  test "Confirm is enabled for a budget with only a total" do
+    budget = budgets(:one)
+    Budget.find_or_bootstrap(@family, start_date: budget.start_date)
+    budget.reload.all_budget_categories.update_all(budgeted_spending: 0)
+
+    get budget_budget_categories_path(budget)
+
+    assert_response :ok
+    assert_select "##{dom_id(budget, :confirm_button)} button"
+    assert_select "##{dom_id(budget, :confirm_button)} button[disabled]", count: 0
+  end
+
+  test "Confirm is disabled when the categories add up to more than the total" do
+    budget = budgets(:one)
+    Budget.find_or_bootstrap(@family, start_date: budget.start_date)
+    budget.reload
+    budget.budget_categories.reject(&:subcategory?).first.update!(budgeted_spending: budget.budgeted_spending + 1)
+
+    get budget_budget_categories_path(budget)
+
+    assert_response :ok
+    assert_select "##{dom_id(budget, :confirm_button)} button[disabled]"
   end
 end

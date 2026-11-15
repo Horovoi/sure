@@ -222,6 +222,20 @@ class Budget < ApplicationRecord
     start_date == family.budget_period_start_for(Date.current) && end_date == family.budget_period_end_for(start_date)
   end
 
+  # Whole days from today through the period's last day (today counts); 0 once the
+  # period is over. Counts to end_date, so a fiscal period that ends in the next
+  # calendar month gets its real number of days.
+  def days_remaining
+    [ (end_date - Date.current).to_i + 1, 0 ].max
+  end
+
+  # The setup wizard can be confirmed once the budget has a total and its categories
+  # do not add up to more than it. A budget with only a total (nothing allocated) is
+  # valid: what it spends shows as uncategorized.
+  def confirmable?
+    initialized? && !over_allocated?
+  end
+
   # The neighbours are the periods just before the first day and just after the last
   # day. Stepping a month from the start date would skip or repeat a period when the
   # fiscal start day is past the end of a short month (day 31 and February).

@@ -13,7 +13,8 @@
   <% selected_categories = Array(@q[:categories]).map(&:to_s) %>
 
   <% render_category_option = lambda do |category, nested: false, parent_name: nil, role: :plain, group_id: nil|
-       is_checked = selected_categories.include?(category.name) ||
+       is_checked = selected_categories.include?(category.filter_value) ||
+         (category.uncategorized? && selected_categories.any? { |value| Category.uncategorized_filter_value?(value) }) ||
          (parent_name.present? && selected_categories.include?(parent_name))
 
        checkbox_options = {
@@ -40,9 +41,9 @@
          data: { filter_name: category.name } do
            form.check_box(:categories,
                           checkbox_options,
-                          category.name,
+                          category.filter_value,
                           nil) +
-           form.label(:categories, category.name, value: category.name, class: "cursor-pointer w-full") do
+           form.label(:categories, category.name, value: category.filter_value, class: "cursor-pointer w-full") do
              content_tag(:div, class: "flex items-center gap-2 text-sm text-primary") do
                content = []
                if nested

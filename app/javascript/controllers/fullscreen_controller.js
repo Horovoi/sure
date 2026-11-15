@@ -24,13 +24,12 @@ export default class extends Controller {
     if (!chartEl) return;
     chartEl.dispatchEvent(new CustomEvent("sankey:set-subcategories", { detail: { showSubcategories: checked } }));
 
-    // Also update the compact card behind via its existing form
+    // Also switch the inline card behind; its toggle's change handler
+    // (cashflow-sync) redraws the inline chart without a request
     const compactToggle = document.getElementById("cashflow_show_subcategories");
-    if (compactToggle) {
+    if (compactToggle && compactToggle.checked !== checked) {
       compactToggle.checked = checked;
-      // Trigger auto-submit on its form to update the cashflow_sankey_section frame
-      const ev = new Event("change", { bubbles: true });
-      compactToggle.dispatchEvent(ev);
+      compactToggle.dispatchEvent(new Event("change", { bubbles: true }));
     }
   };
 }

@@ -104,8 +104,9 @@ class Transaction::Search
     def apply_category_filter(query, categories)
       return query unless categories.present?
 
-      include_uncategorized = categories.include?("Uncategorized")
-      named_categories = categories.reject { |c| c == "Uncategorized" }
+      # The Uncategorized sentinel, or the display name older links still send
+      include_uncategorized = categories.any? { |c| Category.uncategorized_filter_value?(c) }
+      named_categories = categories.reject { |c| Category.uncategorized_filter_value?(c) }
 
       # Get parent category IDs so subcategories are included when a parent is selected
       parent_category_ids = named_categories.present? ?

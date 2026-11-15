@@ -1,0 +1,28 @@
+<%# locals: (sankey_data:, period:, show_subcategories:, id:) %>
+<div
+  id="<%= id %>"
+  data-controller="sankey-chart"
+  data-sankey-chart-data-value="<%= sankey_data.to_json %>"
+  data-sankey-chart-show-subcategories-value="<%= show_subcategories %>"
+  data-sankey-chart-currency-symbol-value="<%= sankey_data[:currency_symbol] %>"
+  data-sankey-chart-start-date-value="<%= period.start_date&.iso8601 %>"
+  data-sankey-chart-end-date-value="<%= period.end_date&.iso8601 %>"
+  data-period-text="<%= period.key.present? ? period.label : period.comparison_label %>"
+  class="w-full h-full flex flex-col gap-2">
+  <%# px-4 lines the back button up with the section header %>
+  <div class="flex justify-start px-4">
+    <%= render DS::Button.new(
+      variant: :icon,
+      icon: "arrow-left",
+      type: "button",
+      title: t("pages.dashboard.cashflow_sankey.zoom_out"),
+      aria: { label: t("pages.dashboard.cashflow_sankey.zoom_out") },
+      hidden: true,
+      data: {
+        sankey_chart_target: "zoomOutButton",
+        action: "sankey-chart#zoomOut"
+      }
+    ) %>
+  </div>
+  <div data-sankey-chart-target="chart" class="min-h-0 flex-1"></div>
+</div>

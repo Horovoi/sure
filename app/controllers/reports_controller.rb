@@ -6,6 +6,10 @@ class ReportsController < ApplicationController
   skip_authentication only: :export_transactions
   before_action :authenticate_for_export, only: :export_transactions
 
+  # How far apart the period starts of each report period type are, for comparing a
+  # period that runs up to today with the same days of earlier periods
+  SPENDING_COMPARISON_STEP_MONTHS = { monthly: 1, quarterly: 3, last_6_months: 6, ytd: 12 }.freeze
+
   def index
     setup_report_data(show_flash: true)
 
@@ -103,15 +107,17 @@ class ReportsController < ApplicationController
       @period = Period.custom(start_date: @start_date, end_date: @end_date)
       @previous_period = build_previous_period
 
-      # Get aggregated data
-      @current_income_totals = Current.family.income_statement.income_totals(period: @period)
-      @current_expense_totals = Current.family.income_statement.expense_totals(period: @period)
+      # Get aggregated data. One income statement for the whole page: it memoizes each
+      # period's totals, so a trend month equal to the selected period is not built again.
+      @income_statement = Current.family.income_statement
+      @current_income_totals = @income_statement.income_totals(period: @period)
+      @current_expense_totals = @income_statement.expense_totals(period: @period)
 
-      @previous_income_totals = Current.family.income_statement.income_totals(period: @previous_period)
-      @previous_expense_totals = Current.family.income_statement.expense_totals(period: @previous_period)
+      @previous_income_totals = @income_statement.income_totals(period: @previous_period)
+      @previous_expense_totals = @income_statement.expense_totals(period: @previous_period)
 
       # Build trend data (last 6 months) — must be before summary metrics (sparklines)
-      @trends_data = build_trends_data
+      @trends_data = build_trends_data(income_statement: @income_statement)
 
       # Calculate summary metrics
       @summary_metrics = build_summary_metrics
@@ -182,7 +188,8 @@ class ReportsController < ApplicationController
           },
           visible: Current.family.transactions.any?,
           collapsible: true
-        }
+        },
+        spending_vs_normal_section
       ]
 
       # Order sections according to user preference
@@ -197,6 +204,28 @@ class ReportsController < ApplicationController
       end
 
       ordered_sections
+    end
+
+    def spending_vs_normal_section
+      {
+        key: "spending_vs_normal",
+        title: "reports.spending_vs_normal.title",
+        partial: "reports/spending_vs_normal",
+        locals: { comparison: spending_comparison },
+        visible: @has_accounts && Current.family.transactions.any?,
+        collapsible: true
+      }
+    end
+
+    # This period's spending against the year before it, on the page's one income
+    # statement
+    def spending_comparison
+      @spending_comparison ||= IncomeStatement::SpendingComparison.new(
+        @income_statement,
+        period: @period,
+        history_start: IncomeStatement::SpendingComparison.history_start(Current.family),
+        step_months: SPENDING_COMPARISON_STEP_MONTHS.fetch(@period_type, 1)
+      )
     end
 
     def validate_and_fix_date_range(show_flash: false)
@@ -403,7 +432,7 @@ class ReportsController < ApplicationController
       nil
     end
 
-    def build_trends_data
+    def build_trends_data(income_statement:)
       # Generate month-by-month data based on the current period filter
       trends = []
       use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
@@ -419,8 +448,8 @@ class ReportsController < ApplicationController
 
           period = Period.custom(start_date: current_start, end_date: month_end)
 
-          income = family.income_statement.income_totals(period: period).total
-          expenses = family.income_statement.expense_totals(period: period).total
+          income = income_statement.income_totals(period: period).total
+          expenses = income_statement.expense_totals(period: period).total
 
           current_fiscal_start = family.budget_period_start_for(Date.current)
 
@@ -448,8 +477,8 @@ class ReportsController < ApplicationController
 
           period = Period.custom(start_date: month_start, end_date: month_end)
 
-          income = family.income_statement.income_totals(period: period).total
-          expenses = family.income_statement.expense_totals(period: period).total
+          income = income_statement.income_totals(period: period).total
+          expenses = income_statement.expense_totals(period: period).total
 
           trends << {
             month: month_start.strftime("%b %Y"),
@@ -486,11 +515,14 @@ class ReportsController < ApplicationController
         .joins(entry: :account)
         .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
         .where(entries: { entryable_type: "Trade", excluded: false, date: @period.date_range })
-        .includes(entry: :account, category: :parent)
+        .includes(entry: :account)
 
-      # Get sort parameters
-      sort_by = params[:sort_by] || "amount"
-      sort_direction = params[:sort_direction] || "desc"
+      # The account, amount and date filters apply to trades too; a category or tag
+      # filter leaves them out, since a trade has neither
+      trades = apply_trade_filters(trades)
+
+      # Get sort parameters. The table sorts by amount only.
+      sort_direction = %w[asc desc].include?(params[:sort_direction]) ? params[:sort_direction] : "desc"
 
       # Group by category (tracking parent relationship) and type
       # Structure: { [parent_category_id, type] => { parent_data, subcategories: { subcategory_id => data } } }
@@ -498,13 +530,36 @@ class ReportsController < ApplicationController
       family_currency = Current.family.currency
 
       # Helper to initialize a category group hash
-      init_category_group = ->(id, name, color, icon, type) do
-        { category_id: id, category_name: name, category_color: color, category_icon: icon, type: type, total: 0, count: 0, subcategories: {} }
+      # filter_value is the transactions filter (q[categories][]) the row links to, nil when
+      # the row has no category to filter by. has_transactions is false for a row that
+      # only holds trades: /transactions does not list trades, so such a row gets no link.
+      init_category_group = ->(id, name, color, icon, type, filter_value) do
+        {
+          category_id: id,
+          category_name: name,
+          category_color: color,
+          category_icon: icon,
+          type: type,
+          total: 0,
+          count: 0,
+          filter_value: filter_value,
+          has_transactions: false,
+          subcategories: {}
+        }
       end
 
       # Helper to initialize a subcategory hash
       init_subcategory = ->(category) do
-        { category_id: category.id, category_name: category.name, category_color: category.color, category_icon: category.lucide_icon, total: 0, count: 0 }
+        {
+          category_id: category.id,
+          category_name: category.name,
+          category_color: category.color,
+          category_icon: category.lucide_icon,
+          total: 0,
+          count: 0,
+          filter_value: category.filter_value,
+          has_transactions: false
+        }
       end
 
       # Helper to process an entry (transaction or trade)
@@ -523,29 +578,31 @@ class ReportsController < ApplicationController
           # Uncategorized or Other Investments (for trades)
           if is_trade
             parent_key = [ :other_investments, type ]
-            grouped_data[parent_key] ||= init_category_group.call(:other_investments, Category.other_investments.name, Category.other_investments.color, Category.other_investments.lucide_icon, type)
+            grouped_data[parent_key] ||= init_category_group.call(:other_investments, Category.other_investments.name, Category.other_investments.color, Category.other_investments.lucide_icon, type, nil)
           else
             parent_key = [ :uncategorized, type ]
-            grouped_data[parent_key] ||= init_category_group.call(:uncategorized, Category.uncategorized.name, Category.uncategorized.color, Category.uncategorized.lucide_icon, type)
+            grouped_data[parent_key] ||= init_category_group.call(:uncategorized, Category.uncategorized.name, Category.uncategorized.color, Category.uncategorized.lucide_icon, type, Category::UNCATEGORIZED_FILTER_VALUE)
           end
         elsif category.parent_id.present?
           # This is a subcategory - group under parent
           parent = category.parent
           parent_key = [ parent.id, type ]
-          grouped_data[parent_key] ||= init_category_group.call(parent.id, parent.name, parent.color || Category::UNCATEGORIZED_COLOR, parent.lucide_icon, type)
+          grouped_data[parent_key] ||= init_category_group.call(parent.id, parent.name, parent.color || Category::UNCATEGORIZED_COLOR, parent.lucide_icon, type, parent.filter_value)
 
           # Add to subcategory
           grouped_data[parent_key][:subcategories][category.id] ||= init_subcategory.call(category)
           grouped_data[parent_key][:subcategories][category.id][:count] += 1
           grouped_data[parent_key][:subcategories][category.id][:total] += converted_amount
+          grouped_data[parent_key][:subcategories][category.id][:has_transactions] = true unless is_trade
         else
           # This is a root category (no parent)
           parent_key = [ category.id, type ]
-          grouped_data[parent_key] ||= init_category_group.call(category.id, category.name, category.color || Category::UNCATEGORIZED_COLOR, category.lucide_icon, type)
+          grouped_data[parent_key] ||= init_category_group.call(category.id, category.name, category.color || Category::UNCATEGORIZED_COLOR, category.lucide_icon, type, category.filter_value)
         end
 
         grouped_data[parent_key][:count] += 1
         grouped_data[parent_key][:total] += converted_amount
+        grouped_data[parent_key][:has_transactions] = true unless is_trade
       end
 
       # Process transactions
@@ -553,9 +610,9 @@ class ReportsController < ApplicationController
         process_entry.call(transaction.category, transaction.entry, false)
       end
 
-      # Process trades
+      # Process trades. A trade has no category: it lands in Other Investments.
       trades.each do |trade|
-        process_entry.call(trade.category, trade.entry, true)
+        process_entry.call(nil, trade.entry, true)
       end
 
       # Convert to array and sort subcategories
@@ -576,6 +633,10 @@ class ReportsController < ApplicationController
               category_icon: parent_data[:category_icon],
               total: direct_total,
               count: [ direct_count, 1 ].max,
+              # The parent's own filter also lists its subcategories, so this row has no
+              # exact filter and gets no link
+              filter_value: nil,
+              has_transactions: parent_data[:has_transactions],
               synthetic: true
             }
             subcategories = subcategories.sort_by { |s| sort_direction == "asc" ? s[:total] : -s[:total] }
@@ -630,6 +691,12 @@ class ReportsController < ApplicationController
         .joins(:entry)
         .where(entries: { date: @period.date_range })
         .where("trades.qty < 0")
+        # A transfer out has the same negative quantity as a sale. Nothing was sold, so
+        # it is neither counted nor listed as one.
+        .where(
+          "trades.investment_activity_label IS NULL OR trades.investment_activity_label NOT IN (?)",
+          Trade::INTERNAL_MOVEMENT_LABELS
+        )
         .includes(:security, entry: { account: :accountable })
         .to_a
 
@@ -765,39 +832,54 @@ class ReportsController < ApplicationController
         transactions = transactions.where(category_id: all_category_ids)
       end
 
-      # Filter by account
-      if params[:filter_account_id].present?
-        transactions = transactions.where(entries: { account_id: params[:filter_account_id] })
-      end
-
       # Filter by tag
       if params[:filter_tag_id].present?
         transactions = transactions.joins(:taggings).where(taggings: { tag_id: params[:filter_tag_id] })
       end
 
+      apply_entry_filters(transactions)
+    end
+
+    # Trades have no category and no tags, so either filter leaves them all out
+    def apply_trade_filters(trades)
+      return trades.none if params[:filter_category_id].present? || params[:filter_tag_id].present?
+
+      apply_entry_filters(trades)
+    end
+
+    # The filters every entry has: account, amount range and dates within the period
+    def apply_entry_filters(scope)
+      # Filter by account
+      if params[:filter_account_id].present?
+        scope = scope.where(entries: { account_id: params[:filter_account_id] })
+      end
+
       # Filter by amount range
       if params[:filter_amount_min].present?
-        transactions = transactions.where("ABS(entries.amount) >= ?", params[:filter_amount_min].to_f)
+        scope = scope.where("ABS(entries.amount) >= ?", params[:filter_amount_min].to_f)
       end
 
       if params[:filter_amount_max].present?
-        transactions = transactions.where("ABS(entries.amount) <= ?", params[:filter_amount_max].to_f)
+        scope = scope.where("ABS(entries.amount) <= ?", params[:filter_amount_max].to_f)
       end
 
-      # Filter by date range (within the period)
-      if params[:filter_date_start].present?
-        filter_start = Date.parse(params[:filter_date_start])
-        transactions = transactions.where("entries.date >= ?", filter_start) if filter_start >= @start_date
-      end
+      # Filter by date range (within the period). A bad date is ignored on its own, so
+      # the other filters still apply.
+      filter_start = parse_filter_date(:filter_date_start)
+      scope = scope.where("entries.date >= ?", filter_start) if filter_start && filter_start >= @start_date
 
-      if params[:filter_date_end].present?
-        filter_end = Date.parse(params[:filter_date_end])
-        transactions = transactions.where("entries.date <= ?", filter_end) if filter_end <= @end_date
-      end
+      filter_end = parse_filter_date(:filter_date_end)
+      scope = scope.where("entries.date <= ?", filter_end) if filter_end && filter_end <= @end_date
 
-      transactions
+      scope
+    end
+
+    def parse_filter_date(param_name)
+      return nil if params[param_name].blank?
+
+      Date.parse(params[param_name].to_s)
     rescue Date::Error
-      transactions
+      nil
     end
 
     def build_transactions_breakdown_for_export

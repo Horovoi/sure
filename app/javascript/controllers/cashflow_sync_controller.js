@@ -1,69 +1,46 @@
 import { Controller } from "@hotwired/stimulus";
 
-// Keeps compact and fullscreen Sankey subcategory toggles in sync
+// Keeps the inline and fullscreen cash flow Sankeys in step: the subcategory
+// mode, and the data and period after the inline card's frame reloads.
 export default class extends Controller {
   connect() {
-    // When this element (compact toggle) appears after a Turbo Frame refresh,
-    // broadcast its current state to the fullscreen chart + toggle.
+    // When this element (the inline toggle) appears after a Turbo Frame
+    // refresh, send its state and the new data to the fullscreen chart.
     this.broadcast();
   }
 
   broadcast() {
-    const checked = this.element?.checked;
+    const checked = !!this.element?.checked;
 
-    // Get latest datasets from the compact chart element
     const compactChart = document.getElementById("cashflowSankeyChart");
-    let withSub = null;
-    let withoutSub = null;
-    let currency = null;
+    compactChart?.dispatchEvent(
+      new CustomEvent("sankey:set-subcategories", { detail: { showSubcategories: checked } }),
+    );
+
+    const detail = { showSubcategories: checked };
     if (compactChart) {
       const ds = compactChart.dataset;
-      try { withSub = ds.sankeyChartWithSubcategoriesValue ? JSON.parse(ds.sankeyChartWithSubcategoriesValue) : null; } catch {}
-      try { withoutSub = ds.sankeyChartWithoutSubcategoriesValue ? JSON.parse(ds.sankeyChartWithoutSubcategoriesValue) : null; } catch {}
-      currency = ds.sankeyChartCurrencySymbolValue || null;
-      // Update fullscreen period label from compact chart's current period
-      const label = ds.periodLabel;
-      const start = ds.periodStart;
-      const end = ds.periodEnd;
-      const pretty = label || this.formatRange(start, end);
+      try {
+        detail.data = ds.sankeyChartDataValue ? JSON.parse(ds.sankeyChartDataValue) : null;
+      } catch {
+        detail.data = null;
+      }
+      detail.currencySymbol = ds.sankeyChartCurrencySymbolValue || null;
+      detail.startDate = ds.sankeyChartStartDateValue || null;
+      detail.endDate = ds.sankeyChartEndDateValue || null;
+
       const headerEl = document.getElementById("cashflowFullscreenPeriod");
-      if (headerEl && pretty) headerEl.textContent = pretty;
+      if (headerEl && ds.periodText) headerEl.textContent = ds.periodText;
+    } else {
+      // The inline card shows its empty state: the new period has no flows
+      detail.data = { nodes: [], links: [] };
     }
 
-    // Update fullscreen chart if present
-    const chartEl = document.getElementById("cashflowSankeyChartFullscreen");
-    if (chartEl) {
-      // Replace datasets (period) and set the desired mode
-      chartEl.dispatchEvent(new CustomEvent("sankey:set-datasets", {
-        detail: {
-          withSubcategories: withSub,
-          withoutSubcategories: withoutSub,
-          showSubcategories: checked,
-          currencySymbol: currency,
-        }
-      }));
-    }
+    document
+      .getElementById("cashflowSankeyChartFullscreen")
+      ?.dispatchEvent(new CustomEvent("sankey:set-datasets", { detail }));
 
-    // Update fullscreen toggle UI if present
     const overlayToggle = document.getElementById("cashflow_show_subcategories_dialog");
-    if (overlayToggle) {
-      overlayToggle.checked = !!checked;
-    }
-  }
-
-  formatRange(start, end) {
-    if (!start || !end) return null;
-    try {
-      const fmt = new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-      });
-      const s = fmt.format(new Date(start));
-      const e = fmt.format(new Date(end));
-      return `${s} to ${e}`;
-    } catch {
-      return `${start} to ${end}`;
-    }
+    if (overlayToggle) overlayToggle.checked = checked;
   }
 }

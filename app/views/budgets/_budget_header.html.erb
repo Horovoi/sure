@@ -1,4 +1,4 @@
-<%# locals: (budget:, previous_budget:, next_budget:, latest_budget:) %>
+<%# locals: (budget:) %>
 
 <div class="flex items-center gap-1 mb-4">
   <div class="flex items-center gap-2">
@@ -31,7 +31,7 @@
 
   <%= render DS::Popover.new(variant: "button") do |popover| %>
     <% popover.with_button class: "flex items-center gap-1 hover:bg-surface-hover cursor-pointer rounded-md p-2"  do %>
-      <span class="text-primary font-medium text-base md:text-lg"><%= @budget.name %></span>
+      <span class="text-primary font-medium text-base md:text-lg"><%= budget.name %></span>
       <%= icon("chevron-down") %>
     <% end %>
 
@@ -52,7 +52,7 @@
 <div class="text-secondary text-xs mb-3">
   <span><%= t(".period") %></span>
   <span class="text-primary">
-    <%= @budget.start_date.strftime("%b %-d, %Y") %> — <%= @budget.end_date.strftime("%b %-d, %Y") %>
+    <%= budget.start_date.strftime("%b %-d, %Y") %> — <%= budget.end_date.strftime("%b %-d, %Y") %>
   </span>
   <% if Current.family.fiscal_month_enabled? %>
     <span class="ml-2 px-1.5 py-0.5 border border-tertiary rounded-md"><%= t(".fiscal_months") %></span>

@@ -1,16 +1,18 @@
-<%# locals: (sankey_data:, period:, sankey_data_with_subcategories: nil, sankey_data_without_subcategories: nil) %>
+<%# locals: (sankey_data:, period:, show_subcategories: false) %>
 <%= turbo_frame_tag "cashflow_sankey_section" do %>
 <div id="cashflow-sankey-chart">
   <div class="flex flex-col gap-3 px-4 mb-4 sm:flex-row sm:items-center sm:justify-between">
     <div class="flex items-center gap-2">
       <h2 class="text-lg font-medium inline-flex items-center gap-1.5">
-        Cashflow
+        <%= t("pages.dashboard.cashflow_sankey.title") %>
       </h2>
       <%= render DS::Button.new(
         variant: :icon,
         size: :sm,
         icon: "maximize-2",
         type: "button",
+        title: t("pages.dashboard.cashflow_sankey.expand"),
+        aria: { label: t("pages.dashboard.cashflow_sankey.expand") },
         data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "cashflow_sankey_dialog" },
         class: "hidden sm:inline-flex"
       ) %>
@@ -18,7 +20,7 @@
 
     <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "cashflow_sankey_section" } do |form| %>
       <div class="flex flex-wrap items-center gap-2">
-        <% cashflow_options = Period.as_options + [["Custom", "custom"]] %>
+        <% cashflow_options = Period.as_options + [ [ t("pages.dashboard.cashflow_sankey.custom"), "custom" ] ] %>
         <% selected_key = period.key || "custom" %>
         <%= form.select :cashflow_period,
                   cashflow_options,
@@ -33,7 +35,7 @@
                   value: period.start_date,
                   data: { "auto-submit-form-target": "auto" },
                   class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
-            <span class="text-secondary text-sm">to</span>
+            <span class="text-secondary text-sm"><%= t("pages.dashboard.cashflow_sankey.to") %></span>
             <%= form.date_field :cashflow_end_date,
                   value: period.end_date,
                   data: { "auto-submit-form-target": "auto" },
@@ -41,16 +43,17 @@
           </div>
         <% end %>
 
+        <%# The chart draws both modes from one payload, so the toggle needs no request.
+            It stays in the form so a period change keeps the mode. %>
         <div class="flex items-center gap-1 sm:gap-2 pl-0 sm:pl-2">
-          <label for="cashflow_show_subcategories" class="text-xs sm:text-sm text-secondary">Show subcategories</label>
+          <label for="cashflow_show_subcategories" class="text-xs sm:text-sm text-secondary"><%= t("pages.dashboard.cashflow_sankey.show_subcategories") %></label>
           <%= render DS::Toggle.new(
             id: "cashflow_show_subcategories",
             name: "cashflow_show_subcategories",
-            checked: @cashflow_show_subcategories,
+            checked: show_subcategories,
             data: {
               controller: "cashflow-sync",
-              action: "change->cashflow-sync#broadcast",
-              "auto-submit-form-target": "auto"
+              action: "change->cashflow-sync#broadcast"
             }
           ) %>
         </div>
@@ -60,17 +63,11 @@
 
   <% if sankey_data[:links].present? %>
     <div class="w-full h-[26rem] md:h-[28rem]">
-      <div
-        id="cashflowSankeyChart"
-        data-controller="sankey-chart"
-        data-sankey-chart-with-subcategories-value="<%= (sankey_data_with_subcategories || sankey_data).to_json %>"
-        data-sankey-chart-without-subcategories-value="<%= (sankey_data_without_subcategories || sankey_data).to_json %>"
-        data-sankey-chart-data-value="<%= sankey_data.to_json %>"
-        data-sankey-chart-currency-symbol-value="<%= sankey_data[:currency_symbol] %>"
-        data-period-label="<%= period.key.present? ? period.label : nil %>"
-        data-period-start="<%= period.start_date %>"
-        data-period-end="<%= period.end_date %>"
-        class="w-full h-full"></div>
+      <%= render "pages/dashboard/cashflow_sankey_chart",
+            sankey_data: sankey_data,
+            period: period,
+            show_subcategories: show_subcategories,
+            id: "cashflowSankeyChart" %>
     </div>
   <% else %>
     <div class="h-[340px] lg:h-[380px] bg-container py-4 flex flex-col items-center justify-center">
@@ -94,4 +91,4 @@
 </div>
 <% end %>
 
-<%# Fullscreen dialog moved to dashboard.html.erb to prevent frame refresh from closing it %>
+<%# The fullscreen dialog is in dashboard.html.erb, outside this frame, so a frame refresh does not close it %>

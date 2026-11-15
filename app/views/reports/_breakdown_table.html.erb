@@ -1,5 +1,5 @@
 <%# Renders a breakdown table for income or expense groups %>
-<%# Local variables: groups, total, type (:income or :expense), amount_sort_params, current_sort_by, current_sort_direction %>
+<%# Local variables: groups, total, type (:income or :expense), amount_sort_params, current_sort_by, current_sort_direction, start_date, end_date %>
 
 <%
   color_class = type == :income ? "text-success" : "text-destructive"
@@ -16,7 +16,7 @@
 
   <% if groups.any? && total > 0 %>
     <%
-      days_in_period = defined?(start_date) && defined?(end_date) && start_date && end_date ? (end_date - start_date).to_i + 1 : 30
+      days_in_period = start_date && end_date ? (end_date - start_date).to_i + 1 : 30
       currency = Current.family.currency
 
       treemap_categories = groups.each_with_index.map { |g, idx|
@@ -41,14 +41,22 @@
           dailyAvgFormatted: days_in_period > 0 ? Money.new(g[:total] / days_in_period, currency).format : nil,
           rank: idx + 1,
           subcategories: subs,
-          totalSubcategories: (g[:subcategories] || []).size
+          totalSubcategories: (g[:subcategories] || []).size,
+          href: g[:has_transactions] && g[:filter_value].present? && start_date && end_date ? transactions_path(q: { categories: [ g[:filter_value] ], start_date: start_date, end_date: end_date }) : nil
         }
       }.to_json
     %>
     <div class="mb-6 relative"
          data-controller="reports-treemap"
          data-reports-treemap-categories-value="<%= treemap_categories %>"
-         data-reports-treemap-type-value="<%= type %>">
+         data-reports-treemap-type-value="<%= type %>"
+         data-reports-treemap-labels-value="<%= {
+           txn: t("reports.treemap.txn"),
+           txns: t("reports.treemap.txns"),
+           avg: t("reports.treemap.avg"),
+           per_day: t("reports.treemap.per_day"),
+           more: t("reports.treemap.more")
+         }.to_json %>">
     </div>
   <% end %>
 
@@ -70,20 +78,20 @@
               <% end %>
             <% end %>
           </div>
-          <div class="text-right font-medium text-secondary">Txns</div>
-          <div class="text-right font-medium text-secondary">Avg</div>
+          <div class="text-right font-medium text-secondary"><%= t("reports.transactions_breakdown.table.transactions_short") %></div>
+          <div class="text-right font-medium text-secondary"><%= t("reports.transactions_breakdown.table.average_short") %></div>
           <div class="text-right font-medium text-secondary"><%= t("reports.transactions_breakdown.table.percentage") %></div>
         </div>
 
         <div class="bg-container rounded-lg shadow-border-xs">
           <% groups.each_with_index do |group, idx| %>
-            <%= render "reports/category_row", item: group, total: total, color_class: color_class, level: :category %>
+            <%= render "reports/category_row", item: group, total: total, color_class: color_class, level: :category, start_date: start_date, end_date: end_date %>
             <% if idx < groups.size - 1 %>
               <%= render "shared/ruler", classes: "mx-3 lg:mx-4" %>
             <% end %>
             <% if group[:subcategories].present? && group[:subcategories].any? %>
               <% group[:subcategories].each_with_index do |subcategory, sub_idx| %>
-                <%= render "reports/category_row", item: subcategory, total: total, color_class: color_class, level: :subcategory %>
+                <%= render "reports/category_row", item: subcategory, total: total, color_class: color_class, level: :subcategory, start_date: start_date, end_date: end_date %>
               <% end %>
               <% if idx < groups.size - 1 %>
                 <%= render "shared/ruler", classes: "mx-3 lg:mx-4" %>

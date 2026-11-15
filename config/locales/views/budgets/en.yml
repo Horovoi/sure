@@ -7,6 +7,9 @@ en:
       period: "Period:"
       previous_budget: Previous budget
       today: Today
+    budget_nav:
+      categories: Categories
+      setup: Setup
     show:
       tabs:
         actual: Actual

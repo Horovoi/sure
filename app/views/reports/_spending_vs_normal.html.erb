@@ -1,0 +1,94 @@
+<%# locals: (comparison:) %>
+<%
+  treemap_categories = spending_treemap_categories(comparison)
+  changes = spending_changes(comparison)
+  start_mode = comparison.comparable? ? "normal" : "category"
+%>
+<div class="space-y-4" data-testid="spending-vs-normal">
+  <p class="text-sm text-secondary">
+    <% if comparison.comparable? %>
+      <%= t(comparison.in_progress? ? "reports.spending_vs_normal.summary_so_far_html" : "reports.spending_vs_normal.summary_html",
+            total: tag.span(spending_money(comparison.total, precision: 0), class: "font-medium text-primary"),
+            normal: tag.span(spending_money(comparison.normal_total, precision: 0), class: "font-medium text-primary"),
+            baseline_start: l(comparison.baseline_period.start_date, format: :long),
+            baseline_end: l(comparison.baseline_period.end_date, format: :long)) %>
+    <% else %>
+      <%= t("reports.spending_vs_normal.no_history_html", total: tag.span(spending_money(comparison.total, precision: 0), class: "font-medium text-primary")) %>
+    <% end %>
+  </p>
+
+  <% if treemap_categories.empty? %>
+    <p class="text-sm text-secondary py-6 text-center"><%= t("reports.spending_vs_normal.no_spending") %></p>
+  <% else %>
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div class="lg:col-span-3 min-w-0"
+           data-controller="reports-treemap"
+           data-reports-treemap-categories-value="<%= treemap_categories.to_json %>"
+           data-reports-treemap-type-value="expense"
+           data-reports-treemap-color-mode-value="<%= start_mode %>"
+           data-reports-treemap-labels-value="<%= {
+             open: t("reports.spending_vs_normal.tooltip.open"),
+             more: t("reports.treemap.more")
+           }.to_json %>">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 id="spending-treemap-title" class="text-sm font-medium text-secondary"><%= t("reports.spending_vs_normal.treemap_title") %></h3>
+          <% if comparison.comparable? %>
+            <%= render DS::SegmentedControl.new(aria_label: t("reports.spending_vs_normal.color_mode.label")) do |control| %>
+              <% control.with_segment(t("reports.spending_vs_normal.color_mode.normal"),
+                    active: start_mode == "normal",
+                    data: { reports_treemap_target: "modeButton", action: "reports-treemap#setColorMode", reports_treemap_mode_param: "normal" }) %>
+              <% control.with_segment(t("reports.spending_vs_normal.color_mode.category"),
+                    active: start_mode == "category",
+                    data: { reports_treemap_target: "modeButton", action: "reports-treemap#setColorMode", reports_treemap_mode_param: "category" }) %>
+            <% end %>
+          <% end %>
+        </div>
+        <div class="relative w-full" data-reports-treemap-target="chart" role="group" aria-labelledby="spending-treemap-title"></div>
+        <% if comparison.comparable? %>
+          <ul class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-secondary <%= "hidden" unless start_mode == "normal" %>"
+              data-reports-treemap-target="legend"
+              data-testid="spending-legend">
+            <% ReportsHelper::SPENDING_RATIO_BUCKETS.each do |bucket| %>
+              <li class="inline-flex items-center gap-1.5">
+                <span class="inline-block w-3 h-3 rounded-sm" style="background: <%= bucket[:color] %>"></span>
+                <%= t("reports.spending_vs_normal.legend.#{bucket[:key]}") %>
+              </li>
+            <% end %>
+          </ul>
+        <% end %>
+      </div>
+
+      <div class="lg:col-span-2 min-w-0">
+        <h3 class="text-sm font-medium text-secondary mb-2"><%= t("reports.spending_vs_normal.changes_title") %></h3>
+        <% if changes.empty? %>
+          <p class="text-sm text-secondary"><%= comparison.comparable? ? t("reports.spending_vs_normal.no_changes") : t("reports.spending_vs_normal.no_history_short") %></p>
+        <% else %>
+          <ul class="space-y-1" data-testid="spending-changes">
+            <% changes.each do |change| %>
+              <li data-category-key="<%= IncomeStatement::CategoryNetting.key(change[:row].category) %>">
+                <% row_content = capture do %>
+                  <span class="truncate text-primary"><%= change[:row].category.name %></span>
+                  <span class="grid grid-cols-2 h-3" aria-hidden="true">
+                    <span class="flex justify-end">
+                      <% if change[:row].change.negative? %><span class="h-3 rounded-l bg-success" style="width: <%= change[:width] %>%"></span><% end %>
+                    </span>
+                    <span class="flex justify-start border-l border-secondary">
+                      <% if change[:row].change.positive? %><span class="h-3 rounded-r bg-destructive" style="width: <%= change[:width] %>%"></span><% end %>
+                    </span>
+                  </span>
+                  <span class="text-right text-secondary tabular-nums"><%= change[:amount_label] %></span>
+                <% end %>
+                <% row_classes = "grid grid-cols-[minmax(0,9rem)_1fr_5rem] items-center gap-2 rounded-md px-1 py-1 text-sm" %>
+                <% if change[:href] %>
+                  <%= link_to row_content, change[:href], class: "#{row_classes} hover:bg-surface-hover", data: { turbo_frame: "_top" } %>
+                <% else %>
+                  <div class="<%= row_classes %>"><%= row_content %></div>
+                <% end %>
+              </li>
+            <% end %>
+          </ul>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

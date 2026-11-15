@@ -154,8 +154,9 @@ class EntrySearch
     def apply_category_conditions(query, categories)
       return query if categories.blank?
 
-      include_uncategorized = categories.include?("Uncategorized")
-      named_categories = categories.reject { |c| c == "Uncategorized" }
+      # The Uncategorized sentinel, or the display name older links still send
+      include_uncategorized = categories.any? { |c| Category.uncategorized_filter_value?(c) }
+      named_categories = categories.reject { |c| Category.uncategorized_filter_value?(c) }
 
       query = query.joins(TRANSACTIONS_JOIN)
 

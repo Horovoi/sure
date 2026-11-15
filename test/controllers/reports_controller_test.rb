@@ -398,4 +398,134 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "[data-testid=unconverted-gains-note]", text: /1 gain is not included/
   end
+
+  test "a transfer out is not listed among the period's sales" do
+    account = @family.accounts.create!(name: "Wallet", balance: 100, currency: "USD", accountable: Investment.new)
+    security = Security.find_or_create_by!(ticker: "MOVE") { |sec| sec.name = "Movable" }
+    Holding.create!(account: account, security: security, date: 10.days.ago.to_date,
+                    qty: 100, price: 2, amount: 200, currency: "USD", cost_basis: 1)
+
+    %w[Transfer Sell].each do |label|
+      account.entries.create!(
+        date: 3.days.ago.to_date, name: "out #{label}", amount: 0, currency: "USD",
+        entryable: Trade.new(security: security, qty: -40, price: 3, currency: "USD", investment_activity_label: label)
+      )
+    end
+
+    get reports_path(period_type: :custom, start_date: 30.days.ago.to_date, end_date: Date.current)
+    assert_response :success
+
+    assert_match I18n.t("reports.investment_performance.sells_count", count: 1), response.body
+    assert_no_match(/#{Regexp.escape(I18n.t("reports.investment_performance.sells_count", count: 2))}/, response.body)
+  end
+
+  test "the breakdown account filter leaves out trades of other accounts" do
+    create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: Date.current, price: 100)
+
+    get reports_path(breakdown_period_params.merge(filter_account_id: accounts(:depository).id))
+    assert_response :ok
+    assert_select "div[data-category='category-other_investments']", count: 0
+
+    get reports_path(breakdown_period_params.merge(filter_account_id: accounts(:investment).id))
+    assert_response :ok
+    assert_select "div[data-category='category-other_investments']"
+  end
+
+  test "a breakdown category filter lists the category's transactions and leaves trades out" do
+    category = @family.categories.create!(name: "Filtered", classification: "expense", color: "#123456")
+    create_transaction(account: accounts(:depository), name: "Filtered spend", amount: 42, category: category)
+    create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: Date.current, price: 100)
+
+    get reports_path(breakdown_period_params.merge(filter_category_id: category.id))
+
+    assert_response :ok
+    assert_select "div[data-category='category-#{category.id}']"
+    assert_select "div[data-category='category-other_investments']", count: 0
+  end
+
+  test "a breakdown tag filter leaves trades out" do
+    tag = tags(:one)
+    create_transaction(account: accounts(:depository), name: "Tagged spend", amount: 42, tags: [ tag ])
+    create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: Date.current, price: 100)
+
+    get reports_path(breakdown_period_params.merge(filter_tag_id: tag.id))
+
+    assert_response :ok
+    assert_select "div[data-category='category-other_investments']", count: 0
+  end
+
+  test "breakdown amount and date filters apply to trades" do
+    create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: 10.days.ago.to_date, price: 100)
+
+    get reports_path(breakdown_period_params)
+    assert_select "div[data-category='category-other_investments']"
+
+    get reports_path(breakdown_period_params.merge(filter_amount_min: 500))
+    assert_select "div[data-category='category-other_investments']", count: 0
+
+    get reports_path(breakdown_period_params.merge(filter_amount_max: 50))
+    assert_select "div[data-category='category-other_investments']", count: 0
+
+    get reports_path(breakdown_period_params.merge(filter_date_start: 2.days.ago.to_date))
+    assert_select "div[data-category='category-other_investments']", count: 0
+
+    get reports_path(breakdown_period_params.merge(filter_date_end: 20.days.ago.to_date))
+    assert_select "div[data-category='category-other_investments']", count: 0
+  end
+
+  test "breakdown category rows link to their transactions for the report period" do
+    category = @family.categories.create!(name: "Linked", classification: "expense", color: "#123456")
+    create_transaction(account: accounts(:depository), name: "Linked spend", amount: 42, category: category)
+    create_transaction(account: accounts(:depository), name: "Loose spend", amount: 17)
+    create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: Date.current, price: 100)
+    start_date = 30.days.ago.to_date
+    end_date = Date.current
+
+    get reports_path(breakdown_period_params)
+    assert_response :ok
+
+    assert_select "div[data-category='category-#{category.id}'] a[href=?]",
+      transactions_path(q: { categories: [ "Linked" ], start_date: start_date, end_date: end_date })
+    assert_select "div[data-category='category-uncategorized'] a[href=?]",
+      transactions_path(q: { categories: [ Category::UNCATEGORIZED_FILTER_VALUE ], start_date: start_date, end_date: end_date })
+    # /transactions does not list trades, so the trade-only row has no link
+    assert_select "div[data-category='category-other_investments'] a", count: 0
+  end
+
+  test "the synthetic Other subcategory row has no link" do
+    parent = @family.categories.create!(name: "Housing", classification: "expense", color: "#FF5733", lucide_icon: "home")
+    rent = @family.categories.create!(name: "Rent", classification: "expense", parent: parent, lucide_icon: "home")
+    create_transaction(account: accounts(:depository), name: "Home repair", amount: 200, category: parent)
+    create_transaction(account: accounts(:depository), name: "Monthly rent", amount: 1500, category: rent)
+
+    get reports_path(breakdown_period_params)
+    assert_response :ok
+
+    assert_select "div[data-category='category-#{parent.id}_other']"
+    assert_select "div[data-category='category-#{parent.id}_other'] a", count: 0
+    assert_select "div[data-category='category-#{rent.id}'] a"
+  end
+
+  test "reports render the spending vs normal section with links to the changed categories" do
+    period_start = 2.months.ago.to_date.beginning_of_month
+    period_end = period_start.end_of_month
+    misc = @family.categories.create!(name: "Vs normal misc", classification: "expense", color: "#654321")
+    dining = @family.categories.create!(name: "Vs normal dining", classification: "expense", color: "#123456")
+    # Earlier history, so the period has a normal to compare with
+    create_transaction(account: accounts(:depository), name: "Old spend", amount: 10, category: misc, date: period_start - 200.days)
+    create_transaction(account: accounts(:depository), name: "Dinner", amount: 1_000, category: dining, date: period_start + 3.days)
+
+    get reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
+
+    assert_response :ok
+    assert_select "section[data-section-key='spending_vs_normal']"
+    assert_select "[data-testid=spending-vs-normal] [data-controller='reports-treemap'][data-reports-treemap-color-mode-value='normal']"
+    assert_select "[data-testid=spending-changes] a[href=?]",
+      transactions_path(q: { categories: [ "Vs normal dining" ], start_date: period_start, end_date: period_end })
+  end
+
+  # A helper, not private: other streams append tests below it
+  def breakdown_period_params
+    { period_type: :custom, start_date: 30.days.ago.to_date, end_date: Date.current }
+  end
 end

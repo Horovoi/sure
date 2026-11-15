@@ -1,18 +1,17 @@
-<%# locals: (sankey_data:, period:, cashflow_show_subcategories:, sankey_data_with_subcategories: nil, sankey_data_without_subcategories: nil) %>
+<%# locals: (sankey_data:, period:, show_subcategories:) %>
 
 <%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "cashflow_sankey_dialog", disable_frame: true) do |d| %>
-  <%# Build a friendly period label: named period_text %>
-  <% period_text = period.key.present? ? period.label : "#{period.start_date.strftime('%b %d, %Y')} to #{period.end_date.strftime('%b %d, %Y')}" %>
+  <% period_text = period.key.present? ? period.label : period.comparison_label %>
 
-  <% d.with_header title: "Cashflow", meta: period_text, meta_id: "cashflowFullscreenPeriod" do %>
-    <p class="text-xs sm:text-sm text-secondary">Expanded view</p>
+  <% d.with_header title: t("pages.dashboard.cashflow_sankey.title"), meta: period_text, meta_id: "cashflowFullscreenPeriod" do %>
+    <p class="text-xs sm:text-sm text-secondary"><%= t("pages.dashboard.cashflow_sankey.expanded_view") %></p>
     <div class="w-full max-w-[1400px] mx-auto flex flex-wrap items-center justify-end gap-2">
       <div class="inline-flex items-center gap-1 sm:gap-2">
-        <label for="cashflow_show_subcategories_dialog" class="text-xs sm:text-sm text-secondary">Show subcategories</label>
+        <label for="cashflow_show_subcategories_dialog" class="text-xs sm:text-sm text-secondary"><%= t("pages.dashboard.cashflow_sankey.show_subcategories") %></label>
         <%= render DS::Toggle.new(
           id: "cashflow_show_subcategories_dialog",
           name: "cashflow_show_subcategories_overlay",
-          checked: cashflow_show_subcategories,
+          checked: show_subcategories,
           data: { controller: "fullscreen", action: "change->fullscreen#toggleSubcategories", fullscreen_target_id_value: "cashflowSankeyChartFullscreen" }
         ) %>
       </div>
@@ -21,15 +20,11 @@
   <% d.with_body do %>
     <div class="pb-4 -mx-2 sm:-mx-1">
       <div class="w-full max-w-[1400px] h-[70svh] mx-auto">
-        <div
-          id="cashflowSankeyChartFullscreen"
-          data-controller="sankey-chart"
-          data-sankey-chart-inner-padding-value="8"
-          data-sankey-chart-with-subcategories-value="<%= (sankey_data_with_subcategories || sankey_data).to_json %>"
-          data-sankey-chart-without-subcategories-value="<%= (sankey_data_without_subcategories || sankey_data).to_json %>"
-          data-sankey-chart-data-value="<%= (cashflow_show_subcategories ? sankey_data_with_subcategories : sankey_data_without_subcategories).to_json %>"
-          data-sankey-chart-currency-symbol-value="<%= sankey_data[:currency_symbol] %>"
-          class="w-full h-full"></div>
+        <%= render "pages/dashboard/cashflow_sankey_chart",
+              sankey_data: sankey_data,
+              period: period,
+              show_subcategories: show_subcategories,
+              id: "cashflowSankeyChartFullscreen" %>
       </div>
     </div>
   <% end %>

@@ -3,24 +3,89 @@ import * as d3 from "d3";
 
 const WORD_SEPARATORS = /[\s&,/]+/;
 
-// Draws a treemap for category breakdown (income or expense)
-// Connects to data-controller="reports-treemap"
+// Category names are user-named; escape anything put into .html()
+const escapeHtml = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
+
+// Draws a treemap for category breakdown (income or expense).
+// Connects to data-controller="reports-treemap".
+//
+// colorMode "category" fills each tile with its category colour; "normal" fills it
+// with the tile's normalColor (its change against normal, see the Spending vs normal
+// section). A tile with an href opens it on click or Enter. Optional targets: chart
+// (where the svg goes, else the element), legend (shown in normal mode) and
+// modeButton (the colour mode switch, with a mode param).
 export default class extends Controller {
+  static targets = ["chart", "legend", "modeButton"];
+
   static values = {
     categories: { type: Array, default: [] },
     type: { type: String, default: "expense" },
+    colorMode: { type: String, default: "category" },
+    labels: { type: Object, default: {} },
   };
 
   _resizeObserver = null;
+  _connected = false;
 
   connect() {
+    this._connected = true;
+    this._syncModeControls();
     this._install();
     document.addEventListener("turbo:load", this._reinstall);
     this._resizeObserver = new ResizeObserver(() => this._reinstall());
-    this._resizeObserver.observe(this.element);
+    this._resizeObserver.observe(this._container);
+  }
+
+  setColorMode(event) {
+    const mode = event.params?.mode;
+    if (mode === "normal" || mode === "category") this.colorModeValue = mode;
+  }
+
+  colorModeValueChanged() {
+    if (!this._connected) return;
+    this._syncModeControls();
+    this._reinstall();
+  }
+
+  get _container() {
+    return this.hasChartTarget ? this.chartTarget : this.element;
+  }
+
+  _label(key, fallback) {
+    return this.labelsValue?.[key] || fallback;
+  }
+
+  _syncModeControls() {
+    const normal = this.colorModeValue === "normal";
+    this.modeButtonTargets.forEach((button) => {
+      const active = button.dataset.reportsTreemapModeParam === this.colorModeValue;
+      button.classList.toggle("segmented-control__segment--active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    if (this.hasLegendTarget) this.legendTarget.classList.toggle("hidden", !normal);
+    this.element.dataset.colorMode = this.colorModeValue;
+  }
+
+  _fill(data) {
+    if (this.colorModeValue === "normal") return data.normalColor || "var(--color-gray-400)";
+    return data.color;
+  }
+
+  _visit(href) {
+    if (!href) return;
+    if (window.Turbo) {
+      window.Turbo.visit(href);
+    } else {
+      window.location.href = href;
+    }
   }
 
   disconnect() {
+    this._connected = false;
     this._teardown();
     document.removeEventListener("turbo:load", this._reinstall);
     this._resizeObserver?.disconnect();
@@ -32,14 +97,15 @@ export default class extends Controller {
   };
 
   _teardown() {
-    d3.select(this.element).selectAll("svg, .treemap-tooltip").remove();
+    d3.select(this._container).selectAll("svg, .treemap-tooltip").remove();
   }
 
   _install() {
     const categories = this.categoriesValue;
     if (categories.length === 0) return;
 
-    const containerWidth = this.element.clientWidth;
+    const container = this._container;
+    const containerWidth = container.clientWidth;
     if (containerWidth < 50) return;
 
     const uid = Math.random().toString(36).slice(2, 8);
@@ -62,6 +128,9 @@ export default class extends Controller {
           rank: c.rank,
           subcategories: c.subcategories || [],
           totalSubcategories: c.totalSubcategories || 0,
+          normalColor: c.normalColor,
+          normalLines: c.normalLines || [],
+          href: c.href || null,
         })),
       })
       .sum((d) => d.value);
@@ -73,14 +142,14 @@ export default class extends Controller {
       .round(true)(root);
 
     const svg = d3
-      .select(this.element)
+      .select(container)
       .append("svg")
       .attr("width", width)
       .attr("height", height);
 
     // Tooltip
     const tooltip = d3
-      .select(this.element)
+      .select(container)
       .append("div")
       .attr("class", "treemap-tooltip")
       .style("position", "absolute")
@@ -104,7 +173,23 @@ export default class extends Controller {
       .enter()
       .append("g")
       .attr("transform", (d) => `translate(${d.x0},${d.y0})`)
+      .attr("data-category-name", (d) => d.data.name)
       .style("pointer-events", "all");
+
+    // A tile with an href opens its transactions, by click or from the keyboard
+    const linked = nodes.filter((d) => Boolean(d.data.href));
+    linked
+      .attr("tabindex", 0)
+      .attr("role", "link")
+      .attr("aria-label", (d) => `${d.data.name}: ${d.data.formattedAmount}. ${this._label("open", "")}`.trim())
+      .style("cursor", "pointer")
+      .on("click", (_event, d) => this._visit(d.data.href))
+      .on("keydown", (event, d) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          this._visit(d.data.href);
+        }
+      });
 
     // ClipPath per tile — prevents text from bleeding outside tile boundaries
     const defs = svg.append("defs");
@@ -125,9 +210,10 @@ export default class extends Controller {
       .attr("width", (d) => d.x1 - d.x0)
       .attr("height", (d) => d.y1 - d.y0)
       .attr("rx", 6)
-      .attr("fill", (d) => d.data.color)
+      // style, not the fill attribute: the normal colours are CSS variables
+      .style("fill", (d) => this._fill(d.data))
       .attr("opacity", 0.9)
-      .style("cursor", "default");
+      .style("cursor", (d) => (d.data.href ? "pointer" : "default"));
 
     // Helpers
     const tileW = (d) => d.x1 - d.x0;
@@ -321,20 +407,21 @@ export default class extends Controller {
       true
     )
       .attr("opacity", 0.85)
-      .text((d) => d.data.name[0].toUpperCase());
+      .text((d) => String(d.data.name || "?")[0].toUpperCase());
 
     // Tooltip HTML builder
     const buildTooltipHtml = (d) => {
       const data = d.data;
       const pct = Number(data.percentage).toFixed(1);
       const barW = Math.min(Number(data.percentage), 100);
+      const swatch = escapeHtml(this._fill(data));
 
       // Header: color dot + name + rank
       let html = `<div style="padding:12px 14px;">`;
       html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">`;
       html += `<div style="display:flex;align-items:center;gap:7px;min-width:0;">`;
-      html += `<span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${data.color};box-shadow:0 0 0 2px ${data.color}33;"></span>`;
-      html += `<span style="font-weight:600;font-size:13px;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${data.name}</span>`;
+      html += `<span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${swatch};"></span>`;
+      html += `<span style="font-weight:600;font-size:13px;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(data.name)}</span>`;
       html += `</div>`;
       if (data.rank) {
         html += `<span style="font-size:10px;font-weight:500;color:var(--color-text-secondary);background:var(--color-tooltip-border);border-radius:4px;padding:1px 5px;white-space:nowrap;">#${data.rank}</span>`;
@@ -343,25 +430,37 @@ export default class extends Controller {
 
       // Amount + percentage
       html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">`;
-      html += `<span style="font-weight:600;font-size:15px;color:var(--color-text-primary);letter-spacing:-0.01em;">${data.formattedAmount}</span>`;
+      html += `<span style="font-weight:600;font-size:15px;color:var(--color-text-primary);letter-spacing:-0.01em;">${escapeHtml(data.formattedAmount)}</span>`;
       html += `<span style="font-size:12px;font-weight:500;color:var(--color-text-secondary);">${pct}%</span>`;
       html += `</div>`;
 
       // Percentage bar
       html += `<div style="height:3px;border-radius:2px;background:var(--color-tooltip-border);margin-bottom:10px;">`;
-      html += `<div style="height:100%;border-radius:2px;width:${barW}%;background:${data.color};opacity:0.75;"></div>`;
+      html += `<div style="height:100%;border-radius:2px;width:${barW}%;background:${swatch};opacity:0.75;"></div>`;
       html += `</div>`;
 
-      // Stats row: count, avg, daily avg
+      // Stats row: count, avg, daily avg (the breakdown sends them; the spending
+      // comparison has no counts)
       const stats = [];
-      const txnLabel = data.count === 1 ? "txn" : "txns";
-      stats.push(`${data.count} ${txnLabel}`);
-      if (data.avgFormatted) stats.push(`${data.avgFormatted} avg`);
-      if (data.dailyAvgFormatted) stats.push(`${data.dailyAvgFormatted}/day`);
+      if (data.count) {
+        const txnLabel = data.count === 1 ? this._label("txn", "txn") : this._label("txns", "txns");
+        stats.push(`${data.count} ${escapeHtml(txnLabel)}`);
+      }
+      if (data.avgFormatted) stats.push(`${escapeHtml(data.avgFormatted)} ${escapeHtml(this._label("avg", "avg"))}`);
+      if (data.dailyAvgFormatted) stats.push(`${escapeHtml(data.dailyAvgFormatted)}${escapeHtml(this._label("per_day", "/day"))}`);
 
-      html += `<div style="font-size:11px;color:var(--color-text-secondary);letter-spacing:0.01em;">`;
-      html += stats.join(` <span style="opacity:0.4;margin:0 3px;">&middot;</span> `);
-      html += `</div>`;
+      if (stats.length > 0) {
+        html += `<div style="font-size:11px;color:var(--color-text-secondary);letter-spacing:0.01em;">`;
+        html += stats.join(` <span style="opacity:0.4;margin:0 3px;">&middot;</span> `);
+        html += `</div>`;
+      }
+
+      // Against normal (the Spending vs normal section)
+      if (data.normalLines && data.normalLines.length > 0) {
+        html += `<div style="font-size:11px;color:var(--color-text-secondary);margin-top:6px;">`;
+        html += data.normalLines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+        html += `</div>`;
+      }
 
       // Subcategories section
       if (data.subcategories && data.subcategories.length > 0) {
@@ -372,18 +471,18 @@ export default class extends Controller {
           html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px;">`;
           // Mini bar
           html += `<div style="width:48px;height:4px;border-radius:2px;background:var(--color-tooltip-border);flex-shrink:0;">`;
-          html += `<div style="height:100%;border-radius:2px;width:${subBarW}%;background:${sub.color};opacity:0.8;"></div>`;
+          html += `<div style="height:100%;border-radius:2px;width:${subBarW}%;background:${escapeHtml(sub.color)};opacity:0.8;"></div>`;
           html += `</div>`;
           // Name
-          html += `<span style="color:var(--color-text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub.name}</span>`;
+          html += `<span style="color:var(--color-text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(sub.name)}</span>`;
           // Amount + percentage
-          html += `<span style="color:var(--color-text-secondary);white-space:nowrap;font-variant-numeric:tabular-nums;">${sub.amount}</span>`;
+          html += `<span style="color:var(--color-text-secondary);white-space:nowrap;font-variant-numeric:tabular-nums;">${escapeHtml(sub.amount)}</span>`;
           html += `</div>`;
         });
 
         const remaining = data.totalSubcategories - data.subcategories.length;
         if (remaining > 0) {
-          html += `<div style="font-size:10px;color:var(--color-text-secondary);opacity:0.7;margin-top:2px;">+${remaining} more</div>`;
+          html += `<div style="font-size:10px;color:var(--color-text-secondary);opacity:0.7;margin-top:2px;">+${remaining} ${escapeHtml(this._label("more", "more"))}</div>`;
         }
         html += `</div>`;
       }
@@ -397,15 +496,13 @@ export default class extends Controller {
       .on("mouseover", (_event, d) => {
         nodes
           .selectAll("rect")
-          .attr("opacity", (c) =>
-            c.data.name === d.data.name ? 1 : 0.3
-          );
+          .attr("opacity", (c) => (c === d ? 1 : 0.3));
         tooltip
           .style("opacity", 1)
           .html(buildTooltipHtml(d));
       })
       .on("mousemove", (event) => {
-        const containerRect = this.element.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
         const tipNode = tooltip.node();
         const tipW = tipNode.offsetWidth || 0;
         const tipH = tipNode.offsetHeight || 0;

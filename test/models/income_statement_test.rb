@@ -516,4 +516,74 @@ class IncomeStatementTest < ActiveSupport::TestCase
     assert_equal 15, fees.total
     assert_equal 200 + 300 + 400 + 15, expense_totals.total
   end
+
+  test "the budget-excluded kinds stay out of the totals, the family stats and the category stats" do
+    Entry.joins(:account).where(accounts: { family_id: @family.id }).destroy_all
+
+    assert_equal %w[funds_movement one_time cc_payment], Transaction::BUDGET_EXCLUDED_KINDS
+    assert_equal "'funds_movement', 'one_time', 'cc_payment'", Transaction.budget_excluded_kinds_sql
+
+    create_transaction(account: @checking_account, amount: 100, category: @groceries_category)
+    create_transaction(account: @checking_account, amount: 40, category: @groceries_category, kind: "loan_payment")
+    Transaction::BUDGET_EXCLUDED_KINDS.each do |kind|
+      create_transaction(account: @checking_account, amount: 1000, category: @groceries_category, kind: kind)
+    end
+
+    income_statement = IncomeStatement.new(@family)
+    assert_equal 140, income_statement.expense_totals(period: Period.last_30_days).total
+    assert_equal Money.new(140, @family.currency), income_statement.totals(date_range: Period.last_30_days.date_range).expense_money
+    assert_equal 140.0, income_statement.median_expense(interval: "month")
+    assert_equal 140.0, income_statement.median_expense(interval: "month", category: @groceries_category)
+  end
+
+  test "income and expense totals of the same period run one totals query" do
+    income_statement = IncomeStatement.new(@family)
+    period = Period.last_30_days
+
+    totals_query_calls = 0
+    income_statement.singleton_class.prepend(Module.new do
+      define_method(:totals_query) do |**kwargs|
+        totals_query_calls += 1
+        super(**kwargs)
+      end
+    end)
+
+    income = income_statement.income_totals(period: period)
+    expense = income_statement.expense_totals(period: period)
+    # A second call for the same dates is the memoized total, not a new build
+    assert_same expense, income_statement.expense_totals(period: Period.custom(start_date: period.start_date, end_date: period.end_date))
+
+    assert_equal 1, totals_query_calls
+    assert_equal 1000, income.total
+    assert_equal 900, expense.total
+
+    # Another period builds its own totals
+    income_statement.expense_totals(period: Period.last_90_days)
+    assert_equal 2, totals_query_calls
+  end
+
+  test "memoized totals match a fresh income statement, category by category" do
+    restaurants = @family.categories.create! name: "Restaurants", classification: "expense", parent: @food_category
+    create_transaction(account: @checking_account, amount: 50, category: restaurants)
+    create_transaction(account: @checking_account, amount: 70, category: @food_category)
+    create_transaction(account: @checking_account, amount: 30)
+
+    period = Period.last_30_days
+    memoized = IncomeStatement.new(@family)
+    memoized.income_totals(period: period)
+
+    expense = memoized.expense_totals(period: period)
+    fresh = IncomeStatement.new(@family).expense_totals(period: period)
+
+    assert_equal 900 + 50 + 70 + 30, expense.total
+    assert_equal fresh.total, expense.total
+    assert_equal fresh.category_totals.map { |ct| [ ct.category.id, ct.category.name, ct.total ] },
+      expense.category_totals.map { |ct| [ ct.category.id, ct.category.name, ct.total ] }
+
+    by_id = expense.category_totals.index_by { |ct| ct.category.id }
+    assert_equal 200 + 300 + 400 + 50 + 70, by_id[@food_category.id].total
+    assert_equal 50, by_id[restaurants.id].total
+    assert_equal 30, expense.category_totals.find { |ct| ct.category.uncategorized? }.total
+    assert_equal 0, expense.category_totals.find { |ct| ct.category.other_investments? }.total
+  end
 end
