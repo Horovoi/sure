@@ -320,4 +320,35 @@ class Balance::ChartSeriesBuilderTest < ActiveSupport::TestCase
     assert_equal 1, linked_account.balances.where(currency: "USD").count
     assert_equal 0, linked_account.balances.where(currency: "EUR").count
   end
+
+  test "without an interval the period's own interval is used" do
+    account = accounts(:depository)
+    account.balances.destroy_all
+    create_balance(account: account, date: Date.current, balance: 1200)
+
+    short = Balance::ChartSeriesBuilder.new(account_ids: [ account.id ], currency: "USD", period: Period.last_30_days)
+    five_years = Period.custom(start_date: Date.new(2020, 1, 1), end_date: Date.new(2025, 1, 1))
+    weekly = Balance::ChartSeriesBuilder.new(account_ids: [ account.id ], currency: "USD", period: five_years)
+    long = Period.custom(start_date: Date.new(2019, 1, 1), end_date: Date.new(2025, 1, 1))
+    monthly = Balance::ChartSeriesBuilder.new(account_ids: [ account.id ], currency: "USD", period: long)
+
+    assert_equal "1 day", short.balance_series.interval
+    assert_equal 31, short.balance_series.size
+
+    assert_equal "1 week", weekly.balance_series.interval
+    assert_equal Date.new(2020, 1, 8), weekly.balance_series.values.second.date
+
+    assert_equal "1 month", monthly.balance_series.interval
+    assert_equal Date.new(2019, 2, 1), monthly.balance_series.values.second.date
+    assert_equal 73, monthly.balance_series.size # 6 years of months, both ends included
+  end
+
+  test "an explicit interval still wins over the period's" do
+    account = accounts(:depository)
+    long = Period.custom(start_date: Date.current - 6.years, end_date: Date.current)
+
+    builder = Balance::ChartSeriesBuilder.new(account_ids: [ account.id ], currency: "USD", period: long, interval: "1 day")
+
+    assert_equal "1 day", builder.balance_series.interval
+  end
 end

@@ -806,11 +806,17 @@ export default class extends Controller {
         </div>
 
         ${
-          datum.trend.value === 0
+          // trend.value is serialized Money ({ amount: "0.0", ... }), so compare
+          // its number; an infinite percent (zero base) serializes as null.
+          this._extractNumericValue(datum.trend.value) === 0
             ? `<span class="w-20"></span>`
             : `
           <span style="color: ${datum.trend.color};">
-            ${this._extractFormattedValue(datum.trend.value)} (${datum.trend.percent_formatted})
+            ${this._extractFormattedValue(datum.trend.value)}${
+              datum.trend.percent === null
+                ? ""
+                : ` (${datum.trend.percent_formatted})`
+            }
           </span>
         `
         }

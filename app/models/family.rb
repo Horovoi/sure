@@ -122,6 +122,15 @@ class Family < ApplicationRecord
     entries.order(:date).first&.date || Date.current
   end
 
+  # Date of the first real activity: the earliest Transaction or Trade entry.
+  # Unlike oldest_entry_date (any entry type; kept for budgets and the AI
+  # balance sheet), Valuations and opening balances do not count, so one old
+  # valuation cannot stretch the All Time charts back for years.
+  # Nil when the family has no transactions or trades yet.
+  def earliest_activity_date
+    entries.where(entryable_type: %w[Transaction Trade]).minimum(:date)
+  end
+
   # ---------------------------------------------------------------------------
   # Budget / Fiscal month helpers
   # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ class Series
     values.each(&block)
   end
 
-  attr_reader :start_date, :end_date, :interval, :trend, :values, :favorable_direction
+  attr_reader :start_date, :end_date, :interval, :values, :favorable_direction
 
   Value = Struct.new(
     :date,
@@ -56,22 +56,47 @@ class Series
     @favorable_direction = favorable_direction
   end
 
+  # Rounded like the serialized values: this trend is rendered next to the
+  # chart, so a change between two amounts that print the same must read as
+  # no change here too.
   def trend
     return nil if values.blank?
     @trend ||= Trend.new(
-      current: values.last&.value,
-      previous: values.first&.value,
+      current: display_amount(values.last&.value),
+      previous: display_amount(values.first&.value),
       favorable_direction: favorable_direction
     )
   end
 
+  # The values themselves stay exact (insights, goals and the assistant read
+  # them); only the payload a chart draws from is rounded.
   def as_json
     {
       start_date: start_date,
       end_date: end_date,
       interval: interval,
       trend: trend,
-      values: values.map { |v| { date: v.date, date_formatted: v.date_formatted, value: v.value, trend: v.trend } }
+      values: values.map do |v|
+        { date: v.date, date_formatted: v.date_formatted, value: display_amount(v.value), trend: display_trend(v.trend) }
+      end
     }
   end
+
+  private
+    # A chart is drawn from the amounts, not from the formatted strings, so a
+    # sub-unit residue would plot as a visible move between two points that
+    # both print as the same value.
+    def display_trend(trend)
+      return trend unless trend.is_a?(Trend)
+
+      Trend.new(
+        current: display_amount(trend.current),
+        previous: display_amount(trend.previous),
+        favorable_direction: trend.favorable_direction
+      )
+    end
+
+    def display_amount(amount)
+      amount.is_a?(Money) ? amount.for_display : amount
+    end
 end

@@ -81,10 +81,16 @@ class Period
     },
     "all_time" => {
       date_range: -> {
+        # Anchor one month before the first real activity (a Transaction or
+        # Trade), not the oldest entry of any kind: a single old Valuation or
+        # opening balance would otherwise stretch every All chart into a long
+        # flat line. Only a family with no transactions or trades falls back
+        # to oldest_entry_date. A start of today or later is not a meaningful
+        # range, so it degrades to the last 5 years.
         family = Current.family
-        start_date = family&.oldest_entry_date
-        # Fallback to 5 years ago if no family or oldest_entry_date is today
-        start_date = 5.years.ago.to_date if start_date.nil? || start_date == Date.current
+        earliest_activity_date = family&.earliest_activity_date
+        start_date = earliest_activity_date ? earliest_activity_date - 1.month : family&.oldest_entry_date
+        start_date = 5.years.ago.to_date unless start_date && start_date < Date.current
         [ start_date, Date.current ]
       },
       label_short: "All",
@@ -153,7 +159,12 @@ class Period
   end
 
   def interval
-    if days > 366
+    # Calendar years, so leap days do not move the thresholds: exactly 5
+    # years (the 5Y period) is weekly, only a longer range is monthly; a
+    # year (1Y) stays daily.
+    if end_date > start_date.advance(years: 5)
+      "1 month"
+    elsif end_date > start_date.advance(years: 1)
       "1 week"
     else
       "1 day"

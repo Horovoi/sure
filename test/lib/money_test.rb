@@ -194,4 +194,11 @@ class MoneyTest < ActiveSupport::TestCase
     assert_equal 0, Money.new(1000).exchange_to(:jpy, fallback_rate: 0)
     assert_equal Money.new(1000, :jpy), Money.new(1000, :usd).exchange_to(:jpy, fallback_rate: 1)
   end
+
+  test "for_display rounds to the currency's display precision" do
+    assert_equal Money.new(1000.9, :uah), Money.new(1000.899, :uah).for_display
+    assert_equal Money.new(1000.9, :usd), Money.new(1000.899, :usd).for_display
+    assert_equal Money.new(0, :uah), Money.new(0.004, :uah).for_display
+    assert_equal Money.new(1001, :jpy), Money.new(1000.6, :jpy).for_display
+  end
 end
