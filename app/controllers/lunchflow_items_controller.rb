@@ -1,5 +1,5 @@
 class LunchflowItemsController < ApplicationController
-  require_bank_connections
+  require_bank_connections provider: :lunchflow
   include FamilyAdminRequired
 
   # Connections are managed from the admin-only Sync Providers settings

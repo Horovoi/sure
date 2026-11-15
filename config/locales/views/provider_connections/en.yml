@@ -1,0 +1,15 @@
+---
+en:
+  provider_connections:
+    cutover_text: "Transactions from %{date} come from %{provider}. Earlier history is kept as you entered it."
+    status:
+      deleting: Deletion in progress
+      requires_update: The connection needs a new token
+      syncing: Syncing...
+      fetching:
+        one: "Fetching history: 1 statement page left (about %{minutes} min)"
+        other: "Fetching history: %{count} statement pages left (about %{minutes} min)"
+      fetching_finishing: "Fetching history: finishing"
+      error: "Sync failed: %{error}"
+      ok: "Synced %{time} ago"
+      never: Never synced

@@ -116,6 +116,22 @@ class Transaction < ApplicationRecord
 
   scope :from_subscription, -> { where.not(recurring_transaction_id: nil) }
 
+  # SQL condition: the transaction is a provider's pending hold. Without provider: any
+  # provider's flag (extra["<provider>"]["pending"]), as the pending scopes read it.
+  # With provider: only that provider's flag.
+  #
+  #   Transaction.pending_sql("t", provider: "monobank")
+  #   # => (("t"."extra" -> 'monobank') ->> 'pending')::boolean IS TRUE
+  def self.pending_sql(table_alias = "transactions", provider: nil)
+    extra = "#{connection.quote_table_name(table_alias)}.#{connection.quote_column_name('extra')}"
+
+    if provider
+      "((#{extra} -> #{connection.quote(provider.to_s)}) ->> 'pending')::boolean IS TRUE"
+    else
+      "EXISTS (SELECT 1 FROM jsonb_each(#{extra}) AS pd WHERE (pd.value ->> 'pending')::boolean = true)"
+    end
+  end
+
   # Arel conditions behind the income / expense / transfer filters, for a query that has
   # entries joined. Built as nodes, not SQL strings, so callers combine them with and/or/not.
   # A query without transactions joined passes its own tests for the two kinds.

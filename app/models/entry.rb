@@ -82,6 +82,14 @@ class Entry < ApplicationRecord
       SQL
   }
 
+  # A provider's pending holds: transaction entries written by source (the provider key,
+  # e.g. "monobank") whose extra[source]["pending"] is true
+  scope :pending_from, ->(source) {
+    joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+      .where(source: source.to_s)
+      .where(Transaction.pending_sql("transactions", provider: source))
+  }
+
   scope :excluding_pending, -> {
     # For non-Transaction entries (Trade, Valuation), always include
     # For Transaction entries, exclude if pending flag is true

@@ -71,6 +71,18 @@ class Account < ApplicationRecord
 
   scope :listable_manual, -> { manual.listable }
 
+  # Accounts that no enabled bank connection syncs: manual accounts, and accounts linked
+  # to a provider that is switched off (see BankConnections). The accounts page lists
+  # them with the manual accounts and the family sync syncs them like manual ones, so an
+  # account keeps its balances while its provider is off.
+  scope :outside_enabled_providers, -> {
+    classes = BankConnections.enabled_account_class_names
+    scope = all
+    scope = scope.where.not(id: AccountProvider.where(provider_type: classes).select(:account_id)) if classes.any?
+    scope = scope.where(plaid_account_id: nil) if BankConnections.enabled?(:plaid)
+    scope
+  }
+
   has_one_attached :logo
 
   # w2-transfers default-account: users whose new entries start in this account. The
@@ -349,6 +361,39 @@ class Account < ApplicationRecord
 
   def first_valuation_amount
     first_valuation&.amount_money || balance_money
+  end
+
+  # The day the provider took over an account that had manual history
+  # (Account::ProviderLink), or nil
+  def provider_cutover_date
+    if account_providers.loaded?
+      account_providers.filter_map(&:cutover_date).max
+    else
+      account_providers.maximum(:cutover_date)
+    end
+  end
+
+  # How the account's balances are calculated (Account::Syncer):
+  # - :forward from the opening anchor: manual accounts, and a linked account with
+  #   manual history (a cutover date) until the provider wrote its first balance;
+  # - :reverse from the provider's current balance: linked accounts;
+  # - :cutover: forward up to the day before the cutover date, then reverse from the
+  #   provider's balance (Balance::CutoverCalculator).
+  def balance_strategy
+    return :forward unless linked?
+
+    cutover = provider_cutover_date
+    return :reverse if cutover.nil?
+    return :forward unless has_current_anchor?
+
+    cutover > opening_anchor_date ? :cutover : :reverse
+  end
+
+  # Whether the linked provider's balance already counts open holds, so the balances
+  # calculated back from it must count pending entries too
+  def provider_balance_includes_pending?
+    providers = account_providers.loaded? ? account_providers : account_providers.select(:provider_type)
+    providers.any? { |link| BankConnections.provider_for_account_class(link.provider_type)&.balance_includes_pending? }
   end
 
   # Get short version of the subtype label

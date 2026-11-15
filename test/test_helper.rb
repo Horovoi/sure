@@ -89,10 +89,14 @@ module ActiveSupport
     end
 
     # Bank and crypto connection providers are off unless BANK_CONNECTIONS_ENABLED
-    # is set (see BankConnections). Tests that exercise them turn the switch on,
-    # for the rest of the test.
-    def enable_bank_connections
-      BankConnections.stubs(:enabled?).returns(true)
+    # names them (see BankConnections). Tests that exercise them turn them on for
+    # the rest of the test: the given keys, or every registered provider.
+    #
+    #   enable_bank_connections             # all
+    #   enable_bank_connections(:monobank)  # only monobank
+    def enable_bank_connections(*keys)
+      enabled = keys.empty? ? BankConnections.providers.map(&:key) : keys.flatten.map(&:to_s)
+      BankConnections.stubs(:enabled_keys).returns(Set.new(enabled))
     end
 
     def with_self_hosting

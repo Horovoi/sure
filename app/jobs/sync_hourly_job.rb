@@ -1,20 +1,18 @@
+# Syncs the items of the enabled bank connection providers that opt in to hourly
+# syncing (BankConnections.register(..., hourly: true)).
 class SyncHourlyJob < ApplicationJob
   queue_as :scheduled
 
-  # Provider item classes that opt-in to hourly syncing
-  HOURLY_SYNCABLES = [
-    CoinstatsItem # https://coinstats.app/api-docs/rate-limits#plan-limits
-  ].freeze
-
   def perform
-    # Every hourly syncable is a bank or crypto connection provider
-    unless BankConnections.enabled?
-      Rails.logger.info("Skipping hourly sync: bank connections are disabled")
+    syncable_classes = BankConnections.enabled_providers.select(&:hourly?).map(&:item_class)
+
+    if syncable_classes.empty?
+      Rails.logger.info("Skipping hourly sync: no enabled bank connection syncs hourly")
       return
     end
 
     Rails.logger.info("Starting hourly sync")
-    HOURLY_SYNCABLES.each do |syncable_class|
+    syncable_classes.each do |syncable_class|
       sync_items(syncable_class)
     end
     Rails.logger.info("Completed hourly sync")
