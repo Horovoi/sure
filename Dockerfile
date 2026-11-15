@@ -9,11 +9,13 @@ WORKDIR /rails
 
 # Install base packages. postgresql-client and age are for backup bundles (Backup::Bundle):
 # pg_dump must be at least as new as the postgres:16 server, which the version test below checks
-# (Debian trixie ships client 17); age encrypts the copy of .env.production.
+# (Debian trixie ships client 17); age encrypts the copy of .env.production. poppler-utils
+# gives pdftoppm, which renders scanned PDF statements to images for the AI vision path.
 RUN apt-get update -qq \
-    && apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client libyaml-0-2 procps age \
+    && apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client libyaml-0-2 procps age poppler-utils \
     && ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so \
     && [ "$(pg_dump --version | sed -E 's/^[^0-9]*([0-9]+).*/\1/')" -ge 16 ] \
+    && command -v pdftoppm \
     && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Set production environment, and load jemalloc: with threaded Puma and Sidekiq it keeps
