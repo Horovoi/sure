@@ -381,7 +381,148 @@ class Budget < ApplicationRecord
     remaining_expected_income.abs / expected_income.to_f * 100
   end
 
+  # =============================================================================
+  # Subscription reservations (decision 35)
+  #
+  # Money set aside for the charges of the family's subscriptions and other
+  # recurring rows that fall in this period but are not generated yet. It is an
+  # additive figure: spent, available and allocation figures do not include it.
+  # =============================================================================
+
+  # What one category has reserved, in the family currency, and how many of its
+  # rows were left out because their currency has no exchange rate.
+  SubscriptionReservation = Data.define(:amount, :unconvertible_count) do
+    def self.empty
+      new(amount: 0.to_d, unconvertible_count: 0)
+    end
+
+    def +(other)
+      with(amount: amount + other.amount, unconvertible_count: unconvertible_count + other.unconvertible_count)
+    end
+  end
+
+  # A charge linked to the row this many days around a reserved date means
+  # that date is already paid. The same window as the subscription reconciler's
+  # clear match, so a real or generated charge is never also reserved.
+  SUBSCRIPTION_RESERVATION_MATCH_DAYS = 5
+
+  # Category id to SubscriptionReservation, loaded once per budget. A past
+  # budget reserves nothing.
+  def subscription_reservations_by_category_id
+    @subscription_reservations_by_category_id ||= build_subscription_reservations
+  end
+
+  # The reservations of the categories this budget shows. Each category counts
+  # once: a parent's own reservation does not include its subcategories here.
+  def subscription_reservation_total
+    @subscription_reservation_total ||= begin
+      category_ids = budget_categories.map(&:category_id).to_set
+      subscription_reservations_by_category_id
+        .select { |category_id, _| category_ids.include?(category_id) }
+        .values
+        .sum(SubscriptionReservation.empty)
+    end
+  end
+
+  def subscriptions_reserved
+    Money.new(subscription_reservation_total.amount, family.currency)
+  end
+
+  def subscriptions_reserved_unconvertible_count
+    subscription_reservation_total.unconvertible_count
+  end
+
+  # Spent and reserved shares of the budgeted amount for the summary bar. The
+  # reserved share is capped at what the spent share leaves free.
+  def spent_bar_width_percent
+    [ percent_of_budget_spent.to_f, 100 ].min
+  end
+
+  def subscriptions_reserved_bar_width_percent
+    reserved = subscription_reservation_total.amount
+    return 0 unless budgeted_spending.to_d.positive? && reserved.positive?
+
+    [ (reserved / budgeted_spending.to_d * 100).to_f, 100 - spent_bar_width_percent ].min.clamp(0, 100)
+  end
+
   private
+    def build_subscription_reservations
+      return {} if end_date < Date.current
+
+      rows = family.recurring_transactions
+        .active
+        .user_managed
+        .where.not(category_id: nil)
+        .where.not(next_expected_date: nil)
+        .where(next_expected_date: ..end_date)
+        .where("recurring_transactions.amount > 0")
+        .to_a
+        .select { |row| row.amount_for_transaction.to_d.positive? }
+      return {} if rows.empty?
+
+      linked_dates = subscription_linked_charge_dates(rows)
+      rates = subscription_reservation_rates(rows)
+
+      rows.each_with_object({}) do |row, result|
+        charge_dates = linked_dates.fetch(row.id, [])
+        dates = subscription_reservation_dates(row).reject do |date|
+          charge_dates.any? { |charge_date| (charge_date - date).abs <= SUBSCRIPTION_RESERVATION_MATCH_DAYS }
+        end
+        next if dates.empty?
+
+        rate = rates[row.currency]
+        reservation = if rate.nil?
+          SubscriptionReservation.new(amount: 0.to_d, unconvertible_count: 1)
+        else
+          SubscriptionReservation.new(amount: row.amount_for_transaction.to_d * dates.size * rate.to_d, unconvertible_count: 0)
+        end
+
+        result[row.category_id] = (result[row.category_id] || SubscriptionReservation.empty) + reservation
+      end
+    end
+
+    # Recurring row id to the dates of its linked charges near this period, in one query
+    def subscription_linked_charge_dates(rows)
+      window = (start_date - SUBSCRIPTION_RESERVATION_MATCH_DAYS)..(end_date + SUBSCRIPTION_RESERVATION_MATCH_DAYS)
+
+      Entry
+        .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+        .where(transactions: { recurring_transaction_id: rows.map(&:id) })
+        .where(date: window)
+        .pluck("transactions.recurring_transaction_id", "entries.date")
+        .group_by(&:first)
+        .transform_values { |pairs| pairs.map(&:last) }
+    end
+
+    # Rates into the family currency by the nearest-rate rule. A currency with no
+    # stored rate at all is absent, never converted at 1.
+    def subscription_reservation_rates(rows)
+      foreign = rows.map(&:currency).uniq - [ family.currency ]
+      rates = foreign.any? ? ExchangeRate.rates_for(foreign, to: family.currency, date: Date.current) : {}
+      rates.merge(family.currency => 1)
+    end
+
+    # The row's billing dates in this period, from its next expected date on.
+    # The dates before next_expected_date are generated (or skipped) already.
+    def subscription_reservation_dates(row)
+      dates = []
+      date = row.next_expected_date
+
+      # Budgets reach two years ahead, so a monthly row steps at most about 25 times
+      400.times do
+        break if date > end_date
+
+        dates << date if date >= start_date
+        following = row.calculate_next_expected_date(date)
+        break unless following > date
+
+        date = following
+      end
+
+      dates
+    end
+
+
     def income_statement
       @income_statement ||= family.income_statement
     end

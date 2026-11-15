@@ -252,6 +252,36 @@ class BudgetCategory < ApplicationRecord
     [ parent_budget - siblings_budget, 0 ].max
   end
 
+  # =============================================================================
+  # Subscription reservations (see Budget#subscription_reservations_by_category_id)
+  # =============================================================================
+
+  # Money set aside for subscription charges of this category in the period that
+  # are not generated yet, in the family currency. A parent sums its subcategories.
+  def subscriptions_reserved
+    Money.new(subscription_reservation.amount, budget.family.currency)
+  end
+
+  # Rows of this category (and its subcategories) left out of the figure because
+  # their currency has no exchange rate.
+  def subscriptions_reserved_unconvertible_count
+    subscription_reservation.unconvertible_count
+  end
+
+  def subscriptions_reserved?
+    subscription_reservation.amount.positive? || subscription_reservation.unconvertible_count.positive?
+  end
+
+  # Width of the hatched segment after the spent bar: the reserved share of the
+  # budget, capped at what the spent bar leaves free.
+  def subscriptions_reserved_bar_width_percent
+    budget_amount = display_budgeted_spending.to_d
+    reserved = subscription_reservation.amount
+    return 0 unless budget_amount.positive? && reserved.positive?
+
+    [ (reserved / budget_amount * 100).to_f, 100 - bar_width_percent.to_f ].min.clamp(0, 100)
+  end
+
   # Read from the budget's loaded categories (like `siblings` and `parent_budget_category`),
   # so a page of budget categories does not run one query per parent category.
   def subcategories
@@ -261,4 +291,16 @@ class BudgetCategory < ApplicationRecord
 
     budget.budget_categories.select { |bc| bc.category.parent_id == category.id }
   end
+
+  private
+    def subscription_reservation
+      @subscription_reservation ||= begin
+        reservations = budget.subscription_reservations_by_category_id
+        category_ids = [ category.id, *subcategories.map(&:category_id) ].compact
+
+        category_ids.sum(Budget::SubscriptionReservation.empty) do |category_id|
+          reservations[category_id] || Budget::SubscriptionReservation.empty
+        end
+      end
+    end
 end

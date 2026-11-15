@@ -57,6 +57,39 @@ class BudgetsTest < ApplicationSystemTestCase
     assert_no_selector "[data-testid='budget-filter-over_budget']"
   end
 
+  test "the budget page shows what is reserved for a due subscription" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: 10_000, expected_income: 10_000)
+    budget.budget_categories.find_by!(category: categories(:subscriptions)).update!(budgeted_spending: 500)
+    # Due on the last day of the period, so it is still ahead whatever today is
+    @family.recurring_transactions.create!(
+      name: "Streaming service", amount: 25, currency: @family.currency, manual: true, status: "active",
+      expected_day_of_month: budget.end_date.day, last_occurrence_date: budget.end_date.prev_month,
+      next_expected_date: budget.end_date, category: categories(:subscriptions)
+    )
+    reserved_text = Money.new(25, @family.currency).format
+
+    visit budget_path(budget, tab: "actuals")
+
+    within_testid("budget-reserved-summary") do
+      assert_text I18n.t("budgets.subscription_reservations.reserved")
+      assert_text reserved_text
+    end
+
+    within_testid("budget-category-reserved") do
+      assert_text I18n.t("budgets.subscription_reservations.reserved")
+      assert_text reserved_text
+    end
+    assert_selector "[data-testid='budget-category-reserved-bar']"
+
+    find("[data-testid='budget-category-reserved']").click
+
+    within_testid("budget-category-reserved-detail") do
+      assert_text I18n.t("budgets.subscription_reservations.reserved")
+      assert_text reserved_text
+    end
+  end
+
   # Food & Drink is over budget, Subscriptions is on track.
   def filter_test_budget
     budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
