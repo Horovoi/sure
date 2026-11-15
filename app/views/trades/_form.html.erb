@@ -1,6 +1,16 @@
 <%# locals: (model:, account:) %>
 
-<% type = params[:type] || "buy" %>
+<%# A failed create renders the form again with the type that was sent %>
+<% type = params[:type].presence || params.dig(:model, :type).presence || "buy" %>
+
+<%# Every type's fields are on the page and the type select shows only its own,
+    in the browser. Fetching the form again for each type replaced it under the
+    cursor: what was typed while the request ran, or before the type changed, was
+    lost. A disabled fieldset is not validated or sent. %>
+<% fields_for_types = ->(types, &block) do
+     tag.fieldset(class: "space-y-2", hidden: !types.include?(type), disabled: !types.include?(type),
+                  data: { trade_form_target: "fields", types: types.join(" ") }, &block)
+   end %>
 
 <%= styled_form_with url: trades_path(account_id: account&.id), scope: :model, data: { controller: "trade-form" } do |form| %>
   <div class="space-y-4">
@@ -17,13 +27,9 @@
           ["Interest", "interest"]
       ],
       { label: t(".type"), selected: type },
-      { data: {
-          action: "trade-form#changeType",
-          trade_form_url_param: new_trade_path(account_id: account&.id),
-          trade_form_key_param: "type",
-        }} %>
+      { data: { action: "trade-form#changeType", trade_form_target: "type" } } %>
 
-      <% if %w[buy sell].include?(type) %>
+      <%= fields_for_types.call(%w[buy sell]) do %>
         <% if Security.provider.present? %>
           <div class="form-field combobox">
             <%= form.combobox :ticker,
@@ -40,15 +46,15 @@
 
       <%= form.date_field :date, label: true, value: model.date || Date.current, required: true %>
 
-      <% unless %w[buy sell].include?(type) %>
+      <%= fields_for_types.call(%w[deposit withdrawal interest]) do %>
         <%= form.money_field :amount, label: t(".amount"), value: model.amount, required: true %>
       <% end %>
 
-      <% if %w[deposit withdrawal].include?(type) %>
+      <%= fields_for_types.call(%w[deposit withdrawal]) do %>
         <%= form.collection_select :transfer_account_id, Current.family.accounts.visible.alphabetically, :id, :name, { prompt: t(".account_prompt"), label: t(".account") } %>
       <% end %>
 
-      <% if %w[buy sell].include?(type) %>
+      <%= fields_for_types.call(%w[buy sell]) do %>
         <%= form.number_field :qty, label: t(".qty"), placeholder: "10", min: 0.000000000000000001, step: "any", required: true %>
         <%= form.money_field :price, label: t(".price"), step: "any", precision: 10, required: true %>
       <% end %>

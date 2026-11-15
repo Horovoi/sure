@@ -161,6 +161,9 @@ class AccountsTest < ApplicationSystemTestCase
 
       click_button "Create Account"
 
+      # The new account's page, or `within` holds on to the old page's sidebar
+      assert_selector "h2", text: account_name
+
       within_testid("account-sidebar-tabs") do
         click_on "All"
         find("details", text: Accountable.from_type(accountable_type).display_name).click

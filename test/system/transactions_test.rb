@@ -119,14 +119,13 @@ class TransactionsTest < ApplicationSystemTestCase
 
     assert_text "No entries found"
 
-    # Remove all filters by clicking their X buttons
-    # Get all the filter buttons at once to avoid stale elements
+    # Remove all filters by clicking their X buttons. Each X sends the filters of
+    # the page it is on, so the next click waits for the page without the last one.
     filter_count = page.all("ul#transaction-search-filters li button").count
 
-    # Click each one with a small delay to let Turbo update
-    filter_count.times do
-      page.all("ul#transaction-search-filters li button").first.click
-      sleep 0.1
+    filter_count.downto(1) do |remaining|
+      first("ul#transaction-search-filters li button").click
+      assert_selector "ul#transaction-search-filters li button", count: remaining - 1
     end
 
     assert_text @transaction.name
