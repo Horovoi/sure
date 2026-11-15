@@ -136,6 +136,33 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "bulk rename sets the name on every selected entry and locks it as a user edit" do
+    account = accounts(:depository)
+    entries = 2.times.map { |i| create_bulk_test_transaction(account, "Old name #{i}") }
+
+    assert_no_enqueued_jobs only: SyncJob do
+      post transactions_bulk_update_url, params: { bulk_update: { entry_ids: entries.map(&:id), name: "  Coffee shop  " } }
+    end
+
+    assert_redirected_to transactions_url
+    entries.each do |entry|
+      entry.reload
+      assert_equal "Coffee shop", entry.name
+      assert entry.locked?(:name), "the new name is locked against rules and imports"
+      assert entry.user_locked?(:name)
+    end
+  end
+
+  test "a blank name in bulk edit keeps each name" do
+    account = accounts(:depository)
+    entries = 2.times.map { |i| create_bulk_test_transaction(account, "Keep #{i}") }
+
+    post transactions_bulk_update_url, params: { bulk_update: { entry_ids: entries.map(&:id), name: "   ", notes: "Note" } }
+
+    assert_equal [ "Keep 0", "Keep 1" ], entries.map { |entry| entry.reload.name }.sort
+    entries.each { |entry| assert_not entry.locked?(:name) }
+  end
+
   private
     def create_bulk_test_transaction(account, name)
       account.entries.create!(

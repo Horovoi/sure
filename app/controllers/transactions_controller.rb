@@ -5,11 +5,14 @@ class TransactionsController < ApplicationController
   USER_SETTABLE_KINDS = %w[standard one_time].freeze
 
   before_action :store_params!, only: :index
+  # Before the form options: a duplicate's nature decides which categories the form lists
+  before_action :prefill_params_from_duplicate!, only: :new
   before_action :set_new_transaction_form_options, only: %i[new create]
   before_action :set_entry_for_tags, only: :update_tags
 
   def new
     super
+    apply_duplicate_attributes!
   end
 
   def index
@@ -476,6 +479,43 @@ class TransactionsController < ApplicationController
       @recent_categories = Category.recently_used_for(family: Current.family, classification: @category_classification).to_a
       @merchants = Current.family.available_merchants.alphabetically.to_a
       @tags = Current.family.tags.alphabetically.to_a
+    end
+
+    # Duplicate (the selection bars' copy button, decision 45: duplicate-and-edit
+    # instead of splits): the new form opens filled from one of the family's
+    # transactions, dated today, for the user to change and save.
+    def duplicate_source
+      return @duplicate_source if defined?(@duplicate_source)
+
+      @duplicate_source = if params[:duplicate_entry_id].present?
+        Current.family.entries.transactions.includes(:entryable).find_by(id: params[:duplicate_entry_id])
+      end
+    end
+
+    def prefill_params_from_duplicate!
+      return unless duplicate_source
+
+      params[:nature] ||= duplicate_source.amount.negative? ? "inflow" : "outflow"
+      # The form's account list holds manual, active accounts only
+      if params[:account_id].blank? && Current.family.accounts.manual.active.exists?(id: duplicate_source.account_id)
+        params[:account_id] = duplicate_source.account_id
+      end
+    end
+
+    def apply_duplicate_attributes!
+      return unless duplicate_source
+
+      source = duplicate_source.transaction
+      @entry.assign_attributes(
+        name: duplicate_source.name,
+        amount: duplicate_source.amount.abs,
+        currency: duplicate_source.currency,
+        notes: duplicate_source.notes
+      )
+      # Only values the form's pickers offer: a category of the other classification is left out
+      @entry.entryable.category_id = source.category_id if @categories.any? { |category| category.id == source.category_id }
+      @entry.entryable.merchant_id = source.merchant_id if @merchants.any? { |merchant| merchant.id == source.merchant_id }
+      @entry.entryable.tag_ids = source.tag_ids & @tags.map(&:id)
     end
 
     def set_entry_for_tags

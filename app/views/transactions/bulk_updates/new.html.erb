@@ -6,6 +6,7 @@
       <div class="space-y-4">
         <%= render DS::Disclosure.new(title: t(".overview"), open: true) do %>
           <%= form.date_field :date, label: t(".date_label"), max: Date.current %>
+          <%= form.text_field :name, label: t(".name_label"), placeholder: t(".name_placeholder"), autocomplete: "off" %>
         <% end %>
 
         <%= render DS::Disclosure.new(title: t(".transactions_section"), open: true) do %>

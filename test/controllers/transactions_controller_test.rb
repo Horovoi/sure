@@ -830,4 +830,74 @@ end
     assert_response :ok
     assert_select "select[name='investment_activity_label'] option[selected][value='Sell']"
   end
+
+  # --- Duplicate (w2-rules): the selection bars' copy button ---
+
+  test "new with duplicate_entry_id fills the form from the transaction" do
+    @entry.update!(notes: "Weekly coffee")
+    @entry.transaction.update!(tags: [ tags(:one) ])
+
+    get new_transaction_url(duplicate_entry_id: @entry.id)
+
+    assert_response :success
+    assert_select "input[name='entry[name]'][value=?]", @entry.name
+    assert_select "input[name='entry[amount]']" do |elements|
+      assert_equal @entry.amount.abs.to_d, elements.first["value"].to_d
+    end
+    assert_select "input[type=hidden][name='entry[account_id]'][value=?]", @entry.account_id
+    assert_select "input[name='entry[nature]'][value=outflow]"
+    assert_select "input[type=hidden][name='entry[entryable_attributes][category_id]'][value=?]", @entry.transaction.category_id
+    assert_select "input[type=hidden][name='entry[entryable_attributes][merchant_id]'][value=?]", @entry.transaction.merchant_id
+    assert_select "input[type=hidden][name='entry[entryable_attributes][tag_ids][]'][value=?]", tags(:one).id
+    assert_select "textarea[name='entry[notes]']", text: "Weekly coffee"
+    # Dated today, not on the source's date
+    assert_select "input[name='entry[date]'][value=?]", Date.current.to_s
+  end
+
+  test "duplicating an income opens the income form with its category" do
+    salary = @user.family.categories.create!(name: "Salary", color: "#22c55e", classification: "income", lucide_icon: "briefcase")
+    income = create_transaction(account: accounts(:depository), name: "Pay", amount: -500, category: salary)
+
+    get new_transaction_url(duplicate_entry_id: income.id)
+
+    assert_response :success
+    assert_select "input[name='entry[nature]'][value=inflow]"
+    assert_select "input[type=hidden][name='entry[entryable_attributes][category_id]'][value=?]", salary.id
+  end
+
+  test "new with an unknown duplicate_entry_id renders an empty form" do
+    get new_transaction_url(duplicate_entry_id: "not-an-id")
+
+    assert_response :success
+    assert_select "input[name='entry[name]']" do |elements|
+      assert_nil elements.first["value"]
+    end
+  end
+
+  test "new with another family's duplicate_entry_id does not fill the form" do
+    other_account = families(:empty).accounts.create!(name: "Other", balance: 0, currency: "USD", accountable: Depository.new)
+    other_entry = create_transaction(account: other_account, name: "Should not leak", amount: 50)
+
+    get new_transaction_url(duplicate_entry_id: other_entry.id)
+
+    assert_response :success
+    assert_not_includes response.body, "Should not leak"
+  end
+
+  test "new with a valuation id does not fill the form" do
+    valuation = entries(:valuation)
+
+    get new_transaction_url(duplicate_entry_id: valuation.id)
+
+    assert_response :success
+    assert_select "input[name='entry[name]']" do |elements|
+      assert_nil elements.first["value"]
+    end
+  end
+
+  test "the transactions selection bar has a hidden duplicate link" do
+    get transactions_url
+
+    assert_select "#entry-selection-bar a[data-bulk-select-target=duplicateLink].hidden[href=?]", new_transaction_path
+  end
 end

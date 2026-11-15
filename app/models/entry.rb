@@ -154,6 +154,8 @@ class Entry < ApplicationRecord
       bulk_attributes = {
         date: bulk_update_params[:date],
         notes: bulk_update_params[:notes],
+        # A blank name leaves each name as it is; a new one is a user edit and gets locked below
+        name: bulk_update_params[:name].to_s.strip,
         entryable_attributes: {
           category_id: bulk_update_params[:category_id],
           merchant_id: bulk_update_params[:merchant_id]

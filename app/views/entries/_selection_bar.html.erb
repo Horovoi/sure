@@ -7,6 +7,16 @@
 
   <div class="flex items-center gap-1 text-secondary">
     <%= turbo_frame_tag "bulk_transaction_edit_drawer" %>
+
+    <%# One transaction selected: open the new-transaction form filled from it (bulk-select sets the id) %>
+    <%= link_to new_transaction_path,
+                class: "p-1.5 group/duplicate hover:bg-inverse flex items-center justify-center rounded-md hidden",
+                title: t(".duplicate"),
+                aria: { label: t(".duplicate") },
+                data: { turbo_frame: "modal", bulk_select_target: "duplicateLink" } do %>
+      <%= icon "copy", class: "group-hover/duplicate:text-inverse" %>
+    <% end %>
+
     <%= link_to new_transactions_bulk_update_path,
                 class: "p-1.5 group/edit hover:bg-inverse flex items-center justify-center rounded-md",
                 title: t(".edit"),
