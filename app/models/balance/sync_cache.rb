@@ -13,9 +13,14 @@
 #
 # report_unconverted_amounts writes one warn DebugLogEntry per calculation with both counts
 # and the currency pairs.
+#
+# Pending provider holds are left out unless include_pending: true. That is for a balance
+# calculated back from a provider balance that already counts the holds (monobank): the
+# past days stay right while a hold is open.
 class Balance::SyncCache
-  def initialize(account)
+  def initialize(account, include_pending: false)
     @account = account
+    @include_pending = include_pending
     @unconvertible_entry_count = 0
     @unconvertible_holding_count = 0
     @missing_rate_pairs = Set.new
@@ -74,7 +79,7 @@ class Balance::SyncCache
   end
 
   private
-    attr_reader :account
+    attr_reader :account, :include_pending
 
     def entries_by_date
       @entries_by_date ||= converted_entries.group_by(&:date)
@@ -126,7 +131,8 @@ class Balance::SyncCache
     # leave the stored balance for that date wrong until the next sync, since this fork
     # has no job that syncs an account on an entry's date.
     def entries_scope
-      account.entries.excluding_pending.order(:date)
+      scope = include_pending ? account.entries : account.entries.excluding_pending
+      scope.order(:date)
     end
 
     # The one place an entry's amount is converted. A foreign-currency transaction with a
