@@ -135,6 +135,18 @@ class RecurringTransaction::LifecycleTest < ActiveSupport::TestCase
     end
   end
 
+  test "generate_transaction! books a converted charge rounded to the account currency" do
+    uah_account = @family.accounts.create!(name: "Card UAH", balance: 0, currency: "UAH", accountable: CreditCard.new)
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: Date.current, rate: 45.385)
+    subscription = create_recurring(subscription_state: "subscription", default_account: uah_account,
+                                    amount: 2.99, next_expected_date: Date.current)
+
+    entry = subscription.generate_transaction!(for_date: Date.current)
+
+    assert_equal "UAH", entry.currency
+    assert_equal BigDecimal("135.70"), entry.amount
+  end
+
   test "generation job creates the overdue period after an unrelated save" do
     subscription = create_recurring(subscription_state: "subscription", default_account: @account,
                                     next_expected_date: 2.days.ago.to_date, expected_day_of_month: 2.days.ago.day)

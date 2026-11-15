@@ -699,7 +699,9 @@ class RecurringTransaction < ApplicationRecord
 
       entry = default_account.entries.create!(
         date: for_date,
-        amount: converted.amount,
+        # Booked as the bank books it, in whole units of the account currency: 2.99 USD
+        # at 45.385 is 135.70 UAH, not 135.7009, so the statement row matches it exactly
+        amount: converted.amount.round(converted.currency.default_precision),
         currency: default_account.currency,
         name: display_name,
         source: "subscription",
