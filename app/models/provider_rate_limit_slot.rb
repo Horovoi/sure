@@ -1,6 +1,7 @@
 # One request slot of a rate-limited provider API (see Provider::RateLimitable).
 # Every write is a single statement, so two processes that reserve the same slot
-# at once can never both get it.
+# at once can never both get it. Reads and writes bypass the query cache (jobs and
+# requests run with it on): a cached INSERT ... RETURNING would never reach Postgres.
 class ProviderRateLimitSlot < ApplicationRecord
   validates :provider_key, :scope_key, :bucket, :next_free_at, presence: true
 
@@ -21,7 +22,7 @@ class ProviderRateLimitSlot < ApplicationRecord
         RETURNING next_free_at
       SQL
 
-      reserved_until = connection.select_value(sql)
+      reserved_until = write_returning(sql)
       return [ true, cast_time(reserved_until) ] if reserved_until
 
       [ false, next_free_at(provider_key: provider_key, scope_key: scope_key, bucket: bucket) ]
@@ -40,15 +41,21 @@ class ProviderRateLimitSlot < ApplicationRecord
         RETURNING next_free_at
       SQL
 
-      cast_time(connection.select_value(sql))
+      cast_time(write_returning(sql))
     end
 
     # When the slot is next free; now when there is no row yet
     def next_free_at(provider_key:, scope_key:, bucket:)
-      where(provider_key: provider_key, scope_key: scope_key, bucket: bucket.to_s).pick(:next_free_at) || Time.current
+      uncached { where(provider_key: provider_key, scope_key: scope_key, bucket: bucket.to_s).pick(:next_free_at) } || Time.current
     end
 
     private
+      def write_returning(sql)
+        value = uncached { connection.select_value(sql, "#{name} Write") }
+        connection.clear_query_cache
+        value
+      end
+
       def cast_time(value)
         ActiveRecord::Type::DateTime.new.cast(value)&.in_time_zone
       end

@@ -19,10 +19,9 @@ class Settings::ProvidersController < ApplicationController
   end
 
   def update
-    # Build index of valid configurable fields with their metadata
-    Provider::Factory.ensure_adapters_loaded
+    # Build index of valid configurable fields with their metadata (enabled providers only)
     valid_fields = {}
-    Provider::ConfigurationRegistry.all.each do |config|
+    enabled_configurations.each do |config|
       config.fields.each do |field|
         valid_fields[field.setting_key.to_s] = field
       end
@@ -82,17 +81,18 @@ class Settings::ProvidersController < ApplicationController
 
   private
     def provider_params
-      # Dynamically permit all provider configuration fields
-      Provider::Factory.ensure_adapters_loaded
+      # Dynamically permit the configuration fields of the enabled providers
       permitted_fields = []
 
-      Provider::ConfigurationRegistry.all.each do |config|
+      enabled_configurations.each do |config|
         config.fields.each do |field|
           permitted_fields << field.setting_key
         end
       end
 
-      params.require(:setting).permit(*permitted_fields)
+      return {} if permitted_fields.empty?
+
+      params.expect(setting: permitted_fields)
     end
 
     # Reload provider configurations after settings update
@@ -118,16 +118,19 @@ class Settings::ProvidersController < ApplicationController
       end
     end
 
+    # The global configurations (Provider::ConfigurationRegistry) of the enabled
+    # providers: each provider lists its keys in config_keys (Plaid: plaid, plaid_eu)
+    def enabled_configurations
+      Provider::Factory.ensure_adapters_loaded
+      keys = BankConnections.enabled_providers.flat_map(&:config_keys)
+      Provider::ConfigurationRegistry.all.select { |config| keys.include?(config.provider_key.to_s) }
+    end
+
     # Prepares instance vars needed by the show view and partials
     def prepare_show_context
-      # Load all provider configurations (exclude Lunchflow, which has its own family-specific panel below)
-      Provider::Factory.ensure_adapters_loaded
-      @provider_configurations = Provider::ConfigurationRegistry.all.reject do |config|
-        config.provider_key.to_s.casecmp("lunchflow").zero? || \
-        config.provider_key.to_s.casecmp("enable_banking").zero? || \
-        config.provider_key.to_s.casecmp("coinstats").zero? || \
-        config.provider_key.to_s.casecmp("coinbase").zero?
-      end
+      @provider_configurations = enabled_configurations
+      # Family-scoped connections render their own panel (BankConnections settings_partial)
+      @provider_panels = BankConnections.enabled_providers.select(&:settings_partial)
 
       # Providers page only needs to know whether Lunchflow connections exist with valid credentials
       @lunchflow_items = Current.family.lunchflow_items.where.not(api_key: [ nil, "" ]).ordered.select(:id)

@@ -7,21 +7,22 @@ class Family::SyncerTest < ActiveSupport::TestCase
     @family = families(:dylan_family)
   end
 
-  test "syncs only visible manual accounts while bank connections are off" do
+  test "syncs every visible account while bank connections are off, linked ones included" do
     family_sync = syncs(:family)
     @family.accounts.manual.first.update_columns(status: "pending_deletion")
+    assert @family.accounts.visible.where.not(plaid_account_id: nil).exists?, "fixtures should have a plaid-linked account"
 
     Account.any_instance
            .expects(:sync_later)
            .with(parent_sync: family_sync, window_start_date: nil, window_end_date: nil)
-           .times(@family.accounts.visible.manual.count)
+           .times(@family.accounts.visible.count)
     PlaidItem.any_instance.expects(:sync_later).never
 
     Family::Syncer.new(@family).perform_sync(family_sync)
   end
 
   test "syncs plaid items and manual accounts" do
-    BankConnections.stubs(:enabled?).returns(true)
+    enable_bank_connections
     family_sync = syncs(:family)
 
     manual_accounts_count = @family.accounts.visible.manual.count
@@ -42,6 +43,23 @@ class Family::SyncerTest < ActiveSupport::TestCase
     syncer.perform_sync(family_sync)
 
     assert_equal "completed", family_sync.reload.status
+  end
+
+  test "an account linked to a provider that is off syncs on its own, the enabled provider's items sync" do
+    enable_bank_connections(:lunchflow)
+    plaid_linked = @family.accounts.visible.where.not(plaid_account_id: nil).to_a
+    assert plaid_linked.any?, "fixtures should have a plaid-linked account"
+    item = @family.lunchflow_items.create!(name: "Bank", api_key: "key")
+    lunchflow_linked = @family.accounts.create!(name: "LF", balance: 0, currency: "USD", accountable: Depository.new)
+    Account::ProviderLink.link!(account: lunchflow_linked, provider_account: item.lunchflow_accounts.create!(name: "C", currency: "USD", account_id: "c"))
+
+    syncables = Family::Syncer.new(@family).send(:child_syncables)
+
+    assert_includes syncables, item
+    plaid_linked.each { |account| assert_includes syncables, account }
+    assert_not_includes syncables, lunchflow_linked
+    assert_empty syncables.grep(PlaidItem)
+    assert_equal @family.accounts.visible.count - 1, syncables.grep(Account).size
   end
 
   test "post-sync enqueues one ordered rule run for the family" do
@@ -71,7 +89,7 @@ class Family::SyncerTest < ActiveSupport::TestCase
   end
 
   test "syncs every active provider item type while bank connections are on" do
-    BankConnections.stubs(:enabled?).returns(true)
+    enable_bank_connections
     family_sync = syncs(:family)
     @family.enable_banking_items.create!(name: "Test Enable Banking", country_code: "FI", application_id: "app-id", client_certificate: "cert")
     @family.coinstats_items.create!(name: "Test CoinStats", api_key: "coinstats-key")
@@ -88,7 +106,6 @@ class Family::SyncerTest < ActiveSupport::TestCase
   end
 
   test "syncs no provider item type while bank connections are off" do
-    BankConnections.stubs(:enabled?).returns(false)
     family_sync = syncs(:family)
     @family.coinstats_items.create!(name: "Test CoinStats", api_key: "coinstats-key")
 
