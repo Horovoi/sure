@@ -54,7 +54,100 @@ class Assistant::ResponderTest < ActiveSupport::TestCase
     assert_includes usages.last.metadata["error"], "connection reset"
   end
 
+  test "the last permitted round asks for a text answer and the turn completes" do
+    rounds = Assistant::Responder::MAX_FUNCTION_ROUNDS
+    steps = (1..rounds).map { |i| scripted_response(id: "r#{i}", function_call: "call_#{i}") }
+    steps << scripted_response(id: "final", chunks: [ "Here is what I found" ])
+    llm = ScriptedLlm.new(steps)
+
+    response = Assistant::Responder.new(message: @message, instructions: nil, function_tool_caller: @function_tool_caller, llm: llm).respond
+
+    assert_equal "final", response.id
+    assert_equal rounds + 1, llm.calls.size
+    assert_equal [ nil ] * rounds + [ :none ], llm.calls.map { |call| call[:tool_choice] }
+    assert llm.calls.last[:functions].any?, "the tool definitions stay in the final request"
+  end
+
+  test "a model that still asks for functions after the last round raises" do
+    rounds = Assistant::Responder::MAX_FUNCTION_ROUNDS
+    steps = (1..(rounds + 1)).map { |i| scripted_response(id: "r#{i}", function_call: "call_#{i}") }
+    llm = ScriptedLlm.new(steps)
+
+    assert_raises(Assistant::Responder::TooManyFunctionRoundsError) do
+      Assistant::Responder.new(message: @message, instructions: nil, function_tool_caller: @function_tool_caller, llm: llm).respond
+    end
+    assert_equal rounds + 1, llm.calls.size
+  end
+
+  test "ASSISTANT_MAX_FUNCTION_ROUNDS overrides the round limit" do
+    with_env_overrides("ASSISTANT_MAX_FUNCTION_ROUNDS" => "2") do
+      assert_equal 2, Assistant::Responder.max_function_rounds
+    end
+
+    with_env_overrides("ASSISTANT_MAX_FUNCTION_ROUNDS" => "nonsense") do
+      assert_equal Assistant::Responder::MAX_FUNCTION_ROUNDS, Assistant::Responder.max_function_rounds
+    end
+  end
+
+  test "a turn with no text raises EmptyResponseError" do
+    llm = ScriptedLlm.new([ scripted_response(id: "r1", function_call: "call_1"), scripted_response(id: "r2", chunks: [ "  " ]) ])
+
+    assert_raises(Assistant::Responder::EmptyResponseError) do
+      Assistant::Responder.new(message: @message, instructions: nil, function_tool_caller: @function_tool_caller, llm: llm).respond
+    end
+  end
+
+  test "leading whitespace chunks are held and merged into the first text chunk" do
+    llm = ScriptedLlm.new([ scripted_response(id: "r1", chunks: [ " ", " ", "5", " UAH" ]) ])
+    emitted = []
+
+    responder = Assistant::Responder.new(message: @message, instructions: nil, function_tool_caller: @function_tool_caller, llm: llm)
+    responder.on(:output_text) { |text| emitted << text }
+    responder.respond
+
+    assert_equal [ "  5", " UAH" ], emitted
+  end
+
+  test "text a provider returns without streaming still reaches the turn" do
+    llm = ScriptedLlm.new([ scripted_response(id: "r1", text: "Unstreamed answer") ])
+    emitted = []
+
+    responder = Assistant::Responder.new(message: @message, instructions: nil, function_tool_caller: @function_tool_caller, llm: llm)
+    responder.on(:output_text) { |text| emitted << text }
+    responder.respond
+
+    assert_equal [ "Unstreamed answer" ], emitted
+  end
+
   private
+    # Replays scripted responses like Provider::Openai#chat_response, streaming their chunks, and records each call
+    class ScriptedLlm
+      attr_reader :calls
+
+      def initialize(steps)
+        @steps = steps
+        @calls = []
+      end
+
+      def chat_response(prompt, **options)
+        @calls << options
+        step = @steps.shift || raise("unexpected chat_response call ##{@calls.size}")
+        step[:chunks].each { |text| options[:streamer]&.call(Provider::LlmConcept::ChatStreamChunk.new(type: "output_text", data: text, usage: nil)) }
+        Provider::Response.new(success?: true, data: step[:response], error: nil)
+      end
+    end
+
+    def scripted_response(id:, chunks: [], text: nil, function_call: nil)
+      text ||= chunks.join.presence
+      response = Provider::LlmConcept::ChatResponse.new(
+        id: id,
+        model: "gpt-4.1",
+        messages: text ? [ Provider::LlmConcept::ChatMessage.new(id: id, output_text: text) ] : [],
+        function_requests: function_call ? [ Provider::LlmConcept::ChatFunctionRequest.new(id: "fc_#{function_call}", call_id: function_call, function_name: "get_accounts", function_args: "{}") ] : []
+      )
+      { response: response, chunks: chunks }
+    end
+
     def responder(provider, model: "gpt-4.1")
       @message.update!(ai_model: model)
       Assistant::Responder.new(message: @message, instructions: nil, function_tool_caller: @function_tool_caller, llm: provider)

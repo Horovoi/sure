@@ -169,6 +169,7 @@ class AssistantTest < ActiveSupport::TestCase
     assert @turn.reload.failed?
     assert_equal Assistant::Responder::MAX_FUNCTION_ROUNDS, @turn.tool_calls.size
     assert_equal Assistant::Responder::MAX_FUNCTION_ROUNDS + 1, llm.calls.size
+    assert_equal :none, llm.calls.last[:tool_choice], "the last round asks for a text answer"
     assert_equal "resp_previous", @chat.reload.latest_assistant_response_id
   end
 
@@ -188,6 +189,60 @@ class AssistantTest < ActiveSupport::TestCase
     assert_equal "Your net", @turn.content
     assert_equal 1, @turn.tool_calls.size
     assert_equal "resp_previous", @chat.reload.latest_assistant_response_id
+  end
+
+  test "a turn that ends with no text fails and can be retried" do
+    response = provider_response(id: "1")
+    use_llm(step(response: provider_success_response(response)))
+
+    @turn.generate_response
+
+    assert @turn.reload.failed?
+    assert @turn.retryable?
+    assert_includes @chat.reload.error, "no text"
+    assert_equal "resp_previous", @chat.latest_assistant_response_id
+  end
+
+  test "the static prompt prefix is byte-identical across chats and families" do
+    first = Assistant.config_for(chats(:one))[:instructions]
+    second = Assistant.config_for(chats(:two))[:instructions]
+
+    assert first.start_with?(Assistant::Configurable::STATIC_INSTRUCTIONS)
+    assert second.start_with?(Assistant::Configurable::STATIC_INSTRUCTIONS)
+    assert Assistant::Configurable::STATIC_INSTRUCTIONS.frozen?
+    assert_not_includes Assistant::Configurable::STATIC_INSTRUCTIONS, Date.current.iso8601
+  end
+
+  test "the session context shows today's date in the family's time zone" do
+    family = chats(:one).user.family
+    family.update!(timezone: "Europe/Kyiv", currency: "UAH")
+
+    # 23:30 UTC on Nov 14 is already Nov 15 in Kyiv
+    travel_to Time.utc(2026, 11, 14, 23, 30) do
+      instructions = Assistant.config_for(chats(:one).reload)[:instructions]
+      context = instructions.delete_prefix(Assistant::Configurable::STATIC_INSTRUCTIONS)
+
+      assert_includes context, "Today's date: 2026-11-15 (time zone Europe/Kyiv)"
+      assert_includes context, "Preferred currency: UAH"
+    end
+  end
+
+  test "the session context lists accounts and categories up to their caps" do
+    family = chats(:one).user.family
+    context = Assistant.config_for(chats(:one))[:instructions].delete_prefix(Assistant::Configurable::STATIC_INSTRUCTIONS)
+
+    family.accounts.visible.each { |account| assert_includes context, "- #{account.name}:" } if family.accounts.visible.count <= Assistant::Configurable::ACCOUNTS_ROSTER_LIMIT
+    family.categories.each { |category| assert_includes context, category.name } if family.categories.count <= Assistant::Configurable::CATEGORY_NAMES_LIMIT
+    assert_includes context, "Months: budgets and monthly totals use calendar months."
+  end
+
+  test "the session context describes fiscal months when they are on" do
+    family = chats(:one).user.family
+    family.update!(use_fiscal_months: true, fiscal_month_start_day: 25)
+
+    context = Assistant.config_for(chats(:one).reload)[:instructions].delete_prefix(Assistant::Configurable::STATIC_INSTRUCTIONS)
+
+    assert_includes context, "fiscal months that start on day 25"
   end
 
   private

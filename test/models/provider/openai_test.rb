@@ -286,4 +286,50 @@ class Provider::OpenaiTest < ActiveSupport::TestCase
 
     assert_equal "configured model: custom-model", custom_provider.supported_models_description
   end
+  test "native chat sends tool_choice only when it is set and there are tools" do
+    sent = capture_responses_parameters(@subject) do
+      @subject.chat_response("Hi", model: "gpt-4.1", functions: [ sample_function ])
+      @subject.chat_response("Hi", model: "gpt-4.1", functions: [ sample_function ], tool_choice: :none)
+      @subject.chat_response("Hi", model: "gpt-4.1", tool_choice: :none)
+    end
+
+    assert_not sent[0].key?(:tool_choice)
+    assert_equal "none", sent[1][:tool_choice]
+    assert sent[1][:tools].any?, "the final round keeps the tool definitions"
+    assert_not sent[2].key?(:tool_choice), "tool_choice without tools is rejected by the API"
+  end
+
+  test "generic chat sends tool_choice only when it is set and there are tools" do
+    provider = Provider::Openai.new("test-token", uri_base: "http://llm.local/v1", model: "local-model")
+    reply = { "id" => "chatcmpl_1", "model" => "local-model", "choices" => [ { "message" => { "role" => "assistant", "content" => "Hi" } } ] }
+    sent = []
+    provider.send(:client).stubs(:chat).with { |parameters:| sent << parameters }.returns(reply)
+
+    provider.chat_response("Hi", model: "local-model", functions: [ sample_function ])
+    provider.chat_response("Hi", model: "local-model", functions: [ sample_function ], tool_choice: :none)
+
+    assert_not sent[0].key?(:tool_choice)
+    assert_equal "none", sent[1][:tool_choice]
+  end
+
+  private
+    def sample_function
+      { name: "get_accounts", description: "Lists accounts", params_schema: { type: "object", properties: {}, required: [], additionalProperties: false }, strict: true }
+    end
+
+    # Stubs client.responses.create with a completed stream and returns the parameters of every request
+    def capture_responses_parameters(provider)
+      sent = []
+      completed = { "id" => "resp_1", "model" => "gpt-4.1", "output" => [], "usage" => { "input_tokens" => 1, "output_tokens" => 1, "total_tokens" => 2 } }
+      responses = Object.new
+      responses.define_singleton_method(:create) do |parameters:|
+        sent << parameters
+        parameters[:stream]&.call({ "type" => "response.completed", "response" => completed })
+        parameters[:stream] ? nil : completed
+      end
+      provider.send(:client).stubs(:responses).returns(responses)
+
+      yield
+      sent
+    end
 end

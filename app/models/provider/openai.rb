@@ -173,6 +173,7 @@ class Provider::Openai < Provider
     instructions: nil,
     functions: [],
     function_results: [],
+    tool_choice: nil,
     streamer: nil,
     previous_response_id: nil,
     session_id: nil,
@@ -186,6 +187,7 @@ class Provider::Openai < Provider
         instructions: instructions,
         functions: functions,
         function_results: function_results,
+        tool_choice: tool_choice,
         streamer: streamer,
         session_id: session_id,
         user_identifier: user_identifier,
@@ -198,6 +200,7 @@ class Provider::Openai < Provider
         instructions: instructions,
         functions: functions,
         function_results: function_results,
+        tool_choice: tool_choice,
         streamer: streamer,
         previous_response_id: previous_response_id,
         session_id: session_id,
@@ -216,6 +219,7 @@ class Provider::Openai < Provider
       instructions: nil,
       functions: [],
       function_results: [],
+      tool_choice: nil,
       streamer: nil,
       previous_response_id: nil,
       session_id: nil,
@@ -247,14 +251,19 @@ class Provider::Openai < Provider
         input_payload = chat_config.build_input(prompt)
 
         begin
-          raw_response = client.responses.create(parameters: {
+          request_params = {
             model: model,
             input: input_payload,
             instructions: instructions,
             tools: chat_config.tools,
             previous_response_id: previous_response_id,
             stream: stream_proxy
-          })
+          }
+          # Sent only when a caller sets it, and only with tools to choose from (the API rejects tool_choice
+          # without tools). The responder's last round sends :none so the model answers in text.
+          request_params[:tool_choice] = tool_choice.to_s if tool_choice.present? && chat_config.tools.present?
+
+          raw_response = client.responses.create(parameters: request_params)
 
           # If streaming, Ruby OpenAI does not return anything, so to normalize this method's API, we search
           # for the "response chunk" in the stream and return it (it is already parsed)
@@ -310,6 +319,7 @@ class Provider::Openai < Provider
       instructions: nil,
       functions: [],
       function_results: [],
+      tool_choice: nil,
       streamer: nil,
       session_id: nil,
       user_identifier: nil,
@@ -330,6 +340,7 @@ class Provider::Openai < Provider
           messages: messages
         }
         params[:tools] = tools if tools.present?
+        params[:tool_choice] = tool_choice.to_s if tool_choice.present? && tools.present?
 
         begin
           raw_response = client.chat(parameters: params)
