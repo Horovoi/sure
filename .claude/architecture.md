@@ -87,6 +87,12 @@ through the official `mcp` gem (`MCP::Server::Transports::StreamableHTTPTranspor
   failure is an `isError` result built by `Assistant::FunctionToolCaller.error_result` (the full
   exception goes only to the log). `tools/list` and `server/discover` carry `ttlMs` 60000 and
   `cacheScope` private (the schemas hold family names).
+- Read tools: `get_accounts` (ids, loan and card `terms`, opt-in balance series), `get_balance_sheet`
+  (named or custom period, interval), `get_income_statement` (budget-month series, previous period,
+  account filter; totals match `IncomeStatement`), `get_transactions` (one row per transfer,
+  `classification` income/expense/transfer, compact rows), `get_holdings`, `get_valuations`,
+  `get_categories`, `get_tags`, `get_merchants`, `search_family_files`. Filters take exact names from the
+  get_* tools, not enums. A soft failure is `{error, hint}`, like a raised one.
 - `Assistant::Function#title`, `#mcp_annotations` (default read-only, idempotent, closed world) and
   `#mcp_input_schema` (nullable properties are optional, empty enums pruned) describe each tool.
 - `Mcp::Credential`: who is calling (user, kind `:static` or `:turn`, assistant message). Every client

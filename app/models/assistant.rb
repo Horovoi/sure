@@ -9,15 +9,24 @@ class Assistant
       new(chat, instructions: config[:instructions], functions: config[:functions])
     end
 
+    # Every tool, in one fixed order: the in-app chat and /mcp both serve this list (tools/list keeps the order).
+    # Each tool unit adds its classes in its own block.
     def function_classes
       [
-        Assistant::Function::GetTransactions,
+        # Reads: accounts and balances, income and spending, transactions, holdings, reference data
         Assistant::Function::GetAccounts,
-        Assistant::Function::GetHoldings,
         Assistant::Function::GetBalanceSheet,
         Assistant::Function::GetIncomeStatement,
-        Assistant::Function::ImportBankStatement,
-        Assistant::Function::SearchFamilyFiles
+        Assistant::Function::GetTransactions,
+        Assistant::Function::GetHoldings,
+        Assistant::Function::GetValuations,
+        Assistant::Function::GetCategories,
+        Assistant::Function::GetTags,
+        Assistant::Function::GetMerchants,
+        Assistant::Function::SearchFamilyFiles,
+
+        # Imports
+        Assistant::Function::ImportBankStatement
       ]
     end
   end

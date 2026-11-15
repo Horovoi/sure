@@ -9,6 +9,11 @@ class Assistant::Function
     end
   end
 
+  # Largest page a paginated tool returns, whatever page_size asks for
+  MAX_PAGE_SIZE = 100
+
+  UUID_FORMAT = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+
   def initialize(user)
     @user = user
   end
@@ -118,38 +123,69 @@ class Assistant::Function
         Array(property[:anyOf]).any? { |option| option.is_a?(Hash) && option[:type].to_s == "null" }
     end
 
-    def family_account_names
-      @family_account_names ||= family.accounts.visible.pluck(:name)
-    end
-
-    def family_category_names
-      @family_category_names ||= begin
-        names = family.categories.pluck(:name)
-        names << "Uncategorized"
-        names
-      end
-    end
-
-    def family_merchant_names
-      @family_merchant_names ||= family.merchants.pluck(:name)
-    end
-
+    # Tag lists are small, so a tool that names tags may still offer them as an enum. The large data-driven enums
+    # (accounts, categories, merchants) are gone from schemas: they grew with family data and changed the tool
+    # definitions whenever a name did. Filters take exact names from the sibling get_* tools instead.
     def family_tag_names
       @family_tag_names ||= family.tags.pluck(:name)
+    end
+
+    # Page size for a paginated tool that declares a page_size param, clamped to 1..MAX_PAGE_SIZE
+    def resolved_page_size(params)
+      return self.class.default_page_size if params["page_size"].blank?
+
+      params["page_size"].to_i.clamp(1, MAX_PAGE_SIZE)
+    end
+
+    # Pagy refuses zero, negative or non-numeric pages; anything invalid reads as the first page. A page past the
+    # end gives the last page (Paginatable).
+    def resolved_page(params)
+      page = params["page"].to_i
+      page.positive? ? page : 1
+    end
+
+    # A soft failure the model can act on, in the same {error, hint} shape FunctionToolCaller gives a raised error:
+    # a short code, what to change, and any extra keys that help (e.g. the ids that were not found).
+    def tool_error(code, hint, **details)
+      { error: code, hint: hint, **details }
+    end
+
+    def valid_uuid?(value)
+      value.is_a?(String) && UUID_FORMAT.match?(value)
+    end
+
+    # Period.from_key reads Current.family for the fiscal month and "all time", and the chat job has no Current.
+    # Those two keys are built from the tool's own family instead, so the chat and /mcp agree.
+    def named_period(key)
+      case key
+      when "fiscal_current_month"
+        Period.custom(start_date: family.budget_period_start_for(Date.current), end_date: Date.current)
+      when "all_time"
+        start_date = family.oldest_entry_date
+        start_date = 5.years.ago.to_date if start_date >= Date.current
+        Period.custom(start_date: start_date, end_date: Date.current)
+      else
+        Period.from_key(key)
+      end
     end
 
     def family
       user.family
     end
 
-    # To save tokens, we provide the AI metadata about the series and a flat array of
-    # raw, formatted values which it can infer dates from
+    # To save tokens, the series is metadata plus a flat array of numbers the model can infer dates from. The
+    # currency is stated once instead of formatting every value, and values round to the currency's own precision
+    # (UAH and USD 2, BTC 8), rounded as BigDecimal before the Float conversion.
     def to_ai_time_series(series)
+      currency = series.values.first&.trend&.current&.currency
+      precision = currency&.default_precision || 2
+
       {
         start_date: series.start_date,
         end_date: series.end_date,
         interval: series.interval,
-        values: series.values.map { |v| v.trend.current.format }
-      }
+        currency: currency&.iso_code,
+        values: series.values.map { |v| v.trend.current.amount.round(precision).to_f }
+      }.compact
     end
 end

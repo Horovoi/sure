@@ -64,6 +64,7 @@ class Assistant::Function::GetHoldings < Assistant::Function
       properties: {
         page: {
           type: "integer",
+          minimum: 1,
           description: "Page number"
         },
         accounts: {
@@ -89,7 +90,7 @@ class Assistant::Function::GetHoldings < Assistant::Function
 
     pagy, paginated_holdings = pagy(
       holdings_query.includes(:security, :account).order(amount: :desc),
-      page: params["page"] || 1,
+      page: resolved_page(params),
       limit: default_page_size,
       request: { params: {} }
     )
@@ -144,8 +145,9 @@ class Assistant::Function::GetHoldings < Assistant::Function
         )
 
       if params["securities"].present?
-        security_ids = family.securities.where(ticker: params["securities"]).pluck(:id)
-        holdings = holdings.where(security_id: security_ids)
+        # Family has no securities association (the old call raised NoMethodError). A ticker listed on more than
+        # one exchange matches all of them, as the enum names tickers only.
+        holdings = holdings.joins(:security).where(securities: { ticker: params["securities"] })
       end
 
       holdings
