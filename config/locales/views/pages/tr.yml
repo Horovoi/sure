@@ -1,8 +1,6 @@
 ---
 tr:
   pages:
-    changelog:
-      title: Yenilikler
     dashboard:
       cashflow_sankey:
         other_category: "Other %{category}"

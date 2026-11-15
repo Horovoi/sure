@@ -30,16 +30,10 @@
       <% end %>
     <% end %>
 
-    <% menu.with_item(variant: "link", text: "Settings", icon: "settings", href: accounts_path(return_to: request.fullpath)) %>
-    <% menu.with_item(variant: "link", text: "Changelog", icon: "box", href: changelog_path) %>
-
-    <% if self_hosted? %>
-      <% menu.with_item(variant: "link", text: "Feedback", icon: "megaphone", href: feedback_path) %>
-    <% end %>
-    <% menu.with_item(variant: "link", text: "Contact", icon: "message-square", href: "https://discord.gg/36ZGBsxYEK") %>
+    <% menu.with_item(variant: "link", text: t(".settings"), icon: "settings", href: accounts_path(return_to: request.fullpath)) %>
 
     <% menu.with_item(variant: "divider") %>
 
-    <% menu.with_item(variant: "button", text: "Log out", icon: "log-out", href: session_path(Current.session), method: :delete) %>
+    <% menu.with_item(variant: "button", text: t(".log_out"), icon: "log-out", href: session_path(Current.session), method: :delete) %>
   <% end %>
 </div>

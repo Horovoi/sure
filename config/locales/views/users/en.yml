@@ -1,6 +1,9 @@
 ---
 en:
   users:
+    user_menu:
+      log_out: Log out
+      settings: Settings
     destroy:
       success: Your account has been deleted.
     update:

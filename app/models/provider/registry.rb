@@ -49,10 +49,6 @@ class Provider::Registry
         Provider::Plaid.new(config, region: :eu)
       end
 
-      def github
-        Provider::Github.new
-      end
-
       def openai
         access_token = ENV["OPENAI_ACCESS_TOKEN"].presence || Setting.openai_access_token
 
@@ -107,7 +103,7 @@ class Provider::Registry
       when :llm
         %i[openai]
       else
-        %i[plaid_us plaid_eu github openai]
+        %i[plaid_us plaid_eu openai]
       end
     end
 end

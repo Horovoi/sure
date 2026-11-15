@@ -97,7 +97,6 @@ es:
       api_key_label: Clave API
       payment_label: Pago
       categories_label: Categorías
-      feedback_label: Comentarios
       general_section_title: General
       imports_label: Importaciones
       exports_label: Exportaciones
@@ -113,7 +112,6 @@ es:
       self_hosting_label: Autoalojamiento
       tags_label: Etiquetas
       transactions_section_title: Transacciones
-      whats_new_label: Novedades
       api_keys_label: Clave API
       bank_sync_label: Sincronización Bancaria
     settings_nav_link_large:

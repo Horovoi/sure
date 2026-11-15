@@ -1,8 +1,6 @@
 ---
 zh-CN:
   pages:
-    changelog:
-      title: 更新日志
     dashboard:
       balance_sheet:
         add_accounts: 添加您的%{name}账户以查看完整分析

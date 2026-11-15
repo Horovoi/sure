@@ -64,4 +64,12 @@ class Provider::RegistryTest < ActiveSupport::TestCase
       assert_instance_of Provider::Openai, provider
     end
   end
+
+  test "the GitHub release-notes provider is gone" do
+    assert_not defined?(Provider::Github)
+    assert_raises(Provider::Registry::Error) { Provider::Registry.get_provider(:github) }
+    Provider::Registry::CONCEPTS.each do |concept|
+      assert_not_includes Provider::Registry.new(concept).send(:available_providers), :github
+    end
+  end
 end

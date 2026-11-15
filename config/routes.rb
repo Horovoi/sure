@@ -72,8 +72,6 @@ Rails.application.routes.draw do
     end
   end
 
-  get "changelog", to: "pages#changelog"
-  get "feedback", to: "pages#feedback"
   patch "dashboard/preferences", to: "pages#update_preferences"
 
   resource :current_session, only: %i[update]

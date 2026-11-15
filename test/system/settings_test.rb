@@ -14,32 +14,34 @@ class SettingsTest < ApplicationSystemTestCase
       [ "Tags", tags_path ],
       [ "Rules", rules_path ],
       [ "Merchants", family_merchants_path ],
-      [ "Guides", settings_guides_path ],
-      [ "What's new", changelog_path ],
-      [ "Feedback", feedback_path ]
+      [ "Budgeting", settings_budgeting_path ],
+      [ "Guides", settings_guides_path ]
     ]
 
     # Add admin settings if user is admin
     if @user.admin?
       @settings_links += [
         [ "AI Prompts", settings_ai_prompts_path ],
+        [ "LLM Usage", settings_llm_usage_path ],
         [ "API Key", settings_api_key_path ]
       ]
     end
   end
 
   test "can access settings from sidebar" do
-    VCR.use_cassette("git_repository_provider/fetch_latest_release_notes") do
-      open_settings_from_sidebar
-      assert_selector "h1", text: "Accounts"
-      assert_current_path accounts_path, ignore_query: true
+    open_settings_from_sidebar
+    assert_selector "h1", text: "Accounts"
+    assert_current_path accounts_path, ignore_query: true
 
-      @settings_links.each do |name, path|
-        click_link name
-        assert_selector "h1", text: name
-        assert_current_path path
-      end
+    @settings_links.each do |name, path|
+      click_link name
+      assert_selector "h1", text: name
+      assert_current_path path
     end
+
+    assert_link I18n.t("settings.settings_nav.exports_label"), href: family_exports_path
+    assert_no_link "What's new"
+    assert_no_link "Feedback"
   end
 
   test "can update self hosting settings" do
@@ -68,6 +70,26 @@ class SettingsTest < ApplicationSystemTestCase
     Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
     open_settings_from_sidebar
     assert_no_selector "li", text: I18n.t("settings.settings_nav.payment_label")
+  end
+
+  test "a member sees no exports, LLM usage or admin links" do
+    Capybara.reset_sessions!
+    sign_in users(:family_member)
+    open_settings_from_sidebar
+
+    assert_link I18n.t("settings.settings_nav.budgeting_label"), href: settings_budgeting_path
+    assert_no_link I18n.t("settings.settings_nav.exports_label"), href: family_exports_path
+    assert_no_link I18n.t("settings.settings_nav.llm_usage_label"), href: settings_llm_usage_path
+    assert_no_link I18n.t("settings.settings_nav.users_label"), href: admin_users_path
+    assert_no_link I18n.t("settings.settings_nav.sso_providers_label"), href: admin_sso_providers_path
+  end
+
+  test "a super admin sees the users and SSO provider links" do
+    @user.update!(role: "super_admin")
+    open_settings_from_sidebar
+
+    assert_link I18n.t("settings.settings_nav.users_label"), href: admin_users_path
+    assert_link I18n.t("settings.settings_nav.sso_providers_label"), href: admin_sso_providers_path
   end
 
   private

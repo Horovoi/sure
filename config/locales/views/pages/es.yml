@@ -1,8 +1,6 @@
 ---
 es:
   pages:
-    changelog:
-      title: Novedades
     dashboard:
       welcome: "Bienvenido de nuevo, %{name}"
       subtitle: "Esto es lo que está pasando con tus finanzas"

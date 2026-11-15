@@ -96,7 +96,6 @@ de:
       api_key_label: API-Schlüssel
       payment_label: Zahlung
       categories_label: Kategorien
-      feedback_label: Feedback
       general_section_title: Allgemein
       imports_label: Importe
       exports_label: Exporte
@@ -112,7 +111,6 @@ de:
       self_hosting_label: Self-Hosting
       tags_label: Tags
       transactions_section_title: Transaktionen
-      whats_new_label: Was ist neu
       api_keys_label: API-Schlüssel
       bank_sync_label: Banksynchronisierung
     settings_nav_link_large:

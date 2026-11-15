@@ -115,9 +115,12 @@ en:
       advanced_section_title: Advanced
       ai_prompts_label: AI Prompts
       api_key_label: API Key
+      budgeting_label: Budgeting
+      llm_usage_label: LLM Usage
+      sso_providers_label: SSO Providers
+      users_label: Users
       payment_label: Payment
       categories_label: Categories
-      feedback_label: Feedback
       general_section_title: General
       imports_label: Imports
       exports_label: Exports
@@ -133,7 +136,6 @@ en:
       self_hosting_label: Self-Hosting
       tags_label: Tags
       transactions_section_title: Transactions
-      whats_new_label: What's new
       api_keys_label: API Key
       bank_sync_label: Bank Sync
     settings_nav_link_large:

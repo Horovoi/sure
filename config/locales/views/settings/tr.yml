@@ -80,7 +80,6 @@ tr:
       advanced_section_title: Gelişmiş
       payment_label: Ödeme
       categories_label: Kategoriler
-      feedback_label: Geri Bildirim
       general_section_title: Genel
       imports_label: İçe Aktarımlar
       logout: Çıkış Yap
@@ -93,7 +92,6 @@ tr:
       self_hosting_label: Kendi Sunucunda Barındırma
       tags_label: Etiketler
       transactions_section_title: İşlemler
-      whats_new_label: Yenilikler
     settings_nav_link_large:
       next: Sonraki
       previous: Geri

@@ -1,8 +1,6 @@
 ---
 pt-BR:
   pages:
-    changelog:
-      title: Novidades
     dashboard:
       welcome: "Bem-vindo(a) de volta, %{name}"
       subtitle: "Veja o que está acontecendo com suas finanças"
