@@ -36,4 +36,23 @@ class TagTest < ActiveSupport::TestCase
 
     assert tag.update(name: "Renamed")
   end
+
+  test "the database refuses a second tag with the same name in a family" do
+    assert_raises ActiveRecord::RecordNotUnique do
+      Tag.insert_all!([ { family_id: tags(:one).family_id, name: tags(:one).name, color: "#000000" } ])
+    end
+  end
+
+  test "find_or_create_by_name! returns the existing tag or creates one" do
+    family = tags(:one).family
+
+    assert_equal tags(:one), family.tags.find_or_create_by_name!(tags(:one).name)
+
+    created = nil
+    assert_difference "Tag.count", +1 do
+      created = family.tags.find_or_create_by_name!("Brand new") { |tag| tag.color = "#123456" }
+    end
+    assert created.previously_new_record?
+    assert_equal "#123456", created.color
+  end
 end

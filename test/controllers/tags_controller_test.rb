@@ -54,13 +54,32 @@ class TagsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "JSON create returns the validation errors" do
+    assert_no_difference "Tag.count" do
+      post tags_url(format: :json), params: { tag: { name: "", color: Tag::COLORS.first } }, as: :json
+    end
+
+    assert_response :unprocessable_entity
+    assert response.parsed_body["errors"].any?
+  end
+
+  test "JSON create of an existing name returns that tag" do
     existing = users(:family_admin).family.tags.first
 
     assert_no_difference "Tag.count" do
       post tags_url(format: :json), params: { tag: { name: existing.name, color: Tag::COLORS.first } }, as: :json
     end
 
-    assert_response :unprocessable_entity
-    assert response.parsed_body["errors"].any?
+    assert_response :ok
+    assert_equal existing.id, response.parsed_body["id"]
+  end
+
+  test "renaming a tag to a name in use shows an error instead of failing" do
+    first, second = users(:family_admin).family.tags.alphabetically.first(2)
+
+    patch tag_url(first), params: { tag: { name: second.name } }
+
+    assert_redirected_to tags_url
+    assert_match "taken", flash[:alert]
+    assert_not_equal second.name, first.reload.name
   end
 end

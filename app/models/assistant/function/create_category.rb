@@ -74,8 +74,11 @@ class Assistant::Function::CreateCategory < Assistant::Function
     icon = params["icon"].presence || "layers"
     return tool_error("invalid_icon", icon_hint) unless valid_icon?(icon)
 
-    category = family.categories.create!(attributes.merge(color: color, lucide_icon: icon))
+    # The shared create path: a same-name category created in between comes back as it is
+    category = family.categories.find_or_create_by_name!(name) do |new_category|
+      new_category.assign_attributes(attributes.except(:name).merge(color: color, lucide_icon: icon))
+    end
 
-    { id: category.id, created: true, category: category_snapshot(category) }
+    { id: category.id, created: category.previously_new_record?, category: category_snapshot(category) }
   end
 end

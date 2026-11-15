@@ -87,9 +87,7 @@ class Transaction < ApplicationRecord
 
   def set_category!(category)
     if category.is_a?(String)
-      category = entry.account.family.categories.find_or_create_by!(
-        name: category
-      )
+      category = entry.account.family.categories.find_or_create_by_name!(category)
     end
 
     update!(category: category)

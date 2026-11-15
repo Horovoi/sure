@@ -293,12 +293,11 @@ class RuleImport < Import
     end
 
     def find_or_create_category(name)
-      categories_by_name[name] ||= family.categories.create!(
-        name: name,
-        color: Category::UNCATEGORIZED_COLOR,
-        classification: "expense",
-        lucide_icon: "shapes"
-      )
+      categories_by_name[name] ||= family.categories.find_or_create_by_name!(name) do |category|
+        category.color = Category::UNCATEGORIZED_COLOR
+        category.classification = "expense"
+        category.lucide_icon = "shapes"
+      end
     end
 
     def find_or_create_merchant(name)
@@ -318,7 +317,7 @@ class RuleImport < Import
     end
 
     def find_or_create_tag(name)
-      tags_by_name[name] ||= family.tags.create!(name: name)
+      tags_by_name[name] ||= family.tags.find_or_create_by_name!(name)
     end
 
     def parse_boolean(value)

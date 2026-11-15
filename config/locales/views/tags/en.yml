@@ -25,4 +25,5 @@ en:
       delete: Delete
       edit: Edit
     update:
+      error: 'Error updating tag: %{error}'
       updated: Tag updated

@@ -1,4 +1,6 @@
 class Tag < ApplicationRecord
+  include FamilyUniqueName
+
   belongs_to :family
   has_many :taggings, dependent: :destroy
   has_many :transactions, through: :taggings, source: :taggable, source_type: "Transaction"

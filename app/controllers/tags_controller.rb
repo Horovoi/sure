@@ -1,4 +1,6 @@
 class TagsController < ApplicationController
+  include UniqueNameSaving
+
   before_action :set_tag, only: %i[edit update destroy]
 
   def index
@@ -14,7 +16,7 @@ class TagsController < ApplicationController
   def create
     @tag = Current.family.tags.new(tag_params)
 
-    if @tag.save
+    if save_unique_name(@tag)
       respond_to do |format|
         format.html { redirect_to tags_path, notice: t(".created") }
         # The tag picker's inline create: the new option comes back to insert and select.
@@ -23,7 +25,15 @@ class TagsController < ApplicationController
     else
       respond_to do |format|
         format.html { redirect_to tags_path, alert: t(".error", error: @tag.errors.full_messages.to_sentence) }
-        format.json { render json: { errors: @tag.errors.full_messages }, status: :unprocessable_entity }
+        format.json do
+          # The picker's inline create of a name that exists already picks that tag
+          existing = Current.family.tags.find_by(name: @tag.name) if @tag.errors.of_kind?(:name, :taken)
+          if existing
+            render json: tag_json(existing), status: :ok
+          else
+            render json: { errors: @tag.errors.full_messages }, status: :unprocessable_entity
+          end
+        end
       end
     end
   end
@@ -32,8 +42,13 @@ class TagsController < ApplicationController
   end
 
   def update
-    @tag.update!(tag_params)
-    redirect_to tags_path, notice: t(".updated")
+    @tag.assign_attributes(tag_params)
+
+    if save_unique_name(@tag)
+      redirect_to tags_path, notice: t(".updated")
+    else
+      redirect_to tags_path, alert: t(".error", error: @tag.errors.full_messages.to_sentence)
+    end
   end
 
   def destroy

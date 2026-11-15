@@ -281,17 +281,24 @@ export default class extends Controller {
         return;
       }
 
-      // A subcategory goes at the end of its parent's group, not the list.
-      const anchor = parentId ? this.#lastOptionInGroup(parentId) : null;
-      if (anchor) anchor.insertAdjacentHTML("afterend", category.html);
-      else this.createFormTarget.insertAdjacentHTML("beforebegin", category.html);
+      // A name that exists already comes back as that category: select its row, don't add another
+      const findOption = () =>
+        this.#listOptions().find(
+          (option) => option.dataset.categoryId === String(category.id),
+        );
+      const listedOption = findOption();
 
-      const newOption = this.#listOptions().find(
-        (option) => option.dataset.categoryId === String(category.id),
-      );
+      if (!listedOption) {
+        // A subcategory goes at the end of its parent's group, not the list.
+        const anchor = parentId ? this.#lastOptionInGroup(parentId) : null;
+        if (anchor) anchor.insertAdjacentHTML("afterend", category.html);
+        else this.createFormTarget.insertAdjacentHTML("beforebegin", category.html);
+      }
+
+      const newOption = listedOption || findOption();
 
       if (newOption) this.selectOption(newOption);
-      if (!parentId) this.#addParentOption(category, newOption);
+      if (!parentId && !listedOption && !category.parent_id) this.#addParentOption(category, newOption);
 
       this.searchTarget.value = "";
       this.filter();

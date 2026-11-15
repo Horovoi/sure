@@ -1,4 +1,6 @@
 class CategoriesController < ApplicationController
+  include UniqueNameSaving
+
   before_action :set_category, only: %i[edit update destroy]
   before_action :set_categories, only: %i[update edit]
   before_action :set_transaction, only: :create
@@ -20,7 +22,7 @@ class CategoriesController < ApplicationController
   def create
     @category = Current.family.categories.new(category_params)
 
-    if @category.save
+    if save_unique_name(@category)
       if @transaction
         @transaction.update(category_id: @category.id)
         @transaction.record_category_usage!
@@ -47,7 +49,16 @@ class CategoriesController < ApplicationController
           set_categories
           render :new, formats: [ :html ], status: :unprocessable_entity
         end
-        format.json { render json: { errors: @category.errors.full_messages }, status: :unprocessable_entity }
+        format.json do
+          # The picker's inline create of a name that exists already picks that category,
+          # unless it is of the other classification (the form could not use it).
+          existing = existing_category_for(@category)
+          if existing
+            render json: category_json(existing), status: :ok
+          else
+            render json: { errors: @category.errors.full_messages }, status: :unprocessable_entity
+          end
+        end
       end
     end
   end
@@ -56,7 +67,9 @@ class CategoriesController < ApplicationController
   end
 
   def update
-    if @category.update(category_params)
+    @category.assign_attributes(category_params)
+
+    if save_unique_name(@category)
       flash[:notice] = t(".success")
 
       redirect_target_url = request.referer || categories_path
@@ -134,6 +147,12 @@ class CategoriesController < ApplicationController
 
     def category_params
       params.expect(category: [ :name, :color, :parent_id, :classification, :lucide_icon ])
+    end
+
+    def existing_category_for(category)
+      return unless category.errors.of_kind?(:name, :taken)
+
+      Current.family.categories.find_by(name: category.name, classification: category.classification)
     end
 
     def category_merge_params

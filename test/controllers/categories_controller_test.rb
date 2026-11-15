@@ -126,16 +126,49 @@ class CategoriesControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "JSON create returns the validation errors" do
-    existing = categories(:food_and_drink)
-
     assert_no_difference "Category.count" do
       post categories_url(format: :json), params: {
-        category: { name: existing.name, color: Category::COLORS.first, classification: "expense" }
+        category: { name: "", color: Category::COLORS.first, classification: "expense" }
       }, as: :json
     end
 
     assert_response :unprocessable_entity
     assert response.parsed_body["errors"].any?
+  end
+
+  test "JSON create of an existing name returns that category" do
+    existing = categories(:food_and_drink)
+
+    assert_no_difference "Category.count" do
+      post categories_url(format: :json), params: {
+        category: { name: existing.name, color: Category::COLORS.first, classification: existing.classification }
+      }, as: :json
+    end
+
+    assert_response :ok
+    assert_equal existing.id, response.parsed_body["id"]
+    assert_includes response.parsed_body["html"], %(data-category-id="#{existing.id}")
+  end
+
+  test "JSON create of an existing name of the other classification is refused" do
+    existing = categories(:food_and_drink)
+    other = existing.classification == "income" ? "expense" : "income"
+
+    assert_no_difference "Category.count" do
+      post categories_url(format: :json), params: {
+        category: { name: existing.name, color: Category::COLORS.first, classification: other }
+      }, as: :json
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "create that loses a race to the unique index shows the name error" do
+    Category.any_instance.stubs(:save).raises(ActiveRecord::RecordNotUnique)
+
+    post categories_url, params: { category: { name: "Racing", color: Category::COLORS.first } }
+
+    assert_response :unprocessable_entity
   end
 
   test "JSON create rejects a parent from another family" do
