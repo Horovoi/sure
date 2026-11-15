@@ -492,6 +492,8 @@ class TransactionsController < ApplicationController
                 categories: [], merchants: [], types: [], tags: [], status: []
               )
               .to_h
+              # A blank member (q[account_ids][]=) is no filter, not a filter that matches nothing
+              .transform_values { |value| value.is_a?(Array) ? value.compact_blank : value }
               .compact_blank
 
       cleaned_params.delete(:amount_operator) unless cleaned_params[:amount].present?

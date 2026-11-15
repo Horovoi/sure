@@ -8,3 +8,6 @@ en:
             logo:
               invalid_content_type: must be a JPEG, PNG or WebP image
               invalid_file_size: must be %{max_megabytes} MB or smaller
+  models:
+    merchant:
+      no_merchant: No merchant

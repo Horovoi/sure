@@ -48,7 +48,8 @@ class Transaction::Search
   def totals
     @totals ||= begin
       # v2: Totals gained the transfer inflow and outflow (w2-transfers transfer-hints)
-      Rails.cache.fetch("transaction_search_totals/v2/#{cache_key_base}", expires_in: Family::AGGREGATE_CACHE_TTL) do
+      # v3: the No merchant and Untagged filter options (w3-toolstrx filter-options)
+      Rails.cache.fetch("transaction_search_totals/v3/#{cache_key_base}", expires_in: Family::AGGREGATE_CACHE_TTL) do
         # The nearest stored rate of the entry's day; an amount in a currency with no rate
         # at all is left out, not counted at 1
         rate = ExchangeRate.rate_sql(
@@ -126,7 +127,10 @@ class Transaction::Search
       end
 
       if include_uncategorized
-        conditions << "(categories.id IS NULL AND transactions.kind NOT IN ('funds_movement', 'cc_payment'))"
+        # The legs of a transfer between own accounts have nothing to categorize (the same
+        # kinds the categorize wizard leaves out)
+        conditions << "(categories.id IS NULL AND transactions.kind NOT IN (?))"
+        binds.push(Transaction::UNCATEGORIZED_EXCLUDED_KINDS)
       end
 
       return query if conditions.empty?
@@ -158,16 +162,34 @@ class Transaction::Search
       query.where(condition)
     end
 
+    # Merchant names, plus the "No merchant" sentinel for transactions without one
     def apply_merchant_filter(query, merchants)
       return query unless merchants.present?
-      query.joins(:merchant).where(merchants: { name: merchants })
+
+      include_no_merchant = merchants.include?(Merchant::NO_MERCHANT_FILTER_VALUE)
+      named = merchants - [ Merchant::NO_MERCHANT_FILTER_VALUE ]
+
+      if include_no_merchant
+        query.left_joins(:merchant).where("merchants.name IN (?) OR transactions.merchant_id IS NULL", named)
+      else
+        query.joins(:merchant).where(merchants: { name: named })
+      end
     end
 
-    # A subquery, not a join: joining tags gives one row per matching tag, so a
-    # transaction with two of the filtered tags was counted and summed twice in totals.
+    # Tag names, plus the "Untagged" sentinel for transactions without a tag. Subqueries,
+    # not a join: joining tags gives one row per matching tag, so a transaction with two of
+    # the filtered tags was counted and summed twice in totals.
     def apply_tag_filter(query, tags)
       return query unless tags.present?
-      query.where(id: EntrySearch.tagged_transaction_ids(tags))
+
+      include_untagged = tags.include?(Tag::UNTAGGED_FILTER_VALUE)
+      named = tags - [ Tag::UNTAGGED_FILTER_VALUE ]
+      transactions = Transaction.arel_table
+
+      tagged = transactions[:id].in(EntrySearch.tagged_transaction_ids(named).arel) if named.any?
+      untagged = EntrySearch.untagged_condition(transactions[:id]) if include_untagged
+
+      query.where([ tagged, untagged ].compact.reduce(:or))
     end
 
     def apply_status_filter(query, statuses)

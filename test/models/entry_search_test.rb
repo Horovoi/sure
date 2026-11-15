@@ -144,6 +144,64 @@ class EntrySearchTest < ActiveSupport::TestCase
     assert_equal [ matching_entry.id ], results.where(id: Entry.where("entries.name LIKE ?", "Composable lunch%").select(:id)).ids
   end
 
+  test "tag filter returns an entry with two of the filtered tags once" do
+    tag_a = @family.tags.create!(name: "EntryTagA")
+    tag_b = @family.tags.create!(name: "EntryTagB")
+
+    double_tagged = create_transaction(account: @account, name: "Double", tags: [ tag_a, tag_b ])
+    single_tagged = create_transaction(account: @account, name: "Single", tags: [ tag_b ])
+    untagged = create_transaction(account: @account, name: "Untagged")
+
+    results = @account.entries.search(tags: [ "EntryTagA", "EntryTagB" ])
+
+    assert_equal [ double_tagged.id, single_tagged.id ].sort, results.pluck(:id).sort
+    assert_equal 2, results.count
+    assert_not_includes results, untagged
+  end
+
+  # --- w3-toolstrx filter-options: No merchant, Untagged on the account page --------------------------------------
+
+  test "No merchant on the account page finds the account's transactions without a merchant" do
+    with_merchant = create_transaction(account: @account, name: "Has merchant", merchant: merchants(:netflix))
+    without = create_transaction(account: @account, name: "No merchant here")
+    valuation = create_valuation(account: @account, name: "Valuation", date: Date.current)
+
+    results = @account.entries.search(merchants: [ Merchant::NO_MERCHANT_FILTER_VALUE ])
+
+    assert_includes results, without
+    assert_not_includes results, with_merchant
+    assert_not_includes results, valuation
+
+    both = @account.entries.search(merchants: [ Merchant::NO_MERCHANT_FILTER_VALUE, merchants(:netflix).name ])
+    assert_includes both, with_merchant
+    assert_includes both, without
+  end
+
+  test "Untagged on the account page, alone and with tags, lists each entry once" do
+    tag_a = @family.tags.create!(name: "EntryTagA")
+    tag_b = @family.tags.create!(name: "EntryTagB")
+    double = create_transaction(account: @account, name: "Two tags", tags: [ tag_a, tag_b ])
+    untagged = create_transaction(account: @account, name: "No tags")
+
+    alone = @account.entries.search(tags: [ Tag::UNTAGGED_FILTER_VALUE ])
+    assert_includes alone, untagged
+    assert_not_includes alone, double
+
+    combined = @account.entries.search(tags: [ Tag::UNTAGGED_FILTER_VALUE, "EntryTagA", "EntryTagB" ]).to_a
+    assert_equal 1, combined.count(double)
+    assert_includes combined, untagged
+  end
+
+  test "Uncategorized on the account page uses the categorize wizard's kinds" do
+    one_time = create_transaction(account: @account, name: "Once", kind: "one_time")
+    transfer = create_transaction(account: @account, name: "Move", kind: "funds_movement")
+
+    results = @account.entries.search(categories: [ Category::UNCATEGORIZED_FILTER_VALUE ])
+
+    assert_includes results, one_time
+    assert_not_includes results, transfer
+  end
+
   private
 
     def create_pending_transaction(account:, name:, provider:, date: Date.current, amount: 100, **transaction_attributes)
@@ -156,20 +214,5 @@ class EntrySearchTest < ActiveSupport::TestCase
         amount: amount,
         entryable: transaction
       )
-    end
-
-    test "tag filter returns an entry with two of the filtered tags once" do
-      tag_a = @family.tags.create!(name: "EntryTagA")
-      tag_b = @family.tags.create!(name: "EntryTagB")
-
-      double_tagged = create_transaction(account: @account, name: "Double", tags: [ tag_a, tag_b ])
-      single_tagged = create_transaction(account: @account, name: "Single", tags: [ tag_b ])
-      untagged = create_transaction(account: @account, name: "Untagged")
-
-      results = @account.entries.search(tags: [ "EntryTagA", "EntryTagB" ])
-
-      assert_equal [ double_tagged.id, single_tagged.id ].sort, results.pluck(:id).sort
-      assert_equal 2, results.count
-      assert_not_includes results, untagged
     end
 end

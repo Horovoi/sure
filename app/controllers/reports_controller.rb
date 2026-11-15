@@ -1017,7 +1017,7 @@ class ReportsController < ApplicationController
         entry = transaction.entry
         is_expense = entry.amount > 0
         type = is_expense ? "expense" : "income"
-        category_name = transaction.category&.name || "Uncategorized"
+        category_name = transaction.category&.name || Category.uncategorized_name
         month_key = use_fiscal ? family.budget_period_start_for(entry.date) : entry.date.beginning_of_month
 
         # Convert to family currency at the entry's own date; an amount with no rate at all is

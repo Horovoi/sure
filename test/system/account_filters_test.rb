@@ -98,6 +98,50 @@ class AccountFiltersTest < ApplicationSystemTestCase
     assert_text @income_entry.name
   end
 
+  test "account page filters by No merchant and Untagged" do
+    @matching_expense.entryable.update!(merchant: merchants(:netflix))
+    @other_expense.entryable.update!(tags: [ tags(:one) ])
+
+    find("#activity-filter-button").click
+
+    within "#transaction-filters-menu" do
+      click_button "Merchant"
+      check "No merchant"
+    end
+
+    page.execute_script("document.getElementById('entries-search').requestSubmit()")
+
+    assert_no_text @matching_expense.name
+    assert_text @other_expense.name
+    assert_text @income_entry.name
+
+    within "ul#transaction-search-filters" do
+      assert_text "No merchant"
+      assert_no_text Merchant::NO_MERCHANT_FILTER_VALUE
+    end
+
+    within find("ul#transaction-search-filters").find(:xpath, "..") do
+      click_on "Clear all"
+    end
+
+    find("#activity-filter-button").click
+
+    within "#transaction-filters-menu" do
+      click_button "Tag"
+      check "Untagged"
+    end
+
+    page.execute_script("document.getElementById('entries-search').requestSubmit()")
+
+    assert_text @matching_expense.name
+    assert_no_text @other_expense.name
+    assert_text @income_entry.name
+
+    within "ul#transaction-search-filters" do
+      assert_text "Untagged"
+    end
+  end
+
   private
 
     def create_transaction(name, amount, category)

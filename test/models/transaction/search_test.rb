@@ -114,7 +114,7 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     )
 
     # Search for uncategorized transactions
-    uncategorized_results = Transaction::Search.new(@family, filters: { categories: [ "Uncategorized" ] }).transactions_scope
+    uncategorized_results = Transaction::Search.new(@family, filters: { categories: [ Category.uncategorized.name ] }).transactions_scope
     uncategorized_ids = uncategorized_results.pluck(:id)
 
     # Should include standard uncategorized transactions
@@ -126,12 +126,12 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_not_includes uncategorized_ids, uncategorized_transfer.entryable.id
   end
 
-  test "the Uncategorized sentinel and the legacy display name both filter for no category" do
+  test "the Uncategorized sentinel and the display name both filter for no category" do
     uncategorized = create_transaction(account: @checking_account, amount: 100, kind: "standard")
     categorized = create_transaction(account: @checking_account, amount: 50, category: categories(:food_and_drink))
     transfer = create_transaction(account: @checking_account, amount: 200, kind: "funds_movement")
 
-    [ Category::UNCATEGORIZED_FILTER_VALUE, "Uncategorized" ].each do |value|
+    [ Category::UNCATEGORIZED_FILTER_VALUE, Category.uncategorized.name ].each do |value|
       ids = Transaction::Search.new(@family, filters: { categories: [ value ] }).transactions_scope.pluck(:id)
 
       assert_includes ids, uncategorized.entryable.id, value
@@ -476,5 +476,82 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_equal 2, search.transactions_scope.count
     assert_equal 2, search.totals.count
     assert_equal Money.new(150, @family.currency), search.totals.expense_money
+  end
+
+  # --- w3-toolstrx filter-options: No merchant, Untagged ----------------------------------------------------------
+
+  test "the Uncategorized filter leaves out only transfer legs, the kinds the categorize wizard skips" do
+    one_time = create_transaction(account: @checking_account, amount: 40, kind: "one_time")
+    cc_payment = create_transaction(account: @checking_account, amount: 60, kind: "cc_payment")
+
+    ids = Transaction::Search.new(@family, filters: { categories: [ Category::UNCATEGORIZED_FILTER_VALUE ] }).transactions_scope.pluck(:id)
+
+    assert_includes ids, one_time.entryable.id
+    assert_not_includes ids, cc_payment.entryable.id
+  end
+
+  test "No merchant finds transactions without a merchant" do
+    with_merchant = create_transaction(account: @checking_account, amount: 10, merchant: merchants(:netflix))
+    without = create_transaction(account: @checking_account, amount: 20)
+
+    ids = Transaction::Search.new(@family, filters: { merchants: [ Merchant::NO_MERCHANT_FILTER_VALUE ] }).transactions_scope.pluck(:id)
+
+    assert_equal [ without.entryable.id ], ids
+    assert_not_includes ids, with_merchant.entryable.id
+  end
+
+  test "No merchant combines with a named merchant" do
+    netflix = create_transaction(account: @checking_account, amount: 10, merchant: merchants(:netflix))
+    amazon = create_transaction(account: @checking_account, amount: 15, merchant: merchants(:amazon))
+    without = create_transaction(account: @checking_account, amount: 20)
+
+    search = Transaction::Search.new(@family, filters: { merchants: [ Merchant::NO_MERCHANT_FILTER_VALUE, merchants(:netflix).name ] })
+    ids = search.transactions_scope.pluck(:id)
+
+    assert_equal [ netflix.entryable.id, without.entryable.id ].sort, ids.sort
+    assert_not_includes ids, amazon.entryable.id
+    assert_equal 2, search.totals.count
+  end
+
+  test "Untagged finds transactions without a tag" do
+    tag = @family.tags.create!(name: "Trip")
+    tagged = create_transaction(account: @checking_account, amount: 10, tags: [ tag ])
+    untagged = create_transaction(account: @checking_account, amount: 20)
+
+    ids = Transaction::Search.new(@family, filters: { tags: [ Tag::UNTAGGED_FILTER_VALUE ] }).transactions_scope.pluck(:id)
+
+    assert_equal [ untagged.entryable.id ], ids
+    assert_not_includes ids, tagged.entryable.id
+  end
+
+  test "Untagged combines with named tags, and a transaction with two of them counts once" do
+    tag_a = @family.tags.create!(name: "UntagA")
+    tag_b = @family.tags.create!(name: "UntagB")
+    tag_c = @family.tags.create!(name: "UntagC")
+
+    double = create_transaction(account: @checking_account, amount: 100, tags: [ tag_a, tag_b ])
+    untagged = create_transaction(account: @checking_account, amount: 50)
+    other = create_transaction(account: @checking_account, amount: 70, tags: [ tag_c ])
+
+    search = Transaction::Search.new(@family, filters: { tags: [ Tag::UNTAGGED_FILTER_VALUE, "UntagA", "UntagB" ] })
+    ids = search.transactions_scope.pluck(:id)
+
+    assert_equal [ double.entryable.id, untagged.entryable.id ].sort, ids.sort
+    assert_not_includes ids, other.entryable.id
+    assert_equal 2, search.totals.count
+    assert_equal Money.new(150, @family.currency), search.totals.expense_money
+  end
+
+  test "a real merchant or tag cannot take the filter sentinel as its name" do
+    assert_not @family.tags.new(name: Tag::UNTAGGED_FILTER_VALUE).valid?
+    assert_not @family.merchants.new(name: Merchant::NO_MERCHANT_FILTER_VALUE, color: "#000000").valid?
+  end
+
+  test "the synthetic options submit the sentinel and show the English name" do
+    assert_equal Merchant::NO_MERCHANT_FILTER_VALUE, Merchant.no_merchant.filter_value
+    assert_equal "No merchant", Merchant.no_merchant.name
+    assert_equal Tag::UNTAGGED_FILTER_VALUE, Tag.untagged.filter_value
+    assert_equal "Untagged", Tag.untagged.name
+    assert_equal merchants(:netflix).name, merchants(:netflix).filter_value
   end
 end

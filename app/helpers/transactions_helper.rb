@@ -22,6 +22,13 @@ module TransactionsHelper
       .map { |f| f[:key] == "type_filter" ? f.merge(key: "account_type_filter") : f }
   end
 
+  # The account an account_ids filter chip names (the dashboard drill-down filters by id),
+  # or the value itself when it is no account of the family. One query per request.
+  def transaction_filter_account_name(account_id)
+    @transaction_filter_account_names ||= Current.family.accounts.pluck(:id, :name).to_h
+    @transaction_filter_account_names.fetch(account_id.to_s, account_id.to_s)
+  end
+
   # ---- Transaction extra details helpers ----
   # Returns a structured hash describing extra details for a transaction.
   # Input can be a Transaction or an Entry (responds_to :transaction).
