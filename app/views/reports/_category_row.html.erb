@@ -40,13 +40,13 @@
   </div>
 
   <div class="text-right">
-    <span class="text-sm text-tertiary">
+    <span class="text-sm text-subdued">
       <%= item[:count] %>
     </span>
   </div>
 
   <div class="text-right">
-    <span class="text-sm text-tertiary">
+    <span class="text-sm text-subdued">
       <% if item[:count] > 1 %>
         <%= Money.new(item[:total] / item[:count], Current.family.currency).format %>
       <% else %>
