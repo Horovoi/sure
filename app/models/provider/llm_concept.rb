@@ -34,10 +34,12 @@ module Provider::LlmConcept
     instructions: nil,
     functions: [],
     function_results: [],
+    tool_choice: nil, # nil lets the model choose; :none asks for a text answer with no function calls
     streamer: nil,
     previous_response_id: nil,
     session_id: nil,
-    user_identifier: nil
+    user_identifier: nil,
+    family: nil
   )
     raise NotImplementedError, "Subclasses must implement #chat_response"
   end

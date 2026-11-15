@@ -112,6 +112,10 @@ class ProcessPdfJobTest < ActiveJob::TestCase
     assert_equal [ "EUR" ], @import.entries.pluck(:currency)
   end
 
+  test "runs in the AI lane's low-priority queue" do
+    assert_equal "ai_low_priority", ProcessPdfJob.queue_name
+  end
+
   private
     def stub_ai(import, document_type:)
       import.define_singleton_method(:process_with_ai) do

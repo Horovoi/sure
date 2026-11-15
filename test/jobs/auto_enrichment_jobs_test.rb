@@ -44,4 +44,9 @@ class AutoEnrichmentJobsTest < ActiveJob::TestCase
       AutoDetectMerchantsJob.perform_now(@family, transaction_ids: [])
     end
   end
+
+  test "auto-categorize and merchant detection run in the AI lane's low-priority queue" do
+    assert_equal "ai_low_priority", AutoCategorizeJob.queue_name
+    assert_equal "ai_low_priority", AutoDetectMerchantsJob.queue_name
+  end
 end

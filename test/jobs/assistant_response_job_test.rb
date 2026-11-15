@@ -37,4 +37,12 @@ class AssistantResponseJobTest < ActiveJob::TestCase
       AssistantResponseJob.perform_now(messages(:chat1_user))
     end
   end
+
+  test "runs in the AI lane, ahead of batch AI work" do
+    assert_equal "ai_high_priority", AssistantResponseJob.queue_name
+
+    assert_enqueued_with(job: AssistantResponseJob, queue: "ai_high_priority") do
+      AssistantMessage.create!(chat: @chat, ai_model: "gpt-4.1").respond_later
+    end
+  end
 end

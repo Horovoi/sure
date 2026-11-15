@@ -74,7 +74,8 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
   test "shows retry for a lost turn" do
     chat = chats(:one)
     turn = chat.ask!("Question", ai_model: "gpt-4.1")
-    turn.update_column(:updated_at, (AssistantMessage::STALE_AFTER + 1.minute).ago)
+    # Still pending: a queued turn is lost only after the longer pending wait
+    turn.update_column(:updated_at, (AssistantMessage::PENDING_STALE_AFTER + 1.minute).ago)
 
     get chat_url(chat)
 

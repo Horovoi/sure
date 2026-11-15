@@ -1,0 +1,343 @@
+#!/usr/bin/env bash
+# Claude in Sure's chat: the host bridge (claude_bridge/server.ts).
+#
+#   bin/claude-bridge install [--write-env]  install and start the LaunchAgent, and register
+#                                            Sure's MCP with Claude Code (user scope)
+#   bin/claude-bridge uninstall              stop it, unregister the MCP, move its files to the Trash
+#   bin/claude-bridge status                 check Node, the bundled Claude Code, the agent and the login
+#   bin/claude-bridge logs                   follow the log
+#   bin/claude-bridge restart                restart the agent
+#   bin/claude-bridge run                    run the bridge in this terminal instead (development)
+#
+# The bridge listens on 127.0.0.1:3339 only and runs as you, with your `claude auth login`.
+# Sure reaches it at http://host.docker.internal:3339 with CLAUDE_BRIDGE_TOKEN. install
+# never edits .env.production unless you say so: it asks (or takes --write-env), and
+# otherwise prints the lines to add. They take effect at the next bin/deploy.
+#
+# Files: ~/Library/LaunchAgents/ua.sure.claude-bridge.plist, ~/.config/sure-claude-bridge/
+# (config.json with the token, mode 600), ~/Library/Logs/sure-claude-bridge.log and an empty
+# working folder in ~/Library/Application Support/sure-claude-bridge/.
+# See .claude/deploy.md, section "Claude bridge".
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BRIDGE_DIR="${CLAUDE_BRIDGE_DIR:-$ROOT/claude_bridge}"
+ENV_FILE="${CLAUDE_BRIDGE_ENV_FILE:-$ROOT/.env.production}"
+
+LABEL="ua.sure.claude-bridge"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+CONFIG_DIR="$HOME/.config/sure-claude-bridge"
+CONFIG="$CONFIG_DIR/config.json"
+LOG="$HOME/Library/Logs/sure-claude-bridge.log"
+APP_DIR="$HOME/Library/Application Support/sure-claude-bridge"
+WORK_DIR="$APP_DIR/work"
+DOMAIN="gui/$(id -u)"
+DEFAULT_PORT=3339
+SURE_MCP_URL="http://localhost:3333/mcp"
+
+die() { echo "error: $*" >&2; exit 1; }
+warn() { echo "warning: $*" >&2; }
+
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; }
+
+# The last KEY=value in the env file, without quotes. Never sources the file.
+env_value() {
+  [ -f "$ENV_FILE" ] || return 0
+  grep -E "^$1=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- |
+    sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true
+}
+
+# A value from config.json, empty when there is none.
+config_value() {
+  [ -f "$CONFIG" ] || return 0
+  CB_KEY="$1" CB_FILE="$CONFIG" "${NODE:-node}" -e '
+    try {
+      const v = JSON.parse(require("fs").readFileSync(process.env.CB_FILE, "utf8"))[process.env.CB_KEY];
+      if (v !== undefined && v !== null) process.stdout.write(String(v));
+    } catch {}
+  ' 2>/dev/null || true
+}
+
+xml_escape() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
+find_node() {
+  command -v node >/dev/null 2>&1 || die "node is not on PATH. Install Node 24 or newer first."
+  NODE="$(node -p 'process.execPath')"
+  local major
+  major="$("$NODE" -p 'process.versions.node.split(".")[0]')"
+  [ "$major" -ge 24 ] || die "Node $major found at $NODE; the bridge needs Node 24 or newer (native TypeScript)."
+}
+
+write_config() {
+  local token="$1" port
+  port="$(config_value port)"
+  mkdir -p "$CONFIG_DIR"
+  chmod 700 "$CONFIG_DIR"
+  # The token goes through the environment, not argv.
+  CB_FILE="$CONFIG" CB_TOKEN="$token" CB_PORT="${port:-$DEFAULT_PORT}" CB_WORK="$WORK_DIR" "$NODE" -e '
+    const fs = require("fs");
+    const e = process.env;
+    const config = {
+      port: Number(e.CB_PORT),
+      token: e.CB_TOKEN,
+      mcp_allowlist: [
+        "http://localhost:3333/mcp", "http://127.0.0.1:3333/mcp",
+        "http://localhost:3000/mcp", "http://127.0.0.1:3000/mcp",
+        "http://localhost:3334/mcp", "http://127.0.0.1:3334/mcp",
+      ],
+      work_dir: e.CB_WORK,
+    };
+    fs.writeFileSync(e.CB_FILE, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+    fs.chmodSync(e.CB_FILE, 0o600);
+  '
+}
+
+write_plist() {
+  mkdir -p "$(dirname "$PLIST")"
+  cat >"$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$NODE")</string>
+    <string>$(xml_escape "$BRIDGE_DIR/server.ts")</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$(xml_escape "$WORK_DIR")</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CLAUDE_BRIDGE_CONFIG</key>
+    <string>$(xml_escape "$CONFIG")</string>
+    <key>PATH</key>
+    <string>$(xml_escape "$(dirname "$NODE")"):/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$LOG")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$LOG")</string>
+</dict>
+</plist>
+EOF
+}
+
+register_mcp() {
+  if ! command -v claude >/dev/null 2>&1; then
+    warn "claude is not on PATH; skipped registering Sure's MCP with Claude Code."
+    return 0
+  fi
+  local mcp_token
+  mcp_token="$(env_value MCP_API_TOKEN)"
+  if [ -z "$mcp_token" ]; then
+    warn "MCP_API_TOKEN is not set in $ENV_FILE; skipped 'claude mcp add'. Set it, then run install again."
+    return 0
+  fi
+  claude mcp remove --scope user sure >/dev/null 2>&1 || true
+  # Output is dropped: it can echo the header, and the token must not be printed.
+  if claude mcp add --scope user --transport http sure "$SURE_MCP_URL" \
+    --header "Authorization: Bearer $mcp_token" >/dev/null 2>&1; then
+    echo "Registered Sure's MCP ($SURE_MCP_URL) with Claude Code, user scope, as 'sure'."
+  else
+    warn "'claude mcp add' failed. Try: claude mcp list"
+  fi
+}
+
+offer_env_lines() {
+  local token="$1" write="$2" answer
+  local -a lines=()
+  [ -n "$(env_value CLAUDE_BRIDGE_URL)" ] ||
+    lines+=("CLAUDE_BRIDGE_URL=http://host.docker.internal:$(config_value port)")
+  [ -n "$(env_value CLAUDE_BRIDGE_TOKEN)" ] || lines+=("CLAUDE_BRIDGE_TOKEN=$token")
+  if [ "${#lines[@]}" -eq 0 ]; then
+    echo "$ENV_FILE already has CLAUDE_BRIDGE_URL and CLAUDE_BRIDGE_TOKEN."
+    return 0
+  fi
+  if [ "$write" = 0 ] && [ -t 0 ] && [ -t 1 ]; then
+    read -r -p "Add CLAUDE_BRIDGE_URL and CLAUDE_BRIDGE_TOKEN to $ENV_FILE? [y/N] " answer || answer=""
+    case "$answer" in [Yy]*) write=1 ;; esac
+  fi
+  if [ "$write" = 1 ]; then
+    [ -f "$ENV_FILE" ] || die "$ENV_FILE does not exist"
+    {
+      printf '\n# Claude in chat: the host bridge (bin/claude-bridge)\n'
+      printf '%s\n' "${lines[@]}"
+    } >>"$ENV_FILE"
+    echo "Added to $ENV_FILE. They take effect at the next bin/deploy."
+  else
+    echo "Add these lines to $ENV_FILE (they take effect at the next bin/deploy):"
+    printf '  %s\n' "${lines[@]}"
+  fi
+}
+
+cmd_install() {
+  local write_env=0
+  case "${1:-}" in
+    "") ;;
+    --write-env) write_env=1 ;;
+    *) die "unknown option: $1" ;;
+  esac
+  [ "$(uname -s)" = Darwin ] || die "the bridge runs as a macOS LaunchAgent"
+  find_node
+
+  echo "Installing the bridge's dependencies (npm ci)..."
+  (cd "$BRIDGE_DIR" && npm ci --no-audit --no-fund --loglevel=error) || die "npm ci failed in $BRIDGE_DIR"
+  "$NODE" "$BRIDGE_DIR/server.ts" --versions || die "the bundled Claude Code is too old for Sure's MCP"
+
+  # One token for both sides: .env.production wins, then an earlier install, then a new one.
+  local token
+  token="$(env_value CLAUDE_BRIDGE_TOKEN)"
+  [ -n "$token" ] || token="$(config_value token)"
+  [ -n "$token" ] || token="$(openssl rand -hex 32)"
+
+  mkdir -p "$WORK_DIR" "$(dirname "$LOG")"
+  write_config "$token"
+  touch "$LOG"
+  chmod 600 "$LOG"
+  write_plist
+
+  launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
+  launchctl bootstrap "$DOMAIN" "$PLIST" || die "launchctl could not load $PLIST"
+  echo "LaunchAgent $LABEL loaded: node $BRIDGE_DIR/server.ts on 127.0.0.1:$(config_value port)."
+
+  register_mcp
+  offer_env_lines "$token" "$write_env"
+  echo "Check it with: bin/claude-bridge status"
+}
+
+cmd_uninstall() {
+  launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
+  if command -v claude >/dev/null 2>&1; then
+    claude mcp remove --scope user sure >/dev/null 2>&1 || true
+  fi
+  local f
+  for f in "$PLIST" "$CONFIG_DIR" "$LOG" "$APP_DIR"; do
+    if [ -e "$f" ]; then
+      trash "$f"
+      echo "Moved to the Trash: $f"
+    fi
+  done
+  echo "Uninstalled. CLAUDE_BRIDGE_URL and CLAUDE_BRIDGE_TOKEN in $ENV_FILE are left as they are."
+}
+
+cmd_status() {
+  local failed=0 node="" out port token health
+  good() { echo "  ok    $1"; }
+  bad() {
+    echo "  FAIL  $1"
+    echo "        fix: $2"
+    failed=1
+  }
+
+  echo "Claude bridge"
+  if [ ! -f "$PLIST" ]; then
+    bad "The LaunchAgent is not installed." "bin/claude-bridge install"
+  else
+    node="$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:0' "$PLIST" 2>/dev/null || true)"
+    if [ -n "$node" ] && [ -x "$node" ]; then
+      good "Node $("$node" --version) at $node"
+    else
+      bad "The Node the agent runs (${node:-unknown}) is gone, for example after a Node upgrade." \
+        "bin/claude-bridge install"
+      node=""
+    fi
+  fi
+  [ -n "$node" ] || node="$(command -v node 2>/dev/null || true)"
+  NODE="${node:-node}"
+
+  if [ -n "$node" ]; then
+    if out="$("$node" "$BRIDGE_DIR/server.ts" --versions 2>&1)"; then
+      good "$out"
+    else
+      bad "$out" "raise the @anthropic-ai/claude-agent-sdk pin in claude_bridge/package.json, then bin/claude-bridge install"
+    fi
+  else
+    bad "node is not on PATH." "install Node 24 or newer, then bin/claude-bridge install"
+  fi
+
+  if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
+    good "LaunchAgent $LABEL is loaded"
+  else
+    bad "The LaunchAgent $LABEL is not loaded." "bin/claude-bridge install"
+  fi
+
+  port="$(config_value port)"
+  token="$(config_value token)"
+  if [ -z "$token" ]; then
+    bad "No token in $CONFIG." "bin/claude-bridge install"
+  elif ! health="$(printf 'Authorization: Bearer %s\n' "$token" |
+    curl -sS -m 40 -H @- "http://127.0.0.1:${port:-$DEFAULT_PORT}/health" 2>&1)"; then
+    bad "The bridge does not answer on 127.0.0.1:${port:-$DEFAULT_PORT} ($health)." \
+      "bin/claude-bridge restart, then bin/claude-bridge logs"
+  elif [ -n "$node" ]; then
+    local summary rc=0
+    summary="$(printf '%s' "$health" | "$node" -e '
+      let raw = "";
+      process.stdin.on("data", (c) => (raw += c)).on("end", () => {
+        let h;
+        try { h = JSON.parse(raw); } catch { console.log("unreadable answer from /health"); process.exit(4); }
+        if (h.code === "unauthorized") { console.log("the bridge refused the token in config.json"); process.exit(5); }
+        if (h.signed_in === false) { console.log("Claude is signed out"); process.exit(3); }
+        if (!h.ok) { console.log(`health check failed: ${h.error?.message ?? "unknown"}`); process.exit(4); }
+        const lines = [`Signed in as ${h.account?.email ?? "?"} (plan ${h.plan ?? "?"}, ${h.token_source ?? "?"}), Claude Code ${h.cli_version}`];
+        for (const name of ["five_hour", "seven_day"]) {
+          const w = h.usage?.[name];
+          if (w && typeof w.utilization === "number") {
+            lines.push(`${name.replace("_", "-")} window ${Math.round(w.utilization * 100)}% used, resets ${w.resets_at ?? "?"}`);
+          }
+        }
+        if (h.usage && h.usage.available === false) lines.push("usage windows not available for this login");
+        console.log(lines.join("\n"));
+      });
+    ')" || rc=$?
+    case "$rc" in
+      0) while IFS= read -r line; do good "$line"; done <<<"$summary" ;;
+      3) bad "$summary" "claude auth login" ;;
+      5) bad "$summary" "bin/claude-bridge install, then bin/claude-bridge restart" ;;
+      *) bad "$summary" "bin/claude-bridge logs" ;;
+    esac
+  fi
+
+  local env_token
+  env_token="$(env_value CLAUDE_BRIDGE_TOKEN)"
+  if [ -z "$env_token" ] || [ -z "$(env_value CLAUDE_BRIDGE_URL)" ]; then
+    bad "$ENV_FILE lacks CLAUDE_BRIDGE_URL or CLAUDE_BRIDGE_TOKEN, so Sure cannot reach the bridge." \
+      "bin/claude-bridge install (it offers the lines), then bin/deploy"
+  elif [ -n "$token" ] && [ "$env_token" != "$token" ]; then
+    bad "CLAUDE_BRIDGE_TOKEN in $ENV_FILE differs from $CONFIG." "bin/claude-bridge install, then bin/claude-bridge restart"
+  else
+    good "$ENV_FILE has the bridge URL and the matching token"
+  fi
+
+  if [ "$failed" = 0 ]; then echo "All good."; else return 1; fi
+}
+
+cmd_run() {
+  find_node
+  [ -f "$CONFIG" ] || [ -n "${CLAUDE_BRIDGE_TOKEN:-}" ] ||
+    die "no $CONFIG: run bin/claude-bridge install first, or set CLAUDE_BRIDGE_TOKEN"
+  if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
+    warn "the LaunchAgent is running on the same port; stop it first with: launchctl bootout $DOMAIN/$LABEL"
+  fi
+  exec "$NODE" "$BRIDGE_DIR/server.ts"
+}
+
+case "${1:-}" in
+  install) shift; cmd_install "$@" ;;
+  uninstall) cmd_uninstall ;;
+  status) cmd_status ;;
+  logs) touch "$LOG"; exec tail -n 200 -f "$LOG" ;;
+  restart) launchctl kickstart -k "$DOMAIN/$LABEL" && echo "Restarted $LABEL." ;;
+  run) cmd_run ;;
+  -h | --help | help) usage ;;
+  *) usage; exit 1 ;;
+esac

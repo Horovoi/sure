@@ -132,3 +132,5 @@ docs/temp/
 
 # Local seed task for test data
 lib/tasks/seed_from_export.rake
+# Claude bridge dependencies (bin/claude-bridge install runs npm ci there)
+/claude_bridge/node_modules/

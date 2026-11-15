@@ -3,10 +3,15 @@
 class AssistantMessage < Message
   include AASM
 
-  # A turn with no progress for this long is treated as lost (its job died); the stale work reaper fails it.
-  # Each provider request times out after OPENAI_REQUEST_TIMEOUT (60s by default), so a live turn never stays
-  # silent this long.
+  # A streaming turn with no progress (updated_at) for this long is treated as lost (its job died); the stale
+  # work reaper fails it. Streamed text and tool calls touch the row, an OpenAI request times out after
+  # OPENAI_REQUEST_TIMEOUT (60s by default), and a Claude turn sends a heartbeat while it works, so a live turn
+  # never stays silent this long.
   STALE_AFTER = 10.minutes
+  # A pending turn waits in the AI lane's queue (config/sidekiq.yml) behind other AI jobs, which can take
+  # minutes each, so it is lost only after a longer wait. Measured from updated_at: a requeued turn keeps its
+  # old created_at, and nothing else writes a pending row.
+  PENDING_STALE_AFTER = 30.minutes
   IN_FLIGHT_STATES = %w[pending streaming].freeze
 
   Error = Class.new(StandardError)
@@ -20,7 +25,12 @@ class AssistantMessage < Message
   validates :ai_model, presence: true
 
   scope :in_flight, -> { where(status: IN_FLIGHT_STATES) }
-  scope :stale, -> { in_flight.where(updated_at: ...STALE_AFTER.ago) }
+  # The reaper, Chat (before a new or retried turn), #live? and #retryable? all use this rule, through this
+  # scope or #stale?
+  scope :stale, -> {
+    where(status: "pending", updated_at: ...PENDING_STALE_AFTER.ago)
+      .or(where(status: "streaming", updated_at: ...STALE_AFTER.ago))
+  }
 
   aasm column: :status, requires_lock: true, whiny_persistence: true do
     state :pending, initial: true
@@ -56,7 +66,12 @@ class AssistantMessage < Message
   end
 
   def stale?
-    in_flight? && updated_at.present? && updated_at < STALE_AFTER.ago
+    in_flight? && updated_at.present? && updated_at < stale_after.ago
+  end
+
+  # How long this turn may go without progress in its current state
+  def stale_after
+    pending? ? PENDING_STALE_AFTER : STALE_AFTER
   end
 
   # Still being answered, as far as anyone can tell

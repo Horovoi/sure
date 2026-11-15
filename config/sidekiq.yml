@@ -1,7 +1,19 @@
-concurrency: <%= ENV.fetch("RAILS_MAX_THREADS") { 3 } %>
+# Two lanes. RAILS_MAX_THREADS is the worker's total thread count and also its
+# database pool (config/database.yml), so the two lanes together never take
+# more connections than the pool holds. The default lane gets what the AI lane
+# leaves (at least 1).
+concurrency: <%= [ ENV.fetch("RAILS_MAX_THREADS") { 3 }.to_i - ENV.fetch("RAILS_AI_MAX_THREADS") { 1 }.to_i, 1 ].max %>
 queues:
   - [scheduled, 10] # For cron-like jobs (e.g. "daily market data sync")
   - [high_priority, 4]
   - [medium_priority, 2]
   - [low_priority, 1]
   - [default, 1]
+
+# AI jobs hold a thread for the whole model call (a Claude turn can take
+# minutes), so they get their own capsule and cannot starve syncs and imports.
+# Strict order, no weights: chat (ai_high_priority) before batch AI work.
+capsules:
+  ai:
+    concurrency: <%= ENV.fetch("RAILS_AI_MAX_THREADS") { 1 }.to_i %>
+    queues: [ai_high_priority, ai_low_priority]
