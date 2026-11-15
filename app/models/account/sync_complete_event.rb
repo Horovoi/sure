@@ -26,14 +26,14 @@ class Account::SyncCompleteEvent
       )
     end
 
-    # If this is a manual, unlinked account (i.e. not part of a Plaid Item),
-    # trigger the family sync complete broadcast so net worth graph is updated
+    # If this is a manual, unlinked account (i.e. not part of a provider item),
+    # trigger the family sync complete broadcast: it updates the net worth graph and
+    # sends the sync toast, which refreshes the account page once the user is idle.
+    # There is no account.broadcast_refresh here: it reloaded the page under an open
+    # form and, with the toast, made the server render the page twice.
     unless account.linked?
       account.family.broadcast_sync_complete
     end
-
-    # Refresh entire account page (only applies if currently viewing this account)
-    account.broadcast_refresh
   end
 
   private

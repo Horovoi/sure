@@ -29,6 +29,21 @@ class Family::SyncCompleteEvent
       Rails.logger.error("Family::SyncCompleteEvent net_worth_chart broadcast failed: #{e.message}\n#{e.backtrace&.join("\n")}")
     end
 
+    # Replace the #sync-toast slot instead of refreshing every open page. The
+    # sync-toast Stimulus controller morph-refreshes an idle page, and leaves the
+    # toast up (or hidden until a dialog closes) while someone is typing, so a
+    # background sync never wipes a half-filled form. The partial has no user data
+    # (Current.user is nil in the job); each browser re-fetches its own page.
+    begin
+      family.broadcast_replace_to(
+        family,
+        target: "sync-toast",
+        partial: "shared/notifications/sync_toast"
+      )
+    rescue => e
+      Rails.logger.error("Family::SyncCompleteEvent sync_toast broadcast failed: #{e.message}\n#{e.backtrace&.join("\n")}")
+    end
+
     # Schedule recurring transaction pattern identification (debounced to run after all syncs complete)
     begin
       RecurringTransaction.identify_patterns_for(family)
