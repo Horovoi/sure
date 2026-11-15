@@ -216,4 +216,31 @@ class Family < ApplicationRecord
   def self_hoster?
     Rails.application.config.app_mode.self_hosted?
   end
+
+  # ---------------------------------------------------------------------------
+  # Subscriptions iCal feed (w1-budrec). Off until enabled; the token in the
+  # feed URL is the only credential, so reset replaces it and disable clears it.
+  # ---------------------------------------------------------------------------
+  def self.find_by_subscriptions_feed_token(token)
+    return nil if token.blank?
+
+    find_by(subscriptions_feed_token: token.to_s)
+  end
+
+  def subscriptions_feed_enabled?
+    subscriptions_feed_token.present?
+  end
+
+  def enable_subscriptions_feed!
+    subscriptions_feed_enabled? ? subscriptions_feed_token : reset_subscriptions_feed!
+  end
+
+  def reset_subscriptions_feed!
+    update!(subscriptions_feed_token: SecureRandom.urlsafe_base64(32))
+    subscriptions_feed_token
+  end
+
+  def disable_subscriptions_feed!
+    update!(subscriptions_feed_token: nil)
+  end
 end

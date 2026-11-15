@@ -58,6 +58,12 @@ class Rack::Attack
     request.ip if request.path.start_with?("/api/")
   end
 
+  # w1-budrec: the subscriptions iCal feed has no session; its token is in the
+  # path, so guessing tokens is throttled. Calendar apps poll it a few times an hour.
+  throttle("subscriptions_feed/ip", limit: 30, period: 1.minute) do |request|
+    request.ip if request.get? && request.path.start_with?("/feeds/subscriptions/")
+  end
+
   # Block requests that appear to be malicious
   blocklist("block malicious requests") do |request|
     # Block requests with suspicious user agents

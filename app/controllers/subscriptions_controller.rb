@@ -55,7 +55,7 @@ class SubscriptionsController < ApplicationController
   end
 
   def calendar
-    @month = params[:month].present? ? Date.parse(params[:month]) : Date.current.beginning_of_month
+    @month = parse_calendar_month(params[:month])
     @subscriptions = Current.family.recurring_transactions
                           .active_subscriptions
                           .includes(:merchant, :category, :subscription_service, :default_account)
@@ -73,7 +73,25 @@ class SubscriptionsController < ApplicationController
       s.currency == Current.family.currency ? amount : amount.exchange_to(Current.family.currency, fallback_rate: 1)
     end
 
+    @feed_url = subscriptions_feed_url(token: Current.family.subscriptions_feed_token) if Current.family.subscriptions_feed_enabled?
     @breadcrumbs = [ [ t(".home"), root_path ], [ t("subscriptions.index.title"), subscriptions_path ], [ t(".title"), nil ] ]
+  end
+
+  # The subscriptions iCal feed (decision 41): off by default. Reset gives a
+  # new link and the old one stops working; disable removes the link.
+  def enable_feed
+    Current.family.enable_subscriptions_feed!
+    redirect_to calendar_subscriptions_path(anchor: "subscriptions-feed"), notice: t(".success")
+  end
+
+  def reset_feed
+    Current.family.reset_subscriptions_feed!
+    redirect_to calendar_subscriptions_path(anchor: "subscriptions-feed"), notice: t(".success")
+  end
+
+  def disable_feed
+    Current.family.disable_subscriptions_feed!
+    redirect_to calendar_subscriptions_path(anchor: "subscriptions-feed"), notice: t(".success")
   end
 
   def new
@@ -318,6 +336,15 @@ class SubscriptionsController < ApplicationController
 
       (status_filter == "active" && subscription.inactive?) ||
         (status_filter == "inactive" && subscription.active?)
+    end
+
+    # A ?month= that is not a date shows the current month instead of failing
+    def parse_calendar_month(value)
+      return Date.current.beginning_of_month if value.blank?
+
+      Date.parse(value.to_s).beginning_of_month
+    rescue Date::Error
+      Date.current.beginning_of_month
     end
 
     def set_subscription

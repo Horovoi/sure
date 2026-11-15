@@ -240,7 +240,16 @@ Rails.application.routes.draw do
     # w1-budrec: detection toggle and manual recurring rows on Subscriptions
     patch :update_detection_settings, on: :collection
     post :make_subscription, on: :member
+
+    # w1-budrec: turn the subscriptions iCal feed on, give it a new link, or turn it off
+    post :enable_feed, on: :collection
+    post :reset_feed, on: :collection
+    delete :disable_feed, on: :collection
   end
+
+  # w1-budrec: subscriptions iCal feed, read by calendar apps without a session
+  get "feeds/subscriptions/:token.ics", to: "subscription_feeds#show", as: :subscriptions_feed,
+    format: false, constraints: { token: /[A-Za-z0-9_-]+/ }
 
   resources :subscription_services, only: [ :index ] do
     collection do

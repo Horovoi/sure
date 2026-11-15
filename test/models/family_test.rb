@@ -26,4 +26,40 @@ class FamilyTest < ActiveSupport::TestCase
     assert_equal Date.new(2027, 3, 30), family.budget_period_end_for(Date.new(2027, 2, 28))
     assert_equal Date.new(2026, 11, 29), family.budget_period_end_for(Date.new(2026, 10, 31))
   end
+
+  test "the subscriptions feed is off until enabled" do
+    family = families(:dylan_family)
+
+    assert_not family.subscriptions_feed_enabled?
+    assert_nil Family.find_by_subscriptions_feed_token(nil)
+    assert_nil Family.find_by_subscriptions_feed_token("")
+
+    token = family.enable_subscriptions_feed!
+
+    assert family.subscriptions_feed_enabled?
+    assert_operator token.length, :>=, 43
+    assert_equal family, Family.find_by_subscriptions_feed_token(token)
+    assert_equal token, family.enable_subscriptions_feed!, "enabling again keeps the link"
+  end
+
+  test "resetting the subscriptions feed gives a new token and the old one stops working" do
+    family = families(:dylan_family)
+    old_token = family.enable_subscriptions_feed!
+
+    new_token = family.reset_subscriptions_feed!
+
+    assert_not_equal old_token, new_token
+    assert_nil Family.find_by_subscriptions_feed_token(old_token)
+    assert_equal family, Family.find_by_subscriptions_feed_token(new_token)
+  end
+
+  test "disabling the subscriptions feed removes the token" do
+    family = families(:dylan_family)
+    token = family.enable_subscriptions_feed!
+
+    family.disable_subscriptions_feed!
+
+    assert_not family.reload.subscriptions_feed_enabled?
+    assert_nil Family.find_by_subscriptions_feed_token(token)
+  end
 end

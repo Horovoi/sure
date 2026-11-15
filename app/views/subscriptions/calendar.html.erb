@@ -26,9 +26,9 @@
     <div>
       <h1 class="text-primary text-xl font-medium"><%= t(".title") %></h1>
       <p class="text-secondary text-sm mt-1">
-        <span class="font-medium text-primary"><%= @subscriptions.count %></span> active ·
-        <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span>/mo ·
-        <span class="font-medium text-primary"><%= format_money(@monthly_total * 12) %></span>/yr
+        <span class="font-medium text-primary"><%= @subscriptions.size %></span> <%= t("subscriptions.index.summary.active") %> ·
+        <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span><%= t("subscriptions.index.summary.per_month") %> ·
+        <span class="font-medium text-primary"><%= format_money(@monthly_total * 12) %></span><%= t("subscriptions.index.summary.per_year") %>
       </p>
     </div>
 
@@ -80,13 +80,13 @@
     <%# Quick stats bar - pill style %>
     <div class="flex items-center gap-3 mb-4">
       <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-inset">
-        <span class="text-xs text-secondary">This week</span>
+        <span class="text-xs text-secondary"><%= t(".this_week") %></span>
         <span class="text-xs font-medium text-primary"><%= @this_week_data.size %></span>
         <span class="text-xs text-tertiary">·</span>
         <span class="text-xs font-medium text-primary"><%= format_money(@this_week_total) %></span>
       </div>
       <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg <%= @today_subscriptions.any? ? "bg-green-500/10" : "bg-surface-inset" %>">
-        <span class="text-xs text-secondary">Due today</span>
+        <span class="text-xs text-secondary"><%= t(".due_today") %></span>
         <span class="text-xs font-medium <%= @today_subscriptions.any? ? "text-green-600" : "text-primary" %>">
           <%= @today_subscriptions.size %>
         </span>
@@ -97,7 +97,7 @@
     <div class="rounded-lg overflow-hidden border border-secondary">
       <%# Day headers %>
       <div class="grid grid-cols-7 bg-surface-inset">
-        <% %w[Mon Tue Wed Thu Fri Sat Sun].each do |day| %>
+        <% t("date.abbr_day_names").rotate(1).each do |day| %>
           <div class="py-2 text-center text-xs font-medium text-secondary uppercase">
             <%= day %>
           </div>
@@ -195,6 +195,8 @@
     </div>
   </div>
 
+  <%= render "subscriptions/feed_settings", feed_url: @feed_url %>
+
   <%# Hover card (populated via Stimulus) %>
   <div class="hidden fixed z-50 bg-container shadow-border-xs rounded-xl p-3 min-w-[220px] max-w-[300px] pointer-events-none"
        data-subscription-calendar-target="hoverCard">
@@ -209,7 +211,7 @@
       <div class="p-4">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-medium text-primary" data-subscription-calendar-target="drawerTitle">
-            Subscriptions
+            <%= t("subscriptions.index.title") %>
           </h3>
           <button type="button"
                   class="p-2 rounded-lg hover:bg-surface-inset transition-colors"

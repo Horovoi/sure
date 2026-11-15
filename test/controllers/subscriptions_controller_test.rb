@@ -517,4 +517,52 @@ class SubscriptionsControllerTest < ActionDispatch::IntegrationTest
     post record_transaction_subscription_url(rent)
     assert_response :not_found
   end
+
+  # w1-budrec: subscriptions iCal feed controls on the calendar page (decision 41)
+
+  test "the calendar page offers to turn the feed on and shows no link while it is off" do
+    get calendar_subscriptions_url
+
+    assert_response :success
+    assert_select "[data-testid='subscriptions-feed'] button", text: I18n.t("subscriptions.feed_settings.enable")
+    assert_select "[data-testid='subscriptions-feed-url']", count: 0
+    assert_select "[data-testid='subscriptions-feed']", text: /#{Regexp.escape(I18n.t("subscriptions.feed_settings.lan_note").first(40))}/
+  end
+
+  test "enable_feed turns the feed on and the calendar page shows its link" do
+    post enable_feed_subscriptions_url
+
+    assert_redirected_to calendar_subscriptions_path(anchor: "subscriptions-feed")
+    token = @family.reload.subscriptions_feed_token
+    assert token.present?
+
+    get calendar_subscriptions_url
+    assert_select "[data-testid='subscriptions-feed-url']", text: subscriptions_feed_url(token: token)
+    assert_select "a[href='#{subscriptions_feed_url(token: token).sub(/\Ahttps?:/, "webcal:")}']"
+  end
+
+  test "reset_feed replaces the token" do
+    old_token = @family.enable_subscriptions_feed!
+
+    post reset_feed_subscriptions_url
+
+    assert_redirected_to calendar_subscriptions_path(anchor: "subscriptions-feed")
+    assert_not_equal old_token, @family.reload.subscriptions_feed_token
+    assert_equal I18n.t("subscriptions.reset_feed.success"), flash[:notice]
+  end
+
+  test "disable_feed turns the feed off" do
+    @family.enable_subscriptions_feed!
+
+    delete disable_feed_subscriptions_url
+
+    assert_redirected_to calendar_subscriptions_path(anchor: "subscriptions-feed")
+    assert_nil @family.reload.subscriptions_feed_token
+  end
+
+  test "calendar with a month that is not a date shows the current month" do
+    get calendar_subscriptions_url(month: "not-a-date")
+
+    assert_response :success
+  end
 end
