@@ -288,6 +288,39 @@ class ExchangeRateTest < ActiveSupport::TestCase
       "index_exchange_rates_on_to_currency_and_updated_at"
   end
 
+  # --- Only usable rates are stored (w1-fx money-strict-rates) ---
+
+  test "validation rejects a zero, negative, NaN or infinite rate" do
+    [ 0, -1, BigDecimal("NaN"), BigDecimal("Infinity"), BigDecimal("-Infinity") ].each do |value|
+      rate = ExchangeRate.new(from_currency: "USD", to_currency: "UAH", date: Date.current, rate: value)
+
+      assert_not rate.valid?, "#{value.inspect} must be rejected"
+      assert rate.errors.added?(:rate, :greater_than, count: 0)
+    end
+
+    assert ExchangeRate.new(from_currency: "USD", to_currency: "UAH", date: Date.current, rate: 1).valid?
+  end
+
+  test "the database rejects a zero, NaN or infinite rate written past validation" do
+    [ "0", "NaN", "Infinity", "-2" ].each do |value|
+      assert_raises(ActiveRecord::CheckViolation, "#{value} must be rejected") do
+        ExchangeRate.transaction(requires_new: true) do
+          ExchangeRate.insert_all([ { from_currency: "USD", to_currency: "UAH", date: Date.current, rate: value } ])
+        end
+      end
+    end
+  end
+
+  test "a lost race to store the provider's rate still returns that rate" do
+    ExchangeRate.delete_all
+    @provider.expects(:fetch_exchange_rate).returns(
+      provider_success_response(OpenStruct.new(from: "USD", to: "UAH", date: Date.current, rate: 41))
+    )
+    ExchangeRate.stubs(:find_or_create_by!).raises(ActiveRecord::RecordInvalid.new(ExchangeRate.new))
+
+    assert_equal 41, ExchangeRate.find_or_fetch_rate(from: "USD", to: "UAH", date: Date.current).rate
+  end
+
   private
     def no_provider_rate
       @provider.stubs(:fetch_exchange_rate).returns(provider_error_response(StandardError.new("no rate")))

@@ -50,9 +50,12 @@ class ExchangeRate::Importer
         [ provider_rate_value, :provider ]     # fill gaps
       end
 
-      # Gapfill with LOCF strategy (last observation carried forward)
-      # Treat nil or zero rates as invalid and use previous rate
-      if chosen_rate.nil? || chosen_rate.to_f <= 0
+      # Gapfill with LOCF strategy (last observation carried forward). A rate that cannot
+      # convert an amount (nil, zero, negative, NaN, Infinity) is skipped and the previous
+      # valid rate carried instead: the chk_exchange_rates_rate_positive constraint would
+      # reject the whole upsert batch otherwise.
+      unless ExchangeRate.valid_rate?(chosen_rate)
+        Rails.logger.warn("Skipping invalid exchange rate #{from}/#{to} on #{date}: #{chosen_rate.inspect}") unless chosen_rate.nil?
         chosen_rate = prev_rate_value
         source = :locf
       end
@@ -107,8 +110,9 @@ class ExchangeRate::Importer
     # start_date when the fill starts later: that one can be years old.
     def start_rate_value
       [ provider_rates, db_rates ].each do |rates|
-        value = rates.select { |date, _| date <= effective_start_date }.max_by { |date, _| date }&.last&.rate
-        return value if value.present? && value.to_f > 0
+        value = rates.select { |date, rate| date <= effective_start_date && ExchangeRate.valid_rate?(rate&.rate) }
+                     .max_by { |date, _| date }&.last&.rate
+        return value if value.present?
       end
 
       nil

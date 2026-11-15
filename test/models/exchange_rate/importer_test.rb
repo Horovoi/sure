@@ -211,6 +211,24 @@ class ExchangeRate::ImporterTest < ActiveSupport::TestCase
     assert ExchangeRate.where(from_currency: "USD", to_currency: "EUR").none?(&:provisional)
   end
 
+  test "a zero or non-finite provider rate is skipped and the previous rate carried forward" do
+    ExchangeRate.delete_all
+
+    @provider.expects(:fetch_exchange_rates)
+             .returns(provider_success_response([
+               OpenStruct.new(from: "USD", to: "EUR", date: 3.days.ago.to_date, rate: 1.3),
+               OpenStruct.new(from: "USD", to: "EUR", date: 2.days.ago.to_date, rate: 0),
+               OpenStruct.new(from: "USD", to: "EUR", date: 1.day.ago.to_date, rate: BigDecimal("NaN")),
+               OpenStruct.new(from: "USD", to: "EUR", date: Date.current, rate: 1.5)
+             ]))
+
+    import_rates(start_date: 3.days.ago.to_date)
+
+    rates = ExchangeRate.where(from_currency: "USD", to_currency: "EUR").order(:date).pluck(:date, :rate).to_h
+    assert_equal [ 1.3, 1.3, 1.3, 1.5 ], rates.values.map(&:to_f)
+    assert_equal 4, rates.size
+  end
+
   private
     def import_rates(start_date:, end_date: Date.current)
       ExchangeRate::Importer.new(

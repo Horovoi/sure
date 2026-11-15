@@ -266,17 +266,21 @@ module ExchangeRate::Provided
         return rate unless cache
 
         begin
-          ExchangeRate.find_or_create_by!(
-            from_currency: rate.from,
-            to_currency: rate.to,
-            date: rate.date
-          ) do |exchange_rate|
-            exchange_rate.rate = rate.rate
+          # A savepoint, so a lost race cannot abort the caller's transaction
+          ExchangeRate.transaction(requires_new: true) do
+            ExchangeRate.find_or_create_by!(
+              from_currency: rate.from,
+              to_currency: rate.to,
+              date: rate.date
+            ) do |exchange_rate|
+              exchange_rate.rate = rate.rate
+            end
           end
-        rescue ActiveRecord::RecordNotUnique
+        rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
           # Race condition: another process inserted between our SELECT and INSERT.
-          # The provider's answer stands either way.
-          nil
+          # RecordNotUnique is the unique index; RecordInvalid is the model's uniqueness
+          # validation firing first. The provider's answer stands either way.
+          Rails.logger.info("Exchange rate #{rate.from}/#{rate.to} on #{rate.date} not stored: #{e.class}")
         end
         rate
       end

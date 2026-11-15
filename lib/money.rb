@@ -15,6 +15,25 @@ class Money
     end
   end
 
+  # Raised (strict mode) or reported (otherwise) when an operation combines two amounts in
+  # different currencies. The operators cannot convert: they do not know which date the
+  # rate is for, and that differs per caller (entry date, price date, today). Callers
+  # convert with exchange_to (or ExchangeRate.convert_or_leave_out) first.
+  class CurrencyMismatchError < StandardError
+    attr_reader :left_currency, :right_currency, :operation
+
+    def initialize(left_currency:, right_currency:, operation:)
+      @left_currency = left_currency
+      @right_currency = right_currency
+      @operation = operation
+
+      super("Can't apply #{operation} to #{left_currency} and #{right_currency} amounts; convert one with exchange_to first")
+    end
+  end
+
+  # Distinct mismatch call sites remembered per process before the memory starts over
+  REPORTED_MISMATCHES_LIMIT = 500
+
   attr_reader :amount, :currency, :store
 
   validate :source_must_be_of_known_type
@@ -26,6 +45,29 @@ class Money
 
     def default_currency=(object)
       @default = Money::Currency.new(object)
+    end
+
+    # On in development and test (config/initializers/money.rb): mixing currencies raises.
+    # Off in production: the mismatch is reported once per call site and the operation
+    # keeps its old result, so a page that shows a wrong figure today does not start failing.
+    attr_writer :strict_currency
+
+    def strict_currency?
+      @strict_currency == true
+    end
+
+    # true the first time a mismatch key is seen in this process. Once the memory is full
+    # it starts over instead of going quiet, so a long-running process still reports new
+    # call sites (a known one may be reported once more).
+    def first_mismatch_report?(key)
+      @reported_mismatches ||= Concurrent::Set.new
+      @reported_mismatches.clear if @reported_mismatches.size >= REPORTED_MISMATCHES_LIMIT
+
+      !@reported_mismatches.add?(key).nil?
+    end
+
+    def reset_reported_mismatches!
+      @reported_mismatches = nil
     end
   end
 
@@ -62,12 +104,21 @@ class Money
     { amount: amount, currency: currency.iso_code, formatted: format }.as_json
   end
 
+  # Amounts in different currencies are simply not equal; only ordering them (<, >, <=>)
+  # needs a conversion
+  def ==(other)
+    return false if other.is_a?(Money) && currency != other.currency
+
+    super
+  end
+
   def <=>(other)
     raise TypeError, "Money can only be compared with other Money objects except for 0" unless other.is_a?(Money) || other.eql?(0)
 
     if other.is_a?(Numeric)
       amount <=> other
     else
+      ensure_same_currency!(other, :<=>)
       amount_comparison = amount <=> other.amount
 
       if amount_comparison == 0
@@ -79,6 +130,25 @@ class Money
   end
 
   private
+    def ensure_same_currency!(other, operation)
+      return if currency == other.currency
+
+      error = CurrencyMismatchError.new(left_currency: currency.iso_code, right_currency: other.currency.iso_code, operation: operation)
+      raise error if self.class.strict_currency?
+
+      # Once per call site and process: a sort or a long sync would otherwise report the
+      # same mismatch thousands of times
+      call_site = caller_locations(2, 1).first&.to_s
+      return unless self.class.first_mismatch_report?([ operation, error.left_currency, error.right_currency, call_site ])
+
+      Rails.error.report(error, handled: true, severity: :warning, source: "money", context: { call_site: call_site })
+      Rails.logger.warn("[Money] #{error.message} (#{call_site})")
+      DebugLogEntry.capture(
+        category: "money", level: "warn", message: error.message, source: "Money##{operation}",
+        metadata: { left_currency: error.left_currency, right_currency: error.right_currency, call_site: call_site }
+      )
+    end
+
     def stored_rate(from:, to:, date:)
       record = if store.respond_to?(:find_rate)
         store.find_rate(from: from, to: to, date: date)

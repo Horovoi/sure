@@ -29,12 +29,19 @@ class Trade < ApplicationRecord
     end
   end
 
+  # The current price is in the security's price currency and the cost in the trade's, so
+  # the value converts into the trade's currency first (nearest-rate rule). nil when the
+  # pair has no rate at all.
   def unrealized_gain_loss
     return nil if qty.negative?
     current_price = security.current_price
     return nil if current_price.nil?
 
-    current_value = current_price * qty.abs
+    current_value = ExchangeRate.convert_or_leave_out(
+      current_price * qty.abs, to: currency, source: "Trade#unrealized_gain_loss", family: entry&.account&.family
+    )
+    return nil if current_value.nil?
+
     cost_basis = price_money * qty.abs
 
     Trend.new(current: current_value, previous: cost_basis)
