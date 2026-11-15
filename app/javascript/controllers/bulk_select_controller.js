@@ -53,6 +53,10 @@ export default class extends Controller {
   }
 
   submitBulkRequest(e) {
+    // The Save button is a submit button, so Enter in a field still reaches
+    // this action. Cancel its own submission: requestSubmit() below sends the
+    // form once, with the selected ids added.
+    e.preventDefault();
     const form = e.target.closest("form");
     const scope = e.params.scope;
     this._reconcileSelection();

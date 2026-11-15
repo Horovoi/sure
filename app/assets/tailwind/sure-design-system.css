@@ -404,6 +404,26 @@
     outline-color: var(--color-focus-ring);
   }
 
+  /*
+    Themed hover-card surface (DS::Tooltip variant: :surface): a hairline ring
+    composed with a soft drop shadow (Tailwind shadow utilities don't compose,
+    hence the component class). Dark mode swaps the ring to alpha-white.
+  */
+  .chart-tooltip {
+    background: var(--color-container);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow:
+      0 0 0 1px var(--color-alpha-black-50),
+      0 8px 24px rgba(11, 11, 11, 0.12);
+
+    @variant theme-dark {
+      box-shadow:
+        0 0 0 1px var(--color-alpha-white-50),
+        0 8px 24px rgba(11, 11, 11, 0.12);
+    }
+  }
+
   /* Mobile bottom nav: safe-area adjustments
      - Default: respect safe-area insets
      - PWA standalone: reduce padding slightly to visually match Safari

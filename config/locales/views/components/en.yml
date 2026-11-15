@@ -1,11 +1,28 @@
 ---
 en:
+  UI:
+    account:
+      activity_date:
+        balance_tooltip: "The end of day balance, after all transactions and adjustments"
   ds:
+    alert:
+      variants:
+        info: Info
+        success: Success
+        warning: Warning
+        error: Error
+        destructive: Error
     pill:
       aria_label: "%{label}"
       default_label: Preview
+    dialog:
+      close: Close
     popover:
       avatar_default_label: Open menu
+    tooltip:
+      trigger_label: More info
+    link:
+      opens_in_new_tab: (opens in new tab)
     icon_picker:
       no_matching_icons: No matching icons
       search_placeholder: Search icons...
