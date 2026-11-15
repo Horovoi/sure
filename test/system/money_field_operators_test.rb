@@ -37,6 +37,10 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
     visit new_transaction_url
 
     fill_in "entry_name", with: "Groceries"
+    # The name's async suggestions open a list over the fields below it; close it as a
+    # person would before clicking the amount, or the click can land on the list
+    find_field("entry_name").send_keys(:escape)
+    assert_no_selector "[role='listbox']", visible: true
     assert_no_selector OPERATOR_ROW
 
     find_field("entry[amount]").click

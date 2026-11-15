@@ -30,7 +30,7 @@ en:
         empty: No categories are over budget
         title: Over budget
     budget_category:
-      monthly_average: "%{amount} avg"
+      monthly_median: "%{amount}/m median"
     no_categories:
       description: You have not created or assigned any expense categories to your transactions yet.
       new_category: New category

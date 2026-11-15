@@ -95,6 +95,10 @@ class RulesTest < ApplicationSystemTestCase
       action = @first.reload.actions.first
       action.action_type == "set_transaction_tags" && action.execution_value.sort == [ work.id, travel.id ].sort
     end
+
+    action = @first.reload.actions.first
+    assert_equal "set_transaction_tags", action.action_type
+    assert_equal [ work.id, travel.id ].sort, action.execution_value.sort
   end
 
   private
