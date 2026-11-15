@@ -144,6 +144,13 @@ case "$command" in
     [ $# -eq 1 ] || die "usage: bin/staging restore <bundle-dir>"
     [ -d "$1" ] || die "no such folder: $1"
     bundle=$(cd "$1" && pwd)
+    # Start the version that made the bundle when its image is here: a bundle from a newer
+    # build carries a schema the deployed version cannot run. Otherwise the deployed one.
+    bundle_tag=$(ruby -rjson -e 'puts JSON.parse(File.read(ARGV[0]))["tag"].to_s' "$bundle/manifest.json" 2>/dev/null || true)
+    if [ -n "$bundle_tag" ] && [ "$bundle_tag" != "$TAG" ] && image_exists "$bundle_tag"; then
+      echo "  the bundle was made by sure:$bundle_tag; staging runs that version"
+      TAG="$bundle_tag"
+    fi
     image_exists "$TAG" || die "no local image sure:$TAG; run bin/deploy first"
 
     step "Checking $bundle"
