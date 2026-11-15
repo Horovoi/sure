@@ -117,22 +117,44 @@ class IncomeStatement
       )
     end
 
+    # The stats depend on today's period (which one is current, and where the category
+    # average window ends), so a new period means a new cache key. today is the family's
+    # date: requests and jobs run in its time zone.
     def family_stats(interval: "month", exclude_current_period: false)
       @family_stats ||= {}
+      today = Date.current
       fiscal_key = [ family.use_fiscal_months, family.fiscal_start_day ]
-      cache_key = [ interval, fiscal_key, exclude_current_period ]
+      period_key = current_period_start(interval, today).iso8601
+      cache_key = [ interval, fiscal_key, exclude_current_period, period_key ]
       @family_stats[cache_key] ||= Rails.cache.fetch([
-        "income_statement", "family_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
-       ], expires_in: Family::AGGREGATE_CACHE_TTL) { FamilyStats.new(family, interval:, exclude_current_period:).call }
+        "income_statement", "family_stats", "v2", family.id, interval, fiscal_key, exclude_current_period, period_key, family.entries_cache_version
+       ], expires_in: Family::AGGREGATE_CACHE_TTL) { FamilyStats.new(family, interval:, exclude_current_period:, today:).call }
     end
 
     def category_stats(interval: "month", exclude_current_period: false)
       @category_stats ||= {}
+      today = Date.current
       fiscal_key = [ family.use_fiscal_months, family.fiscal_start_day ]
-      cache_key = [ interval, fiscal_key, exclude_current_period ]
+      period_key = current_period_start(interval, today).iso8601
+      cache_key = [ interval, fiscal_key, exclude_current_period, period_key ]
       @category_stats[cache_key] ||= Rails.cache.fetch([
-        "income_statement", "category_stats", family.id, interval, fiscal_key, exclude_current_period, family.entries_cache_version
-       ], expires_in: Family::AGGREGATE_CACHE_TTL) { CategoryStats.new(family, interval:, exclude_current_period:).call }
+        "income_statement", "category_stats", "v2", family.id, interval, fiscal_key, exclude_current_period, period_key, family.entries_cache_version
+       ], expires_in: Family::AGGREGATE_CACHE_TTL) { CategoryStats.new(family, interval:, exclude_current_period:, today:).call }
+    end
+
+    # Start of the stats period that contains today, matching the SQL: date_trunc of the
+    # date shifted back by the fiscal offset (Postgres weeks start on Monday)
+    def current_period_start(interval, today)
+      offset_days = family.fiscal_month_enabled? ? family.fiscal_start_day.to_i - 1 : 0
+      shifted = today - offset_days
+
+      case interval.to_s
+      when "day" then shifted
+      when "week" then shifted.beginning_of_week(:monday)
+      when "quarter" then shifted.beginning_of_quarter
+      when "year" then shifted.beginning_of_year
+      else shifted.beginning_of_month
+      end
     end
 
     def totals_query(transactions_scope:, date_range:)

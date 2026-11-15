@@ -1,8 +1,11 @@
 class IncomeStatement::CategoryStats
-  def initialize(family, interval: "month", exclude_current_period: false)
+  # today: the family's date (Date.current in its time zone). It decides which period
+  # is the current one; Postgres CURRENT_DATE is the UTC date, a day off around midnight.
+  def initialize(family, interval: "month", exclude_current_period: false, today: Date.current)
     @family = family
     @interval = interval
     @exclude_current_period = exclude_current_period
+    @today = today.to_date
   end
 
   def call
@@ -27,7 +30,8 @@ class IncomeStatement::CategoryStats
           interval: @interval,
           family_id: @family.id,
           offset_days: fiscal_offset_days,
-          exclude_current_period: (@exclude_current_period ? 1 : 0)
+          exclude_current_period: (@exclude_current_period ? 1 : 0),
+          today: @today
         }
       ])
     end
@@ -42,8 +46,8 @@ class IncomeStatement::CategoryStats
               :interval,
               CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
             ) as period,
-            CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END as classification,
-            SUM(ae.amount * COALESCE(er.rate, 1)) as total
+            #{classification_sql} as classification,
+            SUM(CASE WHEN t.kind = 'investment_contribution' THEN ABS(ae.amount * COALESCE(er.rate, 1)) ELSE ae.amount * COALESCE(er.rate, 1) END) as total
           FROM transactions t
           JOIN entries ae ON ae.entryable_id = t.id AND ae.entryable_type = 'Transaction'
           JOIN accounts a ON a.id = ae.account_id
@@ -62,12 +66,9 @@ class IncomeStatement::CategoryStats
               date_trunc(
                 :interval,
                 CASE WHEN :offset_days > 0 THEN (ae.date - make_interval(days => :offset_days)) ELSE ae.date END
-              ) < date_trunc(
-                :interval,
-                CASE WHEN :offset_days > 0 THEN (CURRENT_DATE - make_interval(days => :offset_days)) ELSE CURRENT_DATE END
-              )
+              ) < #{current_period_sql}
             )
-          GROUP BY c.id, c.parent_id, period, CASE WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END
+          GROUP BY c.id, c.parent_id, period, #{classification_sql}
         ),
         parents AS (
           SELECT
@@ -90,15 +91,54 @@ class IncomeStatement::CategoryStats
           WHERE p.category_id IN (
             SELECT id FROM categories WHERE family_id = :family_id AND parent_id IS NULL
           )
+        ),
+        -- last_p: the latest past period with any activity in the family, or the
+        -- period before the current one when there is none
+        bounds AS (
+          SELECT COALESCE(MAX(period), #{current_period_sql} - CAST('1 ' || :interval AS interval)) AS last_p
+          FROM base
+          WHERE period < #{current_period_sql}
+        ),
+        -- end_p: the category's latest period with spending, or last_p when that is later
+        windowed AS (
+          SELECT final.*,
+            GREATEST(MAX(period) OVER (PARTITION BY category_id, classification), (SELECT last_p FROM bounds)) AS end_p
+          FROM final
         )
         SELECT
           category_id,
           classification,
+          -- The median stays the typical period with spending
           ABS(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total)) as median,
-          ABS(AVG(total)) as avg
-        FROM final
+          -- The average runs over every period from the category's first one to end_p,
+          -- at most 12, so a period without spending counts as zero. The unfinished
+          -- current period counts only once it has spending.
+          ABS(COALESCE(SUM(total) FILTER (WHERE period > end_p - CAST('12 ' || :interval AS interval)), 0) / (
+            SELECT COUNT(*) FROM generate_series(
+              GREATEST(MIN(period), MAX(end_p) - CAST('11 ' || :interval AS interval)),
+              MAX(end_p),
+              CAST('1 ' || :interval AS interval)
+            )
+          )) as avg
+        FROM windowed
         GROUP BY category_id, classification;
       SQL
+    end
+
+    # The period that contains today, shifted like the entry periods for fiscal months
+    def current_period_sql
+      <<~SQL.squish
+        date_trunc(
+          :interval,
+          CASE WHEN :offset_days > 0 THEN (CAST(:today AS date) - make_interval(days => :offset_days)) ELSE CAST(:today AS date) END
+        )
+      SQL
+    end
+
+    # Same as IncomeStatement::Totals: an investment contribution is an expense whatever
+    # its sign (a provider may import a payroll contribution as an inflow)
+    def classification_sql
+      "CASE WHEN t.kind = 'investment_contribution' THEN 'expense' WHEN ae.amount < 0 THEN 'income' ELSE 'expense' END"
     end
 
     def fiscal_offset_days
