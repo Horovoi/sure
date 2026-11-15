@@ -163,20 +163,57 @@ class IncomeStatement::SpendingComparison
     # { key => { category:, net: } } for every category with activity in the period.
     # net is expense minus income booked to the category, netted per category by
     # CategoryNetting; a parent's net includes its subcategories.
+    #
+    # An in-progress period nets 13 periods (the period and 12 windows), which took about
+    # 28 ms per Reports page even with every totals query cached. The nets of all of them
+    # are cached in one entry (one read) as plain numbers, under the totals query's own
+    # key parts (entries, accounts and categories, and stored rates), and the categories
+    # are looked up again from the statement's loaded list.
     def net_by_category(net_period)
+      dates = [ net_period.start_date, net_period.end_date ]
       @net_by_category ||= {}
-      @net_by_category[[ net_period.start_date, net_period.end_date ]] ||=
-        IncomeStatement::CategoryNetting.new(income_statement, period: net_period).groups.each_with_object({}) do |group, result|
-          root_net = group[:direct] + group[:children].sum { |child| child[:net] }
-          next if root_net.zero? && group[:children].all? { |child| child[:net].zero? }
+      @net_by_category[dates] ||= (cached_nets[dates] || nets(net_period)).each_with_object({}) do |(key, net), result|
+        category = categories_by_key[key]
+        result[key] = { category: category, net: net } if category
+      end
+    end
 
-          result[key_for(group[:category])] = { category: group[:category], net: root_net }
-          group[:children].each do |child|
-            next if child[:net].zero?
+    # { [start_date, end_date] => { key => net } } for the period and its baseline
+    def cached_nets
+      @cached_nets ||= begin
+        periods = [ period, *(comparable? ? (in_progress? ? baseline_windows : [ baseline_period ]) : []) ]
 
-            result[key_for(child[:category])] = { category: child[:category], net: child[:net] }
-          end
+        Rails.cache.fetch([
+          "income_statement", "spending_comparison_nets", "v1", family.id,
+          periods.map { |p| "#{p.start_date.iso8601}..#{p.end_date.iso8601}" }.join(","),
+          family.entries_cache_version, ExchangeRate.conversion_cache_key(family.currency)
+        ], expires_in: Family::AGGREGATE_CACHE_TTL) do
+          periods.to_h { |p| [ [ p.start_date, p.end_date ], nets(p) ] }
         end
+      end
+    end
+
+    # { key => net } for one period
+    def nets(net_period)
+      IncomeStatement::CategoryNetting.new(income_statement, period: net_period).groups.each_with_object({}) do |group, result|
+        root_net = group[:direct] + group[:children].sum { |child| child[:net] }
+        next if root_net.zero? && group[:children].all? { |child| child[:net].zero? }
+
+        result[key_for(group[:category])] = root_net
+        group[:children].each do |child|
+          next if child[:net].zero?
+
+          result[key_for(child[:category])] = child[:net]
+        end
+      end
+    end
+
+    # The categories CategoryNetting reports, by key: every family category (with its
+    # parent loaded) and the two synthetic ones
+    def categories_by_key
+      @categories_by_key ||= [
+        *income_statement.categories, family.categories.uncategorized, family.categories.other_investments
+      ].index_by { |category| key_for(category) }
     end
 
     def scaled_normal(baseline_net)

@@ -404,6 +404,19 @@ class Family::AutoTransferMatchableTest < ActiveSupport::TestCase
       assert_empty @family.transaction_ids_with_transfer_candidates([ outflow.transaction ])
     end
 
+    test "the transfer hint finds counterparts up to two days outside the page's own dates" do
+      outflow = create_transaction(date: 5.days.ago.to_date, account: @depository, amount: 120)
+      later_inflow = create_transaction(date: 3.days.ago.to_date, account: @credit_card, amount: -120)
+      inflow = create_transaction(date: 10.days.ago.to_date, account: @credit_card, amount: -75)
+      earlier_outflow = create_transaction(date: 12.days.ago.to_date, account: @depository, amount: 75)
+
+      ids = @family.transaction_ids_with_transfer_candidates([ outflow.transaction, inflow.transaction ])
+
+      assert_equal Set[outflow.entryable_id, inflow.entryable_id], ids
+      assert_not_includes ids, later_inflow.entryable_id
+      assert_not_includes ids, earlier_outflow.entryable_id
+    end
+
     test "the transfer hint skips pairs in different categories" do
       outflow = create_transaction(account: @depository, amount: 120, category: categories(:food_and_drink))
       create_transaction(account: @credit_card, amount: -120, category: categories(:income))

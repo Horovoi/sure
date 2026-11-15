@@ -95,16 +95,17 @@ class IncomeStatement
       .find { |stat| stat.classification == "income" }&.median || 0
   end
 
+  # Every category of the family, loaded once, with the parent that views and
+  # callers read from a subcategory.
+  def categories
+    @categories ||= family.categories.includes(:parent).to_a
+  end
+
   private
     ScopeTotals = Data.define(:transactions_count, :income_money, :expense_money)
     PeriodTotal = Data.define(:classification, :total, :currency, :category_totals)
     CategoryTotal = Data.define(:category, :total, :currency, :weight)
 
-    # Every category of the family, loaded once, with the parent that views and
-    # callers read from a subcategory.
-    def categories
-      @categories ||= family.categories.includes(:parent).to_a
-    end
 
     def period_memo_key(period)
       [ period.start_date, period.end_date ]

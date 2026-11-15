@@ -384,29 +384,41 @@ class Family < ApplicationRecord
   # Visible accounts' balances, each account's holdings on its latest holding date, and
   # active subscriptions
   private def exchange_rate_currencies_held_now
-    account_ids = accounts.visible.select(:id)
-    latest = Holding.where(account_id: account_ids).group(:account_id).select("account_id, MAX(date) AS date")
-
-    (
-      Account.where(id: account_ids).distinct.pluck(:currency) +
-        Holding.joins("JOIN (#{latest.to_sql}) latest ON latest.account_id = holdings.account_id AND latest.date = holdings.date")
-          .distinct.pluck(:currency) +
-        recurring_transactions.active_subscriptions.distinct.pluck(:currency)
-    ).compact.uniq
+    exchange_rate_currencies.select { |_, held_now| held_now }.keys
   end
 
-  # Memoized: the notes partial reads both lists in one render
+  # Visible accounts and their entries, trades and holdings, and active subscriptions
   private def exchange_rate_currencies_in_use
-    @exchange_rate_currencies_in_use ||= begin
-      account_ids = accounts.visible.select(:id)
+    exchange_rate_currencies.keys
+  end
 
-      (
-        Account.where(id: account_ids).distinct.pluck(:currency) +
-          Entry.where(account_id: account_ids).distinct.pluck(:currency) +
-          Trade.joins(:entry).where(entries: { account_id: account_ids }).distinct.pluck("trades.currency") +
-          Holding.where(account_id: account_ids).distinct.pluck(:currency) +
-          recurring_transactions.active_subscriptions.distinct.pluck(:currency)
-      ).compact.uniq
+  # { currency => held now } for both lists above, in one query: these notes render on
+  # the dashboard, Reports and Transactions pages, and eight separate queries cost
+  # several milliseconds on each.
+  private def exchange_rate_currencies
+    @exchange_rate_currencies ||= begin
+      account_ids = accounts.visible.select(:id)
+      latest = Holding.where(account_id: account_ids).group(:account_id).select("account_id, MAX(date) AS date")
+
+      held_now = Arel.sql("TRUE AS held_now")
+      not_held = Arel.sql("FALSE AS held_now")
+      parts = [
+        Account.where(id: account_ids).select(:currency, held_now),
+        Entry.where(account_id: account_ids).select(:currency, not_held),
+        Trade.joins(:entry).where(entries: { account_id: account_ids }).select("trades.currency", not_held),
+        Holding.where(account_id: account_ids).select(:currency, not_held),
+        Holding.joins("JOIN (#{latest.to_sql}) latest ON latest.account_id = holdings.account_id AND latest.date = holdings.date").select("holdings.currency", held_now),
+        recurring_transactions.active_subscriptions.select(:currency, held_now)
+      ].map { |scope| scope.distinct.arel }
+      union = parts.reduce { |all, part| Arel::Nodes::UnionAll.new(all, part) }
+
+      query = Arel::SelectManager.new
+        .project(Arel.sql("currency"), Arel.sql("bool_or(held_now)"))
+        .from(Arel::Nodes::TableAlias.new(Arel::Nodes::Grouping.new(union), "currencies"))
+        .where(Arel.sql("currency IS NOT NULL"))
+        .group(Arel.sql("currency"))
+
+      self.class.connection.select_rows(query).to_h
     end
   end
 
