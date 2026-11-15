@@ -4,6 +4,14 @@
 <% is_last_step = step_idx == import.mapping_steps.count - 1 %>
 
 <div class="w-full max-w-full">
+  <% if mapping_class == Import::AccountMapping %>
+    <% import.provider_linked_target_accounts.each do |linked_account| %>
+      <div class="mb-4">
+        <%= render DS::Alert.new(message: Import.provider_linked_message(linked_account), variant: :error) %>
+      </div>
+    <% end %>
+  <% end %>
+
   <% if mapping_class == Import::AccountMapping && import.account.nil? %>
     <% if import.requires_account? %>
       <div class="w-full max-w-full overflow-hidden mb-4">

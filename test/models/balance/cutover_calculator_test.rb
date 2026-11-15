@@ -11,6 +11,7 @@ class Balance::CutoverCalculatorTest < ActiveSupport::TestCase
 
   setup do
     travel_to Date.new(2026, 11, 15)
+    enable_bank_connections(:lunchflow)
   end
 
   test "keeps the history before the cutover byte-identical and shows the drift once on the cutover day" do

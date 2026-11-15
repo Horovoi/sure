@@ -7,10 +7,11 @@
 #
 #   page     page_to set: continue the cut window
 #   first    nothing fetched yet: the last 31 days (not before the target start)
-#   gap      the last fetch is older than 31 days: walk forward from it
+#   gap      the last fetch is older than 31 days: walk forward from it (each gap
+#            window re-reads at most half a window, so the walk always advances)
 #   forward  new activity: when the client-info balance changed since the last
 #            forward fetch, open holds need a recheck, the last forward fetch is a day
-#            old, or "Sync now" asked for it
+#            old, or "Sync now" was asked for after it
 #   backfill older history down to the target start
 #
 # The target start is the cut-over date minus 3 days for an account linked to
@@ -25,6 +26,8 @@ class MonobankItem::FetchPlan
   HOLD_RETENTION = 31.days
   CUTOVER_OVERLAP = 3.days
   PRIORITY = { first: 0, forward: 0, gap: 1, backfill: 2 }.freeze
+  # A product whose statement failed this many times in a row is reported as failing
+  FAILING_AFTER = 3
 
   class << self
     def target_start_for(monobank_account, now: Time.current)
@@ -86,9 +89,15 @@ class MonobankItem::FetchPlan
       .min
   end
 
-  # Estimated statement requests until every product is up to date
+  # Estimated statement requests until every product is up to date, products waiting
+  # out a failed request included
   def windows_remaining
-    eligible_accounts.sum { |monobank_account| remaining_for(monobank_account) }
+    candidates(ignore_backoff: true).sum { |monobank_account| remaining_for(monobank_account) }
+  end
+
+  # Products whose statement requests failed FAILING_AFTER times in a row
+  def failing_accounts
+    candidates(ignore_backoff: true).select { |monobank_account| monobank_account.fetch_failures >= FAILING_AFTER }
   end
 
   def target_start(monobank_account)
@@ -107,7 +116,7 @@ class MonobankItem::FetchPlan
     if synced_through.nil?
       Window.new(monobank_account, [ target, now - SPAN ].max, now, :first)
     elsif synced_through < now - SPAN
-      from = synced_through - self.class.lookback
+      from = synced_through - [ self.class.lookback, SPAN / 2 ].min
       Window.new(monobank_account, from, [ from + SPAN, now ].min, :gap)
     elsif forward_needed?(monobank_account)
       from = [ synced_through - self.class.lookback, oldest_hold_time(monobank_account) ].compact.min
@@ -124,8 +133,8 @@ class MonobankItem::FetchPlan
     return true if !monobank_account.raw_balance_minor.nil? && monobank_account.raw_balance_minor != monobank_account.balance_at_forward_fetch
     return true if oldest_hold_time(monobank_account) && fetched_at < now - HOLD_RECHECK_AFTER
 
-    forced_until = monobank_item.force_forward_until
-    forced_until.present? && forced_until > now && fetched_at < forced_until - MonobankItem::FORCE_FORWARD_FOR
+    requested_at = monobank_item.force_forward_requested_at
+    requested_at.present? && fetched_at < requested_at
   end
 
   def backfill_needed?(monobank_account, target = target_start(monobank_account))

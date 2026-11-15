@@ -142,4 +142,48 @@ class MonobankStatementFetchJobTest < ActiveJob::TestCase
     assert @product.reload.history_complete?
     assert_nil @item.reload.fetch_chain_token
   end
+  test "a product backed off for a while does not park the chain: Sync now for another one is fetched within two slots" do
+    bad = create_monobank_product(account_id: "bad")
+    link_product(bad, create_sure_account(name: "Bad"))
+    bad.update!(fetch_failures: 4, next_fetch_after: 16.minutes.from_now)
+    @product.update!(statement_synced_through: Time.current, forward_fetched_at: Time.current, balance_at_forward_fetch: 100_00,
+                     history_synced_from: 400.days.ago, history_complete: true)
+
+    MonobankStatementFetchJob.perform_now(@item, @token)
+
+    job = next_fetch_jobs.sole
+    assert_operator job["scheduled_at"].to_time, :<=, Time.current + 2.minutes + 2.seconds
+    assert_equal true, ActiveJob::Arguments.deserialize(job["arguments"]).last, "parked"
+
+    travel 1.minute
+    @item.force_forward!
+    travel_to job["scheduled_at"].to_time
+    stub = stub_request(:get, %r{/personal/statement/card-uah/}).to_return(status: 200, body: "[]")
+    clear_enqueued_jobs
+    assert_no_difference -> { @item.syncs.count }, "a parked chain asks for one sync only" do
+      MonobankStatementFetchJob.perform_now(*ActiveJob::Arguments.deserialize(job["arguments"]))
+    end
+
+    assert_requested stub, times: 1
+  end
+
+  test "a job that finds the connection refused ends its chain, so a new token starts one at once" do
+    @item.update!(status: :requires_update)
+
+    MonobankStatementFetchJob.perform_now(@item, @token)
+
+    assert_nil @item.reload.fetch_chain_token
+    assert_not @item.fetch_chain_active?
+  end
+
+  test "with monobank switched off the chain makes no request and ends" do
+    enable_bank_connections(:plaid)
+
+    MonobankStatementFetchJob.perform_now(@item, @token)
+
+    assert_not_requested :get, STATEMENT
+    assert_empty next_fetch_jobs
+    assert_nil @item.reload.fetch_chain_token
+    assert_nil @item.ensure_fetch_chain!
+  end
 end

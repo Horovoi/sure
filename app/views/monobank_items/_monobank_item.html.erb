@@ -61,7 +61,7 @@
             ) %>
           </div>
         <% elsif monobank_item.total_accounts_count.zero? %>
-          <p class="p-4 text-secondary text-sm text-center"><%= t("monobank_items.monobank_item.no_accounts") %></p>
+          <p class="p-4 text-secondary text-sm text-center"><%= t(monobank_item.waiting_for_client_info? ? "monobank_items.monobank_item.waiting_for_client_info" : "monobank_items.monobank_item.no_accounts") %></p>
         <% end %>
       </div>
     <% end %>

@@ -4,6 +4,7 @@ class Account::ProviderLinkTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
   setup do
     travel_to Date.new(2026, 11, 15)
+    enable_bank_connections(:lunchflow)
     @family = families(:empty)
     @account = @family.accounts.create!(name: "Mono Visa", balance: 0, currency: "USD", accountable: CreditCard.new)
     @item = LunchflowItem.create!(family: @family, name: "Bank", api_key: "key")
@@ -15,6 +16,19 @@ class Account::ProviderLinkTest < ActiveSupport::TestCase
     entry(2.days.ago)
 
     assert_equal 1.day.ago.to_date, Account::ProviderLink.default_cutover_date(@account)
+  end
+
+  test "an explicit cutover on or before the opening balance is refused" do
+    Account::OpeningBalanceManager.new(@account).set_opening_balance(balance: 1_000, date: Date.new(2026, 10, 31))
+
+    [ Date.new(2026, 10, 31), Date.new(2026, 10, 20) ].each do |date|
+      assert_raises(Account::ProviderLink::InvalidCutover) do
+        Account::ProviderLink.link!(account: @account, provider_account: @provider_account, cutover_date: date)
+      end
+    end
+
+    Account::ProviderLink.link!(account: @account, provider_account: @provider_account, cutover_date: Date.new(2026, 11, 1))
+    assert_equal Date.new(2026, 11, 1), @account.reload.provider_cutover_date
   end
 
   test "default cutover is capped at today and ignores future and valuation entries" do

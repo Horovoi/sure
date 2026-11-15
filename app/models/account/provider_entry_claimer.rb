@@ -7,11 +7,16 @@
 # the same date; pass 2 takes entries up to `window` days away, closest date first, then
 # the oldest entry, then row order. Names are not compared.
 #
-# Candidates have no external_id (so an entry a provider already owns, or one claimed
-# earlier, is never claimed again), are not generated subscription charges (the
-# subscription reconciler owns those), not excluded, not pending holds and carry no
-# provider_claim marker. A pending row never claims, and a row in another currency
-# never matches. Each entry and each row is used once.
+# Candidates are entries the user recorded: no external_id, or one from a manual source
+# (Entry::MANUAL_SOURCES, e.g. an idempotency key given through the assistant), so an
+# entry a provider already owns is never claimed again. They are not generated
+# subscription charges (the subscription reconciler owns those), not excluded, not
+# pending holds and carry no provider_claim marker. A row in another currency never
+# matches. Each entry and each row is used once.
+#
+# Pending rows match too, so the entry a hold stands for is never handed to another
+# row; Account::ProviderImportAdapter does not book such a hold, and its settled row
+# claims the entry.
 #
 #   claimer = Account::ProviderEntryClaimer.new(account, source: "monobank")
 #   claimer.match([ Account::ProviderEntryClaimer::Row.new(key: "tx-1", date:, amount:, currency: "UAH", pending: false) ])
@@ -29,7 +34,6 @@ class Account::ProviderEntryClaimer
   # date span of all rows.
   def match(rows)
     keyed = rows.each_with_index.filter_map do |row, position|
-      next if row.pending
       next if row.date.nil? || row.amount.nil?
       next unless row.currency.to_s.upcase == account.currency.to_s.upcase
 
@@ -75,13 +79,19 @@ class Account::ProviderEntryClaimer
     match([ row ])[row.key]
   end
 
+  # Whether entry's external id still leaves it to the user (none, or a manual source's)
+  def self.claimable_id?(entry)
+    entry.external_id.nil? || entry.source.in?(Entry::MANUAL_SOURCES)
+  end
+
   private
     attr_reader :account, :source, :window
 
     def candidate_entries(dates)
       account.entries
         .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
-        .where(currency: account.currency, external_id: nil, excluded: false)
+        .where(currency: account.currency, excluded: false)
+        .where("entries.external_id IS NULL OR entries.source IN (?)", Entry::MANUAL_SOURCES)
         .where(date: (dates.min - window)..(dates.max + window))
         .where("entries.source IS DISTINCT FROM ?", "subscription")
         .where.not(Transaction.pending_sql("transactions"))

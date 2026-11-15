@@ -1,11 +1,14 @@
 # Turns a product's stored statement rows into entries.
 #
-#   claims   new settled rows first try to take over a hand-entered entry of the
-#            account (Account::ProviderEntryClaimer: same amount, same day or within
-#            3 days), in one batch so each entry is claimed at most once
+#   claims   rows not booked as settled entries yet (new rows, and holds booked as
+#            pending) are matched against the account's hand-entered entries
+#            (Account::ProviderEntryClaimer: same amount, same day or within 3 days), in
+#            one batch so each entry is matched at most once. A settled row takes its
+#            entry over; a hold that matches one is not booked until it settles.
 #   cut-over rows dated before the account's cut-over that claimed nothing are skipped
 #   holds    pending entries whose hold is no longer stored are removed, or kept and
-#            released when the user worked on them (Account::ProviderPendingPruner)
+#            released when the user attached something (Account::ProviderPendingPruner).
+#            With "Import pending holds" off, holds are stored but not booked.
 #   MCC      a category from the MCC is set only on uncategorised entries, when the
 #            connection allows it; own transfers never get one
 #
@@ -32,19 +35,25 @@ class MonobankAccount::Transactions::Processor
     claims = claim_matches(processors)
 
     imported = 0
+    created = 0
     failed_ids = Set.new
     errors = []
+    booked_ids = account.entries.where(source: SOURCE, external_id: processors.map(&:external_id)).pluck(:external_id).to_set
 
     processors.each do |processor|
+      next if processor.pending? && !include_holds?
+
       entry = build_processor(processor.row, claimed_entry: claims[processor.external_id], category: category_for(processor)).process
       imported += 1 if entry
+      created += 1 if entry && !booked_ids.include?(processor.external_id)
     rescue => e
       failed_ids << processor.external_id
       errors << { external_id: processor.external_id, error: "#{e.class}: #{e.message}" }
       Rails.logger.error("MonobankAccount::Transactions::Processor - row #{processor.external_id} failed: #{e.class} - #{e.message}")
     end
 
-    prune = pruner.prune!(keep_external_ids: processors.select(&:pending?).map(&:external_id))
+    kept_holds = include_holds? ? processors.select(&:pending?).map(&:external_id) : []
+    prune = pruner.prune!(keep_external_ids: kept_holds)
     trim_rows!(rows, failed_ids) if errors.empty?
 
     skipped = adapter.skipped_entries
@@ -52,6 +61,7 @@ class MonobankAccount::Transactions::Processor
       success: errors.empty?,
       total: rows.size,
       imported: imported,
+      created: created,
       failed: errors.size,
       claimed: adapter.claimed_entries.size,
       skipped_before_cutover: skipped.count { |s| s[:reason] == "before_cutover" },
@@ -85,6 +95,12 @@ class MonobankAccount::Transactions::Processor
       Account::ProviderPendingPruner.new(account, source: SOURCE)
     end
 
+    def include_holds?
+      return @include_holds if defined?(@include_holds)
+
+      @include_holds = monobank_item.include_pending_holds?
+    end
+
     def cutover_date
       return @cutover_date if defined?(@cutover_date)
 
@@ -102,16 +118,20 @@ class MonobankAccount::Transactions::Processor
       )
     end
 
-    # New settled rows (no entry with their id yet) matched against hand-entered entries
+    # Rows not booked as settled entries yet, matched against hand-entered entries.
+    # Holds take part so the entry a hold stands for is not handed to another row.
     def claim_matches(processors)
-      existing = account.entries.where(source: SOURCE, external_id: processors.map(&:external_id)).pluck(:external_id).to_set
-      candidates = processors.reject { |p| p.pending? || existing.include?(p.external_id) }
+      settled = account.entries.where(source: SOURCE, external_id: processors.map(&:external_id))
+                       .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+                       .where.not(Transaction.pending_sql("transactions", provider: SOURCE))
+                       .pluck(:external_id).to_set
+      candidates = processors.reject { |p| settled.include?(p.external_id) }
       return {} if candidates.empty?
 
       rows = candidates.filter_map do |processor|
         Account::ProviderEntryClaimer::Row.new(
           key: processor.external_id, date: processor.date, amount: processor.amount,
-          currency: processor.currency, pending: false
+          currency: processor.currency, pending: processor.pending?
         )
       rescue ArgumentError
         nil
@@ -176,6 +196,6 @@ class MonobankAccount::Transactions::Processor
     end
 
     def empty_result
-      { success: true, total: 0, imported: 0, failed: 0, claimed: 0, skipped_before_cutover: 0, skipped: 0, pruned: 0, detached: 0, errors: [] }
+      { success: true, total: 0, imported: 0, created: 0, failed: 0, claimed: 0, skipped_before_cutover: 0, skipped: 0, pruned: 0, detached: 0, errors: [] }
     end
 end

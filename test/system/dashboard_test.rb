@@ -270,8 +270,11 @@ class DashboardTest < ApplicationSystemTestCase
       find("button").click
       click_on I18n.t("accounts.exclude_from_reports.menu_exclude")
     end
-    assert_text I18n.t("accounts.exclude_from_reports.excluded", name: savings.name)
-    assert savings.reload.exclude_from_reports?
+    # Waits for the saved state, not the flash: the flash fades after a few seconds and a
+    # busy machine can miss it
+    page.document.synchronize do
+      raise Capybara::ExpectationNotMet, "account not excluded yet" unless savings.reload.exclude_from_reports?
+    end
 
     without_savings = BalanceSheet.new(@family.reload).assets.total_money.format(precision: 0)
     assert_not_equal with_savings, without_savings

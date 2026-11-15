@@ -21,6 +21,16 @@ class SyncWarningThresholdTest < ActiveSupport::TestCase
     Sync.create!(syncable: item).start!
   end
 
+  test "an account an hourly provider syncs warns only after 100 syncs a day" do
+    account = accounts(:depository)
+    item = monobank_items(:one)
+    Account::ProviderLink.link!(account: account, provider_account: item.monobank_accounts.create!(name: "Card", currency: "USD", account_id: "c", account_kind: "card"))
+    50.times { Sync.create!(syncable: account) }
+
+    Sentry.expects(:capture_exception).never
+    Sync.create!(syncable: account.reload).start!
+  end
+
   private
     def coinstats_item
       families(:dylan_family).coinstats_items.create!(name: "Wallets", api_key: "key")

@@ -16,7 +16,8 @@
 #
 # Pending provider holds are left out unless include_pending: true. That is for a balance
 # calculated back from a provider balance that already counts the holds (monobank): the
-# past days stay right while a hold is open.
+# past days stay right while a hold is open. A released hold the user kept
+# (Account::ProviderPendingPruner) counts in neither case.
 class Balance::SyncCache
   def initialize(account, include_pending: false)
     @account = account
@@ -131,7 +132,7 @@ class Balance::SyncCache
     # leave the stored balance for that date wrong until the next sync, since this fork
     # has no job that syncs an account on an entry's date.
     def entries_scope
-      scope = include_pending ? account.entries : account.entries.excluding_pending
+      scope = include_pending ? account.entries.excluding_released_holds : account.entries.excluding_pending
       scope.order(:date)
     end
 

@@ -53,7 +53,11 @@ class MonobankEntry::Processor
       extra: extra_metadata,
       claimed_entry: @claimed_entry,
       category_id_if_blank: @category_id_if_blank,
-      cutover_date: @cutover_date
+      cutover_date: @cutover_date,
+      # monobank settles a hold under its own id and sends every stored row again on
+      # each pass
+      holds_keep_id: true,
+      refresh_details: false
     )
   end
 

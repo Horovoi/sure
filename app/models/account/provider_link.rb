@@ -14,16 +14,20 @@ module Account::ProviderLink
   class InvalidCutover < StandardError; end
 
   class << self
-    # cutover_date: :auto (default_cutover_date), a Date (today or earlier), or nil
-    # (no cutover: the provider owns the whole history). Does not enqueue a sync;
-    # the caller syncs the provider item.
+    # cutover_date: :auto (default_cutover_date), a Date (today or earlier and after the
+    # account's opening anchor), or nil (no cutover: the provider owns the whole
+    # history). A provider account that keeps fetch state (reset_fetch_state!) forgets
+    # it, so the history the new link needs is fetched again, also after an unlink.
+    # Does not enqueue a sync; the caller syncs the provider item.
     def link!(account:, provider_account:, cutover_date: :auto)
       account.with_lock do
         raise AlreadyLinked, "Account #{account.id} is already linked" if account.account_providers.exists? || account.plaid_account_id.present?
         raise AlreadyLinked, "#{provider_account.class.name} #{provider_account.id} is already linked" if AccountProvider.exists?(provider: provider_account)
 
         cutover = resolve_cutover(account, cutover_date)
-        AccountProvider.create!(account: account, provider: provider_account, cutover_date: cutover)
+        link = AccountProvider.create!(account: account, provider: provider_account, cutover_date: cutover)
+        provider_account.reset_fetch_state! if provider_account.respond_to?(:reset_fetch_state!)
+        link
       end
     rescue ActiveRecord::RecordNotUnique
       raise AlreadyLinked, "Account #{account.id} or #{provider_account.class.name} #{provider_account.id} is already linked"
@@ -43,14 +47,21 @@ module Account::ProviderLink
 
     # Turns the account back into a manual one. Its balance today and its history stay
     # as they are: a cutover account gets a reconciliation on the cutover date with the
-    # balance it had there, and the provider's current anchors become reconciliations,
+    # balance it had there, the opening anchor of an account calculated back from the
+    # provider takes the balance the day after it started from, and the provider's
+    # current anchors become reconciliations,
     # so the forward calculation that manual accounts use gives the same numbers. The
-    # provider's entries stay. Enqueues a sync.
+    # provider's entries stay; open holds of a provider whose balance counts them
+    # become ordinary entries (the forward calculation leaves pending entries out, and
+    # nothing would ever settle or remove them). Enqueues a sync.
     def unlink!(account)
       Account.transaction do
         account.lock!
 
-        write_cutover_reconciliation(account) if account.balance_strategy == :cutover
+        strategy = account.balance_strategy
+        write_cutover_reconciliation(account) if strategy == :cutover
+        carry_reverse_opening_balance(account) if strategy == :reverse
+        settle_open_holds(account)
         convert_current_anchors(account)
 
         link_ids = account.account_providers.pluck(:id)
@@ -72,6 +83,11 @@ module Account::ProviderLink
 
         date = cutover_date.is_a?(Date) ? cutover_date : Date.parse(cutover_date.to_s)
         raise InvalidCutover, "Cutover date #{date} is in the future" if date > Date.current
+        # On or before the opening anchor there is no hand-kept history to keep: the
+        # account would be calculated back from the provider in full
+        if account.has_opening_anchor? && date <= account.opening_anchor_date
+          raise InvalidCutover, "Cutover date #{date} must be after the opening balance date #{account.opening_anchor_date}"
+        end
 
         date
       rescue Date::Error
@@ -98,6 +114,36 @@ module Account::ProviderLink
             currency: account.currency,
             entryable: Valuation.new(kind: "reconciliation")
           )
+        end
+      end
+
+      # The reverse calculation shows the opening anchor only on its own day; the day
+      # after starts from the provider's figure. The anchor takes that figure, so the
+      # forward calculation from it gives the same history (e.g. an account a provider
+      # created whose history backfill had not finished).
+      def carry_reverse_opening_balance(account)
+        return unless account.has_opening_anchor?
+
+        opening_date = account.opening_anchor_date
+        start = account.balances.where(currency: account.currency).where("date > ?", opening_date).order(:date).pick(:start_balance)
+        return if start.nil? || start == account.opening_anchor_balance
+
+        account.set_opening_anchor_balance(balance: start)
+      end
+
+      def settle_open_holds(account)
+        account.account_providers.each do |link|
+          provider = BankConnections.provider_for_account_class(link.provider_type)
+          next unless provider&.balance_includes_pending?
+
+          account.entries.pending_from(provider.key).where.not(Transaction.released_hold_sql("transactions")).includes(:entryable).find_each do |entry|
+            extra = (entry.entryable.extra || {}).deep_dup
+            data = extra[provider.key].is_a?(Hash) ? extra[provider.key] : {}
+            data.delete("pending")
+            data["unlinked_while_pending_at"] = Time.current.iso8601
+            extra[provider.key] = data
+            entry.entryable.update!(extra: extra)
+          end
         end
       end
 

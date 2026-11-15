@@ -24,7 +24,7 @@
 
         <div class="form-field">
           <%= form.label :cutover_date, t(".cutover_label"), class: "form-field__label" %>
-          <%= form.date_field :cutover_date, value: @cutover_date, max: Date.current, autocomplete: "off", class: "form-field__input" %>
+          <%= form.date_field :cutover_date, value: @cutover_date, min: (@account.opening_anchor_date + 1.day if @account.has_opening_anchor?), max: Date.current, autocomplete: "off", class: "form-field__input" %>
         </div>
         <p class="text-xs text-secondary">
           <%= @cutover_date ? t(".cutover_text", date: format_date(@cutover_date)) : t(".cutover_none") %>

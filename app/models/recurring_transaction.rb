@@ -325,11 +325,14 @@ class RecurringTransaction < ApplicationRecord
 
   # The family's transaction entries that can be part of a recurring series:
   # no transfer legs, investment contributions or one-time spending.
+  # A provider's pending hold is not an occurrence yet: it may be released, or settle at
+  # another amount
   def self.recurring_entries_for(family)
     family.entries
       .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
       .where(entryable_type: "Transaction")
       .where.not(transactions: { kind: NON_RECURRING_KINDS })
+      .where.not(Transaction.pending_sql("transactions"))
   end
 
   # Find matching transaction entries for variance calculation

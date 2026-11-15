@@ -90,6 +90,19 @@ class Entry < ApplicationRecord
       .where(Transaction.pending_sql("transactions", provider: source))
   }
 
+  # Leaves out released provider holds (as Transaction.released_hold_sql); other entries stay
+  scope :excluding_released_holds, -> {
+    where(<<~SQL.squish)
+      entries.entryable_type != 'Transaction'
+      OR NOT EXISTS (
+        SELECT 1 FROM transactions t, jsonb_each(t.extra) AS rh
+        WHERE t.id = entries.entryable_id
+        AND jsonb_typeof(rh.value) = 'object'
+        AND (rh.value ->> 'hold_released_at') IS NOT NULL
+      )
+    SQL
+  }
+
   scope :excluding_pending, -> {
     # For non-Transaction entries (Trade, Valuation), always include
     # For Transaction entries, exclude if pending flag is true

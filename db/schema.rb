@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_16_100004) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_16_100005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -1021,6 +1021,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100004) do
     t.datetime "opening_anchor_set_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "page_balance_minor"
     t.index ["monobank_item_id", "account_id"], name: "index_monobank_accounts_on_monobank_item_id_and_account_id", unique: true
     t.index ["monobank_item_id"], name: "index_monobank_accounts_on_monobank_item_id"
   end
@@ -1043,7 +1044,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100004) do
     t.boolean "apply_mcc_categories", default: true, null: false
     t.uuid "fetch_chain_token"
     t.datetime "fetch_chain_heartbeat_at"
-    t.datetime "force_forward_until"
+    t.datetime "force_forward_requested_at"
     t.datetime "last_client_info_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false

@@ -149,4 +149,55 @@ class MonobankItem::SyncerTest < ActiveSupport::TestCase
 
     assert sync.reload.completed?
   end
+  test "a busy client-info slot with no product yet schedules a sync for when it frees" do
+    @item.update_columns(created_at: 1.minute.ago)
+    @item.monobank_provider.reserve_request_slot!(:client_info)
+
+    run_sync
+
+    job = enqueued_jobs.find { |j| j["job_class"] == "DelayedSyncJob" }
+    assert job, "a follow-up sync"
+    assert_in_delta (Time.current + 61.seconds).to_f, job["scheduled_at"].to_time.to_f, 2
+    assert @item.reload.waiting_for_client_info?
+    assert_equal "Waiting for monobank to list your accounts (it answers one request a minute)", @item.sync_status_summary
+
+    clear_enqueued_jobs
+    @item.update_columns(created_at: 2.hours.ago)
+    run_sync
+    assert_no_enqueued_jobs only: DelayedSyncJob
+  end
+
+  test "with monobank switched off a queued sync makes no request" do
+    enable_bank_connections(:plaid)
+    create_monobank_product(account_id: "card-uah")
+
+    sync = run_sync
+
+    assert_not_requested :get, CLIENT_INFO
+    assert_nil @item.reload.fetch_chain_token
+    assert_nil sync.sync_stats.to_h["client_info"]
+  end
+
+  test "post-sync rules run only when the sync booked new entries" do
+    @item.syncs.create!(sync_stats: { "monobank_created" => 0 })
+    Family::ProviderPostSync.any_instance.expects(:run).with(new_entries: false).once
+    MonobankItem::Syncer.new(@item).perform_post_sync
+
+    travel 1.second
+    @item.syncs.create!(sync_stats: { "monobank_created" => 2 })
+    Family::ProviderPostSync.any_instance.expects(:run).with(new_entries: true).once
+    MonobankItem::Syncer.new(@item).perform_post_sync
+  end
+
+  test "products whose statement keeps failing are in the sync stats" do
+    stub_request(:get, CLIENT_INFO).to_return(status: 200, body: client_info_body)
+    product = create_monobank_product(account_id: "card-uah", balance: 100_00)
+    link_product(product, create_sure_account(name: "Card"))
+    product.update!(fetch_failures: 5, next_fetch_after: 30.minutes.from_now)
+
+    sync = run_sync
+
+    assert_equal [ product.name ], sync.sync_stats["statement_failing_products"]
+    assert_operator sync.sync_stats["statement_windows_remaining"], :>, 0
+  end
 end

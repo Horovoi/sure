@@ -10,9 +10,10 @@ class Account::Syncer
     Rails.logger.info("Processing balances (#{strategy})")
     import_market_data
     # Manual balances run forward from the opening anchor; keep it before every entry. So
-    # does the hand-kept part of a cutover account (before its cutover date). Linked
-    # accounts run backward from the provider's current balance instead.
-    account.move_opening_anchor_before_oldest_entry! if strategy.in?(%i[forward cutover]) && (account.manual? || account.provider_cutover_date)
+    # do the hand-kept part of a cutover account (before its cutover date) and an account
+    # whose provider is switched off. Linked accounts run backward from the provider's
+    # current balance instead.
+    account.move_opening_anchor_before_oldest_entry! if strategy.in?(%i[forward cutover])
     materialize_balances(strategy)
   end
 

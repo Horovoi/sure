@@ -33,6 +33,7 @@ en:
       client_info_failed: Could not load your monobank accounts. Try again later.
     sync_status:
       no_accounts: No accounts found yet
+      waiting: Waiting for monobank to list your accounts (it answers one request a minute)
       all_synced:
         one: 1 account linked
         other: "%{count} accounts linked"

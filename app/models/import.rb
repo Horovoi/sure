@@ -238,6 +238,7 @@ class Import < ApplicationRecord
       end
 
       release_claimed_entries!
+      release_provider_claimed_entries!
       remove_created_accounts!
       restore_replaced_subscription_charges!
       entries.destroy_all
@@ -550,6 +551,17 @@ class Import < ApplicationRecord
     # Restores entries this import took over as duplicates. An entry whose previous
     # owner import has since been reverted or deleted goes with this import. A category
     # or tag deleted since the claim cannot be restored and is left out.
+    # Entries a bank connection took over (extra["provider_claim"]) are the provider's
+    # record now: a provider never fetches them again once its rows are trimmed. They
+    # stay, without this import.
+    def release_provider_claimed_entries!
+      entries.where(entryable_type: "Transaction")
+             .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
+             .where("(transactions.extra -> 'provider_claim') IS NOT NULL")
+             .update_all(import_id: nil, updated_at: Time.current)
+      entries.reset
+    end
+
     def release_claimed_entries!
       live_import_ids = Import.where(id: claimed_entries.select(:previous_import_id)).where.not(status: "reverted").ids.to_set
       category_ids = Category.where(id: claimed_entries.select(:previous_category_id)).ids.to_set

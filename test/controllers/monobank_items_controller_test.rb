@@ -69,7 +69,7 @@ class MonobankItemsControllerTest < ActionDispatch::IntegrationTest
     post sync_monobank_item_url(@item)
     assert_response :redirect
     assert @item.syncs.any?
-    assert @item.reload.force_forward_until.future?
+    assert_in_delta Time.current.to_f, @item.reload.force_forward_requested_at.to_f, 2
   end
 
   test "another family's connection is not found" do
@@ -84,7 +84,9 @@ class MonobankItemsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "select[name='setup[#{@card.id}][choice]'] option[selected][value='link:#{@visa.id}']"
-    assert_select "input[name='setup[#{@card.id}][cutover_date]'][value='2026-11-14']"
+    # Blank: the date is worked out for whichever account is chosen; the suggestion is a hint
+    assert_select "input[name='setup[#{@card.id}][cutover_date]']:not([value])"
+    assert_match "for Mono Visa, 11-14-2026", response.body
     assert_select "select[name='setup[#{@usd.id}][choice]'] option[selected][value='create:Depository:checking']"
     assert_select "select[name='setup[#{@jar.id}][choice]'] option[selected][value='create:Depository:savings']"
     assert_select "select[name='setup[#{@usd.id}][choice]'] option[value='link:#{@visa.id}']", count: 0

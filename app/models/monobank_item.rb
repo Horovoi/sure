@@ -10,8 +10,6 @@ class MonobankItem < ApplicationRecord
   include Syncable, Provided, Unlinking, Encryptable, DestroyableLater
 
   CHAIN_STALE_AFTER = 5.minutes
-  # How long a manual "Sync now" makes every product get a forward window
-  FORCE_FORWARD_FOR = 10.minutes
 
   enum :status, { good: "good", requires_update: "requires_update" }, default: :good
 
@@ -28,6 +26,7 @@ class MonobankItem < ApplicationRecord
   validates :access_token, presence: true, on: :create
 
   before_validation :apply_institution_defaults, on: :create
+  after_update :refetch_older_history, if: :saved_change_to_sync_start_date?
   # Keeps the Sure accounts (as manual ones) when a connection is removed. Not when the
   # family itself is deleted: its accounts go with it.
   before_destroy :unlink_all_accounts, unless: :destroyed_by_association
@@ -129,6 +128,7 @@ class MonobankItem < ApplicationRecord
   # Starts a fetch chain when there is a window to fetch and no live chain.
   # Returns the new chain token, or nil.
   def ensure_fetch_chain!(provider: monobank_provider)
+    return nil unless BankConnections.enabled?(:monobank)
     return nil if provider.nil? || requires_update? || scheduled_for_deletion?
     return nil if MonobankItem::FetchPlan.new(self).next_window.nil?
 
@@ -152,18 +152,22 @@ class MonobankItem < ApplicationRecord
     end
   end
 
+  # "Sync now": every product gets a forward window fetched after this moment
   def force_forward!
-    update!(force_forward_until: Time.current + FORCE_FORWARD_FOR)
+    update!(force_forward_requested_at: Time.current)
   end
 
-  # Statement pages left to fetch, and about how long that takes
+  # Statement pages left to fetch, about how long that takes, and the products whose
+  # statement keeps failing ({ name:, failures:, failure_code: })
   def backfill_progress
-    remaining = MonobankItem::FetchPlan.new(self).windows_remaining
+    plan = MonobankItem::FetchPlan.new(self)
+    remaining = plan.windows_remaining
     interval = monobank_provider&.min_request_interval || Provider::Monobank::MIN_REQUEST_INTERVAL
 
-    { windows_remaining: remaining, eta_seconds: (remaining * (interval + 1)).ceil, chain_active: fetch_chain_active? }
+    { windows_remaining: remaining, eta_seconds: (remaining * (interval + 1)).ceil, chain_active: fetch_chain_active?,
+      failing: plan.failing_accounts.map { |monobank_account| failing_summary(monobank_account) } }
   rescue Provider::Error
-    { windows_remaining: 0, eta_seconds: 0, chain_active: fetch_chain_active? }
+    { windows_remaining: 0, eta_seconds: 0, chain_active: fetch_chain_active?, failing: [] }
   end
 
   # --- Processing ------------------------------------------------------------
@@ -205,9 +209,17 @@ class MonobankItem < ApplicationRecord
     accounts.any?
   end
 
+  # No products yet because client-info could not be asked for (its request slot was
+  # busy); a follow-up sync is scheduled (MonobankItem::Syncer)
+  def waiting_for_client_info?
+    monobank_accounts.none? && syncs.ordered.first&.sync_stats.to_h["client_info"] == "rate_limited"
+  end
+
   def sync_status_summary
     counts = account_counts
-    if counts[:total].zero?
+    if counts[:total].zero? && waiting_for_client_info?
+      I18n.t("monobank_items.sync_status.waiting")
+    elsif counts[:total].zero?
       I18n.t("monobank_items.sync_status.no_accounts")
     elsif counts[:unlinked].zero?
       I18n.t("monobank_items.sync_status.all_synced", count: counts[:linked])
@@ -267,5 +279,23 @@ class MonobankItem < ApplicationRecord
 
     def unlink_all_accounts
       unlink_all!
+    end
+
+    def failing_summary(monobank_account)
+      { name: monobank_account.name, failures: monobank_account.fetch_failures }
+    end
+
+    # The connection's history start moved earlier than what was fetched: products that
+    # start from it fetch the older history (and a new account its opening balance) again
+    def refetch_older_history
+      monobank_accounts.includes(account_provider: :account).each do |monobank_account|
+        next if monobank_account.sync_start_date.present? || monobank_account.history_synced_from.nil?
+        next if monobank_account.current_account&.provider_cutover_date
+
+        target = MonobankItem::FetchPlan.target_start_for(monobank_account)
+        next unless monobank_account.history_synced_from > target
+
+        monobank_account.update!(history_complete: false, opening_anchor_set_at: nil)
+      end
     end
 end

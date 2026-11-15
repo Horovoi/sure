@@ -61,6 +61,20 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "only monobank on: the Plaid pending toggle is hidden and its value ignored" do
+    enable_bank_connections(:monobank)
+    Setting.syncs_include_pending = true
+
+    with_self_hosting do
+      get settings_hosting_url
+      assert_response :success
+      assert_select "input[name=?]", "setting[syncs_include_pending]", count: 0
+
+      patch settings_hosting_url, params: { setting: { syncs_include_pending: "0" } }
+      assert Setting.syncs_include_pending
+    end
+  end
+
   test "can update settings when self hosting is enabled" do
     with_self_hosting do
       patch settings_hosting_url, params: { setting: { twelve_data_api_key: "1234567890" } }

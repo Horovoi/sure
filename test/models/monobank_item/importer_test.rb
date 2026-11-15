@@ -121,14 +121,32 @@ class MonobankItem::ImporterTest < ActiveSupport::TestCase
     assert_equal %w[new old-hold settled].sort, ids.sort
   end
 
-  test "holds are not stored when the connection turns them off" do
+  test "holds are stored even when the connection does not book them (the balance leaves them out)" do
     @item.update!(include_pending: false)
     product = create_monobank_product(account_id: "uah-card")
     window = MonobankItem::FetchPlan::Window.new(product, 3.days.ago, Time.current, :forward)
 
     @importer.store_window!(window, [ monobank_row(id: "h", time: 1.hour.ago, amount: -10, hold: true), monobank_row(id: "s", time: 1.hour.ago, amount: -10) ])
 
-    assert_equal [ "s" ], product.reload.raw_transactions_payload.map { |row| row["id"] }
+    assert_equal %w[h s], product.reload.raw_transactions_payload.map { |row| row["id"] }.sort
+  end
+
+  test "a paged forward window remembers the balance seen when its first page was requested" do
+    product = create_monobank_product(account_id: "uah-card", balance: 10_000)
+    full_page = Array.new(Provider::Monobank::MAX_STATEMENT_ITEMS) { |i| monobank_row(id: "r#{i}", time: 2.hours.ago + i.seconds, amount: -1) }
+    first = MonobankItem::FetchPlan::Window.new(product, 3.days.ago, Time.current, :forward)
+
+    assert_equal :partial, @importer.store_window!(first, full_page)
+
+    # A sync stores a newer client-info balance (a purchase after the window) between pages
+    product.reload.update!(raw_balance_minor: 5_000)
+    second = MonobankItem::FetchPlan.new(@item).window_for(product.reload)
+    assert_equal :complete, @importer.store_window!(second, [ monobank_row(id: "older", time: 2.days.ago, amount: -1) ])
+
+    product.reload
+    assert_equal 10_000, product.balance_at_forward_fetch
+    assert_nil product.page_balance_minor
+    assert MonobankItem::FetchPlan.new(@item).forward_needed?(product), "the purchase after the window is fetched next"
   end
 
   test "failures back off per product, success resets" do

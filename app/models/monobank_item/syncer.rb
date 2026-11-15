@@ -7,6 +7,8 @@ class MonobankItem::Syncer
 
   class SyncError < StandardError; end
 
+  FOLLOW_UP_WITHIN = 1.hour
+
   attr_reader :monobank_item
 
   def initialize(monobank_item)
@@ -14,6 +16,12 @@ class MonobankItem::Syncer
   end
 
   def perform_sync(sync)
+    # A sync queued before monobank was switched off (BankConnections) does nothing
+    unless BankConnections.enabled?(:monobank)
+      Rails.logger.info("MonobankItem::Syncer - monobank is switched off; sync #{sync.id} skipped")
+      return
+    end
+
     raise SyncError, I18n.t("monobank_items.errors.requires_update") if monobank_item.requires_update?
 
     provider = monobank_item.monobank_provider
@@ -21,6 +29,7 @@ class MonobankItem::Syncer
 
     update_status(sync, "importing")
     client_info = import_client_info(provider)
+    follow_up_when_waiting(provider, client_info)
 
     collect_setup_stats(sync, provider_accounts: monobank_item.monobank_accounts)
     monobank_item.refresh_pending_account_setup!
@@ -53,7 +62,8 @@ class MonobankItem::Syncer
       "client_info" => client_info[:status].to_s,
       "statement_windows_remaining" => progress[:windows_remaining],
       "statement_eta_seconds" => progress[:eta_seconds],
-      "chain_active" => progress[:chain_active]
+      "chain_active" => progress[:chain_active],
+      "statement_failing_products" => progress[:failing].to_a.map { |product| product[:name] }
     ))
 
     collect_health_stats(sync, errors: errors.presence, rate_limited: client_info[:status] == :rate_limited,
@@ -64,13 +74,28 @@ class MonobankItem::Syncer
   # Rules, transfer matching and subscriptions run here only for a sync of the
   # connection alone; inside a family sync the family does it once for everything.
   def perform_post_sync
+    return unless BankConnections.enabled?(:monobank)
+
     latest = monobank_item.syncs.ordered.first
     return if latest.nil? || latest.parent_id.present?
 
-    Family::ProviderPostSync.new(monobank_item.family).run
+    stats = latest.sync_stats || {}
+    new_entries = stats["monobank_created"].to_i.positive?
+    Family::ProviderPostSync.new(monobank_item.family).run(new_entries: new_entries)
   end
 
   private
+    # The client-info slot was busy (a reconnect within a minute, or another client of
+    # the token) and a new connection knows no product yet: sync again once the slot is
+    # free, instead of at the next hourly sync. Only during the connection's first hour,
+    # so a token another client keeps busy is not asked every minute for good.
+    def follow_up_when_waiting(provider, client_info)
+      return unless client_info[:status] == :rate_limited && monobank_item.monobank_accounts.none?
+      return if monobank_item.created_at < FOLLOW_UP_WITHIN.ago
+
+      DelayedSyncJob.set(wait_until: provider.next_request_slot_at(:client_info) + 1.second).perform_later(monobank_item)
+    end
+
     def import_client_info(provider)
       MonobankItem::Importer.new(monobank_item, provider: provider).import_client_info!
     rescue Provider::Monobank::Error => e
@@ -83,7 +108,7 @@ class MonobankItem::Syncer
 
     def summarize(results)
       stats = results.filter_map { |r| r[:result] if r[:result].is_a?(Hash) }
-      %w[claimed skipped_before_cutover pruned detached imported].index_with do |key|
+      %w[claimed skipped_before_cutover pruned detached imported created].index_with do |key|
         stats.sum { |s| s[key.to_sym].to_i }
       end.transform_keys { |key| "monobank_#{key}" }
     end

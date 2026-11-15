@@ -71,4 +71,12 @@ class ProviderConnectionsHelperTest < ActionView::TestCase
     enable_bank_connections(:lunchflow)
     assert provider_link_available?(account)
   end
+  test "a product whose statement keeps failing shows as an error, also while the chain waits" do
+    item = stub(scheduled_for_deletion?: false, requires_update?: false, syncing?: false, sync_error: nil, last_synced_at: 5.minutes.ago,
+      backfill_progress: { windows_remaining: 2, eta_seconds: 120, chain_active: true, failing: [ { name: "Black card ·1234", failures: 4 } ] })
+
+    status = provider_item_status(item)
+    assert_equal :error, status.state
+    assert_equal "The statement of Black card ·1234 keeps failing. Sure tries again later.", status.text
+  end
 end

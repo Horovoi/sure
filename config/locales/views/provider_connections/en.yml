@@ -11,5 +11,8 @@ en:
         other: "Fetching history: %{count} statement pages left (about %{minutes} min)"
       fetching_finishing: "Fetching history: finishing"
       error: "Sync failed: %{error}"
+      failing:
+        one: "The statement of %{names} keeps failing. Sure tries again later."
+        other: "The statements of %{names} keep failing. Sure tries again later."
       ok: "Synced %{time} ago"
       never: Never synced

@@ -68,12 +68,46 @@ class Import::ProviderLinkedRefusalTest < ActiveSupport::TestCase
     assert_equal @message, import.error
   end
 
-  test "account names in a file never match a linked account" do
+  test "an account name in a file that names a linked account maps to it and the import is refused" do
+    import = imports(:transaction)
+    import.update!(account: nil)
+    import.rows.create!(account: @linked.name, date: "01/01/2026", amount: "10", currency: "USD", name: "x")
+
+    assert_equal @linked, Import::AccountMapping.mappables_by_key(import)[@linked.name]
+    import.sync_mappings
+    mapping = import.mappings.accounts.find_by!(key: @linked.name)
+    assert_equal @linked, mapping.mappable
+    assert_includes mapping.selectable_values.map(&:last), @linked.id
+
+    assert_equal [ @linked ], import.provider_linked_target_accounts
+    assert_not import.publishable?
+    assert_no_difference -> { @family.accounts.where(name: @linked.name).count } do
+      assert_raises(Import::ProviderLinkedAccountError) { import.publish_later }
+    end
+  end
+
+  test "a manual account wins over a linked one of the same name" do
+    manual = @family.accounts.create!(name: @linked.name, balance: 0, currency: "USD", accountable: Depository.new)
     import = imports(:transaction)
     import.rows.create!(account: @linked.name, date: "01/01/2026", amount: "10", currency: "USD", name: "x")
 
-    assert_nil Import::AccountMapping.mappables_by_key(import)[@linked.name]
-    assert_not_includes Import::AccountMapping.new(import: import, key: @linked.name).selectable_values.map(&:last), @linked.id
+    assert_equal manual, Import::AccountMapping.mappables_by_key(import)[@linked.name]
+  end
+
+  test "reverting an import keeps the entries a provider claimed" do
+    import = imports(:transaction)
+    manual = accounts(:credit_card)
+    kept = manual.entries.create!(date: Date.current, amount: 10, currency: "USD", name: "Claimed", import: import, entryable: Transaction.new)
+    kept.transaction.update!(extra: { "provider_claim" => { "source" => "monobank", "import_id" => import.id } })
+    gone = manual.entries.create!(date: Date.current, amount: 11, currency: "USD", name: "Imported", import: import, entryable: Transaction.new)
+    import.update_columns(status: "reverting")
+
+    import.revert
+
+    assert import.reload.reverted?, import.error
+    assert Entry.exists?(kept.id)
+    assert_nil kept.reload.import_id
+    assert_not Entry.exists?(gone.id)
   end
 
   test "the assistant tool cannot point a PDF import at a linked account" do

@@ -2,7 +2,9 @@
 module MonobankTestHelper
   CURRENCY_CODES = { "UAH" => 980, "USD" => 840, "EUR" => 978 }.freeze
 
+  # monobank switched on (BankConnections), as in production
   def setup_monobank_family
+    enable_bank_connections(:monobank)
     @family = families(:dylan_family)
     @family.update!(timezone: "Europe/Kyiv")
     @item = monobank_items(:one)

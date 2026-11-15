@@ -111,12 +111,35 @@ class MonobankAccount < ApplicationRecord
   end
 
   # Balance in the terms of a Sure account type: own funds for cash accounts,
-  # debt (limit minus available) for a credit card.
-  def balance_for(accountable_type)
+  # debt (limit minus available) for a credit card. monobank's balance counts open
+  # holds; exclude_holds: true leaves the stored holds out (for an account whose holds
+  # are not booked, so its entries and balance agree).
+  def balance_for(accountable_type, exclude_holds: false)
     return nil if raw_balance.nil?
 
+    raw = raw_balance
+    raw -= BigDecimal(held_minor.to_s) / divisor if exclude_holds
     limit = credit_limit.to_d
-    accountable_type == "CreditCard" ? limit - raw_balance : raw_balance - limit
+    accountable_type == "CreditCard" ? limit - raw : raw - limit
+  end
+
+  # Sum of the stored open holds, in minor units (negative for money out)
+  def held_minor
+    Array(raw_transactions_payload)
+      .select { |row| MonobankEntry::Processor.pending?(row) }
+      .sum { |row| Integer((row["amount"] || row[:amount]).to_s, exception: false) || 0 }
+  end
+
+  # Forgets what was fetched, so the next sync fetches this product's history again from
+  # the target start of the account it is now linked to (Account::ProviderLink.link!).
+  # Stored rows stay: they are booked again into the new account.
+  def reset_fetch_state!
+    update!(
+      statement_synced_through: nil, history_synced_from: nil, history_complete: false,
+      page_from: nil, page_to: nil, page_kind: nil, page_seen_ids: [], page_balance_minor: nil,
+      forward_fetched_at: nil, balance_at_forward_fetch: nil,
+      fetch_failures: 0, next_fetch_after: nil, opening_anchor_set_at: nil
+    )
   end
 
   # Stores a card or jar from client-info (as flattened by Provider::Monobank#get_accounts)

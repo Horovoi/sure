@@ -43,6 +43,7 @@ class Account::OpeningAnchorMoveTest < ActiveSupport::TestCase
     add_expense(100, date: 20.days.ago.to_date)
     @account.stubs(:manual?).returns(false)
     @account.stubs(:linked?).returns(true)
+    @account.stubs(:synced_by_enabled_provider?).returns(true)
 
     Account::Syncer.new(@account).perform_sync(nil)
 

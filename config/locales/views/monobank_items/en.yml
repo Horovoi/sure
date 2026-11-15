@@ -41,6 +41,7 @@ en:
       setup_description: "%{linked} of %{total} monobank accounts are linked."
       setup_action: Set up accounts
       no_accounts: No monobank accounts loaded yet. They appear after the first sync.
+      waiting_for_client_info: monobank answers one request a minute. Your accounts load in a minute.
     new:
       title: Connect monobank
       subtitle: Use a personal token from api.monobank.ua
@@ -58,8 +59,8 @@ en:
       nothing_to_set_up_hint: New cards and jars show up here after a sync.
       choice_label: In Sure
       cutover_label: Take over from
-      cutover_text: Transactions from %{date} come from monobank; earlier history of %{account} stays as you entered it.
-      cutover_hint: When you link an account you already keep, transactions from the day after its last entry come from monobank. Pick another day here if you want.
+      cutover_text: Leave it empty to start the day after the chosen account's latest entry (for %{account}, %{date}); earlier history stays as you entered it.
+      cutover_hint: Leave it empty to start the day after the chosen account's latest entry; earlier history stays as you entered it. Pick another day here if you want.
       cancel: Cancel
       submit: Save
     complete_account_setup:

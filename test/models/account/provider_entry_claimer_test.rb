@@ -53,14 +53,25 @@ class Account::ProviderEntryClaimerTest < ActiveSupport::TestCase
     assert_empty @claimer.match([ row("new", Date.current, 30) ])
   end
 
-  test "skips pending rows, other currencies, generated subscription charges, excluded and pending entries" do
+  test "a pending row matches too (its entry is not handed to another row)" do
+    entry = manual(date: Date.current, amount: 40)
+
+    assert_equal({ "p" => entry }, @claimer.match([ row("p", Date.current, 40, pending: true), row("q", Date.current, 40) ]))
+  end
+
+  test "an entry from a manual source with an idempotency key is a candidate" do
+    entry = manual(date: Date.current, amount: 44, source: "mcp", external_id: "chat-row-1")
+
+    assert_equal entry, @claimer.match_one(row("x", Date.current, 44))
+  end
+
+  test "skips other currencies, generated subscription charges, excluded and pending entries" do
     manual(date: Date.current, amount: 40)
     manual(date: Date.current, amount: 41, source: "subscription")
     manual(date: Date.current, amount: 42, excluded: true)
     hold = manual(date: Date.current, amount: 43)
     hold.transaction.update!(extra: { "other" => { "pending" => true } })
 
-    assert_empty @claimer.match([ row("p", Date.current, 40, pending: true) ])
     assert_empty @claimer.match([ row("c", Date.current, 40, currency: "USD") ])
     assert_empty @claimer.match([ row("s", Date.current, 41) ])
     assert_empty @claimer.match([ row("e", Date.current, 42) ])
@@ -81,8 +92,8 @@ class Account::ProviderEntryClaimerTest < ActiveSupport::TestCase
       Row.new(key: key, date: date.to_date, amount: amount.to_d, currency: currency, pending: pending)
     end
 
-    def manual(date:, amount:, created_at: nil, source: nil, excluded: false)
-      attributes = { date: date.to_date, amount: amount, currency: "UAH", name: "Manual", source: source, excluded: excluded, entryable: Transaction.new }
+    def manual(date:, amount:, created_at: nil, source: nil, excluded: false, external_id: nil)
+      attributes = { date: date.to_date, amount: amount, currency: "UAH", name: "Manual", source: source, excluded: excluded, external_id: external_id, entryable: Transaction.new }
       attributes[:created_at] = created_at if created_at
       @account.entries.create!(**attributes)
     end

@@ -284,8 +284,8 @@ class Sync < ApplicationRecord
     end
 
     # More than DAILY_SYNC_WARNING syncs of one record in a day is worth a look. A bank
-    # connection that syncs hourly (and after each page of a multi-job history fetch)
-    # is allowed HOURLY_DAILY_SYNC_WARNING.
+    # connection that syncs hourly (and after each page of a multi-job history fetch),
+    # and each account it syncs with it, is allowed HOURLY_DAILY_SYNC_WARNING.
     DAILY_SYNC_WARNING = 10
     HOURLY_DAILY_SYNC_WARNING = 100
 
@@ -302,7 +302,15 @@ class Sync < ApplicationRecord
     end
 
     def daily_sync_warning_threshold
-      BankConnections.provider_for_item_class(syncable_type)&.hourly? ? HOURLY_DAILY_SYNC_WARNING : DAILY_SYNC_WARNING
+      hourly_syncable? ? HOURLY_DAILY_SYNC_WARNING : DAILY_SYNC_WARNING
+    end
+
+    def hourly_syncable?
+      if syncable.is_a?(Account)
+        syncable.account_providers.any? { |link| BankConnections.provider_for_account_class(link.provider_type)&.hourly? }
+      else
+        BankConnections.provider_for_item_class(syncable_type)&.hourly? || false
+      end
     end
 
     def handle_start_transition

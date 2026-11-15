@@ -43,5 +43,5 @@ There are no webhooks: production is reachable only on the local network.
 | `MONOBANK_MIN_REQUEST_INTERVAL` | 60 | Seconds between two requests of one function |
 | `MONOBANK_INITIAL_HISTORY_DAYS` | 365 | History of a new product (1..1095) |
 | `MONOBANK_INCLUDE_PENDING` | on | Import holds as pending |
-| `MONOBANK_PENDING_LOOKBACK_DAYS` | 3 | Days a forward fetch re-reads |
+| `MONOBANK_PENDING_LOOKBACK_DAYS` | 3 | Days a forward fetch re-reads (1 to 7) |
 | `MONOBANK_API_BASE_URL` | https://api.monobank.ua | Only that host or a loopback host (tests, `script/monobank_fake`) |

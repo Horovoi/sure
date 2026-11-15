@@ -48,7 +48,8 @@ class Settings::HostingsController < ApplicationController
       Setting.securities_provider = hosting_params[:securities_provider]
     end
 
-    if hosting_params.key?(:syncs_include_pending)
+    # Only Plaid reads it; the toggle is shown only while Plaid is on
+    if hosting_params.key?(:syncs_include_pending) && BankConnections.enabled?(:plaid)
       Setting.syncs_include_pending = hosting_params[:syncs_include_pending] == "1"
     end
 

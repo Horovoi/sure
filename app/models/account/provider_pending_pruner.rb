@@ -1,10 +1,12 @@
 # Removes a provider's pending holds that the provider no longer reports (the hold was
 # released, or it settled under a new id), so they stop counting.
 #
-# A hold the user did something with is never destroyed: it is detached instead. It
-# loses its pending flag, gets extra[source]["hold_released_at"] and stays as an
-# ordinary entry, with its notes, tags, attachments, goal link, subscription link,
-# transfer and import claim intact. The user can delete it if it was a duplicate.
+# A hold the user attached something to (notes, tags, files, a goal, a transfer, a
+# subscription link, an import or a provider claim) is never destroyed: it is released
+# instead. It keeps its pending flag and gets extra[source]["hold_released_at"], so it
+# counts nowhere (not in reports, not in any balance, see Transaction.released_hold_sql)
+# and stays visible with what the user attached. The user can delete it. A category or a
+# name the user set alone does not keep a hold: the bank never charged it.
 #
 #   Account::ProviderPendingPruner.new(account, source: "monobank")
 #     .prune!(keep_external_ids: ids_in_the_latest_statement)
@@ -22,7 +24,7 @@ class Account::ProviderPendingPruner
 
     stale_entries(keep).each do |entry|
       if protected?(entry)
-        detach!(entry)
+        release!(entry)
         detached += 1
       else
         entry.destroy!
@@ -35,13 +37,12 @@ class Account::ProviderPendingPruner
     { pruned: pruned, detached: detached }
   end
 
-  # Whether the user (or another part of the app) relies on this entry
+  # Whether the user (or another part of the app) attached something to this entry
   def protected?(entry)
     transaction = entry.entryable
     extra = transaction.extra.is_a?(Hash) ? transaction.extra : {}
 
-    entry.protected_from_sync? ||
-      entry.notes.present? ||
+    entry.notes.present? ||
       entry.import_id.present? ||
       extra["goal"].present? ||
       extra["provider_claim"].present? ||
@@ -57,16 +58,15 @@ class Account::ProviderPendingPruner
     attr_reader :account, :source
 
     def stale_entries(keep)
-      scope = account.entries.pending_from(source).includes(:entryable)
+      scope = account.entries.pending_from(source).where.not(Transaction.released_hold_sql("transactions")).includes(:entryable)
       scope = scope.where.not(external_id: keep) if keep.any?
       scope.to_a
     end
 
-    def detach!(entry)
+    def release!(entry)
       transaction = entry.entryable
       extra = (transaction.extra || {}).deep_dup
       provider_data = extra[source].is_a?(Hash) ? extra[source] : {}
-      provider_data.delete("pending")
       provider_data["hold_released_at"] = Time.current.iso8601
       extra[source] = provider_data
 
@@ -77,7 +77,7 @@ class Account::ProviderPendingPruner
       DebugLogEntry.capture(
         category: "sync",
         level: "info",
-        message: "Kept #{detached} released #{source} hold(s) the user had changed, as ordinary entries",
+        message: "Kept #{detached} released #{source} hold(s) the user had attached something to; they no longer count",
         source: self.class.name,
         account: account,
         provider_key: source,

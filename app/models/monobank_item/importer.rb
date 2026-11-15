@@ -37,16 +37,25 @@ class MonobankItem::Importer
   # Stores the rows of one statement request for window (a FetchPlan::Window) and moves
   # the cursors. Returns :complete when the window is done, :partial when monobank
   # returned a full page and the rest of the window is fetched as the next page.
+  #
+  # Holds are stored even when they are not booked ("Import pending holds" off): the
+  # balance written then leaves them out (MonobankAccount#balance_for).
+  #
+  # The client-info balance a first or forward window answers for is the one known when
+  # its first page was requested (window.monobank_account as the plan loaded it), not
+  # one a sync stored while later pages were fetched.
   def store_window!(window, rows, now: Time.current)
     rows = Array(rows).select { |row| row.is_a?(Hash) }.map { |row| row.to_h.stringify_keys }
     monobank_account = window.monobank_account
+    balance_at_request = monobank_account.raw_balance_minor
     result = nil
 
     monobank_account.with_lock do
       by_id = Array(monobank_account.raw_transactions_payload).index_by { |row| row_key(row) }
       fetched_ids = rows.map { |row| row_key(row) }
-      kept_rows = monobank_item.include_pending_holds? ? rows : rows.reject { |row| hold?(row) }
-      kept_rows.each { |row| by_id[row_key(row)] = row }
+      rows.each { |row| by_id[row_key(row)] = row }
+      first_page = monobank_account.page_to.blank?
+      monobank_account.page_balance_minor = balance_at_request if first_page
 
       if window.kind.in?(%i[first forward gap])
         monobank_account.statement_synced_through = [ monobank_account.statement_synced_through, window.to ].compact.max
@@ -113,7 +122,7 @@ class MonobankItem::Importer
       monobank_account.history_synced_from = [ monobank_account.history_synced_from, window.from ].compact.min
 
       if window.kind.in?(%i[first forward])
-        monobank_account.balance_at_forward_fetch = monobank_account.raw_balance_minor
+        monobank_account.balance_at_forward_fetch = monobank_account.page_balance_minor
         monobank_account.forward_fetched_at = now
         # A hold the statement no longer shows settled (maybe under a new id) or was cancelled
         by_id.reject! { |id, row| hold?(row) && (time = row_time(row)) && time >= window.from && !seen_ids.include?(id) }
@@ -123,6 +132,7 @@ class MonobankItem::Importer
       monobank_account.page_to = nil
       monobank_account.page_kind = nil
       monobank_account.page_seen_ids = []
+      monobank_account.page_balance_minor = nil
 
       target = MonobankItem::FetchPlan.target_start_for(monobank_account, now: now)
       monobank_account.history_complete = true if monobank_account.history_synced_from <= target

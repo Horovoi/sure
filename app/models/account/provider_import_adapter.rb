@@ -27,15 +27,26 @@ class Account::ProviderImportAdapter
   # @param pending_transaction_id [String, nil] Plaid's linking ID for pending→posted reconciliation
   # @param extra [Hash, nil] Optional provider-specific metadata to merge into transaction.extra
   # @param investment_activity_label [String, nil] Optional activity type label (e.g., "Buy", "Dividend")
-  # @param claimed_entry [Entry, nil, :auto] The existing entry a new posted row takes over
-  #   (from an Account::ProviderEntryClaimer batch), nil for none, or :auto to look one up
-  #   here (Account::ProviderEntryClaimer#match_one). Pending rows never claim.
+  # @param claimed_entry [Entry, nil, :auto] The existing entry this row matches (from an
+  #   Account::ProviderEntryClaimer batch), nil for none, or :auto to look one up here
+  #   (Account::ProviderEntryClaimer#match_one). A new posted row takes that entry over. A
+  #   new pending row is not booked while it matches one (the entry already records the
+  #   purchase; the settled row claims it). A hold this provider booked earlier that
+  #   settles while it matches one is replaced by it.
   # @param category_id_if_blank [String, nil] Category set only while the transaction has
-  #   none (a guess such as the MCC category, which rules and the user may change)
+  #   none (a guess such as the MCC category, which rules and the user may change). Never
+  #   on a transfer leg. Recorded as extra[source]["guessed_category_id"].
   # @param cutover_date [Date, nil] The account's provider cutover date: a new row dated
   #   before it that claims nothing is not imported (returns nil, skip "before_cutover")
-  # @return [Entry, nil] The created, updated or claimed entry; nil when skipped before cutover
-  def import_transaction(external_id:, amount:, currency:, date:, name:, source:, category_id: nil, merchant: nil, notes: nil, pending_transaction_id: nil, extra: nil, investment_activity_label: nil, claimed_entry: :auto, category_id_if_blank: nil, cutover_date: nil)
+  # @param holds_keep_id [Boolean] The provider settles a hold under the hold's own id
+  #   (monobank), so a new posted row is never the settlement of a pending entry: the
+  #   pending-to-posted matching and the duplicate suggestions are skipped.
+  # @param refresh_details [Boolean] Whether a row already booked gets its name, merchant
+  #   and category written again. A provider that sends every stored row on each pass
+  #   (monobank) passes false, so merchant conversions, merges and rule-set names stay;
+  #   a hold that settles is still written.
+  # @return [Entry, nil] The created, updated or claimed entry; nil when not booked
+  def import_transaction(external_id:, amount:, currency:, date:, name:, source:, category_id: nil, merchant: nil, notes: nil, pending_transaction_id: nil, extra: nil, investment_activity_label: nil, claimed_entry: :auto, category_id_if_blank: nil, cutover_date: nil, holds_keep_id: false, refresh_details: true)
     raise ArgumentError, "external_id is required" if external_id.blank?
     raise ArgumentError, "source is required" if source.blank?
 
@@ -54,30 +65,48 @@ class Account::ProviderImportAdapter
         raise ArgumentError, "Entry with external_id '#{external_id}' already exists with different entryable type: #{entry.entryable_type}"
       end
 
+      incoming_pending = pending_extra?(extra)
+      # A hold this provider booked that now arrives settled under the same id
+      settling = entry.persisted? && !incoming_pending && provider_pending?(entry, source)
+
+      # The hold was booked next to a hand-entered entry of the same purchase: the
+      # settled row takes that entry over and the hold goes, unless the user attached
+      # something to it (Account::ProviderPendingPruner#protected?)
+      if settling && !Account::ProviderPendingPruner.new(account, source: source).protected?(entry)
+        claim = resolve_claim(claimed_entry, key: external_id, date: date, amount: amount, currency: currency, source: source)
+        if claim
+          entry.destroy!
+          return claim_entry!(claim, external_id: external_id, source: source, extra: extra, category_id_if_blank: category_id_if_blank)
+        end
+      end
+
       # === PROTECTION CHECK: Skip entries that should not be overwritten ===
       # Check persisted Transaction entries for protection flags before making changes.
       # This prevents sync from overwriting user edits, CSV imports, excluded entries,
-      # and entries the provider took over from the user's own history.
+      # and entries the provider took over from the user's own history. A hold the user
+      # edited still gets the bank's settled amount, date and pending flag.
       if entry.persisted?
         skip_reason = determine_skip_reason(entry)
         if skip_reason
+          return settle_protected_hold!(entry, amount: amount, currency: currency, date: date, extra: extra) if settling && skip_reason.in?(%w[user_modified excluded])
+
           record_skip(entry, skip_reason)
           return entry
         end
       end
 
-      incoming_pending = extra.is_a?(Hash) && extra.values.any? do |provider_data|
-        next false unless provider_data.is_a?(Hash)
-        ActiveModel::Type::Boolean.new.cast(provider_data["pending"])
-      end
-
       # A new posted row may already be recorded by a manual or imported entry (same
       # signed amount, up to 3 days apart; see Account::ProviderEntryClaimer). The
-      # provider takes that entry over and keeps what the user recorded. Generated
-      # subscription charges are left to RecurringTransaction::Reconciler.
-      if entry.new_record? && !incoming_pending
-        claim = resolve_claim(claimed_entry, key: external_id, date: date, amount: amount, currency: currency, source: source)
-        if claim
+      # provider takes that entry over and keeps what the user recorded. A new hold that
+      # matches one is not booked: the entry stays the record until the hold settles.
+      # Generated subscription charges are left to RecurringTransaction::Reconciler.
+      # (holds only in a batch: claimed_entry given as an Entry)
+      if entry.new_record? && (!incoming_pending || claimed_entry.is_a?(Entry))
+        claim = resolve_claim(claimed_entry, key: external_id, date: date, amount: amount, currency: currency, source: source, pending: incoming_pending)
+        if claim && incoming_pending
+          record_skip(claim, "pending_matches_entry", external_id: external_id)
+          return nil
+        elsif claim
           return claim_entry!(claim, external_id: external_id, source: source, extra: extra, category_id_if_blank: category_id_if_blank)
         end
       end
@@ -89,12 +118,7 @@ class Account::ProviderImportAdapter
       end
 
       # If still a new entry and this is a POSTED transaction, check for matching pending transactions
-      incoming_pending = extra.is_a?(Hash) && extra.values.any? do |provider_data|
-        next false unless provider_data.is_a?(Hash)
-        ActiveModel::Type::Boolean.new.cast(provider_data["pending"])
-      end
-
-      if entry.new_record? && !incoming_pending
+      if entry.new_record? && !incoming_pending && !holds_keep_id
         pending_match = nil
 
         # PRIORITY 1: Use Plaid's pending_transaction_id if provided (most reliable)
@@ -122,7 +146,8 @@ class Account::ProviderImportAdapter
       end
 
       # Track if this is a new posted transaction (for fuzzy suggestion after save)
-      is_new_posted = entry.new_record? && !incoming_pending
+      is_new_posted = entry.new_record? && !incoming_pending && !holds_keep_id
+      write_details = entry.new_record? || refresh_details || settling
 
       entry.assign_attributes(
         amount: amount,
@@ -131,16 +156,18 @@ class Account::ProviderImportAdapter
       )
 
       # Use enrichment pattern to respect user overrides
-      entry.enrich_attribute(:name, name, source: source)
+      entry.enrich_attribute(:name, name, source: source) if write_details
 
       # Enrich transaction-specific attributes
+      guessed_category_id = nil
       if category_id
-        entry.transaction.enrich_attribute(:category_id, category_id, source: source)
-      elsif category_id_if_blank && entry.transaction.category_id.blank?
+        entry.transaction.enrich_attribute(:category_id, category_id, source: source) if write_details
+      elsif category_id_if_blank && write_details && entry.transaction.category_id.blank? && !transfer_leg?(entry)
         entry.transaction.enrich_attribute(:category_id, category_id_if_blank, source: source, metadata: { via: "mcc" })
+        guessed_category_id = entry.transaction.category_id if entry.transaction.category_id.to_s == category_id_if_blank.to_s
       end
 
-      if merchant
+      if merchant && write_details
         entry.transaction.enrich_attribute(:merchant_id, merchant.id, source: source)
       end
 
@@ -155,6 +182,8 @@ class Account::ProviderImportAdapter
         entry.transaction.extra = existing.deep_merge(incoming)
         entry.transaction.save!
       end
+
+      note_category_guess(entry.transaction, source, guessed_category_id) if guessed_category_id
 
       # Auto-detect investment activity labels for investment accounts
       detected_label = investment_activity_label
@@ -925,15 +954,53 @@ class Account::ProviderImportAdapter
 
     # The entry a new posted row takes over, or nil. An entry passed in must belong to
     # this account and not be owned by a provider yet.
-    def resolve_claim(claimed_entry, key:, date:, amount:, currency:, source:)
+    def resolve_claim(claimed_entry, key:, date:, amount:, currency:, source:, pending: false)
       case claimed_entry
       when :auto
-        row = Account::ProviderEntryClaimer::Row.new(key: key, date: parse_date(date), amount: amount.to_d, currency: currency, pending: false)
+        row = Account::ProviderEntryClaimer::Row.new(key: key, date: parse_date(date), amount: amount.to_d, currency: currency, pending: pending)
         Account::ProviderEntryClaimer.new(account, source: source).match_one(row)
       when Entry
         claimed_entry.reload
-        claimed_entry if claimed_entry.account_id == account.id && claimed_entry.external_id.nil? && claimed_entry.entryable.is_a?(Transaction)
+        claimed_entry if claimed_entry.account_id == account.id && Account::ProviderEntryClaimer.claimable_id?(claimed_entry) && claimed_entry.entryable.is_a?(Transaction)
       end
+    end
+
+    def pending_extra?(extra)
+      extra.is_a?(Hash) && extra.values.any? do |provider_data|
+        next false unless provider_data.is_a?(Hash)
+        ActiveModel::Type::Boolean.new.cast(provider_data["pending"] || provider_data[:pending])
+      end
+    end
+
+    # Whether entry is an open hold of this provider
+    def provider_pending?(entry, source)
+      return false unless entry.entryable.is_a?(Transaction)
+
+      data = entry.transaction.extra.is_a?(Hash) ? entry.transaction.extra[source.to_s] : nil
+      data.is_a?(Hash) && ActiveModel::Type::Boolean.new.cast(data["pending"]) == true
+    end
+
+    # A hold the user edited (or excluded) settles: the bank's amount, date and pending
+    # flag are written, so balances add up; the name, category and merchant the user
+    # chose stay.
+    def settle_protected_hold!(entry, amount:, currency:, date:, extra:)
+      entry.update!(amount: amount, currency: currency, date: date)
+
+      if extra.is_a?(Hash)
+        transaction = entry.transaction
+        transaction.update!(extra: (transaction.extra || {}).deep_merge(extra.deep_stringify_keys))
+      end
+
+      entry
+    end
+
+    # Remembers that category_id was a guess (the MCC), so a transfer that later makes the
+    # transaction an investment contribution may replace it (Transfer#apply_transaction_kinds)
+    def note_category_guess(transaction, source, category_id)
+      extra = (transaction.extra || {}).deep_dup
+      data = extra[source.to_s].is_a?(Hash) ? extra[source.to_s] : {}
+      extra[source.to_s] = data.merge("guessed_category_id" => category_id.to_s)
+      transaction.extra = extra
     end
 
     # The provider takes over an entry the user recorded. It keeps its date, amount, name,
@@ -957,8 +1024,9 @@ class Account::ProviderImportAdapter
       }
       transaction.extra = merged
 
-      if category_id_if_blank && transaction.category_id.blank? && !entry.protected_from_sync?
+      if category_id_if_blank && transaction.category_id.blank? && !entry.protected_from_sync? && !transfer_leg?(entry)
         transaction.enrich_attribute(:category_id, category_id_if_blank, source: source, metadata: { via: "mcc" })
+        note_category_guess(transaction, source, transaction.category_id) if transaction.category_id.to_s == category_id_if_blank.to_s
       end
 
       transaction.save! if transaction.changed?

@@ -30,11 +30,38 @@ class Account::ProviderPendingPrunerTest < ActiveSupport::TestCase
     assert Entry.exists?(other.id)
   end
 
-  test "detaches each protected hold instead of destroying it" do
+  test "a category, name or exclusion alone does not keep a released hold" do
+    edits = {
+      user_modified: ->(entry) { entry.update!(user_modified: true, name: "Renamed") },
+      category_locked: ->(entry) { entry.transaction.update!(category: categories(:food_and_drink)); entry.transaction.lock_attr!(:category_id) },
+      excluded: ->(entry) { entry.update!(excluded: true) }
+    }
+
+    edits.each do |name, edit|
+      entry = hold("hold-#{name}")
+      edit.call(entry)
+
+      assert_not @pruner.protected?(entry.reload), name
+      assert_equal({ pruned: 1, detached: 0 }, @pruner.prune!(keep_external_ids: []), name)
+      assert_not Entry.exists?(entry.id), name
+    end
+  end
+
+  test "a released hold the user attached something to stays pending and counts in no balance" do
+    entry = hold("hold-kept")
+    entry.update!(notes: "Dinner with Ann")
+
+    @pruner.prune!(keep_external_ids: [])
+
+    entry.reload
+    assert entry.transaction.pending?
+    assert_not_includes @account.entries.excluding_pending, entry
+    assert_not_includes @account.entries.excluding_released_holds, entry
+    assert_equal({ pruned: 0, detached: 0 }, @pruner.prune!(keep_external_ids: []), "released once")
+  end
+
+  test "releases each protected hold instead of destroying it" do
     protections = {
-      user_modified: ->(entry) { entry.update!(user_modified: true) },
-      import_locked: ->(entry) { entry.update!(import_locked: true) },
-      excluded: ->(entry) { entry.update!(excluded: true) },
       notes: ->(entry) { entry.update!(notes: "Dinner with Ann") },
       import: ->(entry) { entry.update_columns(import_id: imports(:transaction).id) },
       tags: ->(entry) { entry.transaction.taggings.create!(tag: tags(:one)) },
@@ -54,7 +81,7 @@ class Account::ProviderPendingPrunerTest < ActiveSupport::TestCase
 
       assert_equal({ pruned: 0, detached: 1 }, result, name)
       entry.reload
-      assert_not entry.transaction.pending?, name
+      assert entry.transaction.pending?, name
       assert entry.transaction.extra.dig("monobank", "hold_released_at").present?, name
     end
   end

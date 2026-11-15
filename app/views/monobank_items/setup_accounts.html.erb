@@ -37,8 +37,9 @@
             <% if candidates.any? %>
               <div class="form-field">
                 <%= label_tag "#{field}[cutover_date]", t(".cutover_label"), class: "form-field__label", for: "setup_#{monobank_account.id}_cutover" %>
+                <%# Blank: the day after the latest entry of whichever account is chosen %>
                 <%= date_field_tag "#{field}[cutover_date]",
-                                   suggested && Account::ProviderLink.default_cutover_date(suggested),
+                                   nil,
                                    id: "setup_#{monobank_account.id}_cutover",
                                    max: Date.current,
                                    autocomplete: "off",

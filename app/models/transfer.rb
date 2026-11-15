@@ -280,7 +280,8 @@ class Transfer < ApplicationRecord
       outflow_kind = self.class.outflow_kind_for(source_account: from_account, destination_account: to_account)
       outflow_attrs = { kind: outflow_kind }
 
-      if outflow_kind == "investment_contribution" && outflow_transaction.category_id.blank?
+      # A category a bank connection only guessed (the MCC) gives way too
+      if outflow_kind == "investment_contribution" && (outflow_transaction.category_id.blank? || outflow_transaction.category_guessed?)
         category = family.investment_contributions_category
         outflow_attrs[:category] = category if category
       end

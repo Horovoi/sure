@@ -206,4 +206,74 @@ class MonobankItem::FetchPlanTest < ActiveSupport::TestCase
     store(plan.next_window)
     assert_equal 11, plan.windows_remaining
   end
+  test "Sync now does not expire: a product that could not fetch in time still gets its forward window" do
+    @product.update!(statement_synced_through: 1.hour.ago, history_synced_from: 400.days.ago, history_complete: true,
+                     forward_fetched_at: 1.hour.ago, balance_at_forward_fetch: 100_00)
+    @item.force_forward!
+
+    assert_equal :forward, plan(now: 30.minutes.from_now).next_window.kind
+  end
+
+  test "a lookback of 31 days still walks a gap forward" do
+    Rails.configuration.x.monobank.stubs(:pending_lookback_days).returns(31)
+    @product.update!(statement_synced_through: 60.days.ago, history_synced_from: 400.days.ago, history_complete: true,
+                     forward_fetched_at: 60.days.ago, balance_at_forward_fetch: 100_00)
+
+    first = plan.next_window
+    store(first)
+    second = plan.next_window
+
+    assert_equal :gap, second.kind
+    assert_operator second.to, :>, first.to
+  end
+
+  test "the lookback setting is clamped to 1..7 days" do
+    ClimateControl.modify(MONOBANK_PENDING_LOOKBACK_DAYS: "31") do
+      load Rails.root.join("config/initializers/monobank.rb")
+      assert_equal 7, Rails.configuration.x.monobank.pending_lookback_days
+    end
+  ensure
+    load Rails.root.join("config/initializers/monobank.rb")
+  end
+
+  test "a product waiting out failed requests still counts as work left and is reported as failing" do
+    @product.update!(fetch_failures: 3, next_fetch_after: 8.minutes.from_now)
+
+    assert_nil plan.next_window
+    assert_equal 12, plan.windows_remaining
+    assert_equal [ @product ], plan.failing_accounts
+    assert_equal [ { name: @product.name, failures: 3 } ], @item.reload.backfill_progress[:failing]
+  end
+
+  test "unlinking and linking again fetches the history the new link needs" do
+    @product.update!(statement_synced_through: Time.current, history_synced_from: 40.days.ago, history_complete: true,
+                     forward_fetched_at: Time.current, balance_at_forward_fetch: 100_00, opening_anchor_set_at: Time.current)
+    assert_nil plan.next_window
+
+    Account::ProviderLink.unlink!(@account)
+    visa = create_sure_account(name: "Mono Visa")
+    add_manual_transaction(visa, date: 90.days.ago.to_date, amount: 10)
+    @item.link_existing_account!(monobank_account: @product.reload, account: visa)
+
+    @product.reload
+    assert_not @product.history_complete?
+    assert_nil @product.opening_anchor_set_at
+    window = plan.next_window
+    assert_equal :first, window.kind
+    assert_operator plan.windows_remaining, :>=, 3
+  end
+
+  test "moving the connection's history start earlier fetches the older history again" do
+    @item.update!(sync_start_date: 60.days.ago.to_date)
+    @product.update!(statement_synced_through: Time.current, history_synced_from: 60.days.ago.beginning_of_day, history_complete: true,
+                     forward_fetched_at: Time.current, balance_at_forward_fetch: 100_00, opening_anchor_set_at: Time.current)
+    assert_nil plan.next_window
+
+    @item.update!(sync_start_date: 300.days.ago.to_date)
+
+    @product.reload
+    assert_not @product.history_complete?
+    assert_nil @product.opening_anchor_set_at
+    assert_equal :backfill, plan.next_window.kind
+  end
 end

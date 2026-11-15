@@ -1,6 +1,7 @@
 # View helpers shared by the bank connection panels and account pages.
 module ProviderConnectionsHelper
-  # state: :deleting, :requires_update, :syncing, :fetching, :error, :ok or :never
+  # state: :deleting, :requires_update, :syncing, :fetching, :error, :ok or :never. A
+  # product whose statement keeps failing (backfill_progress[:failing]) is an :error.
   Status = Data.define(:state, :text)
 
   # "Transactions from 14 Nov 2026 come from monobank. Earlier history is kept as you
@@ -35,7 +36,9 @@ module ProviderConnectionsHelper
       Status.new(state: :requires_update, text: t("provider_connections.status.requires_update"))
     elsif item.syncing?
       Status.new(state: :syncing, text: t("provider_connections.status.syncing"))
-    elsif (progress = backfill_progress_for(item)) && progress[:chain_active]
+    elsif (progress = backfill_progress_for(item)) && progress[:failing].present?
+      Status.new(state: :error, text: failing_text(progress[:failing]))
+    elsif progress && progress[:chain_active]
       Status.new(state: :fetching, text: fetching_text(progress))
     elsif item.sync_error.present?
       Status.new(state: :error, text: t("provider_connections.status.error", error: item.sync_error))
@@ -55,6 +58,11 @@ module ProviderConnectionsHelper
 
     def backfill_progress_for(item)
       item.respond_to?(:backfill_progress) ? item.backfill_progress : nil
+    end
+
+    def failing_text(failing)
+      names = failing.map { |product| product[:name] }.to_sentence
+      t("provider_connections.status.failing", count: failing.size, names: names)
     end
 
     def fetching_text(progress)

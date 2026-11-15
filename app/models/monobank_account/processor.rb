@@ -3,7 +3,8 @@
 # Balance (monobank "balance" includes the credit limit):
 #   CreditCard  limit - balance (the debt); available_credit = balance
 #   Depository  balance - limit (own funds); jars and FOP accounts have no limit
-# It is written as the current anchor through the import adapter.
+# It is written as the current anchor through the import adapter. With "Import pending
+# holds" off, the open holds are left out of it, as they are left out of the entries.
 #
 # For an account monobank created (no cut-over), the opening anchor is set once,
 # when the history backfill is complete, to the balance before the oldest row.
@@ -26,8 +27,12 @@ class MonobankAccount::Processor
   end
 
   private
+    def provider_balance(account)
+      monobank_account.balance_for(account.accountable_type, exclude_holds: !monobank_account.monobank_item.include_pending_holds?)
+    end
+
     def write_balance(account, adapter)
-      balance = monobank_account.balance_for(account.accountable_type)
+      balance = provider_balance(account)
       return if balance.nil?
 
       adapter.update_balance(balance: balance, cash_balance: balance, source: MonobankEntry::Processor::SOURCE)
@@ -42,7 +47,7 @@ class MonobankAccount::Processor
       return if account.respond_to?(:provider_cutover_date) && account.provider_cutover_date.present?
 
       oldest = oldest_entry(account)
-      balance = oldest ? balance_before(account, oldest) : monobank_account.balance_for(account.accountable_type)
+      balance = oldest ? balance_before(account, oldest) : provider_balance(account)
       return if balance.nil?
 
       result = account.set_opening_anchor_balance(balance: balance)

@@ -12,7 +12,7 @@
 #   MONOBANK_INITIAL_HISTORY_DAYS  History a new product reaches back to (365, 1..1095).
 #   MONOBANK_INCLUDE_PENDING       Import holds as pending entries (on). A connection
 #                                  can turn it off for itself.
-#   MONOBANK_PENDING_LOOKBACK_DAYS Days a forward fetch re-reads (3, 1..31).
+#   MONOBANK_PENDING_LOOKBACK_DAYS Days a forward fetch re-reads (3, 1..7).
 Rails.application.configure do
   config.x.monobank.include_pending =
     !ENV["MONOBANK_INCLUDE_PENDING"].to_s.strip.downcase.in?(%w[0 false no off])
@@ -21,7 +21,7 @@ Rails.application.configure do
     ENV.fetch("MONOBANK_INITIAL_HISTORY_DAYS", 365).to_i.clamp(1, 1095)
 
   config.x.monobank.pending_lookback_days =
-    ENV.fetch("MONOBANK_PENDING_LOOKBACK_DAYS", 3).to_i.clamp(1, 31)
+    ENV.fetch("MONOBANK_PENDING_LOOKBACK_DAYS", 3).to_i.clamp(1, 7)
 end
 
 Rails.application.config.to_prepare do

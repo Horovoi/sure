@@ -23,7 +23,8 @@ class MonobankTest < ApplicationSystemTestCase
     within "dialog" do
       assert_text I18n.t("monobank_items.setup_accounts.title")
       assert_equal "link:#{@visa.id}", find("#setup_#{@card.id}_choice").value
-      assert_equal 2.days.ago.to_date.iso8601, find("#setup_#{@card.id}_cutover").value
+      # Blank: worked out for whichever account is chosen (here 2 days ago, see below)
+      assert_equal "", find("#setup_#{@card.id}_cutover").value
       find("#setup_#{@jar.id}_choice").select(I18n.t("monobank_items.setup_choices.skip"))
       click_on I18n.t("monobank_items.setup_accounts.submit")
     end

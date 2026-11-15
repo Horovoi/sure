@@ -70,7 +70,8 @@ class MonobankAccount::Transactions::ProcessorTest < ActiveSupport::TestCase
 
     assert_equal [ 1, 1 ], [ result[:pruned], result[:detached] ]
     kept = @account.entries.find_by!(external_id: "monobank_hold-b")
-    assert_nil kept.entryable.extra.dig("monobank", "pending")
+    assert kept.entryable.extra.dig("monobank", "hold_released_at").present?
+    assert_not_includes @account.entries.excluding_released_holds, kept
     assert_not @account.entries.exists?(external_id: "monobank_hold-a")
   end
 

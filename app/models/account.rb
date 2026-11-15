@@ -374,19 +374,34 @@ class Account < ApplicationRecord
   end
 
   # How the account's balances are calculated (Account::Syncer):
-  # - :forward from the opening anchor: manual accounts, and a linked account with
-  #   manual history (a cutover date) until the provider wrote its first balance;
+  # - :forward from the opening anchor: manual accounts, accounts linked to a provider
+  #   that is switched off, and a linked account with manual history (a cutover date)
+  #   until the provider wrote its first balance;
   # - :reverse from the provider's current balance: linked accounts;
   # - :cutover: forward up to the day before the cutover date, then reverse from the
   #   provider's balance (Balance::CutoverCalculator).
   def balance_strategy
     return :forward unless linked?
+    # A provider that is switched off writes no balance: its last current anchor is old,
+    # and the forward calculation keeps it as a balance on its day so new entries count
+    return :forward unless synced_by_enabled_provider?
 
     cutover = provider_cutover_date
     return :reverse if cutover.nil?
     return :forward unless has_current_anchor?
 
     cutover > opening_anchor_date ? :cutover : :reverse
+  end
+
+  # Whether a bank connection that is switched on (BankConnections) keeps this account
+  def synced_by_enabled_provider?
+    return true if plaid_account_id.present? && BankConnections.enabled?(:plaid)
+
+    classes = BankConnections.enabled_account_class_names
+    return false if classes.empty?
+
+    providers = account_providers.loaded? ? account_providers : account_providers.select(:provider_type)
+    providers.any? { |link| classes.include?(link.provider_type) }
   end
 
   # Whether the linked provider's balance already counts open holds, so the balances

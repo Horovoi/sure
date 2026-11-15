@@ -132,6 +132,23 @@ class Transaction < ApplicationRecord
     end
   end
 
+  # Whether the category is still the one a bank connection guessed at import (e.g. from
+  # the MCC, extra[provider]["guessed_category_id"]) and nobody locked it since
+  def category_guessed?
+    return false if category_id.blank? || locked?(:category_id)
+
+    (extra || {}).values.any? { |data| data.is_a?(Hash) && data["guessed_category_id"].to_s == category_id.to_s }
+  end
+
+  # SQL condition: a provider's hold that was released while the user had attached
+  # something to it (Account::ProviderPendingPruner). It stays pending and counts nowhere,
+  # not even in a balance calculated back from a provider balance that counts open holds.
+  def self.released_hold_sql(table_alias = "transactions")
+    extra = "#{connection.quote_table_name(table_alias)}.#{connection.quote_column_name('extra')}"
+
+    "EXISTS (SELECT 1 FROM jsonb_each(#{extra}) AS rh WHERE jsonb_typeof(rh.value) = 'object' AND (rh.value ->> 'hold_released_at') IS NOT NULL)"
+  end
+
   # Arel conditions behind the income / expense / transfer filters, for a query that has
   # entries joined. Built as nodes, not SQL strings, so callers combine them with and/or/not.
   # A query without transactions joined passes its own tests for the two kinds.
