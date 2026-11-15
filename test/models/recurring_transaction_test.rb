@@ -787,4 +787,23 @@ class RecurringTransactionTest < ActiveSupport::TestCase
 
     assert_equal "Custom Subscription", subscription.display_name
   end
+
+  test "user_managed returns manual rows and subscriptions only" do
+    rows = {
+      manual: { manual: true, subscription_state: "pattern" },
+      subscription: { manual: false, subscription_state: "subscription" },
+      pattern: { manual: false, subscription_state: "pattern" },
+      suggested: { manual: false, subscription_state: "suggested" },
+      dismissed: { manual: false, subscription_state: "dismissed" }
+    }.to_h do |key, attrs|
+      [ key, @family.recurring_transactions.create!(
+        name: "User managed #{key}", amount: 10, currency: "USD", expected_day_of_month: 1,
+        last_occurrence_date: Date.current, next_expected_date: 1.month.from_now.to_date,
+        status: "active", occurrence_count: 1, **attrs
+      ) ]
+    end
+
+    assert_equal [ rows[:manual].id, rows[:subscription].id ].sort, @family.recurring_transactions.user_managed.pluck(:id).sort
+    rows.each_value { |row| assert_equal row.user_managed?, @family.recurring_transactions.user_managed.exists?(row.id) }
+  end
 end

@@ -369,4 +369,29 @@ end
 
     assert_response :bad_request
   end
+
+  def upcoming_test_row(name, manual: false, state: "pattern")
+    families(:dylan_family).recurring_transactions.create!(
+      name: name, amount: 42, currency: "USD", expected_day_of_month: 5.days.from_now.day,
+      last_occurrence_date: 25.days.ago.to_date, next_expected_date: 5.days.from_now.to_date,
+      status: "active", manual: manual, subscription_state: state, occurrence_count: 3
+    )
+  end
+
+  test "upcoming lists only manual recurring rows and subscriptions" do
+    upcoming_test_row("Upcoming manual rent", manual: true)
+    upcoming_test_row("Upcoming streaming plan", state: "subscription")
+    upcoming_test_row("Upcoming detected pattern")
+    upcoming_test_row("Upcoming suggested pattern", state: "suggested")
+    upcoming_test_row("Upcoming dismissed pattern", state: "dismissed")
+
+    get transactions_url
+
+    assert_response :success
+    assert_includes response.body, "Upcoming manual rent"
+    assert_includes response.body, "Upcoming streaming plan"
+    assert_not_includes response.body, "Upcoming detected pattern"
+    assert_not_includes response.body, "Upcoming suggested pattern"
+    assert_not_includes response.body, "Upcoming dismissed pattern"
+  end
 end

@@ -21,9 +21,11 @@ class TransactionsController < ApplicationController
 
     @pagy, @transactions = pagy(base_scope, limit: safe_per_page)
 
-    # Load projected recurring transactions for next month
+    # Upcoming: the next month of rows the user manages (manual recurring rows and
+    # confirmed subscriptions). Detected patterns and suggestions stay off the list.
     @projected_recurring = Current.family.recurring_transactions
                                   .active
+                                  .user_managed
                                   .where("next_expected_date <= ? AND next_expected_date >= ?",
                                          1.month.from_now.to_date,
                                          Date.current)

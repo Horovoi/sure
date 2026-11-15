@@ -9,16 +9,21 @@ class RecurringTransaction
     # Amount tolerance for grouping (15% to handle exchange rate fluctuations)
     AMOUNT_TOLERANCE = 0.15
 
+    # Investment and crypto feeds report dividends, reinvestments and
+    # contributions as plain transactions, monthly and in clustered amounts:
+    # the shape detection looks for, yet never a bill or an income source.
+    # accountable_type is nullable and NOT IN never matches NULL, so the query
+    # admits NULL explicitly.
+    NON_RECURRING_ACCOUNTABLE_TYPES = %w[Investment Crypto].freeze
+
+    # Sub-unit amounts (rounding sweeps, penny tests) are noise, not bills.
+    MINIMUM_AMOUNT = 1
+
     # Identify and create/update recurring transactions for the family
     def identify_recurring_patterns
       three_months_ago = 3.months.ago.to_date
 
-      # Get all transactions from the last 3 months
-      entries_with_transactions = family.entries
-        .where(entryable_type: "Transaction")
-        .where("entries.date >= ?", three_months_ago)
-        .includes(:entryable, :account)
-        .to_a
+      entries_with_transactions = candidate_entries(since: three_months_ago).to_a
 
       # Group by merchant (if present) or name, along with normalized amount bucket and account currency
       # This handles multi-currency scenarios (e.g., USD subscriptions from UAH accounts)
@@ -127,6 +132,18 @@ class RecurringTransaction
       RecurringTransaction::SubscriptionDetector.detect_for_family(family)
 
       recurring_patterns.size
+    end
+
+    # Transactions of the last months that can form a recurring pattern: no
+    # transfer legs, investment contributions or one-time spending (see
+    # RecurringTransaction.recurring_entries_for), nothing on an investment or
+    # crypto account, and nothing below MINIMUM_AMOUNT.
+    def candidate_entries(since:)
+      RecurringTransaction.recurring_entries_for(family)
+        .where("accounts.accountable_type IS NULL OR accounts.accountable_type NOT IN (?)", NON_RECURRING_ACCOUNTABLE_TYPES)
+        .where("ABS(entries.amount) >= ?", MINIMUM_AMOUNT)
+        .where("entries.date >= ?", since)
+        .includes(:entryable, :account)
     end
 
     # Existing row with the pattern's identity whose amount is within the

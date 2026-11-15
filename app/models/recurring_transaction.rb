@@ -24,6 +24,10 @@ class RecurringTransaction < ApplicationRecord
   # Why an inactive row is inactive. Only stale rows come back on their own.
   INACTIVE_REASONS = %w[user stale].freeze
 
+  # Transaction kinds that are never a recurring bill or income: transfer legs,
+  # moves into investments, and spending the user marked as one-time.
+  NON_RECURRING_KINDS = (Transaction::TRANSFER_KINDS + %w[investment_contribution one_time]).freeze
+
   # Lifecycle of a recurring row as a subscription:
   #   pattern      - detected recurring pattern, not a subscription
   #   suggested    - suggested to the user as a subscription
@@ -85,6 +89,8 @@ class RecurringTransaction < ApplicationRecord
   scope :expected_soon, -> { active.where("next_expected_date <= ?", 1.month.from_now) }
   scope :subscriptions, -> { where(subscription_state: "subscription") }
   scope :active_subscriptions, -> { subscriptions.active }
+  # Rows the user created or confirmed (see #user_managed?).
+  scope :user_managed, -> { where(manual: true).or(where(subscription_state: "subscription")) }
 
   # Rows with the same identity as the given merchant or name and currency.
   # Amount is not part of the identity: it drifts with FX rates and prices.
@@ -209,12 +215,20 @@ class RecurringTransaction < ApplicationRecord
     )
   end
 
+  # The family's transaction entries that can be part of a recurring series:
+  # no transfer legs, investment contributions or one-time spending.
+  def self.recurring_entries_for(family)
+    family.entries
+      .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
+      .where(entryable_type: "Transaction")
+      .where.not(transactions: { kind: NON_RECURRING_KINDS })
+  end
+
   # Find matching transaction entries for variance calculation
   def self.find_matching_transaction_entries(family:, merchant_id:, name:, currency:, expected_day:, lookback_months: 6)
     lookback_date = lookback_months.months.ago.to_date
 
-    entries = family.entries
-      .where(entryable_type: "Transaction")
+    entries = recurring_entries_for(family)
       .where(currency: currency)
       .where("entries.date >= ?", lookback_date)
       .where("EXTRACT(DAY FROM entries.date) BETWEEN ? AND ?",
@@ -224,11 +238,7 @@ class RecurringTransaction < ApplicationRecord
 
     # Filter by merchant or name
     if merchant_id.present?
-      # Join with transactions table to filter by merchant_id in SQL (avoids N+1)
-      entries
-        .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
-        .where(transactions: { merchant_id: merchant_id })
-        .to_a
+      entries.where(transactions: { merchant_id: merchant_id }).to_a
     else
       entries.where(name: name).to_a
     end
@@ -281,8 +291,7 @@ class RecurringTransaction < ApplicationRecord
     # For manual recurring with amount variance, match within range
     # For automatic recurring, use tolerance-based matching to handle exchange rate fluctuations
     entries = if manual? && has_amount_variance?
-      family.entries
-        .where(entryable_type: "Transaction")
+      self.class.recurring_entries_for(family)
         .where(currency: currency)
         .where("entries.amount BETWEEN ? AND ?", expected_amount_min, expected_amount_max)
         .where("EXTRACT(DAY FROM entries.date) BETWEEN ? AND ?",
@@ -291,11 +300,10 @@ class RecurringTransaction < ApplicationRecord
         .order(date: :desc)
     else
       # Use tolerance-based matching (±15%) to handle multi-currency exchange rate fluctuations
-      tolerance_min = amount * (1 - AMOUNT_TOLERANCE)
-      tolerance_max = amount * (1 + AMOUNT_TOLERANCE)
+      # minmax: for an income row (negative amount) the -15% bound is the larger one.
+      tolerance_min, tolerance_max = [ amount * (1 - AMOUNT_TOLERANCE), amount * (1 + AMOUNT_TOLERANCE) ].minmax
 
-      family.entries
-        .where(entryable_type: "Transaction")
+      self.class.recurring_entries_for(family)
         .where(currency: currency)
         .where("entries.amount BETWEEN ? AND ?", tolerance_min, tolerance_max)
         .where("EXTRACT(DAY FROM entries.date) BETWEEN ? AND ?",
@@ -306,10 +314,7 @@ class RecurringTransaction < ApplicationRecord
 
     # Filter by merchant or name
     if merchant_id.present?
-      # Match by merchant through the entryable (Transaction)
-      entries.select do |entry|
-        entry.entryable.is_a?(Transaction) && entry.entryable.merchant_id == merchant_id
-      end
+      entries.where(transactions: { merchant_id: merchant_id })
     else
       # Match by entry name
       entries.where(name: name)

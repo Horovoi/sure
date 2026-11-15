@@ -245,4 +245,95 @@ class RecurringTransaction::IdentifierTest < ActiveSupport::TestCase
     days = [ 1, 15, 30 ]
     assert_not @identifier.send(:days_cluster_together?, days)
   end
+
+  # Three monthly charges of the same name and amount, the shape detection looks for.
+  def create_monthly_noise_entries(account:, name:, amount: 15.99, kind: "standard")
+    3.times.map do |i|
+      account.entries.create!(
+        date: i.months.ago.to_date - 2.days,
+        amount: amount,
+        currency: account.currency,
+        name: name,
+        entryable: Transaction.new(kind: kind)
+      )
+    end
+  end
+
+  test "detects a plain monthly charge on a cash account" do
+    create_monthly_noise_entries(account: accounts(:depository), name: "Gym membership")
+
+    assert_equal 1, @identifier.identify_recurring_patterns
+    assert_equal [ "Gym membership" ], @family.recurring_transactions.pluck(:name)
+  end
+
+  test "skips transfer legs" do
+    Transaction::TRANSFER_KINDS.each do |kind|
+      create_monthly_noise_entries(account: accounts(:depository), name: "Transfer #{kind}", kind: kind)
+    end
+
+    assert_equal 0, @identifier.identify_recurring_patterns
+    assert_empty @family.recurring_transactions
+  end
+
+  test "skips investment contributions" do
+    create_monthly_noise_entries(account: accounts(:depository), name: "Pension top-up", kind: "investment_contribution")
+
+    assert_equal 0, @identifier.identify_recurring_patterns
+    assert_empty @family.recurring_transactions
+  end
+
+  test "skips one-time transactions" do
+    create_monthly_noise_entries(account: accounts(:depository), name: "Repair instalment", kind: "one_time")
+
+    assert_equal 0, @identifier.identify_recurring_patterns
+    assert_empty @family.recurring_transactions
+  end
+
+  test "skips transactions on investment accounts" do
+    create_monthly_noise_entries(account: accounts(:investment), name: "Fund dividend")
+    create_monthly_noise_entries(account: accounts(:investment), name: "Payroll contribution", amount: -250)
+
+    assert_equal 0, @identifier.identify_recurring_patterns
+    assert_empty @family.recurring_transactions
+  end
+
+  test "skips transactions on crypto accounts" do
+    create_monthly_noise_entries(account: accounts(:crypto), name: "Staking reward", amount: -12)
+
+    assert_equal 0, @identifier.identify_recurring_patterns
+    assert_empty @family.recurring_transactions
+  end
+
+  test "keeps transactions on an account with no accountable type" do
+    account = @family.accounts.create!(name: "Untyped", balance: 0, currency: "USD", accountable: Depository.new)
+    create_monthly_noise_entries(account: account, name: "Water bill")
+    account.update_column(:accountable_type, nil)
+
+    assert_equal 1, @identifier.identify_recurring_patterns
+    assert_equal [ "Water bill" ], @family.recurring_transactions.pluck(:name)
+  end
+
+  test "skips amounts below one unit" do
+    create_monthly_noise_entries(account: accounts(:depository), name: "Rounding sweep", amount: 0.5)
+    create_monthly_noise_entries(account: accounts(:depository), name: "Interest", amount: -0.99)
+
+    assert_equal 0, @identifier.identify_recurring_patterns
+    assert_empty @family.recurring_transactions
+  end
+
+  test "manual row variance ignores transfer legs" do
+    account = accounts(:depository)
+    charges = create_monthly_noise_entries(account: account, name: "Rent", amount: 500)
+    create_monthly_noise_entries(account: account, name: "Rent", amount: 900, kind: "funds_movement").each do |entry|
+      entry.update!(date: entry.date - 1.day)
+    end
+
+    entries = RecurringTransaction.find_matching_transaction_entries(
+      family: @family, merchant_id: nil, name: "Rent", currency: "USD",
+      expected_day: charges.first.date.day, lookback_months: 6
+    )
+
+    assert_includes entries.map(&:id), charges.first.id
+    assert entries.none? { |entry| entry.entryable.kind == "funds_movement" }, "transfer legs must not count"
+  end
 end
