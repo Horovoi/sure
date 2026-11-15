@@ -384,29 +384,34 @@ class Family < ApplicationRecord
   # Visible accounts' balances, each account's holdings on its latest holding date, and
   # active subscriptions
   private def exchange_rate_currencies_held_now
-    account_ids = accounts.visible.select(:id)
-    latest = Holding.where(account_id: account_ids).group(:account_id).select("account_id, MAX(date) AS date")
-
-    (
-      Account.where(id: account_ids).distinct.pluck(:currency) +
-        Holding.joins("JOIN (#{latest.to_sql}) latest ON latest.account_id = holdings.account_id AND latest.date = holdings.date")
-          .distinct.pluck(:currency) +
-        recurring_transactions.active_subscriptions.distinct.pluck(:currency)
-    ).compact.uniq
+    exchange_rate_currencies.select { |_, held_now| held_now }.keys
   end
 
-  # Memoized: the notes partial reads both lists in one render
+  # Visible accounts and their entries, trades and holdings, and active subscriptions
   private def exchange_rate_currencies_in_use
-    @exchange_rate_currencies_in_use ||= begin
-      account_ids = accounts.visible.select(:id)
+    exchange_rate_currencies.keys
+  end
 
-      (
-        Account.where(id: account_ids).distinct.pluck(:currency) +
-          Entry.where(account_id: account_ids).distinct.pluck(:currency) +
-          Trade.joins(:entry).where(entries: { account_id: account_ids }).distinct.pluck("trades.currency") +
-          Holding.where(account_id: account_ids).distinct.pluck(:currency) +
-          recurring_transactions.active_subscriptions.distinct.pluck(:currency)
-      ).compact.uniq
+  # { currency => held now } for both lists above, in one query: these notes render on
+  # the dashboard, Reports and Transactions pages, and eight separate queries cost
+  # several milliseconds on each.
+  private def exchange_rate_currencies
+    @exchange_rate_currencies ||= begin
+      account_ids = accounts.visible.select(:id)
+      latest = Holding.where(account_id: account_ids).group(:account_id).select("account_id, MAX(date) AS date")
+
+      parts = [
+        [ Account.where(id: account_ids).select(:currency), true ],
+        [ Entry.where(account_id: account_ids).select(:currency), false ],
+        [ Trade.joins(:entry).where(entries: { account_id: account_ids }).select("trades.currency"), false ],
+        [ Holding.where(account_id: account_ids).select(:currency), false ],
+        [ Holding.joins("JOIN (#{latest.to_sql}) latest ON latest.account_id = holdings.account_id AND latest.date = holdings.date").select("holdings.currency"), true ],
+        [ recurring_transactions.active_subscriptions.select(:currency), true ]
+      ]
+      union = parts.map { |scope, held_now| "SELECT DISTINCT currency, #{held_now} AS held_now FROM (#{scope.to_sql}) part" }.join(" UNION ALL ")
+
+      self.class.connection.select_rows("SELECT currency, bool_or(held_now) FROM (#{union}) currencies WHERE currency IS NOT NULL GROUP BY currency")
+        .to_h
     end
   end
 

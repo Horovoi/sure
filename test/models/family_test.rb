@@ -204,6 +204,25 @@ class FamilyTest < ActiveSupport::TestCase
     assert_equal({ "EUR" => 30.days.ago.to_date }, Family.find(family.id).stale_exchange_rate_dates)
   end
 
+  test "an old entry's currency can be missing but never stale; current holdings and subscriptions are held" do
+    family = families(:empty)
+    family.update_columns(currency: "UAH")
+    account = family.accounts.create!(name: "UAH brokerage", balance: 0, currency: "UAH", accountable: Investment.new)
+    account.entries.create!(name: "Old GBP purchase", date: 400.days.ago.to_date, amount: 10, currency: "GBP", entryable: Transaction.new)
+    account.entries.create!(name: "Old PLN purchase", date: 400.days.ago.to_date, amount: 10, currency: "PLN", entryable: Transaction.new)
+    security = Security.create!(ticker: "FXT#{SecureRandom.hex(3)}", name: "FX test")
+    account.holdings.create!(security: security, date: 10.days.ago.to_date, qty: 1, price: 1, amount: 1, currency: "CHF")
+    account.holdings.create!(security: security, date: Date.current, qty: 1, price: 1, amount: 1, currency: "EUR")
+    family.recurring_transactions.create!(name: "Stream", amount: 10, currency: "USD", expected_day_of_month: 1, last_occurrence_date: 1.month.ago.to_date, next_expected_date: 1.month.from_now.to_date, subscription_state: "subscription", status: "active")
+    [ "GBP", "CHF", "EUR", "USD" ].each { |from| ExchangeRate.create!(from_currency: from, to_currency: "UAH", date: 30.days.ago.to_date, rate: 40) }
+
+    reloaded = Family.find(family.id)
+
+    assert_equal [ "PLN" ], reloaded.currencies_without_exchange_rate
+    # GBP only appears on an old entry, CHF only on an earlier holding date
+    assert_equal({ "EUR" => 30.days.ago.to_date, "USD" => 30.days.ago.to_date }, reloaded.stale_exchange_rate_dates)
+  end
+
   # --- Enabled currencies (w1-ds money field) ---
 
   test "nil enabled_currencies offers every currency" do
