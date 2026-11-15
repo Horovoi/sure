@@ -369,4 +369,18 @@ end
 
     assert_response :bad_request
   end
+
+  test "convert to trade preselects Buy for an outflow and Sell for an inflow" do
+    investment = accounts(:investment)
+    outflow = create_transaction(account: investment, amount: 500, name: "Bought shares")
+    inflow = create_transaction(account: investment, amount: -500, name: "Sold shares")
+
+    get convert_to_trade_transaction_url(outflow.entryable)
+    assert_response :ok
+    assert_select "select[name='investment_activity_label'] option[selected][value='Buy']"
+
+    get convert_to_trade_transaction_url(inflow.entryable)
+    assert_response :ok
+    assert_select "select[name='investment_activity_label'] option[selected][value='Sell']"
+  end
 end

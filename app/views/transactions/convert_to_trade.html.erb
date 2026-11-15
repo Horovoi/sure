@@ -1,8 +1,9 @@
 <%
   # Use activity_label param if provided (from quick-edit badge click),
   # otherwise determine default based on amount sign
-  # Negative amount (money going out) = Buy, Positive (money coming in) = Sell
-  default_label = params[:activity_label].presence || (@entry.amount > 0 ? "Sell" : "Buy")
+  # Positive amount (money going out) = Buy, negative (money coming in) = Sell,
+  # the same rule create_trade_from_transaction applies when no label is sent
+  default_label = params[:activity_label].presence || (@entry.amount.negative? ? "Sell" : "Buy")
 %>
 
 <%= render DS::Dialog.new(variant: "modal", reload_on_close: true) do |dialog| %>
@@ -174,8 +175,8 @@
         <%= render DS::Button.new(
           text: t(".cancel"),
           variant: "outline",
-          href: "#",
-          data: { action: "click->ds--dialog#close" }
+          type: "button",
+          data: { action: "DS--dialog#close" }
         ) %>
         <%= render DS::Button.new(
           text: t(".submit"),
