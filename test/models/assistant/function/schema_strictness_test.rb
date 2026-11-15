@@ -1,4 +1,6 @@
 require "test_helper"
+# The mcp gem loads json_schemer only when an MCP schema class loads; this test can run first
+require "json_schemer"
 
 class Assistant::Function::SchemaStrictnessTest < ActiveSupport::TestCase
   setup do
