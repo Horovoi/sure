@@ -73,6 +73,26 @@ class Goals::LifecyclePanelComponentTest < ViewComponent::TestCase
     assert_equal :archive, component_for(goal).celebration_action
   end
 
+  # goal-spending: using the money comes before closing, so it is offered beside it
+  test "a goal at its target offers recording a spend beside closing" do
+    goal = funded_goal
+
+    render_inline(component_for(goal))
+
+    assert_selector "#goal-celebration-actions a[href='#{Rails.application.routes.url_helpers.consume_goal_path(goal)}']"
+  end
+
+  test "a completed goal offers no spend" do
+    goal = funded_goal
+    goal.complete!
+
+    assert_not component_for(goal.reload).offer_recording_a_spend?
+  end
+
+  test "a reserve offers no spend" do
+    assert_not component_for(funded_goal(kind: "maintained")).offer_recording_a_spend?
+  end
+
   private
     def pot(balance:, name: "Pot #{SecureRandom.hex(3)}")
       Account.create!(family: @family, accountable: Depository.new, name: name,

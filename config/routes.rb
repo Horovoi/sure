@@ -186,6 +186,11 @@ Rails.application.routes.draw do
       patch :archive
       patch :unarchive
       patch :reopen
+      # Spending from a goal (goal-spending). Two actions on one path, not one action
+      # branching on the verb: HEAD routes like GET but is not request.get?. A goal can be
+      # spent from more than once, so the write is a POST.
+      get :consume
+      post :consume, action: :record_consumption, as: nil
     end
   end
   # --- end savings goals ---

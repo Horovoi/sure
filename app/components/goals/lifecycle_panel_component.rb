@@ -71,6 +71,10 @@ class Goals::LifecyclePanelComponent < ApplicationComponent
     :none
   end
 
+  # Using the money normally comes before closing, so the celebration panel offers it
+  # beside the close action (never instead of it). Same question as the header menu.
+  def offer_recording_a_spend? = goal.spendable?
+
   # --- projection ---
 
   # The chart draws its projection line with these same two variables

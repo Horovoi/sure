@@ -1,8 +1,8 @@
 require "test_helper"
 
-# Ported from upstream (savings-goals) without the preview gate, the Plan hub,
-# account sharing, pledges and spending. Linkable accounts are the family's active
-# manual accounts of a fundable type.
+# Ported from upstream (savings-goals, goal-spending) without the preview gate, the
+# Plan hub and account sharing. Linkable accounts are the family's active manual
+# accounts of a fundable type.
 class GoalsControllerTest < ActionDispatch::IntegrationTest
   include EntriesTestHelper
 
@@ -529,6 +529,151 @@ class GoalsControllerTest < ActionDispatch::IntegrationTest
     assert_equal I18n.t("goals.errors.not_found"), flash[:alert]
   end
 
+  # --- Spending from a goal (goal-spending) ---
+
+  test "the consumption dialog asks for the amount with a labelled money field" do
+    get consume_goal_url(@goal)
+
+    assert_response :success
+    assert_select "[data-controller='money-field'] input[type=text][name=amount][id=amount][autofocus]"
+    assert_select "label[for=amount]", text: /#{I18n.t("goals.consume.amount_label")}/
+  end
+
+  test "the consumption dialog names a foreign account's currency" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    eur = Account.create!(family: @user.family, accountable: Depository.new,
+                          name: "Euro Savings", currency: "EUR", balance: 1_000)
+    @goal.goal_accounts.create!(account: eur, allocated_amount: 500)
+
+    get consume_goal_url(@goal)
+
+    assert_response :success
+    assert_includes response.body, "Euro Savings · EUR"
+    assert_select "p", text: I18n.t("goals.consume.goal_currency_hint", currency: "USD")
+  end
+
+  test "the consumption dialog blurs its figures under privacy mode" do
+    get consume_goal_url(@goal)
+
+    assert_response :success
+    assert_select "input[name=amount].form-field__input.privacy-sensitive"
+    assert_select "p.privacy-sensitive", text: /is currently backing this goal/
+  end
+
+  test "recording a spend keeps the goal at full progress and frees the earmark" do
+    goal = spend_goal
+
+    post consume_goal_url(goal), params: { amount: 2_000 }
+
+    assert_redirected_to goal_url(goal)
+    assert_equal 2_000, goal.reload.consumed_amount
+    assert_equal 3_000, goal.goal_accounts.first.reload.allocated_amount
+    assert_equal 100, goal.progress_percent
+  end
+
+  test "a refused spend says which rule refused it" do
+    account = unclaimed_account("Reserve Pot")
+    reserve = @user.family.goals.create!(
+      name: "Precaution", target_amount: 6_000, currency: "USD", kind: "maintained"
+    ) { |g| g.goal_accounts.build(account: account) }
+
+    post consume_goal_url(reserve), params: { amount: 500 }
+
+    assert_redirected_to goal_url(reserve)
+    assert_equal I18n.t("goals.consume.errors.maintained"), flash[:alert]
+    assert_equal 0, reserve.reload.consumed_amount
+  end
+
+  # A blank account id means "the one link". An id that resolves to nothing must not
+  # fall back to it.
+  test "an unknown account id is refused rather than falling through" do
+    goal = spend_goal
+
+    post consume_goal_url(goal), params: { amount: 1_000, account_id: SecureRandom.uuid }
+
+    assert_equal I18n.t("goals.consume.errors.account_not_linked"), flash[:alert]
+    assert_equal 0, goal.reload.consumed_amount
+  end
+
+  test "a spend without an exchange rate is refused with the missing-rate message" do
+    eur = Account.create!(family: @user.family, accountable: Depository.new,
+                          name: "Euro Pot", currency: "EUR", balance: 1_000)
+    goal = @user.family.goals.create!(name: "Euro trip", target_amount: 2_000, currency: "USD") do |g|
+      g.goal_accounts.build(account: eur, allocated_amount: 800)
+    end
+    ExchangeRate.stubs(:find_rate).returns(nil)
+
+    post consume_goal_url(goal), params: { amount: 100 }
+
+    assert_redirected_to goal_url(goal)
+    assert_equal I18n.t("goals.consume.errors.missing_exchange_rate"), flash[:alert]
+    assert_equal 0, goal.reload.consumed_amount
+  end
+
+  test "the goal page offers an outflow nothing has claimed" do
+    goal, entry = goal_with_outflow
+
+    get goal_url(goal)
+
+    assert_response :success
+    assert_match I18n.t("goals.unattributed_outflows.heading"), response.body
+    assert_match entry.name, response.body
+  end
+
+  test "attributing an outflow takes its amount and stops offering it" do
+    goal, entry = goal_with_outflow
+
+    post consume_goal_url(goal), params: { transaction_id: entry.entryable_id }
+
+    assert_redirected_to goal_url(goal)
+    assert_equal entry.amount.to_d, goal.reload.consumed_amount
+    assert_equal goal.id, entry.entryable.reload.extra.dig("goal", "consumed_goal_id")
+
+    get goal_url(goal)
+    assert_no_match I18n.t("goals.unattributed_outflows.heading"), response.body
+  end
+
+  test "the same outflow cannot be attributed twice" do
+    goal, entry = goal_with_outflow
+    post consume_goal_url(goal), params: { transaction_id: entry.entryable_id }
+    recorded = goal.reload.consumed_amount
+
+    post consume_goal_url(goal), params: { transaction_id: entry.entryable_id }
+
+    assert_equal recorded, goal.reload.consumed_amount
+    assert_equal I18n.t("goals.consume.errors.transaction_not_found"), flash[:alert]
+  end
+
+  test "detected foreign spending is converted on its date and releases native units" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    eur = Account.create!(family: @user.family, accountable: Depository.new,
+                          name: "EUR spending", currency: "EUR", balance: 1_000)
+    goal = @user.family.goals.create!(name: "Euro trip", target_amount: 5_000, currency: "USD") do |g|
+      g.goal_accounts.build(account: eur, allocated_amount: 500)
+    end
+    date = 20.days.ago.to_date
+    ExchangeRate.create!(from_currency: "EUR", to_currency: "USD", date: date, rate: 2)
+    ExchangeRate.create!(from_currency: "EUR", to_currency: "USD", date: Date.current, rate: 3)
+    entry = eur.entries.create!(name: "Travel", date: date, amount: 100, currency: "EUR", entryable: Transaction.new)
+
+    post consume_goal_url(goal), params: { transaction_id: entry.entryable_id }
+
+    assert_redirected_to goal_path(goal)
+    assert_equal 200, goal.reload.consumed_amount
+    assert_equal 400, goal.goal_accounts.find_by!(account: eur).allocated_amount
+  end
+
+  test "the goal menu offers the spend dialog only for a goal that can be spent" do
+    goal = spend_goal
+
+    get goal_url(goal)
+    assert_select "a[href=?]", consume_goal_path(goal)
+
+    goal.pause!
+    get goal_url(goal)
+    assert_select "a[href=?]", consume_goal_path(goal), count: 0
+  end
+
   private
     # 5,000 saved, 2,000 of it since spent. goal-spending records this with
     # Goal#consume!; the column is here already.
@@ -587,5 +732,22 @@ class GoalsControllerTest < ActionDispatch::IntegrationTest
       family.goals.create!(name: name, target_amount: target_amount, target_date: target_date, currency: "USD") do |g|
         g.goal_accounts.build(account: funding)
       end
+    end
+
+    # A one-off goal at its target on an account no fixture claims
+    def spend_goal
+      account = Account.create!(family: @user.family, accountable: Depository.new,
+                                name: "Trip Pot #{SecureRandom.hex(3)}", currency: "USD", balance: 5_000)
+      @user.family.goals.create!(name: "Trip", target_amount: 5_000, currency: "USD") do |g|
+        g.goal_accounts.build(account: account, allocated_amount: 5_000)
+      end
+    end
+
+    def goal_with_outflow
+      goal = spend_goal
+      entry = goal.linked_accounts.first.entries.create!(
+        name: "Flights", date: Date.current, amount: 1_200, currency: "USD", entryable: Transaction.new
+      )
+      [ goal, entry ]
     end
 end

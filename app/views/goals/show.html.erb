@@ -31,6 +31,12 @@
         <% if @goal.may_resume? %>
           <% menu.with_item(variant: "button", text: t(".resume"), icon: "play", href: resume_goal_path(@goal), method: :patch) %>
         <% end %>
+        <%# Spending: only a running one-off goal with something backing it. The
+            lifecycle panel asks the same question (Goal#spendable?). %>
+        <% if @goal.spendable? %>
+          <% menu.with_item(variant: "link", text: t(".consume"), icon: "hand-coins",
+                            href: consume_goal_path(@goal), data: { turbo_frame: :modal }) %>
+        <% end %>
         <% if @goal.may_complete? %>
           <% menu.with_item(
                variant: "button",
@@ -77,6 +83,10 @@
   </header>
 
   <%= render "status_callout", goal: @goal %>
+
+  <% if @unattributed_outflows.any? %>
+    <%= render "unattributed_outflows", goal: @goal, outflows: @unattributed_outflows %>
+  <% end %>
 
   <% if @goal.paused? %>
     <%= render DS::Alert.new(variant: "info", title: t("goals.show.paused_banner.title")) do %>

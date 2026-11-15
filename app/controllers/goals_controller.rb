@@ -2,7 +2,7 @@
 # and account sharing: one family, so the linkable accounts are the family's active
 # manual accounts of a fundable type.
 class GoalsController < ApplicationController
-  before_action :set_goal, only: %i[show edit update destroy pause resume complete archive unarchive reopen]
+  before_action :set_goal, only: %i[show edit update destroy pause resume complete archive unarchive reopen consume record_consumption]
 
   rescue_from ActiveRecord::RecordNotFound, with: :goal_not_found
 
@@ -30,6 +30,7 @@ class GoalsController < ApplicationController
   end
 
   def show
+    @unattributed_outflows = withdrawal_detector.unattributed_outflows.to_a
     @breadcrumbs = [ [ t("goals.index.home"), root_path ], [ t("goals.index.title"), goals_path ], [ @goal.name, nil ] ]
   end
 
@@ -107,9 +108,59 @@ class GoalsController < ApplicationController
   def unarchive = perform_transition!(:unarchive)
   def reopen = perform_transition!(:reopen)
 
+  # The spend dialog (goal-spending), rendered into the modal frame
+  def consume
+    @consumption_accounts = consumption_accounts
+  end
+
+  # A typed spend, or an outflow from the goal page's list. An outflow says both how
+  # much and from where, so neither is read from the form for it.
+  def record_consumption
+    txn = consumption_transaction
+    amount = txn ? @goal.convert_money!(txn.entry.amount_money, date: txn.entry.date).amount : params[:amount].to_s.strip.to_d
+
+    @goal.consume!(amount, account: consumption_account(txn), transaction: txn)
+    redirect_to goal_path(@goal), notice: t("goals.consume.success", amount: Money.new(amount, @goal.currency).format)
+  rescue Money::ConversionError
+    redirect_to goal_path(@goal), alert: t("goals.consume.errors.missing_exchange_rate")
+  rescue Goal::ConsumptionRefused => e
+    redirect_to goal_path(@goal), alert: t("goals.consume.errors.#{e.reason}")
+  rescue ActiveRecord::RecordInvalid => e
+    redirect_to goal_path(@goal), alert: e.record.errors.full_messages.to_sentence
+  end
+
   private
     def set_goal
       @goal = Current.family.goals.includes(:goal_accounts, linked_accounts: :account_providers).find(params[:id])
+    end
+
+    # ---- spending ----
+
+    # One family: every linked account is the reader's
+    def consumption_accounts
+      @goal.linked_accounts.to_a
+    end
+
+    def withdrawal_detector
+      Goal::WithdrawalDetector.new(@goal, accounts: consumption_accounts)
+    end
+
+    # Only an outflow the goal page could list may be attributed
+    def consumption_transaction
+      return nil if params[:transaction_id].blank?
+
+      withdrawal_detector.unattributed_outflows(limit: 50).find_by(entryable_id: params[:transaction_id])&.entryable ||
+        raise(Goal::ConsumptionRefused.new(:transaction_not_found))
+    end
+
+    # An outflow names its own account; a typed spend names one only when the goal has
+    # several to choose from
+    def consumption_account(txn = nil)
+      account_id = txn ? txn.entry.account_id : params[:account_id]
+      return nil if account_id.blank?
+
+      consumption_accounts.find { |account| account.id.to_s == account_id.to_s } ||
+        raise(Goal::ConsumptionRefused.new(:account_not_linked))
     end
 
     def goal_not_found

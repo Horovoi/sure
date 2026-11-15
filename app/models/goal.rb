@@ -40,6 +40,17 @@ class Goal < ApplicationRecord
   # The trailing window #pace reads, in days
   PACE_WINDOW_DAYS = 90
 
+  # Raised by #consume!. The reason names the rule that refused, so the controller can
+  # say which one (goals.consume.errors.<reason>): every one is something the user can act on.
+  class ConsumptionRefused < StandardError
+    attr_reader :reason
+
+    def initialize(reason)
+      @reason = reason
+      super("goal consumption refused: #{reason}")
+    end
+  end
+
   belongs_to :family
   # autosave, so an earmark edit on an already linked account is saved with the goal
   has_many :goal_accounts, dependent: :destroy, autosave: true
@@ -412,6 +423,83 @@ class Goal < ApplicationRecord
 
   def any_consumption?
     consumed_amount.to_d.positive?
+  end
+
+  # ---------------------------------------------------------------------------
+  # Spending from a goal (w2-goals goal-spending)
+  # ---------------------------------------------------------------------------
+
+  # Whether a spend can be recorded from these accounts: the lifecycle panel and the
+  # header menu both ask this, so the two ways into the dialog agree
+  def spendable_within?(account_ids)
+    one_off? && active? && backing_within(account_ids).to_d.positive?
+  end
+
+  # One family, so every linked account is the reader's
+  def spendable?
+    spendable_within?(linked_accounts.map(&:id))
+  end
+
+  # Records that `amount` (goal currency) was spent on what the goal was for. Progress
+  # keeps counting it (consumed_amount), and the link gives up the same amount, so the
+  # spent money stops being reserved against the sibling goals on that account.
+  #
+  # `account:` may be left out only when the goal has one link, or when `transaction:`
+  # names it. `transaction:` anchors the spend on an outflow: it is stamped in
+  # extra["goal"]["consumed_goal_id"], and a second claim on it is refused.
+  #
+  # The amount is converted to the account's currency by the nearest-rate rule on the
+  # outflow's date (today without one). No rate refuses the spend; never at 1.
+  def consume!(amount, account: nil, transaction: nil)
+    amount = amount.to_d
+    raise ConsumptionRefused.new(:non_positive) unless amount.positive?
+    # A reserve is drawn down and refilled: its shortfall already says so
+    raise ConsumptionRefused.new(:maintained) if maintained?
+
+    account ||= transaction&.entry&.account
+    link = consumption_link_for(account)
+    if transaction && transaction.entry&.account_id != link.account_id
+      raise ConsumptionRefused.new(:account_not_linked)
+    end
+
+    rate = convert_money!(Money.new(1, link.account.currency), date: transaction&.entry&.date || Date.current).amount
+    native_amount = amount / rate
+
+    # The goal is locked, not only the link: two requests locking their own links would
+    # both read the same consumed_amount and both pass the target check
+    with_lock do
+      raise ConsumptionRefused.new(:not_active) unless active?
+      raise ConsumptionRefused.new(:exceeds_target) if consumed_amount.to_d + amount > target_amount.to_d
+
+      link.lock!
+      stamp_consumption!(transaction) if transaction
+
+      if link.allocated_amount.present?
+        # Refused, not clamped: a clamp would count money as spent that the link never
+        # released
+        raise ConsumptionRefused.new(:exceeds_earmark) if native_amount > link.allocated_amount.to_d
+
+        link.update!(allocated_amount: link.allocated_amount.to_d - native_amount)
+      else
+        # A whole-account link has no slice to shrink. It now claims what the goal still
+        # needs after this spend, capped at what it backs. This gives the same answer
+        # whether the outflow is already in the balance or arrives later.
+        backed = account_amount_for(link.account).to_d
+        raise ConsumptionRefused.new(:exceeds_earmark) if native_amount > backed
+
+        still_needed = target_amount.to_d - consumed_amount.to_d - amount
+        link.update!(allocated_amount: [ backed, still_needed / rate ].min.round(4))
+      end
+
+      update!(consumed_amount: consumed_amount.to_d + amount)
+    end
+
+    # reload refreshes the columns but not the memos, and the link's earmark moved
+    reload
+    reset_state_dependent_caches!
+    self
+  rescue Money::ConversionError
+    raise ConsumptionRefused.new(:missing_exchange_rate)
   end
 
   def progress_percent
@@ -871,6 +959,35 @@ class Goal < ApplicationRecord
       return self.target_amount = computed if computed
 
       self.target_amount = target_amount_in_database if target_amount_changed? && !new_record?
+    end
+
+    # ---- spending ----
+
+    # Claims the outflow for this goal. Inside the caller's lock, so a refusal here rolls
+    # the whole spend back. Written beside the fork's other extra keys (exchange_rate,
+    # replaced_subscription_charge) and a pledge's pledge_id under the same "goal" key.
+    def stamp_consumption!(txn)
+      txn.with_lock do
+        raise ConsumptionRefused.new(:transaction_already_claimed) if txn.extra&.dig("goal", "consumed_goal_id").present?
+
+        extra = (txn.extra || {}).deep_dup
+        extra["goal"] = (extra["goal"] || {}).merge("consumed_goal_id" => id)
+        txn.update!(extra: extra)
+      end
+    end
+
+    def consumption_link_for(account)
+      links = goal_accounts.to_a
+      raise ConsumptionRefused.new(:no_linked_account) if links.empty?
+
+      if account.nil?
+        raise ConsumptionRefused.new(:account_required) if links.size > 1
+
+        return links.first
+      end
+
+      links.find { |link| link.account_id == account.id } ||
+        raise(ConsumptionRefused.new(:account_not_linked))
     end
 
     # ---- lifecycle ----
