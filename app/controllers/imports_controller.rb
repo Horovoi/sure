@@ -11,16 +11,21 @@ class ImportsController < ApplicationController
     if account_id.present?
       account = Current.family.accounts.find_by(id: account_id)
       unless account
-        redirect_back_or_to import_path(@import), alert: "Account not found."
+        redirect_back_or_to import_path(@import), alert: t(".account_not_found")
         return
       end
 
-      @import.update!(account: account)
+      Import.transaction do
+        @import.update!(account: account)
+        # PDF rows carry the currency guessed at extraction (the family currency); the
+        # account decides it, and duplicate matching compares in it
+        @import.rows.update_all(currency: account.currency) if @import.is_a?(PdfImport)
+      end
       # The account decides which mapping steps apply (e.g. no account mapping once one is chosen)
       @import.sync_mappings if @import.configured?
     end
 
-    redirect_to import_path(@import), notice: "Account saved."
+    redirect_to import_path(@import), notice: t(".account_saved")
   end
 
   def publish

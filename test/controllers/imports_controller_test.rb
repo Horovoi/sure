@@ -145,6 +145,43 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_nil import.reload.account
   end
 
+  test "choosing or changing a PDF import's account moves its rows to the account currency" do
+    import = @user.family.imports.create!(type: "PdfImport")
+    import.update_columns(status: "pending", ai_summary: "Summary", document_type: "bank_statement")
+    import.rows.create!(date: "01/01/2024", amount: "-10", name: "Coffee", currency: "UAH")
+    eur_account = accounts(:credit_card)
+    eur_account.update_column(:currency, "EUR")
+
+    patch import_url(import), params: { pdf_import: { account_id: accounts(:depository).id } }
+
+    assert_redirected_to import_path(import)
+    assert_equal "Account saved.", flash[:notice]
+    assert_equal [ "USD" ], import.rows.pluck(:currency)
+
+    patch import_url(import), params: { pdf_import: { account_id: eur_account.id } }
+
+    assert_equal eur_account, import.reload.account
+    assert_equal [ "EUR" ], import.rows.pluck(:currency)
+  end
+
+  test "a PDF import under review lists rows the account already records" do
+    account = accounts(:depository)
+    existing = account.entries.create!(date: Date.new(2024, 1, 2), amount: 10, currency: "USD", name: "Coffee by hand", entryable: Transaction.new)
+    import = @user.family.imports.create!(type: "PdfImport", account: account)
+    import.update_columns(status: "pending", ai_summary: "Summary", document_type: "bank_statement")
+    import.rows.create!(date: "01/01/2024", amount: "-10", name: "CARD COFFEE", currency: "USD")
+    import.rows.create!(date: "01/01/2024", amount: "-25", name: "BAKERY", currency: "USD")
+    import.update_column(:rows_count, 2)
+
+    get import_url(import)
+
+    assert_response :success
+    assert_select "#already_recorded a[href='#{entry_path(existing)}']"
+    assert_select "form[action='#{publish_import_path(import)}']"
+    assert_includes response.body, "Publish 1 new transaction"
+    assert_includes response.body, "1 transaction already recorded"
+  end
+
   test "a processing PDF offers a way out" do
     import = @user.family.imports.create!(type: "PdfImport")
     import.update_column(:status, "processing")

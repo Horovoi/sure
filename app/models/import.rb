@@ -265,16 +265,20 @@ class Import < ApplicationRecord
 
   def dry_run
     mappings = {
-      transactions: rows_count,
+      transactions: rows_count - already_recorded.size,
       categories: Import::CategoryMapping.for_import(self).creational.count,
       tags: Import::TagMapping.for_import(self).creational.count
     }
 
-    mappings.merge(
-      accounts: Import::AccountMapping.for_import(self).creational.count,
-    ) if account.nil?
+    mappings[:accounts] = Import::AccountMapping.for_import(self).creational.count if account.nil?
 
     mappings
+  end
+
+  # { row id => Entry } for rows an account already records, which publishing skips.
+  # Overridden by the imports that check for duplicates.
+  def already_recorded
+    {}
   end
 
   def required_column_keys
@@ -398,6 +402,11 @@ class Import < ApplicationRecord
 
   def max_row_count
     10000
+  end
+
+  # The currency a row is published in when it goes into +account+
+  def row_currency(row, _account)
+    row.currency
   end
 
   private

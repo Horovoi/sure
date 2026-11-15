@@ -3,13 +3,21 @@ class PdfImport < Import
 
   validates :document_type, inclusion: { in: DOCUMENT_TYPES }, allow_nil: true
 
+  # Rows the account already records are skipped and the matched entries are left
+  # untouched (decision 27), so revert removes only what this import created.
   def import!
     raise "Account required for PDF import" unless account.present?
 
     transaction do
-      mappings.each(&:create_mappable!)
+      # Built again here, inside the publish lock, so an entry added between review
+      # and publish is caught too.
+      matcher = duplicate_matcher
+      new_rows = rows.ordered.reject { |row| matcher.matched?(row) }
 
-      new_transactions = rows.map do |row|
+      category_keys = new_rows.map(&:category).to_set
+      mappings.each { |mapping| mapping.create_mappable! if category_keys.include?(mapping.key) }
+
+      new_transactions = new_rows.map do |row|
         category = mappings.categories.mappable_for(row.category)
 
         Transaction.new(
@@ -19,8 +27,7 @@ class PdfImport < Import
             date: row.date_iso,
             amount: row.signed_amount,
             name: row.name,
-            # Rows are extracted before an account is chosen, so their currency is only a guess
-            currency: account.currency,
+            currency: row_currency(row, account),
             notes: row.notes,
             import: self,
             import_locked: true
@@ -30,6 +37,24 @@ class PdfImport < Import
 
       Transaction.import!(new_transactions, recursive: true) if new_transactions.any?
     end
+  end
+
+  # Rows are extracted before an account is chosen, so their own currency is only a guess
+  def row_currency(_row, account)
+    account.currency
+  end
+
+  # { row id => Entry } for the rows the chosen account already records. Empty until
+  # an account is chosen. On a finished import only entries that existed at publish
+  # time count, so the list shows what publishing skipped.
+  def already_recorded
+    return {} if account.blank?
+
+    @already_recorded ||= duplicate_matcher(created_before: complete? ? published_at : nil).matches
+  end
+
+  def new_rows_count
+    rows_count - already_recorded.size
   end
 
   def pdf_uploaded?
@@ -88,6 +113,9 @@ class PdfImport < Import
     end
 
     extracted_payload = response.data.respond_to?(:to_h) ? response.data.to_h : response.data
+    # The extractor returns symbol keys, but every reader digs with strings, and jsonb
+    # keeps the assigned hash until reload (ProcessPdfJob never reloads)
+    extracted_payload = extracted_payload.deep_stringify_keys if extracted_payload.is_a?(Hash)
     update!(extracted_data: extracted_payload)
     extracted_payload
   end
@@ -110,7 +138,8 @@ class PdfImport < Import
 
   def generate_rows_from_extracted_data
     transaction do
-      rows.destroy_all
+      # insert_all! below bypasses the association, so a loaded rows cache can be stale
+      rows.reload.destroy_all
 
       unless has_extracted_transactions?
         refresh_rows_count!
@@ -132,6 +161,8 @@ class PdfImport < Import
       end
 
       Import::Row.insert_all!(mapped_rows) if mapped_rows.any?
+      rows.reset
+      @already_recorded = nil
       refresh_rows_count!
     end
   end
@@ -177,6 +208,16 @@ class PdfImport < Import
   end
 
   private
+    def duplicate_matcher(created_before: nil)
+      Import::DuplicateMatcher.new(import: self, account: account, rows: rows.ordered.to_a, created_before: created_before)
+    end
+
+    # Entries are written in one insert when the import publishes. With none
+    # (everything was already recorded) the state change is the last write.
+    def published_at
+      entries.minimum(:created_at) || updated_at
+    end
+
     def awaiting_processing?
       !ai_processed?
     end

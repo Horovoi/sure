@@ -145,22 +145,23 @@ class TransactionImportTest < ActiveSupport::TestCase
     assert_equal @import.id, existing_entry.reload.import_id
   end
 
-  test "creates new transaction when name differs even if date and amount match" do
+  test "skips a row the account already records under another name, without claiming it" do
     account = accounts(:depository)
 
-    # Create an existing manual transaction
+    # A hand-entered transaction, two days off and under another name
     existing_entry = account.entries.create!(
-      date: Date.new(2024, 1, 1),
+      date: Date.new(2024, 1, 3),
       amount: 100,
       currency: "USD",
       name: "Coffee Shop",
+      notes: "typed by hand",
       entryable: Transaction.new
     )
 
-    # Try to import a CSV with same date/amount but different name
     import_csv = <<~CSV
       date,name,amount
-      01/01/2024,Different Store,100
+      01/01/2024,CARD 1234 COFFEE SHOP KYIV,100
+      01/01/2024,Bakery,25
     CSV
 
     @import.update!(
@@ -177,14 +178,102 @@ class TransactionImportTest < ActiveSupport::TestCase
     @import.generate_rows_from_csv
     @import.reload
 
-    # Should create a new entry because the name is different
+    skipped_row = @import.rows.find_by!(name: "CARD 1234 COFFEE SHOP KYIV")
+    assert_equal({ skipped_row.id => existing_entry }, @import.already_recorded)
+    assert_equal 1, @import.dry_run[:transactions]
+
     assert_difference -> { Entry.count } => 1,
                       -> { Transaction.count } => 1 do
       @import.publish
     end
 
-    # Both transactions should exist
-    assert_equal 2, account.entries.where(date: Date.new(2024, 1, 1), amount: 100).count
+    assert_equal [ "Bakery" ], @import.entries.pluck(:name)
+    existing_entry.reload
+    assert_nil existing_entry.import_id
+    assert_equal "typed by hand", existing_entry.notes
+    assert_not existing_entry.import_locked
+    assert_empty @import.claimed_entries
+  end
+
+  test "a row 4 days from an existing entry is imported" do
+    account = accounts(:depository)
+    account.entries.create!(date: Date.new(2024, 1, 5), amount: 100, currency: "USD", name: "Coffee Shop", entryable: Transaction.new)
+
+    @import.update!(
+      account: account,
+      raw_file_str: "date,name,amount\n01/01/2024,Coffee,100\n",
+      date_col_label: "date",
+      amount_col_label: "amount",
+      name_col_label: "name",
+      date_format: "%m/%d/%Y",
+      amount_type_strategy: "signed_amount",
+      signage_convention: "inflows_negative"
+    )
+    @import.generate_rows_from_csv
+    @import.reload
+
+    assert_empty @import.already_recorded
+    assert_difference -> { Entry.count } => 1 do
+      @import.publish
+    end
+  end
+
+  test "an exact-name claim wins over the windowed match and an entry is used once" do
+    account = accounts(:depository)
+    exact = account.entries.create!(date: Date.new(2024, 1, 1), amount: 100, currency: "USD", name: "Coffee Shop", entryable: Transaction.new)
+    nearby = account.entries.create!(date: Date.new(2024, 1, 2), amount: 100, currency: "USD", name: "Typed by hand", entryable: Transaction.new)
+
+    @import.update!(
+      account: account,
+      raw_file_str: "date,name,amount\n01/01/2024,Coffee Shop,100\n01/01/2024,Coffee Shop,100\n01/01/2024,Coffee Shop,100\n",
+      date_col_label: "date",
+      amount_col_label: "amount",
+      name_col_label: "name",
+      date_format: "%m/%d/%Y",
+      amount_type_strategy: "signed_amount",
+      signage_convention: "inflows_negative"
+    )
+    @import.generate_rows_from_csv
+    @import.reload
+
+    # Row 1 claims the exact entry, row 2 is skipped against the nearby one, row 3 is new
+    assert_equal [ nearby ], @import.already_recorded.values
+
+    assert_difference -> { Entry.count } => 1 do
+      @import.publish
+    end
+
+    assert_equal @import.id, exact.reload.import_id
+    assert_nil nearby.reload.import_id
+    assert_equal [ exact.id ], @import.claimed_entries.pluck(:entry_id)
+  end
+
+  test "rows mapped to different accounts are matched per account" do
+    checking = accounts(:depository)
+    card = accounts(:credit_card)
+    card_entry = card.entries.create!(date: Date.new(2024, 1, 2), amount: 100, currency: "USD", name: "Card coffee", entryable: Transaction.new)
+
+    @import.update!(
+      raw_file_str: "date,name,amount,account\n01/01/2024,Coffee,100,Checking\n01/01/2024,Coffee,100,Card\n",
+      date_col_label: "date",
+      amount_col_label: "amount",
+      name_col_label: "name",
+      account_col_label: "account",
+      date_format: "%m/%d/%Y",
+      amount_type_strategy: "signed_amount",
+      signage_convention: "inflows_negative"
+    )
+    @import.generate_rows_from_csv
+    @import.mappings.create!(key: "Checking", mappable: checking, type: "Import::AccountMapping")
+    @import.mappings.create!(key: "Card", mappable: card, type: "Import::AccountMapping")
+    @import.reload
+
+    card_row = @import.rows.find_by!(account: "Card")
+    assert_equal({ card_row.id => card_entry }, @import.already_recorded)
+
+    assert_difference -> { checking.entries.count } => 1, -> { card.entries.count } => 0 do
+      @import.publish
+    end
   end
 
   test "imports all identical transactions from CSV even when one exists in database" do

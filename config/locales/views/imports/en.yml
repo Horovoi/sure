@@ -78,8 +78,72 @@ en:
     index:
       title: Imports
       new: New Import
+    already_recorded:
+      description: The account already has these transactions (same amount, date
+        up to 3 days apart). They are skipped and left as they are. Open one to check it.
+      entry_details: "%{amount} on %{date}"
+      row_date: "Statement date: %{date}"
+      title:
+        one: 1 transaction already recorded
+        other: "%{count} transactions already recorded"
+      unnamed_row: Unnamed transaction
     pdf_import:
+      back_to_dashboard: Back to dashboard
+      back_to_imports: Back to imports
+      complete:
+        description: The new transactions from your statement were added to the account.
+        nothing_new: Every transaction in this statement was already recorded, so nothing
+          new was added.
+        title: Import complete
+      delete_import: Delete import
+      document_type: Document type
+      failed:
+        description: The PDF could not be processed.
+        title: Processing failed
+        try_another_file: Try another file
+      indexed:
+        description: The file was analyzed and added to the family document vault.
+        summary: Summary
+        title: Document indexed
+      processing:
+        description: AI is classifying the PDF and extracting any transactions it can
+          find.
+        title: Processing document
+      refresh_status: Refresh status
       retry_processing: Retry processing
+      review:
+        account_hint: Choose which account these transactions should be published into.
+        account_label: Import to account
+        account_prompt: Select an account...
+        create_account: Create account
+        description:
+          one: We extracted 1 transaction from your statement. Choose an account, review
+            it, and publish when ready.
+          other: We extracted %{count} transactions from your statement. Choose an account,
+            review them, and publish when ready.
+        no_accounts: No manual accounts available. Create one first to publish this
+          import.
+        publish:
+          zero: Finish import (nothing new to add)
+          one: Publish 1 new transaction
+          other: Publish %{count} new transactions
+        review_transactions: Review transactions
+        save_account: Save account
+        select_account: Select an account above to continue.
+        title: Ready for Review
+      unknown_document_type: Unknown
+      unknown_state:
+        description: Refresh the page or return to Imports.
+        title: Unknown import state
+    pdf_import_counts:
+      already_recorded: Already recorded
+      extracted: Extracted from the statement
+      imported: Imported
+      new: New
+      title: Transactions
+    update:
+      account_not_found: Account not found.
+      account_saved: Account saved.
     publish:
       not_publishable: This import can't be published in its current state.
     retry_processing:
@@ -130,5 +194,8 @@ en:
     ready:
       description: Here's a summary of the new items that will be added to your account
         once you publish this import.
+      count: count
+      item: item
+      publish: Publish import
       reverted_notice: This import was reverted. You can review it and publish it again.
       title: Confirm your import data

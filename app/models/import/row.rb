@@ -22,6 +22,23 @@ class Import::Row < ApplicationRecord
     Date.strptime(date, import.date_format).iso8601
   end
 
+  # The row date, or nil when it is blank or does not match the import date format
+  def parsed_date
+    return if date.blank? || import.date_format.blank?
+    return if leftover_digits?
+
+    Date.strptime(date, import.date_format)
+  rescue ArgumentError, TypeError # Date::Error is an ArgumentError
+    nil
+  end
+
+  # The signed amount the import would write, or nil when the amount does not parse
+  def parsed_signed_amount
+    return if amount.blank? || BigDecimal(amount.to_s, exception: false).nil?
+
+    signed_amount
+  end
+
   def signed_amount
     if import.type == "TradeImport"
       price.to_d * apply_trade_signage_convention(qty.to_d)
@@ -68,9 +85,9 @@ class Import::Row < ApplicationRecord
     def date_valid
       return if date.blank?
 
-      parsed_date = Date.strptime(date, import.date_format) rescue nil
+      parsed_date = self.parsed_date
 
-      if parsed_date.nil? || leftover_digits?
+      if parsed_date.nil?
         errors.add(:date, "must exactly match the format: #{import.date_format}")
         return
       end
