@@ -65,7 +65,6 @@ zh-TW:
         owed: 欠款金額
       menu:
         confirm_accept: 刪除「%{name}」
-        confirm_body_html: "<p>刪除此帳戶將會抹除其價值歷史紀錄，並影響您帳戶的各個層面。這將直接影響您的淨值計算和帳戶圖表。</p><br /> <p>刪除後將無法還原帳戶資訊，若需找回則必須重新新增為新帳戶。</p>"
         confirm_title: 確定要刪除帳戶嗎？
         edit: 編輯
         import: 匯入交易

@@ -53,7 +53,6 @@ ro:
         owed: Sumă datorată
       menu:
         confirm_accept: Șterge "%{name}"
-        confirm_body_html: "<p>Prin ștergerea acestui cont, vei șterge istoricul valorii sale, afectând diverse aspecte ale contului tău general. Această acțiune va avea un impact direct asupra calculelor averii nete și a graficelor contului.</p><br /> <p>După ștergere, nu vei mai putea restaura informațiile contului, deoarece va trebui să îl adaugi ca un cont nou.</p>"
         confirm_title: Ștergi contul?
         edit: Editează
         import: Importă tranzacții

@@ -1,16 +1,9 @@
 class LunchflowItem < ApplicationRecord
-  include Syncable, Provided, Unlinking
+  include Syncable, Provided, Unlinking, Encryptable
+
+  DEFAULT_BASE_URL = "https://lunchflow.app/api/v1".freeze
 
   enum :status, { good: "good", requires_update: "requires_update" }, default: :good
-
-  # Helper to detect if ActiveRecord Encryption is configured for this app
-  def self.encryption_ready?
-    creds_ready = Rails.application.credentials.active_record_encryption.present?
-    env_ready = ENV["ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY"].present? &&
-                ENV["ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY"].present? &&
-                ENV["ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT"].present?
-    creds_ready || env_ready
-  end
 
   # Encrypt sensitive credentials if ActiveRecord encryption is configured (credentials OR env vars)
   if encryption_ready?
@@ -159,7 +152,10 @@ class LunchflowItem < ApplicationRecord
     api_key.present?
   end
 
+  # Always the Lunch Flow endpoint. A stored base_url is ignored, so a family
+  # member cannot point the server's requests (with the API key) at another
+  # host, such as a cloud metadata address.
   def effective_base_url
-    base_url.presence || "https://lunchflow.app/api/v1"
+    DEFAULT_BASE_URL
   end
 end

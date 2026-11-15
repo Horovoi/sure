@@ -16,7 +16,7 @@ pt-BR:
         no_api_key:
           title: "Criar Sua Chave de API"
           heading: "Acesse os dados da sua conta programaticamente"
-          description: "Obtenha acesso programático aos seus dados do %{product_name} com uma chave de API segura."
+          description: "Obtenha acesso programático aos seus dados do Sure com uma chave de API segura."
           what_you_can_do: "O que você pode fazer com a API:"
           feature_1: "Acessar dados da sua conta programaticamente"
           feature_2: "Construir integrações e aplicações personalizadas"
@@ -37,7 +37,7 @@ pt-BR:
           never_expires: "Nunca expira"
           permissions: "Permissões"
           usage_instructions_title: "Como usar sua chave de API"
-          usage_instructions: "Inclua sua chave de API no cabeçalho X-Api-Key ao fazer requisições para a API do %{product_name}:"
+          usage_instructions: "Inclua sua chave de API no cabeçalho X-Api-Key ao fazer requisições para a API do Sure:"
           regenerate_key: "Criar Nova Chave"
           revoke_key: "Revogar Chave"
           revoke_confirmation: "Tem certeza de que deseja revogar esta chave de API? Esta ação não pode ser desfeita e desabilitará imediatamente todas as aplicações que usam esta chave."

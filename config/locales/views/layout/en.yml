@@ -15,6 +15,10 @@ en:
       sign_in: Sign in
       sign_up: Create account
     shared:
+      confirm_dialog:
+        body: This action cannot be undone.
+        confirm: Confirm
+        title: Are you sure?
       footer:
         privacy_policy: Privacy Policy
         terms_of_service: Terms of Service

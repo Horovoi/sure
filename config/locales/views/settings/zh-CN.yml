@@ -65,7 +65,7 @@ zh-CN:
           body: 确定要重置您的账户吗？这将删除您的所有账户、分类、商户、标签及其他数据，且不可撤销。
           title: 确认重置账户？
         confirm_reset_with_sample_data:
-          body: 确定要重置账户并加载示例数据吗？这将删除您的现有数据并替换为演示数据，以便您安全地探索 %{product_name}。
+          body: 确定要重置账户并加载示例数据吗？这将删除您的现有数据并替换为演示数据，以便您安全地探索 Sure。
           title: 确认重置账户并加载示例数据？
         danger_zone_title: 高风险操作
         delete_account: 删除账户

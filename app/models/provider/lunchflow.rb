@@ -7,7 +7,7 @@ class Provider::Lunchflow
 
   attr_reader :api_key, :base_url
 
-  def initialize(api_key, base_url: "https://lunchflow.app/api/v1")
+  def initialize(api_key, base_url: LunchflowItem::DEFAULT_BASE_URL)
     @api_key = api_key
     @base_url = base_url
   end

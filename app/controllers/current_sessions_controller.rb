@@ -1,7 +1,12 @@
 class CurrentSessionsController < ApplicationController
+  # Answers 200 even for a key or value outside Session::ALLOWED_TABS: the tabs
+  # controller fires and forgets, and an unknown pair is simply not stored.
   def update
-    if session_params[:tab_key].present? && session_params[:tab_value].present?
-      Current.session.set_preferred_tab(session_params[:tab_key], session_params[:tab_value])
+    tab_key = session_params[:tab_key]
+    tab_value = session_params[:tab_value]
+
+    if Session.allowed_tab?(tab_key, tab_value)
+      Current.session.set_preferred_tab(tab_key, tab_value)
     end
 
     head :ok

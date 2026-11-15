@@ -1,6 +1,10 @@
 module StoreLocation
   extend ActiveSupport::Concern
 
+  # The session lives in a 4 KB cookie. A return_to with a long query (a transactions
+  # filter with many accounts) would overflow it and turn the next response into a 500.
+  MAX_STORED_RETURN_TO_BYTES = 1024
+
   included do
     helper_method :previous_path
     before_action :store_return_to
@@ -23,8 +27,17 @@ private
     end
   end
 
+  # A value over the cap keeps only its path; a path that is still over the cap stores
+  # nothing and drops the older value, so "back" never points to a stale page.
   def store_return_to
-    if (return_to = sanitize_return_to(params[:return_to]))
+    return_to = sanitize_return_to(params[:return_to])
+    return unless return_to
+
+    return_to = return_to.split("?", 2).first if return_to.bytesize > MAX_STORED_RETURN_TO_BYTES
+
+    if return_to.bytesize > MAX_STORED_RETURN_TO_BYTES
+      session.delete(:return_to)
+    else
       session[:return_to] = return_to
     end
   end

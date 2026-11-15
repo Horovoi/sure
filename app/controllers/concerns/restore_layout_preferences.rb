@@ -7,13 +7,18 @@ module RestoreLayoutPreferences
 
   private
     def restore_active_tabs
-      last_selected_tab = Current.session&.get_preferred_tab("account_sidebar_tab") || "asset"
-
-      @account_group_tab = account_group_tab_param || last_selected_tab
+      @account_group_tab = account_group_tab_param || stored_account_group_tab || "asset"
     end
 
     def valid_account_group_tabs
-      %w[asset liability all]
+      Session::ALLOWED_TABS.fetch("account_sidebar_tab")
+    end
+
+    # The stored value is checked again here, so a value written before the
+    # whitelist existed cannot reach the view.
+    def stored_account_group_tab
+      value = Current.session&.get_preferred_tab("account_sidebar_tab")
+      value if value.in?(valid_account_group_tabs)
     end
 
     def account_group_tab_param
