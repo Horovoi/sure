@@ -54,8 +54,16 @@ Rails.application.routes.draw do
 
   mount Lookbook::Engine, at: "/design-system"
 
-  # Uses basic auth - see config/initializers/sidekiq.rb
-  mount Sidekiq::Web => "/sidekiq"
+  # Queue dashboard. Development mounts it open. Everywhere else (production, staging,
+  # test) the route exists only for a signed-in, active super admin; see
+  # app/constraints/super_admin_constraint.rb. Signed-out visitors get a 404.
+  if Rails.env.development?
+    mount Sidekiq::Web => "/sidekiq"
+  else
+    constraints SuperAdminConstraint.new do
+      mount Sidekiq::Web => "/sidekiq"
+    end
+  end
 
   # AI chats
   resources :chats do
