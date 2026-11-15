@@ -51,12 +51,12 @@ zh-CN:
           revoke_confirmation: 确定要撤销此 API 密钥吗？此操作不可撤销，将立即停用所有使用此密钥的应用程序。
           revoke_key: 撤销密钥
           title: 您的 API 密钥
-          usage_instructions: 向 %{product_name} API 发起请求时，请在 X-Api-Key 请求头中包含您的 API
+          usage_instructions: 向 Sure API 发起请求时，请在 X-Api-Key 请求头中包含您的 API
             密钥：
           usage_instructions_title: 如何使用 API 密钥
         no_api_key:
           create_api_key: 创建 API 密钥
-          description: 通过安全的 API 密钥以编程方式访问您的 %{product_name} 数据。
+          description: 通过安全的 API 密钥以编程方式访问您的 Sure 数据。
           feature_1: 以编程方式访问账户数据
           feature_2: 构建自定义集成和应用
           feature_3: 自动化数据获取与分析
