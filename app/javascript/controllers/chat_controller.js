@@ -40,6 +40,12 @@ export default class extends Controller {
     this.sampleQuestionTimer = null;
   }
 
+  // The sidebar's chat frame swaps the composer without reconnecting this controller, so
+  // a prefilled message ("Dig in with AI") is sized when its input arrives.
+  inputTargetConnected() {
+    this.autoResize();
+  }
+
   autoResize() {
     const input = this.inputTarget;
     const lineHeight = 20; // text-sm line-height (14px * 1.429 ≈ 20px)

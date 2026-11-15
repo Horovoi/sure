@@ -1,0 +1,32 @@
+<%# locals: (insight:) %>
+<%# Shown in the notification tray after a dismiss. It removes itself when its
+    countdown ring finishes, like the flash notice. %>
+<%= tag.div id: dom_id(insight, :undo),
+            class: "relative flex items-center gap-3 rounded-lg bg-container p-4 group w-full md:max-w-80 shadow-border-xs",
+            role: "status",
+            data: {
+              controller: "element-removal",
+              action: "animationend->element-removal#remove",
+              testid: "insight-undo-toast"
+            } do %>
+  <p class="text-primary text-sm font-medium grow min-w-0"><%= t("insights.undo_toast.dismissed") %></p>
+
+  <%= render DS::Button.new(
+        text: t("insights.undo_toast.undo"),
+        variant: "outline",
+        size: "sm",
+        href: undismiss_insight_path(insight),
+        method: :patch
+      ) %>
+
+  <div class="h-5 shrink-0" aria-hidden="true">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" class="shrink-0 text-subdued">
+      <circle r="8" cx="10" cy="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="1.6" />
+      <circle class="origin-center -rotate-90 animate-stroke-fill" stroke="currentColor" r="7.2" cx="10" cy="10" stroke-dasharray="43.9822971503" stroke-dashoffset="43.9822971503" />
+    </svg>
+  </div>
+
+  <div class="absolute -top-2 -right-2">
+    <%= icon "x", class: "p-0.5 hidden group-hover:inline-block border border-secondary border-solid rounded-lg bg-container text-subdued cursor-pointer", data: { action: "click->element-removal#remove" }, aria: { label: t("insights.undo_toast.close") } %>
+  </div>
+<% end %>

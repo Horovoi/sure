@@ -31,6 +31,13 @@ export default class extends Controller {
     this.#toggleSidebarWidth(this.rightSidebarTarget, isOpen);
   }
 
+  // Opens the chat sidebar if it is closed ("Dig in with AI" loads a chat into it)
+  openRightSidebar() {
+    if (this.#isExpanded(this.rightSidebarTarget)) return;
+
+    this.toggleRightSidebar();
+  }
+
   #isExpanded(el) {
     return this.expandedSidebarClasses.every((c) => el.classList.contains(c));
   }

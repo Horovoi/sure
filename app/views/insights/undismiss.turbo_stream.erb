@@ -1,0 +1,10 @@
+<%# Undo from the toast: the insight returns in its place on whichever page is open %>
+<%= turbo_stream.replace "insights-feed" do %>
+  <%= render "pages/dashboard/insights_feed", insights: @feed_insights, total_count: @insights.size %>
+<% end %>
+
+<%= turbo_stream.replace "insights-list" do %>
+  <%= render "insights/list", insights: @insights %>
+<% end %>
+
+<%= turbo_stream.remove dom_id(@insight, :undo) %>

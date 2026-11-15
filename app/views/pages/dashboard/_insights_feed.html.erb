@@ -1,0 +1,31 @@
+<%# locals: (insights:, total_count:) %>
+<%# The dashboard's insights section: the first Insight::FEED_LIMIT insights, in an
+    inset well like the outflows and balance sheet lists. Dismiss and undo re-render
+    this partial by its id, so the next insight moves up into the freed slot. %>
+<div id="insights-feed" class="px-4">
+  <div class="bg-container-inset rounded-xl p-1 space-y-1">
+    <div class="px-4 py-2 flex items-center justify-between uppercase text-xs font-medium text-secondary">
+      <p><%= t("insights.feed.header") %></p>
+
+      <% if total_count > insights.size %>
+        <%= render DS::Link.new(
+              text: t("insights.feed.view_all", count: total_count),
+              href: insights_path,
+              variant: "ghost",
+              size: "sm",
+              class: "normal-case"
+            ) %>
+      <% end %>
+    </div>
+
+    <div class="shadow-border-xs rounded-lg bg-container divide-y divide-primary">
+      <% if insights.any? %>
+        <% insights.each do |insight| %>
+          <%= render "insights/insight", insight: insight %>
+        <% end %>
+      <% else %>
+        <p class="px-4 py-6 text-sm text-secondary text-center" data-testid="insights-feed-empty"><%= t("insights.feed.all_caught_up") %></p>
+      <% end %>
+    </div>
+  </div>
+</div>

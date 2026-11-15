@@ -1,0 +1,55 @@
+<%# locals: (insight:) %>
+<%# One insight row, used by the dashboard section and the insights page %>
+<% color = insight_icon_css_color(insight) %>
+<div id="<%= dom_id(insight) %>" class="flex gap-3 px-3 py-3 rounded-lg" data-testid="insight-row">
+  <div class="h-8 w-8 shrink-0 rounded-full flex justify-center items-center"
+       style="background-color: color-mix(in oklab, <%= color %> 10%, transparent); color: <%= color %>;">
+    <%= icon(insight_icon_key(insight), color: "current", size: "sm") %>
+  </div>
+
+  <div class="min-w-0 grow space-y-1">
+    <p class="text-xs text-secondary"><%= insight_meta_line(insight) %></p>
+
+    <div class="flex items-start justify-between gap-3">
+      <h3 class="text-sm font-medium text-primary min-w-0"><%= insight_privacy_text(insight.title) %></h3>
+
+      <% if (figure = insight_key_figure(insight)) %>
+        <div class="text-right shrink-0">
+          <p class="text-sm font-medium whitespace-nowrap privacy-sensitive <%= insight_sentiment(insight) == :positive ? "text-success" : "text-primary" %>"><%= figure.first %></p>
+          <p class="text-xs text-secondary whitespace-nowrap"><%= figure.last %></p>
+        </div>
+      <% end %>
+    </div>
+
+    <p class="text-sm text-secondary"><%= insight_privacy_text(insight.body) %></p>
+
+    <div class="flex flex-wrap items-center gap-2 pt-1">
+      <% if (action = insight_action(insight)) %>
+        <%= render DS::Link.new(text: action[:text], href: action[:href], variant: "outline", size: "sm") %>
+      <% end %>
+
+      <% if insight_dig_in_available? %>
+        <%= render DS::Link.new(
+              text: t("insights.insight.dig_in"),
+              icon: "sparkles",
+              variant: "ghost",
+              size: "sm",
+              href: new_chat_path(insight_id: insight.id),
+              frame: chat_frame,
+              data: { action: "app-layout#openRightSidebar", testid: "insight-dig-in" }
+            ) %>
+      <% end %>
+
+      <%= render DS::Button.new(
+            text: t("insights.insight.dismiss"),
+            icon: "check",
+            variant: "ghost",
+            size: "sm",
+            href: dismiss_insight_path(insight),
+            method: :patch,
+            title: t("insights.insight.dismiss_title"),
+            aria_label: t("insights.insight.dismiss_aria", title: insight.title)
+          ) %>
+    </div>
+  </div>
+</div>

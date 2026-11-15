@@ -10,6 +10,7 @@ class PagesController < ApplicationController
   # The dashboard widgets, in their default order when the saved order leaves one out
   DASHBOARD_SECTION_KEYS = %w[
     cashflow_sankey outflows_donut spending_trend investment_summary net_worth_chart balance_sheet subscriptions_summary
+    insights_feed
   ].freeze
 
   # A widget's period form reloads only the widget's own turbo frame, so such a request
@@ -215,6 +216,18 @@ class PagesController < ApplicationController
             partial: "pages/dashboard/subscriptions_summary",
             locals: subscriptions_summary_locals,
             visible: subscriptions_summary_available?,
+            collapsible: true
+          }
+        },
+        # Insights feed (w3-reports): shown while there is an insight to read
+        "insights_feed" => -> {
+          insights = Current.family.insights.visible.ordered.to_a
+          {
+            key: "insights_feed",
+            title: "pages.dashboard.insights_feed.title",
+            partial: "pages/dashboard/insights_feed",
+            locals: { insights: insights.first(Insight::FEED_LIMIT), total_count: insights.size },
+            visible: @has_accounts && insights.any?,
             collapsible: true
           }
         }

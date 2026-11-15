@@ -1,0 +1,12 @@
+<%# Dismiss is reachable from the dashboard and from the insights page. This response
+    carries the update for both; Turbo ignores a stream whose target is not on the page. %>
+<%= turbo_stream.replace "insights-feed" do %>
+  <%= render "pages/dashboard/insights_feed", insights: @feed_insights, total_count: @insights.size %>
+<% end %>
+
+<%= turbo_stream.replace "insights-list" do %>
+  <%= render "insights/list", insights: @insights %>
+<% end %>
+
+<%= turbo_stream.remove dom_id(@insight, :undo) %>
+<%= turbo_stream.append "notification-tray", partial: "insights/undo_toast", locals: { insight: @insight } %>

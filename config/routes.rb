@@ -255,6 +255,15 @@ Rails.application.routes.draw do
   end
   # --- end exclude from reports ---
 
+  # --- Insights feed (w3-reports): the list, dismiss and its undo ---
+  resources :insights, only: %i[index] do
+    member do
+      patch :dismiss
+      patch :undismiss
+    end
+  end
+  # --- end insights feed ---
+
   resources :imports, only: %i[index new show create update destroy] do
     member do
       post :publish
