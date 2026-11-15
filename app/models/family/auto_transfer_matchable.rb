@@ -3,6 +3,13 @@ module Family::AutoTransferMatchable
   # the gap between the transaction's moment and the day's stored rate)
   EXCHANGE_RATE_TOLERANCE = 0.05
 
+  # The "Transfer?" hint in the transaction list is unprompted, so it is much narrower than
+  # the matcher dialog it opens: on a real multi-currency history the dialog's 30 days
+  # flagged mostly coincidental small purchases, while 2 days and a 3% FX band kept mainly
+  # genuine currency conversions.
+  TRANSFER_HINT_DATE_WINDOW = 2
+  TRANSFER_HINT_EXCHANGE_RATE_TOLERANCE = 0.03
+
   # Pairs of transactions that look like the two legs of one transfer: opposite amounts in
   # two visible accounts of this family, within date_window days, not already in a transfer.
   #
@@ -21,12 +28,15 @@ module Family::AutoTransferMatchable
   # because the user confirms the pair there themselves.
   #
   # account_id limits the pairs to those with a leg in that account (after an account sync).
+  # transaction_ids limits them to those with a leg among these transactions (one page of
+  # the list, for the "Transfer?" hint); an empty list matches nothing.
   #
   # Exact same-currency pairs rank before cross-currency guesses, then the closest dates, so
   # a greedy run never lets a guess one day closer claim a transaction whose exact
   # counterpart is a day later.
-  def transfer_match_candidates(date_window: 4, account_id: nil, restrict_cross_currency_to_routes: false)
+  def transfer_match_candidates(date_window: 4, account_id: nil, restrict_cross_currency_to_routes: false, exchange_rate_tolerance: EXCHANGE_RATE_TOLERANCE, transaction_ids: nil)
     date_window = Integer(date_window)
+    tolerance = Float(exchange_rate_tolerance)
 
     scope = Entry.select([
       "inflow_candidates.entryable_id as inflow_transaction_id",
@@ -64,7 +74,7 @@ module Family::AutoTransferMatchable
         ) OR (
           inflow_candidates.currency <> outflow_candidates.currency AND
           ABS(inflow_candidates.amount / NULLIF(outflow_candidates.amount * #{transfer_match_rate_sql}, 0))
-            BETWEEN #{1 - EXCHANGE_RATE_TOLERANCE} AND #{1 + EXCHANGE_RATE_TOLERANCE}
+            BETWEEN #{1 - tolerance} AND #{1 + tolerance}
           #{"AND (#{confirmed_route_sql} OR (#{linked_account_sql('inflow_accounts')} AND #{linked_account_sql('outflow_accounts')}))" if restrict_cross_currency_to_routes}
         )
       ")
@@ -72,6 +82,12 @@ module Family::AutoTransferMatchable
 
     if account_id
       scope = scope.where("inflow_candidates.account_id = :account_id OR outflow_candidates.account_id = :account_id", account_id: account_id)
+    end
+
+    unless transaction_ids.nil?
+      # IN () is invalid SQL, so an empty list binds a NULL that matches nothing
+      ids = transaction_ids.to_a.presence || [ nil ]
+      scope = scope.where("inflow_candidates.entryable_id IN (:ids) OR outflow_candidates.entryable_id IN (:ids)", ids: ids)
     end
 
     scope.order("match_rank ASC, date_diff ASC")
@@ -107,6 +123,32 @@ module Family::AutoTransferMatchable
     end
   end
 
+  # --- "Transfer?" hint (w2-transfers transfer-hints) ---
+
+  # Which of `transactions` (one page of the list) have a likely transfer counterpart, so
+  # the row can point to the "match as transfer" dialog. A set of transaction ids.
+  def transaction_ids_with_transfer_candidates(transactions)
+    page_ids = transactions.map(&:id).to_set
+
+    transfer_hint_candidates(transactions).each_with_object(Set.new) do |candidate, ids|
+      [ candidate.inflow_transaction_id, candidate.outflow_transaction_id ].each { |id| ids << id if page_ids.include?(id) }
+    end
+  end
+
+  # "Not a transfer" on a hint: rejects every pair the hint offered for this transaction,
+  # the same record a rejected auto-match leaves, so neither the hint nor auto-match offers
+  # them again. The manual dialog still lists them (last).
+  def dismiss_transfer_hint!(transaction)
+    RejectedTransfer.transaction do
+      transfer_hint_candidates([ transaction ]).each do |candidate|
+        RejectedTransfer.find_or_create_by!(
+          inflow_transaction_id: candidate.inflow_transaction_id,
+          outflow_transaction_id: candidate.outflow_transaction_id
+        )
+      end
+    end
+  end
+
   # The switch on the preferences page reads as "on"; the column stores the opt-out
   def auto_match_transfers_enabled
     !auto_match_transfers_disabled?
@@ -128,6 +170,28 @@ module Family::AutoTransferMatchable
   end
 
   private
+    # The hint's pairs for `transactions`: the narrow hint window and FX band, no rejected
+    # pair, no excluded entry or transfer fee, and both legs in the same category (or both
+    # uncategorized). On a real history every coincidental pair (a food delivery against a
+    # utility refund) had different categories on its legs, every genuine one the same.
+    def transfer_hint_candidates(transactions)
+      unmatched_ids = transactions.reject { |txn| txn.transfer? || txn.transfer.present? || txn.fee_transfer_id.present? }.map(&:id)
+      return [] if unmatched_ids.empty?
+
+      transfer_match_candidates(
+        date_window: TRANSFER_HINT_DATE_WINDOW,
+        exchange_rate_tolerance: TRANSFER_HINT_EXCHANGE_RATE_TOLERANCE,
+        transaction_ids: unmatched_ids
+      )
+        .joins("JOIN transactions inflow_txns ON inflow_txns.id = inflow_candidates.entryable_id")
+        .joins("JOIN transactions outflow_txns ON outflow_txns.id = outflow_candidates.entryable_id")
+        .where(rejected_transfers: { id: nil })
+        .where(inflow_candidates: { excluded: false }, outflow_candidates: { excluded: false })
+        .where(inflow_txns: { fee_transfer_id: nil }, outflow_txns: { fee_transfer_id: nil })
+        .where("inflow_txns.category_id IS NOT DISTINCT FROM outflow_txns.category_id")
+        .to_a
+    end
+
     # Only plain transactions are auto-matched: not excluded, not pending at the provider, and
     # still "standard" (a user's one-time mark, or any other kind, is left alone).
     def auto_match_candidates(account: nil)

@@ -265,4 +265,46 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     assert Transaction.exists?(fee.id)
     assert_nil fee.reload.fee_transfer_id
   end
+
+  # w2-transfers transfer-hints
+  def create_pending_match
+    outflow = create_transaction(amount: 120, account: accounts(:depository))
+    inflow = create_transaction(amount: -120, account: accounts(:credit_card))
+    Transfer.create!(inflow_transaction: inflow.transaction, outflow_transaction: outflow.transaction, status: "pending")
+  end
+
+  test "rejecting a pending match from an account page redraws both rows with a turbo stream" do
+    transfer = create_pending_match
+
+    patch transfer_url(transfer), params: { transfer: { status: "rejected" } },
+      headers: { "Referer" => account_url(accounts(:depository)) }, as: :turbo_stream
+
+    assert_response :success
+    assert_equal "text/vnd.turbo-stream.html", response.media_type
+    assert_includes response.body, ActionView::RecordIdentifier.dom_id(transfer.outflow_transaction.entry)
+    assert_includes response.body, ActionView::RecordIdentifier.dom_id(transfer.inflow_transaction.entry)
+    assert_not_includes response.body, %(action="redirect")
+    assert_not Transfer.exists?(transfer.id)
+  end
+
+  test "rejecting a pending match on the transactions list reloads the list" do
+    transfer = create_pending_match
+
+    patch transfer_url(transfer), params: { transfer: { status: "rejected" } },
+      headers: { "Referer" => transactions_url }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="redirect")
+    assert_not Transfer.exists?(transfer.id)
+  end
+
+  test "the pending pill opens the transfer and names the other side" do
+    transfer = create_pending_match
+
+    get account_url(accounts(:depository))
+
+    assert_response :success
+    assert_select "a[href='#{transfer_path(transfer)}'][data-testid=transfer-match-pill]"
+    assert_includes response.body, accounts(:credit_card).name
+  end
 end

@@ -236,7 +236,7 @@ Rails.application.routes.draw do
   end
 
   resources :transactions, only: %i[index new create show update destroy] do
-    resource :transfer_match, only: %i[new create]
+    resource :transfer_match, only: %i[new create destroy] # destroy: w2-transfers transfer-hints "Not a transfer"
     resource :category, only: :update, controller: :transaction_categories
 
     collection do

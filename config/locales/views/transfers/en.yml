@@ -43,4 +43,5 @@ en:
       to: To
       uncategorized: Uncategorized
     update:
+      rejected: Match rejected
       success: Transfer updated

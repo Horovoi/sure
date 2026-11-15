@@ -1,0 +1,24 @@
+---
+en:
+  transfer_matches:
+    create:
+      success: Transfer created
+    matching_fields:
+      create_new_transaction: Create new transaction
+      match_existing_recommended: Match existing transaction (recommended)
+      matching_method: Matching method
+      matching_transaction: Matching transaction
+      no_matching_transactions: We couldn't find a matching transaction in your other accounts. Select an account and a new transaction will be created there.
+      select_method: Select a method for matching your transactions.
+      target_account: Target account
+    new:
+      create_transfer_match: Create transfer match
+      from_account: From account
+      from_account_named: "From account: %{name}"
+      header:
+        subtitle: Match the corresponding transaction in another account or create one if it doesn't exist.
+        title: Match transfer or payment
+      inflow_transaction: Inflow transaction
+      outflow_transaction: Outflow transaction
+      to_account: To account
+      to_account_named: "To account: %{name}"

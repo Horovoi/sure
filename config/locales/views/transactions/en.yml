@@ -56,6 +56,9 @@ en:
       label: Exchange rate, 1 %{from} in %{to}
       no_market_rate: No stored rate from %{from} to %{to}, so this amount is left out of the balance until you enter one.
     show:
+      transfer_matcher_button: Open matcher
+      transfer_matcher_description: Connect this transaction to its counterpart in another account.
+      transfer_matcher_title: Transfer or debt payment?
       account_label: Account
       additional_details: Additional details
       amount: Amount
@@ -122,9 +125,14 @@ en:
       potential_duplicate_tooltip: This may be a duplicate of another transaction
       review_recommended: Review
       review_recommended_tooltip: Large amount difference — review recommended to check if this is a duplicate
+    transfer_hint:
+      dismiss: Not a transfer
+      label: Transfer?
+      tooltip: A transaction in another account looks like the other side of a transfer. Click to match them.
     transfer_match:
       auto_matched: Auto-matched
       auto_matched_short: A/M
+      auto_matched_tooltip_html: "%{amount} in %{account} on %{date}. Click to review the match."
       confirm_match: Confirm match
       reject_match: Reject match
       confirmed_payment: Payment is confirmed
@@ -144,6 +152,8 @@ en:
     summary:
       expenses: Expenses
       income: Income
+      inflow: Inflow
+      outflow: Outflow
       total_transactions: Total transactions
     index:
       transaction: transaction

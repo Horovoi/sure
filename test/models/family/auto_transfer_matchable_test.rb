@@ -385,4 +385,76 @@ class Family::AutoTransferMatchableTest < ActiveSupport::TestCase
         )
       end
     end
+
+    # w2-transfers transfer-hints
+    test "the transfer hint finds a same-category pair within two days" do
+      outflow = create_transaction(date: 1.day.ago.to_date, account: @depository, amount: 120)
+      inflow = create_transaction(date: Date.current, account: @credit_card, amount: -120)
+      unrelated = create_transaction(date: Date.current, account: @depository, amount: 7)
+
+      ids = @family.transaction_ids_with_transfer_candidates([ outflow.transaction, inflow.transaction, unrelated.transaction ])
+
+      assert_equal Set[outflow.entryable_id, inflow.entryable_id], ids
+    end
+
+    test "the transfer hint skips pairs further apart than two days" do
+      outflow = create_transaction(date: 3.days.ago.to_date, account: @depository, amount: 120)
+      create_transaction(date: Date.current, account: @credit_card, amount: -120)
+
+      assert_empty @family.transaction_ids_with_transfer_candidates([ outflow.transaction ])
+    end
+
+    test "the transfer hint skips pairs in different categories" do
+      outflow = create_transaction(account: @depository, amount: 120, category: categories(:food_and_drink))
+      create_transaction(account: @credit_card, amount: -120, category: categories(:income))
+
+      assert_empty @family.transaction_ids_with_transfer_candidates([ outflow.transaction ])
+    end
+
+    test "the transfer hint skips transactions already in a transfer" do
+      transfer = create_transfer(from_account: @depository, to_account: @credit_card, amount: 120)
+
+      assert_empty @family.transaction_ids_with_transfer_candidates([ transfer.outflow_transaction, transfer.inflow_transaction ])
+    end
+
+    test "the transfer hint finds a cross-currency pair within 3% and skips one further off" do
+      eur = @family.accounts.create!(name: "EUR hint", balance: 0, currency: "EUR", accountable: Depository.new)
+      ExchangeRate.create!(from_currency: "USD", to_currency: "EUR", date: Date.current, rate: 0.9)
+      outflow = create_transaction(account: @depository, amount: 100, currency: "USD")
+      create_transaction(account: eur, amount: -88, currency: "EUR")
+
+      assert_includes @family.transaction_ids_with_transfer_candidates([ outflow.transaction ]), outflow.entryable_id
+
+      far_outflow = create_transaction(account: @depository, amount: 200, currency: "USD")
+      create_transaction(account: eur, amount: -170, currency: "EUR")
+
+      assert_not_includes @family.transaction_ids_with_transfer_candidates([ far_outflow.transaction ]), far_outflow.entryable_id
+    end
+
+    test "dismissing a hint rejects its pairs so neither the hint nor auto-match offers them" do
+      outflow = create_transaction(account: @depository, amount: 120)
+      inflow = create_transaction(account: @credit_card, amount: -120)
+
+      assert_difference -> { RejectedTransfer.count }, 1 do
+        @family.dismiss_transfer_hint!(outflow.transaction)
+      end
+
+      assert_empty @family.transaction_ids_with_transfer_candidates([ outflow.transaction, inflow.transaction ])
+      assert_no_difference -> { Transfer.count } do
+        @family.auto_match_transfers!
+      end
+    end
+
+    test "the matcher dialog lists a rejected pair last and a same-category counterpart first" do
+      food = categories(:food_and_drink)
+      outflow = create_transaction(account: @depository, amount: 120, category: food)
+      rejected = create_transaction(date: Date.current, account: @credit_card, amount: -120, category: food)
+      other_category = create_transaction(date: 1.day.ago.to_date, account: @credit_card, amount: -120)
+      same_category = create_transaction(date: 2.days.ago.to_date, account: @credit_card, amount: -120, category: food)
+      RejectedTransfer.create!(inflow_transaction_id: rejected.entryable_id, outflow_transaction_id: outflow.entryable_id)
+
+      order = outflow.transaction.transfer_match_candidates.map(&:inflow_transaction_id)
+
+      assert_equal [ same_category.entryable_id, other_category.entryable_id, rejected.entryable_id ], order
+    end
 end

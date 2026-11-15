@@ -53,14 +53,26 @@ class TransfersController < ApplicationController
   end
 
   def update
+    @view_ctx = view_ctx_from_referer
+    rejecting = transfer_update_params[:status] == "rejected"
+
     Transfer.transaction do
+      # Locked, so a confirmation landing meanwhile cannot change what the response assumes
+      @transfer.lock!
+      @rejected_pending_match = rejecting && @transfer.pending?
       update_transfer_status
-      update_transfer_details unless transfer_update_params[:status] == "rejected"
+      update_transfer_details unless rejecting
     end
 
     respond_to do |format|
       format.html { redirect_back_or_to transactions_url, notice: t(".success") }
-      format.turbo_stream
+      format.turbo_stream do
+        if rejecting
+          respond_to_rejection
+        else
+          render :update
+        end
+      end
     end
   end
 
@@ -72,6 +84,40 @@ class TransfersController < ApplicationController
   end
 
   private
+    # w2-transfers transfer-hints: rejecting a pending match redraws its two rows in place,
+    # without a page reload, when that is enough: the match changed neither leg (so the
+    # page's totals stay right) and the page is an account page, which draws each leg on
+    # its own. Every other list draws a transfer once, by its outflow, so the freed inflow
+    # has no row to redraw there, and a confirmed transfer's legs go back to income and
+    # spending; the page reloads in those cases.
+    def respond_to_rejection
+      unless @rejected_pending_match && @view_ctx == "account"
+        stream_redirect_to(request.referer.presence || transactions_url, notice: t(".rejected"))
+        return
+      end
+
+      # Loaded again: the transfer's own legs still hold it in memory and would draw the pill
+      @redrawn_entries = Entry.where(entryable_type: "Transaction", entryable_id: [ @transfer.inflow_transaction_id, @transfer.outflow_transaction_id ])
+                              .includes(:account, entryable: Transaction::ROW_ASSOCIATIONS)
+                              .to_a
+      @transfer_hint_transaction_ids = Current.family.transaction_ids_with_transfer_candidates(@redrawn_entries.map(&:entryable))
+      render :reject
+    end
+
+    # How the page that asked draws its rows: an account page of one of the legs signs each
+    # leg for its own account, every other list shows a transfer as +/-. Taken from the
+    # Referer rather than from a parameter, so a stale button cannot claim a view the page
+    # does not have.
+    def view_ctx_from_referer
+      path = URI.parse(request.referer.to_s).path
+      return "global" if path.blank?
+
+      leg_account_ids = Entry.where(entryable_type: "Transaction", entryable_id: [ @transfer.inflow_transaction_id, @transfer.outflow_transaction_id ]).pluck(:account_id)
+      leg_account_ids.any? { |id| path == account_path(id) } ? "account" : "global"
+    rescue URI::InvalidURIError
+      "global"
+    end
+
     def set_transfer
       # Finds the transfer and ensures the family owns it
       @transfer = Transfer

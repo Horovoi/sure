@@ -110,6 +110,8 @@
 
                     <% if transaction.transfer.present? %>
                       <%= render "transactions/transfer_match", transaction: transaction %>
+                    <% elsif @transfer_hint_transaction_ids&.include?(transaction.id) %>
+                      <%= render "transactions/transfer_hint", entry: entry, transaction: transaction %>
                     <% end %>
                   </div>
                 </div>

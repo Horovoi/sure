@@ -21,6 +21,8 @@ class TransactionsController < ApplicationController
                        .includes({ entry: :account }, *Transaction::ROW_ASSOCIATIONS)
 
     @pagy, @transactions = pagy(base_scope, limit: safe_per_page)
+    # w2-transfers transfer-hints: rows with a likely transfer counterpart show "Transfer?"
+    @transfer_hint_transaction_ids = Current.family.transaction_ids_with_transfer_candidates(@transactions)
 
     # Upcoming: the next month of rows the user manages (manual recurring rows and
     # confirmed subscriptions). Detected patterns and suggestions stay off the list.
@@ -139,6 +141,8 @@ class TransactionsController < ApplicationController
       respond_to do |format|
         format.html { redirect_back_or_to account_path(@entry.account), notice: t(".success") }
         format.turbo_stream do
+          # The redrawn row shows the "Transfer?" hint as the list would
+          @transfer_hint_transaction_ids = Current.family.transaction_ids_with_transfer_candidates([ @entry.transaction ])
           render turbo_stream: [
             turbo_stream.replace(
               dom_id(@entry, :header),

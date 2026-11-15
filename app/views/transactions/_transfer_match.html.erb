@@ -6,12 +6,31 @@
       <%= icon "link-2", size: "sm", class: "text-secondary" %>
     </span>
   <% elsif transaction.transfer.pending? %>
-    <span class="hidden lg:inline-flex items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary">
-      <%= t(".auto_matched") %>
-    </span>
-    <span class="inline-flex lg:hidden items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary">
-      <%= t(".auto_matched_short") %>
-    </span>
+    <%# w2-transfers transfer-hints: the pill names the other side of the suggested match
+        in a design-system tooltip (so privacy mode blurs its amount) and opens the
+        transfer, so both legs can be reviewed before confirming or rejecting. %>
+    <% transfer = transaction.transfer %>
+    <% counterpart = (transfer.outflow_transaction_id == transaction.id ? transfer.inflow_transaction : transfer.outflow_transaction)&.entry %>
+    <%= render DS::Tooltip.new(placement: "top", as: :span) do |tooltip| %>
+      <% tooltip.with_trigger do %>
+        <%= link_to transfer_path(transfer),
+              class: "flex items-center rounded-full hover:opacity-80 focus-ring",
+              data: { turbo_frame: "drawer", turbo_prefetch: false, testid: "transfer-match-pill" } do %>
+          <span class="hidden lg:inline-flex items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary">
+            <%= t(".auto_matched") %>
+          </span>
+          <span class="inline-flex lg:hidden items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary">
+            <%= t(".auto_matched_short") %>
+          </span>
+        <% end %>
+      <% end %>
+      <% if counterpart %>
+        <%= t(".auto_matched_tooltip_html",
+              amount: tag.span(format_money(counterpart.amount_money.abs), class: "privacy-sensitive"),
+              account: counterpart.account.name,
+              date: l(counterpart.date, format: :long)) %>
+      <% end %>
+    <% end %>
 
     <%= button_to transfer_path(transaction.transfer, transfer: { status: "confirmed" }),
                     method: :patch,
@@ -23,7 +42,6 @@
 
     <%= button_to transfer_path(transaction.transfer, transfer: { status: "rejected" }),
                     method: :patch,
-                    data: { turbo: false },
                     class: "text-secondary hover:text-primary flex items-center justify-center cursor-pointer",
                     title: t(".reject_match"),
                     aria: { label: t(".reject_match") } do %>

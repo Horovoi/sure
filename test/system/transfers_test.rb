@@ -67,4 +67,47 @@ class TransfersTest < ApplicationSystemTestCase
 
     assert_no_selector "[data-testid=exchange-rate-tabs]", visible: true
   end
+
+  # w2-transfers transfer-hints
+  test "rejecting a pending match on an account page needs no page reload" do
+    outflow = accounts(:depository).entries.create!(name: "Pending match out", date: Date.current, amount: 432, currency: "USD", entryable: Transaction.new)
+    inflow = accounts(:credit_card).entries.create!(name: "Pending match in", date: Date.current, amount: -432, currency: "USD", entryable: Transaction.new)
+    Transfer.create!(inflow_transaction: inflow.transaction, outflow_transaction: outflow.transaction, status: "pending")
+
+    visit account_url(accounts(:depository))
+    page.execute_script("window.__sameDocument = true")
+
+    within "##{ActionView::RecordIdentifier.dom_id(outflow)}" do
+      assert_selector "[data-testid=transfer-match-pill]"
+      find("button[aria-label='Reject match']").click
+    end
+
+    within "##{ActionView::RecordIdentifier.dom_id(outflow)}" do
+      assert_no_selector "[data-testid=transfer-match-pill]"
+    end
+    assert page.evaluate_script("window.__sameDocument === true"), "the page was reloaded"
+    assert RejectedTransfer.exists?(inflow_transaction_id: inflow.entryable_id, outflow_transaction_id: outflow.entryable_id)
+  end
+
+  test "the Transfer? hint opens the matcher and Not a transfer removes it in place" do
+    outflow = accounts(:depository).entries.create!(name: "Hint out", date: Date.current, amount: 543, currency: "USD", entryable: Transaction.new)
+    accounts(:credit_card).entries.create!(name: "Hint in", date: Date.current, amount: -543, currency: "USD", entryable: Transaction.new)
+
+    visit transactions_url
+
+    within "##{ActionView::RecordIdentifier.dom_id(outflow.transaction, :transfer_hint)}" do
+      click_on "Transfer?"
+    end
+    assert_text "Match transfer or payment"
+
+    visit transactions_url
+    page.execute_script("window.__sameDocument = true")
+
+    within "##{ActionView::RecordIdentifier.dom_id(outflow.transaction, :transfer_hint)}" do
+      find("button[aria-label='Not a transfer']").click
+    end
+
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(outflow.transaction, :transfer_hint)}"
+    assert page.evaluate_script("window.__sameDocument === true"), "the page was reloaded"
+  end
 end

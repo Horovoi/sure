@@ -885,4 +885,30 @@ end
 
     assert_equal BigDecimal("1.1"), entry.reload.transaction.exchange_rate
   end
+
+  # w2-transfers transfer-hints
+  test "a likely unmatched pair shows the Transfer? hint on the list" do
+    outflow = create_transaction(account: accounts(:depository), amount: 321)
+    create_transaction(account: accounts(:credit_card), amount: -321)
+
+    get transactions_url
+
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(outflow.transaction, :transfer_hint)}" do
+      assert_select "a[href='#{new_transaction_transfer_match_path(outflow)}']", text: /Transfer\?/
+    end
+  end
+
+  test "a list of transfers only shows inflow and outflow totals" do
+    family = @user.family
+    savings = family.accounts.create!(name: "Totals savings", balance: 0, currency: family.currency, accountable: Depository.new)
+    create_transfer(from_account: accounts(:depository), to_account: savings, amount: 250, currency: family.currency)
+
+    get transactions_url(q: { types: [ "transfer" ] })
+
+    assert_response :success
+    assert_select "#total-income", text: /250/
+    assert_select "p", text: "Inflow"
+    assert_select "p", text: "Outflow"
+  end
 end

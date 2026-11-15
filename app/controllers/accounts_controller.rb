@@ -51,6 +51,8 @@ class AccountsController < ApplicationController
     @pagy, @entries = pagy(entries, limit: safe_per_page)
 
     @activity_feed_data = Account::ActivityFeedData.new(@account, @entries)
+    # w2-transfers transfer-hints: rows with a likely transfer counterpart show "Transfer?"
+    @transfer_hint_transaction_ids = Current.family.transaction_ids_with_transfer_candidates(@entries.select(&:transaction?).map(&:entryable))
   end
 
   def sync

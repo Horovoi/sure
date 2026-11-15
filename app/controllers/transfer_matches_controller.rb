@@ -19,7 +19,18 @@ class TransferMatchesController < ApplicationController
 
     @transfer.sync_account_later
 
-    redirect_back_or_to transactions_path, notice: "Transfer created"
+    redirect_back_or_to transactions_path, notice: t(".success")
+  end
+
+  # w2-transfers transfer-hints: "Not a transfer" on the list's "Transfer?" hint. Records
+  # the hint's pairs as rejected and removes the hint from the row in place.
+  def destroy
+    Current.family.dismiss_transfer_hint!(@entry.transaction)
+
+    respond_to do |format|
+      format.turbo_stream { render turbo_stream: turbo_stream.remove(helpers.dom_id(@entry.transaction, :transfer_hint)) }
+      format.html { redirect_back_or_to transactions_path }
+    end
   end
 
   private
