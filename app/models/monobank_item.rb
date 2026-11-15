@@ -175,6 +175,13 @@ class MonobankItem < ApplicationRecord
       next unless account && Account::VISIBLE_STATUSES.include?(account.status)
 
       result = MonobankAccount::Processor.new(monobank_account).process
+      if result.is_a?(Hash) && result[:failed].to_i.positive?
+        capture_error("monobank rows could not be booked", nil, monobank_account: monobank_account,
+                      metadata: { failed: result[:failed], errors: result[:errors] })
+        next { monobank_account_id: monobank_account.id, success: false, result: result,
+               error: I18n.t("monobank_items.errors.account_processing_failed") }
+      end
+
       { monobank_account_id: monobank_account.id, success: true, result: result }
     rescue => e
       capture_error("Failed to process monobank account", e, monobank_account: monobank_account)

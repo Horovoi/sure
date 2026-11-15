@@ -82,7 +82,7 @@ class MonobankItem::Syncer
     end
 
     def summarize(results)
-      stats = results.filter_map { |r| r[:result] if r[:success] && r[:result].is_a?(Hash) }
+      stats = results.filter_map { |r| r[:result] if r[:result].is_a?(Hash) }
       %w[claimed skipped_before_cutover pruned detached imported].index_with do |key|
         stats.sum { |s| s[key.to_sym].to_i }
       end.transform_keys { |key| "monobank_#{key}" }

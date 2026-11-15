@@ -1,5 +1,5 @@
 class DataEnrichment < ApplicationRecord
   belongs_to :enrichable, polymorphic: true
 
-  enum :source, { rule: "rule", plaid: "plaid", lunchflow: "lunchflow", synth: "synth", ai: "ai", enable_banking: "enable_banking", coinstats: "coinstats", bayes: "bayes" }
+  enum :source, { rule: "rule", plaid: "plaid", lunchflow: "lunchflow", synth: "synth", ai: "ai", enable_banking: "enable_banking", coinstats: "coinstats", bayes: "bayes", monobank: "monobank" }
 end
