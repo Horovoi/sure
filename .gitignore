@@ -70,7 +70,8 @@ coverage
 # Ignore node related files
 node_modules
 
-compose.yml
+# A local compose file at the root only: script/bench/compose.yml belongs to the repository
+/compose.yml
 
 plaid_test_accounts/
 
