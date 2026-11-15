@@ -103,6 +103,8 @@ tasks.json
 .taskmaster/reports/
 .taskmaster/state.json
 *.mcp.json
+# The project MCP config for staging (w1-mcp); it holds no secret, the token comes from the shell
+!/.mcp.json
 scripts/
 .cursor/mcp.json
 .taskmasterconfig

@@ -23,12 +23,17 @@ class Account::OpeningBalanceManager
     opening_anchor_valuation&.entry&.amount || 0
   end
 
+  # Serialized per account (see with_account_lock), so two concurrent calls cannot both create an anchor
   def set_opening_balance(balance:, date: nil)
+    with_account_lock { set_opening_balance_unlocked(balance: balance, date: date) }
+  end
+
+  def set_opening_balance_unlocked(balance:, date: nil)
     resolved_date = date || default_date
 
     # Validate date is before oldest entry
-    if date && oldest_entry_date && resolved_date >= oldest_entry_date
-      return Result.new(success?: false, changes_made?: false, error: "Opening balance date must be before the oldest entry date")
+    if (error = date_error(date))
+      return Result.new(success?: false, changes_made?: false, error: error)
     end
 
     if opening_anchor_valuation.nil?
@@ -63,15 +68,44 @@ class Account::OpeningBalanceManager
     false
   end
 
+  # The check set_opening_balance makes on an explicit date, without writing: an error message, or nil
+  def date_error(date)
+    return unless date && oldest_entry_date && date >= oldest_entry_date
+
+    "Opening balance date must be before the oldest entry date"
+  end
+
   private
     attr_reader :account
+
+    # An assistant retrying set_opening_balance after a timeout can run two calls for one account at once; both
+    # would see "no anchor" and create two. A row lock on the account serializes them, and the anchor is read
+    # again under it, uncached, so a query cache filled before the other call committed cannot hide its anchor.
+    # A plain row lock rather than with_lock: callers such as Account.create_and_sync may hold unsaved changes on
+    # the account, which with_lock would reload.
+    def with_account_lock
+      Account.uncached do
+        Account.transaction do
+          Account.where(id: account.id).lock.pick(:id)
+          @opening_anchor_valuation = nil
+          @oldest_entry_date = nil
+
+          yield
+        end
+      end
+    end
 
     def opening_anchor_valuation
       @opening_anchor_valuation ||= account.valuations.opening_anchor.includes(:entry).order("entries.date ASC, entries.created_at ASC").first
     end
 
+    # The opening anchor itself does not count: it may move to any date before the other entries
     def oldest_entry_date
-      @oldest_entry_date ||= account.entries.minimum(:date)
+      @oldest_entry_date ||= begin
+        entries = account.entries
+        entries = entries.where.not(id: opening_anchor_valuation.entry.id) if opening_anchor_valuation&.entry
+        entries.minimum(:date)
+      end
     end
 
     def default_date
@@ -116,4 +150,8 @@ class Account::OpeningBalanceManager
 
       changes_made
     end
+
+    # The set_opening_balance tool reports these
+    public :oldest_entry_date, :default_date
+    private :set_opening_balance_unlocked
 end

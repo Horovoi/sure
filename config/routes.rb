@@ -395,7 +395,15 @@ Rails.application.routes.draw do
     end
   end
 
-  post "mcp", to: "mcp#handle"
+  # --- MCP (w1-mcp): protocol 2026-07-28, POST only; GET and DELETE answer 405 ---
+  match "mcp", to: "mcp#handle", via: %i[post get delete]
+  # --- end MCP ---
+
+  # --- AI tool-call audit (w1-mcp): Settings > Advanced > AI tool calls, read-only, admins only ---
+  namespace :settings do
+    resources :ai_tool_audits, only: :index
+  end
+  # --- end AI tool-call audit ---
 
 
 

@@ -16,10 +16,12 @@ class Api::V1::BaseController < ApplicationController
   before_action :force_json_format
   # Use our custom authentication that supports both OAuth and API keys
   before_action :authenticate_request!
+  # Localize wraps the request in the family time zone before any before_action runs, when Current has no
+  # user yet. Wrap again after authentication, so callbacks and the action see the family zone.
+  skip_around_action :switch_timezone
+  around_action :switch_timezone
   before_action :check_api_key_rate_limit
   before_action :log_api_access
-
-
 
   # Override Doorkeeper's default behavior to return JSON instead of redirecting
   def doorkeeper_unauthorized_render_options(error: nil)

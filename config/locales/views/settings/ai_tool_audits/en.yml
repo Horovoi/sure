@@ -1,0 +1,41 @@
+---
+en:
+  settings:
+    settings_nav:
+      ai_tool_audits_label: AI tool calls
+    ai_tool_audits:
+      index:
+        breadcrumb_home: Home
+        page_title: AI tool calls
+        subtitle: Every tool the AI chat and MCP clients called for this family, newest first. Writes show what they changed and the state before the change.
+        tool_filter: Tool
+        all_tools: All tools
+        writes_only: Writes only
+        filter: Filter
+        empty: No tool calls yet.
+        duration: "%{ms} ms"
+        deleted_user: Deleted user
+        message: "Message %{id}"
+        touched: "%{type}:"
+        record: Record
+        record_gone: This record no longer exists
+        details: Arguments and before state
+        arguments: Arguments
+        truncated: truncated
+        before: Before the call
+        no_before: Nothing recorded (the call only creates)
+        none: None
+        revert_hint: Nothing is reverted automatically. To undo a call, restore the before state by hand or ask Claude to do it.
+        scope_tags:
+          read: Read
+          write: Write
+          destructive: Destructive
+        statuses:
+          running: Running
+          ok: OK
+          error: Error
+          interrupted: Interrupted
+        sources:
+          builtin_chat: Built-in chat
+          claude_chat: Claude chat
+          mcp: MCP

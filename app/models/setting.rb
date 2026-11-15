@@ -49,6 +49,11 @@ class Setting < RailsSettings::Base
   field :security_health_check_time, type: :string
   field :subscription_transactions_time, type: :string
 
+  # MCP endpoint (/mcp). MCP_API_TOKEN stays the real opt-in: without it the endpoint answers 503 whatever this
+  # says. The switch turns off the static-token clients (Claude Code) without editing the env file. The in-app
+  # chat's per-turn token is gated by the user's ai_enabled instead (decision 13).
+  field :mcp_enabled, type: :boolean, default: true
+
   AUTO_SYNC_TIME_FORMAT = /\A([01]?\d|2[0-3]):([0-5]\d)\z/
 
   def self.valid_auto_sync_time?(time_str)

@@ -288,3 +288,22 @@ bin/claude-bridge run                     # foreground, for bin/dev or bin/stagi
 | `docker-compose.prod.yml` | Production services; also the base for staging |
 | `docker-compose.staging.yml` | Staging differences: closed network, proxy, published ports |
 | `Dockerfile`, `.dockerignore` | The image. Keep `BUILD_COMMIT_SHA` as the last instruction so dependency layers stay cached |
+
+## MCP endpoint (Claude Code)
+
+`/mcp` is off until two lines are in `.env.production`. The owner sets the values; do not write
+them into the file for him:
+
+```bash
+MCP_API_TOKEN=...        # generate with: openssl rand -hex 32
+MCP_USER_EMAIL=...       # the Sure login the tools run as (an active user of the family)
+```
+
+Then `bin/deploy` (or restart through it) so the containers read them. Without a token the endpoint
+answers 503; with a token but no active user for the email, also 503. Staging reads the same file,
+so the same token works against http://localhost:3334/mcp.
+
+Settings > Self-Hosting > MCP Server shows whether both are set and has an "Allow MCP clients" switch
+(`Setting.mcp_enabled`, on by default). Turning it off makes `/mcp` answer 403 to the static token at
+once, without a deploy. The in-app chat's Claude does not use this token and is not affected; the
+user's AI switch gates it. To revoke the token itself, change `MCP_API_TOKEN` and deploy.

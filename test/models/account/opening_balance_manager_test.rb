@@ -249,4 +249,57 @@ class Account::OpeningBalanceManagerTest < ActiveSupport::TestCase
     assert_not result.changes_made?
     assert_nil result.error
   end
+
+  test "date_error gives the date check without writing" do
+    oldest_date = @depository_account.entries.minimum(:date)
+    manager = Account::OpeningBalanceManager.new(@depository_account)
+
+    assert_no_difference -> { @depository_account.entries.count } do
+      assert_equal "Opening balance date must be before the oldest entry date", manager.date_error(oldest_date)
+      assert_nil manager.date_error(oldest_date - 1.day)
+      assert_nil manager.date_error(nil)
+    end
+    assert_equal oldest_date, manager.oldest_entry_date
+  end
+
+  test "an existing anchor may move later as long as it stays before the other entries" do
+    manager = Account::OpeningBalanceManager.new(@depository_account)
+    assert manager.set_opening_balance(balance: 1000, date: 1.year.ago.to_date).success?
+
+    # The depository's other entries are a few days old, so a month ago is still before all of them
+    later = 30.days.ago.to_date
+
+    result = Account::OpeningBalanceManager.new(@depository_account).set_opening_balance(balance: 1000, date: later)
+
+    assert result.success?, result.error
+    assert_equal later, anchor_entry.reload.date
+  end
+
+  test "a manager with a stale view finds the anchor another call created and updates it" do
+    stale = Account::OpeningBalanceManager.new(@depository_account)
+    assert_not stale.has_opening_anchor? # memoizes "no anchor"
+
+    Account::OpeningBalanceManager.new(@depository_account).set_opening_balance(balance: 1000, date: 1.year.ago.to_date)
+
+    assert_no_difference -> { @depository_account.valuations.opening_anchor.count } do
+      assert stale.set_opening_balance(balance: 2000).success?
+    end
+    assert_equal 2000, anchor_entry.reload.amount
+  end
+
+  test "set_opening_balance takes a row lock on the account" do
+    statements = []
+    callback = ->(*, payload) { statements << payload[:sql] }
+
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+      Account::OpeningBalanceManager.new(@depository_account).set_opening_balance(balance: 1000, date: 1.year.ago.to_date)
+    end
+
+    assert(statements.any? { |sql| sql.include?("FROM \"accounts\"") && sql.include?("FOR UPDATE") })
+  end
+
+  private
+    def anchor_entry
+      @depository_account.valuations.opening_anchor.includes(:entry).first.entry
+    end
 end

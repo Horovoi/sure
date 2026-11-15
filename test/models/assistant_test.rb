@@ -245,6 +245,106 @@ class AssistantTest < ActiveSupport::TestCase
     assert_includes context, "fiscal months that start on day 25"
   end
 
+  test "a failing tool still gives a completed turn and sends the error to the model" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).raises(RuntimeError, "boom with internals")
+
+    call1 = provider_response(id: "1", function_requests: [ function_request("1") ])
+    call2 = provider_response(id: "2", text: "I could not load your accounts")
+
+    llm = use_llm(
+      step(response: provider_success_response(call1)),
+      step(chunks: [ provider_text_chunk("I could not load your accounts") ], response: provider_success_response(call2))
+    )
+
+    @turn.generate_response
+
+    @turn.reload
+    assert @turn.complete?
+    assert_equal 1, @turn.tool_calls.size
+    assert_equal "2", @chat.reload.latest_assistant_response_id
+
+    output = llm.calls.last[:function_results].first[:output]
+    assert_equal "get_accounts failed unexpectedly", output[:error]
+    refute_match "internals", output.to_json
+  end
+
+  # --- Tool registry --------------------------------------------------------------------------------------
+  # The chat gets every tool, writes and deletes included, with no approval prompt (owner answer 2). No test may
+  # assert that the chat lacks write, delete, rule or transfer tools.
+
+  test "the chat gets the full tool set in the registry order" do
+    assert_equal Assistant.function_classes_for(:full), Assistant.config_for(@chat)[:functions]
+    assert_equal Assistant.function_classes, Assistant.function_classes_for(:full)
+  end
+
+  test "the read scope keeps only read tools, in the registry order" do
+    read = Assistant.function_classes_for(:read)
+
+    assert read.any?
+    assert read.all?(&:read_only?)
+    assert_equal Assistant.function_classes.select(&:read_only?), read
+    assert_not_includes read, Assistant::Function::ImportBankStatement
+  end
+
+  test "the chat gets the write, delete and balance tools" do
+    names = Assistant.config_for(@chat)[:functions].map(&:name)
+
+    %w[create_transaction update_transaction delete_transaction create_category update_category create_tag update_tag
+       set_opening_balance record_balance get_uncategorized_transactions].each { |name| assert_includes names, name }
+  end
+
+  test "an unknown tool scope is refused" do
+    assert_raises(ArgumentError) { Assistant.function_classes_for(:admin) }
+  end
+
+  # --- Tool-call audit ------------------------------------------------------------------------------------
+
+  test "each chat tool call is audited as the built-in chat with the turn's message" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).returns({ accounts: [] })
+
+    call1 = provider_response(id: "1", function_requests: [ function_request("1") ])
+    call2 = provider_response(id: "2", text: "Done")
+    use_llm(step(response: provider_success_response(call1)), step(response: provider_success_response(call2)))
+
+    assert_difference -> { AiToolAudit.count }, 1 do
+      @turn.generate_response
+    end
+
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "builtin_chat", audit.source
+    assert_equal "get_accounts", audit.tool_name
+    assert_equal @chat.user, audit.user
+    assert_equal @chat.id, audit.chat_id
+    assert_equal @turn.id, audit.assistant_message_id
+    assert_equal "ok", audit.status
+  end
+
+  test "a requeue deletes the turn's tool calls but keeps their audit rows" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).returns({ accounts: [] })
+
+    call1 = provider_response(id: "1", function_requests: [ function_request("1") ])
+    use_llm(step(response: provider_success_response(call1)), step(response: provider_error_response(StandardError.new("down"))))
+
+    @turn.generate_response
+    @turn.reload
+    assert @turn.failed?
+    assert_equal 1, @turn.tool_calls.size
+
+    @turn.requeue!
+
+    assert_equal 0, @turn.reload.tool_calls.count
+    assert_equal 1, AiToolAudit.where(assistant_message_id: @turn.id).count
+  end
+
+  test "deleting the chat keeps its audit rows" do
+    AiToolAudit.create!(family: @chat.user.family, user: @chat.user, source: "builtin_chat", chat_id: @chat.id,
+      assistant_message_id: @turn.id, tool_name: "get_accounts", scope_tag: "read", status: "ok")
+
+    @chat.destroy!
+
+    assert_equal 1, AiToolAudit.where(chat_id: @chat.id).count
+  end
+
   private
     def use_llm(*steps)
       ScriptedLlm.new(*steps).tap do |llm|

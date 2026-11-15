@@ -18,6 +18,7 @@ module SettingsHelper
     { label: :budgeting_label, path: :settings_budgeting_path },
     { label: :ai_prompts_label, path: :settings_ai_prompts_path },
     { label: :llm_usage_label, path: :settings_llm_usage_path, condition: :admin_user? },
+    { label: :ai_tool_audits_label, path: :settings_ai_tool_audits_path, condition: :admin_user? },
     { label: :api_keys_label, path: :settings_api_key_path },
     { label: :self_hosting_label, path: :settings_hosting_path, condition: :self_hosted? },
     { label: :imports_label, path: :imports_path },

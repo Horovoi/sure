@@ -5,31 +5,10 @@ class Settings::HostingsController < ApplicationController
 
   before_action :ensure_admin, only: [ :update, :clear_cache, :reset_scheduled_jobs ]
 
+  helper_method :mcp_status
+
   def show
-    @breadcrumbs = [
-      [ "Home", root_path ],
-      [ "Self-Hosting", nil ]
-    ]
-
-    # Determine which providers are currently selected
-    exchange_rate_provider = ENV["EXCHANGE_RATE_PROVIDER"].presence || Setting.exchange_rate_provider
-    securities_provider = ENV["SECURITIES_PROVIDER"].presence || Setting.securities_provider
-
-    # Show Twelve Data settings if either provider is set to twelve_data
-    @show_twelve_data_settings = exchange_rate_provider == "twelve_data" || securities_provider == "twelve_data"
-
-    # Show Yahoo Finance settings if either provider is set to yahoo_finance
-    @show_yahoo_finance_settings = exchange_rate_provider == "yahoo_finance" || securities_provider == "yahoo_finance"
-
-    # Only fetch provider data if we're showing the section
-    if @show_twelve_data_settings
-      twelve_data_provider = Provider::Registry.get_provider(:twelve_data)
-      @twelve_data_usage = twelve_data_provider&.usage
-    end
-
-    if @show_yahoo_finance_settings
-      @yahoo_finance_provider = Provider::Registry.get_provider(:yahoo_finance)
-    end
+    load_show_data
   end
 
   def update
@@ -141,9 +120,14 @@ class Settings::HostingsController < ApplicationController
       Setting.openai_json_mode = hosting_params[:openai_json_mode].presence
     end
 
+    if hosting_params.key?(:mcp_enabled)
+      Setting.mcp_enabled = hosting_params[:mcp_enabled] == "1"
+    end
+
     redirect_to settings_hosting_path, notice: t(".success")
   rescue Setting::ValidationError => error
     flash.now[:alert] = error.message
+    load_show_data
     render :show, status: :unprocessable_entity
   end
 
@@ -168,8 +152,49 @@ class Settings::HostingsController < ApplicationController
         :openai_uri_base, :openai_model, :openai_json_mode, :exchange_rate_provider,
         :securities_provider, :syncs_include_pending, :auto_sync_enabled, :auto_sync_time,
         :scheduled_jobs_start_time, :scheduled_jobs_timezone,
-        :data_cleaner_time, :security_health_check_time, :subscription_transactions_time
+        :data_cleaner_time, :security_health_check_time, :subscription_transactions_time,
+        :mcp_enabled
       ])
+    end
+
+    # The page is also rendered when an update fails validation, so it loads its data in one place
+    def load_show_data
+      @breadcrumbs = [
+        [ "Home", root_path ],
+        [ "Self-Hosting", nil ]
+      ]
+
+      # Determine which providers are currently selected
+      exchange_rate_provider = ENV["EXCHANGE_RATE_PROVIDER"].presence || Setting.exchange_rate_provider
+      securities_provider = ENV["SECURITIES_PROVIDER"].presence || Setting.securities_provider
+
+      # Show Twelve Data settings if either provider is set to twelve_data
+      @show_twelve_data_settings = exchange_rate_provider == "twelve_data" || securities_provider == "twelve_data"
+
+      # Show Yahoo Finance settings if either provider is set to yahoo_finance
+      @show_yahoo_finance_settings = exchange_rate_provider == "yahoo_finance" || securities_provider == "yahoo_finance"
+
+      # Only fetch provider data if we're showing the section
+      if @show_twelve_data_settings
+        twelve_data_provider = Provider::Registry.get_provider(:twelve_data)
+        @twelve_data_usage = twelve_data_provider&.usage
+      end
+
+      if @show_yahoo_finance_settings
+        @yahoo_finance_provider = Provider::Registry.get_provider(:yahoo_finance)
+      end
+    end
+
+    # What the MCP section shows: whether the env file opts in and which user the static token acts as
+    def mcp_status
+      @mcp_status ||= begin
+        email = ENV["MCP_USER_EMAIL"].presence
+        {
+          token_configured: ENV["MCP_API_TOKEN"].present?,
+          user_email: email,
+          user_active: email.present? && User.find_by(email: email)&.active? == true
+        }
+      end
     end
 
     def invalid_schedule_param

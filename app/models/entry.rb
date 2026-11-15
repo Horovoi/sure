@@ -115,8 +115,12 @@ class Entry < ApplicationRecord
     entryable_type.demodulize.underscore
   end
 
+  # Sources of entries made by hand that still carry an external_id: create_transaction stores its idempotency
+  # key there. They stay editable like any manual entry.
+  MANUAL_SOURCES = %w[mcp].freeze
+
   def linked?
-    external_id.present?
+    external_id.present? && !source.in?(MANUAL_SOURCES)
   end
 
   # Checks if entry should be protected from provider sync overwrites.

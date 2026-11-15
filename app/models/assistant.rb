@@ -3,22 +3,56 @@ class Assistant
 
   attr_reader :chat, :instructions
 
+  TOOL_SCOPES = %i[read full].freeze
+
   class << self
     def for_chat(chat)
       config = config_for(chat)
       new(chat, instructions: config[:instructions], functions: config[:functions])
     end
 
+    # Every tool, in one fixed order: the in-app chat and /mcp both serve this list (tools/list keeps the order).
+    # Each tool unit adds its classes in its own block.
     def function_classes
       [
-        Assistant::Function::GetTransactions,
+        # Reads: accounts and balances, income and spending, transactions, holdings, reference data
         Assistant::Function::GetAccounts,
-        Assistant::Function::GetHoldings,
         Assistant::Function::GetBalanceSheet,
         Assistant::Function::GetIncomeStatement,
+        Assistant::Function::GetTransactions,
+        Assistant::Function::GetHoldings,
+        Assistant::Function::GetValuations,
+        Assistant::Function::GetCategories,
+        Assistant::Function::GetTags,
+        Assistant::Function::GetMerchants,
+        Assistant::Function::SearchFamilyFiles,
+
+        # Imports
         Assistant::Function::ImportBankStatement,
-        Assistant::Function::SearchFamilyFiles
+
+        # Transactions, categories, tags and balances: the uncategorized backlog, then writes
+        Assistant::Function::GetUncategorizedTransactions,
+        Assistant::Function::CreateTransaction,
+        Assistant::Function::UpdateTransaction,
+        Assistant::Function::DeleteTransaction,
+        Assistant::Function::CreateCategory,
+        Assistant::Function::UpdateCategory,
+        Assistant::Function::CreateTag,
+        Assistant::Function::UpdateTag,
+        Assistant::Function::SetOpeningBalance,
+        Assistant::Function::RecordBalance
       ]
+    end
+
+    # The tools one caller may use, in the fixed order of function_classes. :full is every tool: the in-app
+    # chat and both MCP tokens use it (owner answer 2). :read keeps only the :read-tagged tools, for tests and a
+    # future read-only token.
+    def function_classes_for(scope)
+      case scope
+      when :full then function_classes
+      when :read then function_classes.select(&:read_only?)
+      else raise ArgumentError, "Unknown tool scope #{scope.inspect}; use one of #{TOOL_SCOPES.inspect}"
+      end
     end
   end
 
@@ -44,7 +78,7 @@ class Assistant
     responder = Assistant::Responder.new(
       message: prompt,
       instructions: instructions,
-      function_tool_caller: function_tool_caller,
+      function_tool_caller: function_tool_caller(assistant_message),
       llm: llm_provider
     )
 
@@ -66,12 +100,13 @@ class Assistant
   private
     attr_reader :functions
 
-    def function_tool_caller
+    # Built per turn, so every tool call is audited with the assistant message it answers
+    def function_tool_caller(assistant_message)
       function_instances = functions.map do |fn|
         fn.new(chat.user)
       end
 
-      @function_tool_caller ||= FunctionToolCaller.new(function_instances)
+      FunctionToolCaller.new(function_instances, actor: ToolInvocation::Actor.builtin_chat(assistant_message))
     end
 
     def build_no_provider_error_message(requested_model)
