@@ -189,11 +189,10 @@ class Holding < ApplicationRecord
       # never cost it.
       return nil if trades.where(investment_activity_label: Trade::TRANSFER_LABEL).exists?
 
-      rate = ExchangeRate.rate_sql(
-        from: "trades.currency",
-        to: ActiveRecord::Base.connection.quote(currency),
-        on: "entries.date"
-      )
+      rate = Trade.sanitize_sql_array([
+        ExchangeRate.rate_sql(from: "trades.currency", to: ":target_currency", on: "entries.date"),
+        { target_currency: currency }
+      ])
 
       total_cost, total_qty, rate_missing = trades.pick(
         Arel.sql("SUM(trades.price * trades.qty * #{rate})"),

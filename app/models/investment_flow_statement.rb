@@ -34,11 +34,10 @@ class InvestmentFlowStatement
     # Each entry at the nearest stored rate of its day. It used to add up the raw amounts
     # of every currency as if they were the family's; one with no rate at all is left out.
     def converted_sum(transactions)
-      rate = ExchangeRate.rate_sql(
-        from: "entries.currency",
-        to: ActiveRecord::Base.connection.quote(family.currency),
-        on: "entries.date"
-      )
+      rate = Entry.sanitize_sql_array([
+        ExchangeRate.rate_sql(from: "entries.currency", to: ":target_currency", on: "entries.date"),
+        { target_currency: family.currency }
+      ])
 
       transactions.sum(Arel.sql("COALESCE(entries.amount * #{rate}, 0)"))
     end
