@@ -1,4 +1,6 @@
 <% unless @transfer.destroyed? %>
+  <%= turbo_stream.replace dom_id(@transfer, :fees), partial: "transfers/fees", locals: { transfer: @transfer } %>
+
   <%= turbo_stream.replace @transfer.inflow_transaction.entry %>
   <%= turbo_stream.replace @transfer.outflow_transaction.entry %>
 

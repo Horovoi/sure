@@ -6,7 +6,11 @@ class Transfer::Creator
   # - destination_amount: what arrived, in the destination currency; the inflow is exactly
   #   that amount.
   # With neither, the inflow converts at the nearest-rate rule.
-  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:, exchange_rate: nil, destination_amount: nil)
+  #
+  # source_fee and destination_fee (decision 21) are what the bank charged, each in its
+  # account's currency. They become linked expenses in the 'Fees' category; the legs keep
+  # the principal. Blank or zero means no fee.
+  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:, exchange_rate: nil, destination_amount: nil, source_fee: nil, destination_fee: nil)
     @family = family
     @source_account = family.accounts.find(source_account_id) # early throw if not found
     @destination_account = family.accounts.find(destination_account_id) # early throw if not found
@@ -14,6 +18,7 @@ class Transfer::Creator
     @amount = amount.to_d
     @exchange_rate_input = exchange_rate
     @destination_amount_input = destination_amount
+    @fee_inputs = { "source" => source_fee, "destination" => destination_fee }
   end
 
   # The legs' kinds (and the Investment Contributions category) are set by Transfer's after_create.
@@ -26,12 +31,19 @@ class Transfer::Creator
       status: "confirmed"
     )
 
-    if (error = amount_error || conversion_error)
+    if (error = amount_error || conversion_error || fee_error)
       transfer.errors.add(:base, *error)
       return transfer
     end
 
-    if transfer.save
+    saved = Transfer.transaction do
+      next false unless transfer.save
+
+      fees.each { |side, fee| transfer.set_fee!(side: side, amount: fee) }
+      true
+    end
+
+    if saved
       source_account.sync_later
       destination_account.sync_later
     end
@@ -69,6 +81,25 @@ class Transfer::Creator
           user_modified: true, # Protect from provider sync claiming this entry
         )
       )
+    end
+
+    # side => fee amount above zero
+    def fees
+      @fee_inputs.filter_map do |side, value|
+        fee = UserDecimal.parse(value)
+        [ side, fee ] if fee&.positive?
+      end
+    end
+
+    def fee_error
+      invalid = @fee_inputs.values.any? do |value|
+        next false if value.blank?
+
+        fee = UserDecimal.parse(value)
+        fee.nil? || fee.negative?
+      end
+
+      [ :invalid_fee ] if invalid
     end
 
     def cross_currency?

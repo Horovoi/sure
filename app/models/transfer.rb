@@ -18,6 +18,13 @@ class Transfer < ApplicationRecord
   belongs_to :inflow_transaction, class_name: "Transaction"
   belongs_to :outflow_transaction, class_name: "Transaction"
 
+  # w2-transfers transfer-fees (decision 21): what the bank charged for the transfer, as
+  # ordinary expenses in the 'Fees' category on the source or destination account. The
+  # legs keep the principal. Deleting the transfer deletes its fees; rejecting it (these
+  # two are not a transfer) keeps them as plain expenses. The foreign key clears the link
+  # if a transfer row goes any other way.
+  has_many :fee_transactions, class_name: "Transaction", foreign_key: :fee_transfer_id, inverse_of: :fee_transfer
+
   aasm column: :status, whiny_persistence: true do
     state :pending, initial: true
     state :confirmed
@@ -45,6 +52,11 @@ class Transfer < ApplicationRecord
   after_create :apply_transaction_kinds, if: :confirmed?
   after_create :clear_rejection
   before_destroy :reset_transaction_kinds
+  before_destroy :destroy_fee_entries
+  after_destroy_commit :sync_fee_accounts_later
+
+  FEE_SIDES = %w[source destination].freeze
+  FEES_CATEGORY_NAME = "Fees" # the default expense category of the same name (Category.default_categories)
 
   class << self
     # The one rule for the kind of the outflow leg. Every way of making a transfer (Creator,
@@ -74,8 +86,77 @@ class Transfer < ApplicationRecord
     Transfer.transaction do
       family&.lock_transfer_matching!
       RejectedTransfer.find_or_create_by!(inflow_transaction_id: inflow_transaction_id, outflow_transaction_id: outflow_transaction_id)
+      release_fees!
       destroy!
     end
+  end
+
+  # --- Fees (w2-transfers transfer-fees) ---
+
+  class << self
+    # The family's 'Fees' expense category, created on first use
+    def fees_category_for(family)
+      family.categories.find_by(name: FEES_CATEGORY_NAME) ||
+        family.categories.create!(name: FEES_CATEGORY_NAME, color: "#6b7280", lucide_icon: "receipt", classification: "expense")
+    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
+      family.categories.find_by!(name: FEES_CATEGORY_NAME)
+    end
+  end
+
+  # The account a side's fee is charged to: the source (from) or the destination (to)
+  def fee_account_for(side)
+    case side.to_s
+    when "source" then from_account
+    when "destination" then to_account
+    else raise ArgumentError, "unknown fee side #{side.inspect}"
+    end
+  end
+
+  def fee_transactions_for(side)
+    account = fee_account_for(side)
+    return [] unless account && persisted?
+
+    fee_transactions.includes(:entry).select { |txn| txn.entry&.account_id == account.id }.sort_by { |txn| txn.entry.created_at }
+  end
+
+  # The total fee on one side, in that account's currency, or nil when there is none
+  def fee_money_for(side)
+    fees = fee_transactions_for(side)
+    return if fees.empty?
+
+    fees.sum(Money.new(0, fee_account_for(side).currency)) { |txn| txn.entry.amount_money }
+  end
+
+  # Sets one side's fee to amount (in that account's currency). Blank or zero removes it;
+  # an existing fee keeps its category and notes and takes the new amount. Returns true
+  # when anything changed; the caller syncs the account.
+  def set_fee!(side:, amount:)
+    account = fee_account_for(side)
+    amount = amount.presence && amount.to_d.abs
+    fees = fee_transactions_for(side)
+
+    changed = Transfer.transaction do
+      if amount.nil? || amount.zero?
+        fees.each { |txn| txn.entry.destroy! }
+        fees.any?
+      elsif (fee = fees.first)
+        fee.entry.update!(amount: amount)
+        fee.entry.saved_change_to_amount?
+      else
+        account.entries.create!(
+          amount: amount,
+          currency: account.currency,
+          date: side.to_s == "source" ? outflow_transaction.entry.date : inflow_transaction.entry.date,
+          name: I18n.t("transfer.fee_name", transfer: name),
+          user_modified: true,
+          entryable: Transaction.new(category: self.class.fees_category_for(family), fee_transfer: self)
+        )
+        true
+      end
+    end
+
+    fee_transactions.reset
+    changed
   end
 
   def family
@@ -140,6 +221,25 @@ class Transfer < ApplicationRecord
   end
 
   private
+    # Rejecting keeps the fees as plain expenses: unlink them before the transfer goes, so
+    # destroy_fee_entries finds none
+    def release_fees!
+      return unless persisted?
+
+      Transaction.where(fee_transfer_id: id).update_all(fee_transfer_id: nil, updated_at: Time.current)
+      fee_transactions.reset
+    end
+
+    def destroy_fee_entries
+      entries = Entry.where(entryable_type: "Transaction", entryable_id: Transaction.where(fee_transfer_id: id).select(:id)).includes(:account).to_a
+      @fee_accounts_to_sync = entries.map(&:account).uniq
+      entries.each(&:destroy!)
+    end
+
+    def sync_fee_accounts_later
+      Array(@fee_accounts_to_sync).each(&:sync_later)
+    end
+
     def apply_transaction_kinds
       inflow_transaction.update!(kind: "funds_movement")
 

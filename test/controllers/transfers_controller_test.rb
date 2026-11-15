@@ -213,4 +213,56 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_select "[data-testid=exchange-rate-tabs]"
   end
+
+  # w2-transfers transfer-fees
+  test "creates a transfer with fees" do
+    family = users(:family_admin).family
+    savings = family.accounts.create!(name: "Fee savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    assert_difference -> { Entry.count } => 3 do
+      post transfers_url, params: {
+        transfer: { from_account_id: accounts(:depository).id, to_account_id: savings.id, date: Date.current, amount: 100, source_fee: "2.5" }
+      }
+    end
+
+    transfer = Transfer.order(:created_at).last
+    assert_equal Money.new(2.5, "USD"), transfer.fee_money_for(:source)
+  end
+
+  test "the drawer lists the fees and edits them" do
+    family = users(:family_admin).family
+    savings = family.accounts.create!(name: "Fee savings", balance: 0, currency: "USD", accountable: Depository.new)
+    transfer = Transfer::Creator.new(
+      family: family, source_account_id: accounts(:depository).id, destination_account_id: savings.id,
+      date: Date.current, amount: 100, source_fee: "2"
+    ).create
+
+    get transfer_url(transfer)
+    assert_response :success
+    assert_select "##{ActionView::RecordIdentifier.dom_id(transfer, :fees)}"
+    assert_select "a", text: /Fee: Transfer to Fee savings/
+
+    patch transfer_url(transfer), params: { transfer: { source_fee: "3", destination_fee: "1" } }, as: :turbo_stream
+    assert_response :success
+    assert_equal Money.new(3, "USD"), transfer.reload.fee_money_for(:source)
+    assert_equal Money.new(1, "USD"), transfer.fee_money_for(:destination)
+
+    patch transfer_url(transfer), params: { transfer: { source_fee: "", destination_fee: "1" } }
+    assert_nil transfer.reload.fee_money_for(:source)
+  end
+
+  test "removing a transfer keeps its fees" do
+    family = users(:family_admin).family
+    savings = family.accounts.create!(name: "Fee savings", balance: 0, currency: "USD", accountable: Depository.new)
+    transfer = Transfer::Creator.new(
+      family: family, source_account_id: accounts(:depository).id, destination_account_id: savings.id,
+      date: Date.current, amount: 100, source_fee: "2"
+    ).create
+    fee = transfer.fee_transactions.sole
+
+    delete transfer_url(transfer)
+
+    assert Transaction.exists?(fee.id)
+    assert_nil fee.reload.fee_transfer_id
+  end
 end

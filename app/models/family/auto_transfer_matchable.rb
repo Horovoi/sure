@@ -137,6 +137,8 @@ module Family::AutoTransferMatchable
         .where(rejected_transfers: { id: nil })
         .where(inflow_candidates: { excluded: false }, outflow_candidates: { excluded: false })
         .where(inflow_txns: { kind: "standard" }, outflow_txns: { kind: "standard" })
+        # A transfer's linked fee is an expense of that transfer, never a leg of another
+        .where(inflow_txns: { fee_transfer_id: nil }, outflow_txns: { fee_transfer_id: nil })
         .where("NOT #{pending_condition('inflow_txns')} AND NOT #{pending_condition('outflow_txns')}")
     end
 

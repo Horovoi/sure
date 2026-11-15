@@ -495,4 +495,22 @@ class BudgetTest < ActiveSupport::TestCase
     assert budget.persisted?
     assert_not budget.initialized?
   end
+
+  # w2-transfers transfer-fees
+  test "a transfer fee counts as spending in the budget's Fees category" do
+    checking = @family.accounts.create!(name: "Checking", currency: @family.currency, balance: 1_000, accountable: Depository.new)
+    savings = @family.accounts.create!(name: "Savings", currency: @family.currency, balance: 0, accountable: Depository.new)
+    fees_category = Transfer.fees_category_for(@family)
+
+    Transfer::Creator.new(
+      family: @family, source_account_id: checking.id, destination_account_id: savings.id,
+      date: Date.current, amount: 500, source_fee: "12"
+    ).create
+
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_category = budget.budget_categories.find_by!(category: fees_category)
+
+    assert_equal 12, budget.budget_category_actual_spending(budget_category)
+    assert_equal 12, budget.actual_spending
+  end
 end

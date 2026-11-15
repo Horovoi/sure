@@ -36,6 +36,15 @@
           converted_name: "transfer[destination_amount]",
           rate_value: params.dig(:transfer, :exchange_rate),
           converted_value: params.dig(:transfer, :destination_amount) %>
+
+    <%# w2-transfers transfer-fees: each in its own account's currency, booked as expenses in Fees %>
+    <div class="grid grid-cols-2 gap-2">
+      <%= f.money_field :source_fee, label: t(".source_fee"), min: 0, hide_currency: true, hide_symbol: true, step: "any", placeholder: "0",
+            value: UserDecimal.parse(params.dig(:transfer, :source_fee)) %>
+      <%= f.money_field :destination_fee, label: t(".destination_fee"), min: 0, hide_currency: true, hide_symbol: true, step: "any", placeholder: "0",
+            value: UserDecimal.parse(params.dig(:transfer, :destination_fee)) %>
+    </div>
+    <p class="text-xs text-secondary px-1"><%= t(".fees_hint") %></p>
   </section>
 
   <section>

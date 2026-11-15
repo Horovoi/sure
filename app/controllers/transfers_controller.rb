@@ -36,7 +36,9 @@ class TransfersController < ApplicationController
       date: date,
       amount: transfer_params[:amount].to_d,
       exchange_rate: transfer_params[:exchange_rate].presence,
-      destination_amount: transfer_params[:destination_amount].presence
+      destination_amount: transfer_params[:destination_amount].presence,
+      source_fee: transfer_params[:source_fee].presence,
+      destination_fee: transfer_params[:destination_fee].presence
     ).create
 
     if @transfer.persisted?
@@ -79,7 +81,7 @@ class TransfersController < ApplicationController
     end
 
     def transfer_params
-      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate, :destination_amount ])
+      params.expect(transfer: [ :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate, :destination_amount, :source_fee, :destination_fee ])
     end
 
     # Parsing raises on a bad value, which would be a 500; a blank or bad date is nil.
@@ -93,7 +95,7 @@ class TransfersController < ApplicationController
     end
 
     def transfer_update_params
-      params.expect(transfer: [ :notes, :status, :category_id ])
+      params.expect(transfer: [ :notes, :status, :category_id, :source_fee, :destination_fee ])
     end
 
     def update_transfer_status
@@ -113,5 +115,24 @@ class TransfersController < ApplicationController
       end
 
       @transfer.update!(notes: transfer_update_params[:notes]) if transfer_update_params.key?(:notes)
+      update_transfer_fees
+    end
+
+    # w2-transfers transfer-fees: the drawer's fee fields. A blank field removes that
+    # side's fee; a value that is not an amount is left alone.
+    def update_transfer_fees
+      Transfer::FEE_SIDES.each do |side|
+        key = :"#{side}_fee"
+        next unless transfer_update_params.key?(key)
+
+        raw = transfer_update_params[key]
+        amount = UserDecimal.parse(raw)
+        next if raw.present? && (amount.nil? || amount.negative?)
+
+        next unless @transfer.set_fee!(side: side, amount: amount)
+
+        @fees_changed = true
+        @transfer.fee_account_for(side).sync_later
+      end
     end
 end

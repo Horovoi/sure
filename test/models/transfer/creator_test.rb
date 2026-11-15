@@ -330,4 +330,68 @@ class Transfer::CreatorTest < ActiveSupport::TestCase
     assert_not transfer.persisted?
     assert_includes transfer.errors.full_messages.to_sentence, "Amount must be greater than 0"
   end
+
+  # w2-transfers transfer-fees
+  test "fees on each side become linked expenses in Fees and the legs keep the principal" do
+    uah_account = @family.accounts.create!(name: "UAH card", balance: 0, currency: "UAH", accountable: Depository.new)
+
+    transfer = nil
+    assert_difference -> { Entry.count } => 4, -> { Transfer.count } => 1 do
+      transfer = Transfer::Creator.new(
+        family: @family,
+        source_account_id: uah_account.id,
+        destination_account_id: @source_account.id,
+        date: @date,
+        amount: 4_150,
+        destination_amount: "100",
+        source_fee: "41,50",
+        destination_fee: "1.5"
+      ).create
+    end
+
+    assert transfer.persisted?
+    assert_equal 4_150, transfer.outflow_transaction.entry.amount
+    assert_equal(-100, transfer.inflow_transaction.entry.amount)
+
+    source_fee = transfer.fee_transactions_for(:source).sole
+    assert_equal uah_account, source_fee.entry.account
+    assert_equal BigDecimal("41.5"), source_fee.entry.amount
+    assert_equal "UAH", source_fee.entry.currency
+    assert_equal "Fees", source_fee.category.name
+    assert_equal "standard", source_fee.kind
+    assert_equal @date, source_fee.entry.date
+
+    destination_fee = transfer.fee_transactions_for(:destination).sole
+    assert_equal @source_account, destination_fee.entry.account
+    assert_equal BigDecimal("1.5"), destination_fee.entry.amount
+    assert_equal "USD", destination_fee.entry.currency
+    assert_equal source_fee.category, destination_fee.category
+  end
+
+  test "a negative or unreadable fee is a validation error and nothing is saved" do
+    other_depository = @family.accounts.create!(name: "Savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    [ { source_fee: "-1" }, { destination_fee: "abc" } ].each do |options|
+      transfer = nil
+      assert_no_difference [ "Transfer.count", "Entry.count" ] do
+        transfer = Transfer::Creator.new(
+          family: @family, source_account_id: @source_account.id, destination_account_id: other_depository.id,
+          date: @date, amount: 100, **options
+        ).create
+      end
+
+      assert_includes transfer.errors.full_messages.to_sentence, "Fees must be numbers", options.inspect
+    end
+  end
+
+  test "a zero fee creates no fee expense" do
+    other_depository = @family.accounts.create!(name: "Savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    assert_difference -> { Entry.count } => 2 do
+      Transfer::Creator.new(
+        family: @family, source_account_id: @source_account.id, destination_account_id: other_depository.id,
+        date: @date, amount: 100, source_fee: "0", destination_fee: ""
+      ).create
+    end
+  end
 end

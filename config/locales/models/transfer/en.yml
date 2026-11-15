@@ -15,6 +15,7 @@ en:
               exchange_rate_and_destination_amount: Enter either an exchange rate
                 or a received amount, not both
               invalid_amount: Amount must be greater than 0
+              invalid_fee: Fees must be numbers of 0 or more
               invalid_exchange_rate: Exchange rate must be a number greater than 0
               invalid_destination_amount: Received amount must be a number greater
                 than 0
@@ -26,5 +27,6 @@ en:
               outflow_cannot_be_in_multiple_transfers: Outflow transaction cannot
                 be part of multiple transfers
   transfer:
+    fee_name: "Fee: %{transfer}"
     name: Transfer to %{to_account}
     payment_name: Payment to %{to_account}

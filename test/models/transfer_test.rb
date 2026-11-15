@@ -287,4 +287,74 @@ class TransferTest < ActiveSupport::TestCase
 
       Transfer.create!(inflow_transaction: inflow_entry.transaction, outflow_transaction: outflow_entry.transaction)
     end
+
+    # w2-transfers transfer-fees
+    def create_transfer_with_fee
+      family = accounts(:depository).family
+      savings = family.accounts.create!(name: "Fee savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+      Transfer::Creator.new(
+        family: family, source_account_id: accounts(:depository).id, destination_account_id: savings.id,
+        date: Date.current, amount: 100, source_fee: "2"
+      ).create
+    end
+
+    test "deleting a transfer leg deletes the transfer's fees" do
+      transfer = create_transfer_with_fee
+      fee_entry = transfer.fee_transactions.sole.entry
+
+      transfer.outflow_transaction.entry.destroy!
+
+      assert_not Transfer.exists?(transfer.id)
+      assert_not Entry.exists?(fee_entry.id)
+    end
+
+    test "destroying a transfer deletes its fees" do
+      transfer = create_transfer_with_fee
+      fee_entry = transfer.fee_transactions.sole.entry
+
+      transfer.destroy!
+
+      assert_not Entry.exists?(fee_entry.id)
+      assert Entry.exists?(transfer.outflow_transaction.entry.id), "the legs stay"
+    end
+
+    test "rejecting a transfer keeps its fees as plain expenses" do
+      transfer = create_transfer_with_fee
+      fee = transfer.fee_transactions.sole
+
+      transfer.reject!
+
+      fee.reload
+      assert_nil fee.fee_transfer_id
+      assert_equal "Fees", fee.category.name
+      assert_equal BigDecimal("2"), fee.entry.amount
+    end
+
+    test "set_fee! creates, changes and removes one side's fee" do
+      transfer = create_transfer_with_fee
+
+      assert transfer.set_fee!(side: :destination, amount: BigDecimal("3"))
+      assert_equal Money.new(3, "USD"), transfer.fee_money_for(:destination)
+
+      assert transfer.set_fee!(side: :destination, amount: BigDecimal("4"))
+      assert_equal Money.new(4, "USD"), transfer.fee_money_for(:destination)
+      assert_not transfer.set_fee!(side: :destination, amount: BigDecimal("4")), "no change"
+
+      assert transfer.set_fee!(side: :destination, amount: nil)
+      assert_nil transfer.fee_money_for(:destination)
+      assert_equal Money.new(2, "USD"), transfer.fee_money_for(:source)
+    end
+
+    test "auto-match never pairs a transfer fee" do
+      transfer = create_transfer_with_fee
+      fee = transfer.fee_transactions.sole
+      family = fee.entry.account.family
+      other = family.accounts.create!(name: "Fee match target", balance: 0, currency: "USD", accountable: Depository.new)
+      create_transaction(account: other, amount: -2, date: Date.current)
+
+      assert_no_difference -> { Transfer.where(outflow_transaction_id: fee.id).count } do
+        family.auto_match_transfers!
+      end
+    end
 end

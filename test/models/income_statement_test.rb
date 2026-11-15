@@ -499,4 +499,21 @@ class IncomeStatementTest < ActiveSupport::TestCase
 
     assert_equal 0, IncomeStatement.new(@family).avg_expense(interval: "month", category: @groceries_category)
   end
+
+  # w2-transfers transfer-fees
+  test "a transfer fee shows under Fees and the transfer itself is not spending" do
+    savings = @family.accounts.create!(name: "Savings", currency: @family.currency, balance: 0, accountable: Depository.new)
+
+    transfer = Transfer::Creator.new(
+      family: @family, source_account_id: @checking_account.id, destination_account_id: savings.id,
+      date: Date.current, amount: 500, source_fee: "15"
+    ).create
+    assert transfer.persisted?
+
+    expense_totals = IncomeStatement.new(@family).expense_totals(period: Period.last_30_days)
+    fees = expense_totals.category_totals.find { |ct| ct.category.name == "Fees" }
+
+    assert_equal 15, fees.total
+    assert_equal 200 + 300 + 400 + 15, expense_totals.total
+  end
 end

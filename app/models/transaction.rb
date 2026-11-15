@@ -4,6 +4,8 @@ class Transaction < ApplicationRecord
   belongs_to :category, optional: true
   belongs_to :merchant, optional: true
   belongs_to :recurring_transaction, optional: true
+  # w2-transfers transfer-fees: set on the expense a transfer's fee is booked as
+  belongs_to :fee_transfer, class_name: "Transfer", optional: true, inverse_of: :fee_transactions
 
   has_many :taggings, as: :taggable, dependent: :destroy
   has_many :tags, through: :taggings
