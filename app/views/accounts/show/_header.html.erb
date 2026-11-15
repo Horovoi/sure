@@ -27,6 +27,9 @@
           <% if subtitle.present? %>
             <p class="text-sm text-secondary"><%= subtitle %></p>
           <% end %>
+          <% if (cutover_text = provider_cutover_text(account)) %>
+            <p class="text-xs text-secondary whitespace-normal" data-testid="provider-cutover-text"><%= cutover_text %></p>
+          <% end %>
         </div>
       </div>
     </div>

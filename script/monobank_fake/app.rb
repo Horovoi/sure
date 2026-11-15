@@ -202,7 +202,7 @@ module MonobankFake
           elsif (match = STATEMENT_PATH.match(path)) then [ "statement", match ]
           end
         return json(404, "errorDescription" => "Not found") unless function
-        return json(405, "errorDescription" => "Method not allowed") unless request.get?
+        return json(405, "errorDescription" => "Method not allowed") unless request.request_method == "GET"
 
         entry = { "at" => now.to_f, "method" => request.request_method, "path" => path, "function" => function }
         if function == "statement"

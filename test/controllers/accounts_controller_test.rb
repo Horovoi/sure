@@ -31,6 +31,18 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
   test "should get show" do
     get account_url(@account)
     assert_response :success
+    assert_select "[data-testid='provider-cutover-text']", count: 0
+  end
+
+  test "show tells where the transactions of an account taken over at a cutover come from" do
+    account = accounts(:credit_card)
+    provider_account = lunchflow_items(:one).lunchflow_accounts.create!(name: "C", currency: account.currency, account_id: "cutover-show")
+    Account::ProviderLink.link!(account: account, provider_account: provider_account, cutover_date: Date.new(2026, 11, 14))
+
+    get account_url(account)
+
+    assert_response :success
+    assert_select "[data-testid='provider-cutover-text']", text: /come from Lunch Flow\. Earlier history is kept as you entered it\./
   end
 
   test "show accepts advanced account-page filters" do

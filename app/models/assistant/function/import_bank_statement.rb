@@ -98,6 +98,16 @@ class Assistant::Function::ImportBankStatement < Assistant::Function
       }
     end
 
+    # A bank connection writes this account's transactions; statement imports are refused
+    if account.linked?
+      return {
+        success: false,
+        error: "provider_linked",
+        message: Import.provider_linked_message(account),
+        available_accounts: available_accounts
+      }
+    end
+
     pdf_import.update!(account: account)
 
     extracted = if pdf_import.has_extracted_transactions?

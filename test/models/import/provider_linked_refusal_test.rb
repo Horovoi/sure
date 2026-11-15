@@ -83,6 +83,8 @@ class Import::ProviderLinkedRefusalTest < ActiveSupport::TestCase
     result = Assistant::Function::ImportBankStatement.new(users(:family_admin)).call("pdf_import_id" => pdf.id, "account_id" => @linked.id)
 
     assert_not result[:success]
+    assert_equal "provider_linked", result[:error]
+    assert_equal Import.provider_linked_message(@linked), result[:message]
     assert_nil pdf.reload.account_id
   end
 end
