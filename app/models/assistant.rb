@@ -60,7 +60,13 @@ class Assistant
         Assistant::Function::PreviewRule,
         Assistant::Function::CreateRule,
         Assistant::Function::UpdateRule,
-        Assistant::Function::ApplyRule
+        Assistant::Function::ApplyRule,
+
+        # Transfers between own accounts: candidates for a transaction, then match, review and unmatch
+        Assistant::Function::GetTransferMatchCandidates,
+        Assistant::Function::MatchTransfer,
+        Assistant::Function::ReviewTransfer,
+        Assistant::Function::UnmatchTransfer
       ]
     end
 
