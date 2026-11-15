@@ -176,6 +176,15 @@ class InvestmentStatement
     Money.new(rate ? money.amount * rate : 0, family.currency)
   end
 
+  # Like to_family_money, but nil when the currency has no stored rate into the family
+  # currency at all, so a caller can count what it left out
+  def to_family_money_or_nil(money)
+    return money if money.currency.iso_code == family.currency
+
+    rate = rate_to_family_currency(money.currency.iso_code)
+    rate && Money.new(money.amount * rate, family.currency)
+  end
+
   # Investment accounts
   def investment_accounts
     @investment_accounts ||= family.accounts.visible.where(accountable_type: %w[Investment Crypto])

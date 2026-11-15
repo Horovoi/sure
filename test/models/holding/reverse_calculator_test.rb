@@ -158,6 +158,50 @@ class Holding::ReverseCalculatorTest < ActiveSupport::TestCase
     end
   end
 
+
+  test "USD-priced security in a UAH account converts each purchase at its own date" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    account = families(:empty).accounts.create!(name: "UAH", balance: 0, cash_balance: 0, currency: "UAH", accountable: Investment.new)
+    aapl = Security.create!(ticker: "AAPL", name: "Apple")
+
+    first_day = 3.days.ago.to_date
+    second_day = 2.days.ago.to_date
+    first_day.upto(Date.current) { |date| Security::Price.create!(security: aapl, date: date, price: 100, currency: "USD") }
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: first_day, rate: 40)
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: second_day, rate: 42)
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: Date.current, rate: 45)
+    account.holdings.create!(security: aapl, date: Date.current, qty: 20, price: 4_500, amount: 90_000, currency: "UAH")
+
+    create_trade(aapl, qty: 10, date: first_day, price: 100, currency: "USD", account: account)
+    create_trade(aapl, qty: 10, date: second_day, price: 100, currency: "USD", account: account)
+
+    snapshot = OpenStruct.new(to_h: { aapl.id => 20 })
+    calculated = Holding::ReverseCalculator.new(account, portfolio_snapshot: snapshot).calculate
+    by_date = calculated.index_by(&:date)
+
+    assert_equal 4_000, by_date[first_day].cost_basis
+    assert_equal 4_100, by_date[1.day.ago.to_date].cost_basis
+    # A historical price converts at its own date
+    assert_equal 84_000, by_date[second_day].amount
+  end
+
+  test "a purchase with no exchange rate leaves the cost basis unknown" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    account = families(:empty).accounts.create!(name: "UAH", balance: 0, cash_balance: 0, currency: "UAH", accountable: Investment.new)
+    aapl = Security.create!(ticker: "AAPL", name: "Apple")
+
+    trade_day = 2.days.ago.to_date
+    trade_day.upto(Date.current) { |date| Security::Price.create!(security: aapl, date: date, price: 100, currency: "USD") }
+    create_trade(aapl, qty: 10, date: trade_day, price: 100, currency: "USD", account: account)
+
+    snapshot = OpenStruct.new(to_h: { aapl.id => 10 })
+    calculated = Holding::ReverseCalculator.new(account, portfolio_snapshot: snapshot).calculate
+
+    after_trade = calculated.select { |h| h.date >= trade_day }
+    assert after_trade.any?
+    assert after_trade.all? { |h| h.cost_basis.nil? }
+  end
+
   private
     def assert_holdings(expected, calculated)
       expected.each do |expected_entry|

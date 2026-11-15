@@ -352,4 +352,50 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "[data-testid=missing-exchange-rates]", count: 0
     assert_select "[data-testid=stale-exchange-rates]", count: 0
   end
+
+  # --- Investment performance across currencies (w1-fx securities-fx) ---
+
+  # A UAH position sold for USD: the proceeds convert into UAH at the sale date,
+  # and the gain into the family currency at the same date. 2 x 110 USD x 42 =
+  # 9 240 UAH, less 8 000 UAH of basis, is 1 240 UAH, which is 31.00 at 0.025.
+  # Re-labelled instead of converted, the line would read 1,240.00.
+  test "investment performance includes a foreign-currency sale converted at its own date" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    date = Date.current
+    currency = @family.currency
+    account = @family.accounts.create!(name: "UAH Brokerage", balance: 10_000, currency: "UAH", accountable: Investment.new)
+    security = Security.create!(ticker: "UXA#{SecureRandom.hex(3)}", name: "Listed in USD")
+
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: date, rate: 42)
+    ExchangeRate.create!(from_currency: "UAH", to_currency: currency, date: date, rate: 0.025)
+    account.holdings.create!(security: security, date: date - 1.day, qty: 10, price: 4_000,
+                             amount: 40_000, currency: "UAH", cost_basis: 4_000)
+    create_trade(security, account: account, qty: -2, date: date, price: 110, currency: "USD")
+
+    get reports_path
+    assert_response :ok
+
+    line = css_select("[data-testid='realized-gain-line']").map(&:text).find { |text| text.include?(security.ticker) }
+    assert line, "the sale must be listed"
+    assert_match "31.00", line
+    assert_no_match(/1,240\.00/, line)
+    assert_select "[data-testid=unconverted-gains-note]", count: 0
+  end
+
+  test "investment performance counts a sale with no exchange rate as left out" do
+    ExchangeRate.stubs(:provider).returns(nil)
+    date = Date.current
+    account = @family.accounts.create!(name: "UAH Brokerage", balance: 10_000, currency: "UAH", accountable: Investment.new)
+    security = Security.create!(ticker: "PLX#{SecureRandom.hex(3)}", name: "Listed in PLN")
+
+    ExchangeRate.create!(from_currency: "UAH", to_currency: @family.currency, date: date, rate: 0.025)
+    account.holdings.create!(security: security, date: date - 1.day, qty: 10, price: 4_000,
+                             amount: 40_000, currency: "UAH", cost_basis: 4_000)
+    create_trade(security, account: account, qty: -2, date: date, price: 400, currency: "PLN")
+
+    get reports_path
+    assert_response :ok
+
+    assert_select "[data-testid=unconverted-gains-note]", text: /1 gain is not included/
+  end
 end

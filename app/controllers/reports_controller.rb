@@ -646,6 +646,10 @@ class ReportsController < ApplicationController
         trade.instance_variable_set(:@preloaded_holdings, holdings_by_account[trade.entry.account_id] || [])
       end
 
+      # The day's rates the proceeds conversion needs, in one query rather than one per
+      # foreign sale
+      Trade.preload_exchange_rates(sell_trades)
+
       trades_by_treatment = sell_trades.group_by { |t| t.entry.account.tax_treatment || :taxable }
 
       # Build metrics per treatment
@@ -653,18 +657,52 @@ class ReportsController < ApplicationController
         holdings = holdings_by_treatment[treatment] || []
         trades = trades_by_treatment[treatment] || []
 
-        # Sum unrealized gains from holdings (only those with known cost basis)
-        # Holdings and trades are in their own currency; convert before adding them up
+        # Holdings and sales left out of the totals for want of an exchange rate
+        unconverted = 0
+
+        # Unrealized gains mark holdings to market, so they convert at today's rate, as the
+        # rest of the card does. Only holdings with a known cost basis have a gain.
+        unrealized_by_holding = {}
         unrealized = holdings.sum do |h|
           trend = h.trend
-          trend ? investment_statement.to_family_money(trend.value).amount : 0
+          next 0 unless trend
+
+          converted = investment_statement.to_family_money_or_nil(trend.value)
+          if converted.nil?
+            unconverted += 1
+            next 0
+          end
+
+          unrealized_by_holding[h.id] = converted
+          converted.amount
         end
 
-        # Sum realized gains from sell trades
-        realized = trades.sum do |t|
+        # Realized gains are locked at the sale, so each converts at its own date. The gain
+        # is in the currency the position's basis is carried in (Trade#realized_gain_loss
+        # converts the proceeds into it first), so it converts from that currency.
+        realized_by_trade = trades.each_with_object({}) do |t, memo|
           gain = t.realized_gain_loss
-          gain ? investment_statement.to_family_money(gain.value).amount : 0
+
+          if gain.nil?
+            # A sale with no rate between its own two currencies is left out and counted;
+            # one with no cost basis never had a figure
+            unconverted += 1 if t.realized_gain_unconvertible?
+            next
+          end
+
+          converted = ExchangeRate.convert_or_leave_out(
+            gain.value, to: currency, date: t.entry.date, source: "ReportsController#gains_by_tax_treatment", family: Current.family
+          )
+
+          if converted.nil?
+            unconverted += 1
+            next
+          end
+
+          memo[t.id] = converted
         end
+
+        realized = realized_by_trade.values.sum(BigDecimal("0"), &:amount)
 
         # Only include treatment groups that have some activity
         next if holdings.empty? && trades.empty?
@@ -674,6 +712,11 @@ class ReportsController < ApplicationController
           sell_trades: trades,
           unrealized_gain: Money.new(unrealized, currency),
           realized_gain: Money.new(realized, currency),
+          # Per-line figures in family currency, so the lines under the card and its totals
+          # are the same arithmetic. A line with no rate has no entry and says so.
+          realized_gain_by_trade: realized_by_trade,
+          unrealized_gain_by_holding: unrealized_by_holding,
+          unconverted_count: unconverted,
           total_gain: Money.new(unrealized + realized, currency)
         }
       end

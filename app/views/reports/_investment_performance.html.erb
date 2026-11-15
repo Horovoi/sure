@@ -87,7 +87,7 @@
 
         <div class="flex flex-wrap gap-4">
           <% investment_metrics[:gains_by_tax_treatment].each do |treatment, data| %>
-            <div class="bg-container-inset rounded-lg p-4 space-y-3 flex-1 min-w-64">
+            <div class="bg-container-inset rounded-lg p-4 space-y-3 flex-1 min-w-64" data-testid="tax-treatment-gains">
               <div class="flex items-center justify-between">
                 <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium <%= tax_treatment_badge_classes(treatment) %>" title="<%= t("accounts.tax_treatment_descriptions.#{treatment}") %>">
                   <%= t("accounts.tax_treatments.#{treatment}") %>
@@ -108,6 +108,13 @@
                 </div>
               </div>
 
+              <% if data[:unconverted_count].to_i > 0 %>
+                <p class="text-xs text-secondary flex items-center gap-1" data-testid="unconverted-gains-note">
+                  <%= icon("info", size: "sm") %>
+                  <%= t("reports.investment_performance.unconverted_note", count: data[:unconverted_count], currency: Current.family.currency) %>
+                </p>
+              <% end %>
+
               <% if treatment == :taxable && data[:realized_gain].amount > 0 %>
                 <p class="text-xs text-warning flex items-center gap-1">
                   <%= icon("alert-triangle", size: "sm") %>
@@ -127,10 +134,12 @@
                     <div class="space-y-1">
                       <p class="text-secondary font-medium"><%= t("reports.investment_performance.holdings") %></p>
                       <% data[:holdings].first(5).each do |holding| %>
-                        <div class="flex justify-between pl-2">
+                        <%# Converted in the controller, so the line and the card's total are the same figure %>
+                        <% gain = data[:unrealized_gain_by_holding][holding.id] %>
+                        <div class="flex justify-between pl-2" data-testid="unrealized-gain-line">
                           <span class="text-primary"><%= holding.ticker %></span>
-                          <span class="<%= holding.trend ? "" : "text-secondary" %>" style="<%= holding.trend ? "color: #{holding.trend.color}" : "" %>">
-                            <%= holding.trend ? format_money(holding.trend.value) : t("reports.investment_performance.no_data") %>
+                          <span class="<%= gain ? "" : "text-secondary" %>" style="<%= gain ? "color: #{holding.trend.color}" : "" %>">
+                            <%= gain ? format_money(gain) : t("reports.investment_performance.no_data") %>
                           </span>
                         </div>
                       <% end %>
@@ -144,11 +153,13 @@
                     <div class="space-y-1">
                       <p class="text-secondary font-medium"><%= t("reports.investment_performance.sell_trades") %></p>
                       <% data[:sell_trades].first(5).each do |trade| %>
+                        <%# Converted in the controller at the sale's own date: gain.value is in the currency the position is held in, and labelling it family currency here reported a USD figure as UAH %>
                         <% gain = trade.realized_gain_loss %>
-                        <div class="flex justify-between pl-2">
+                        <% amount = data[:realized_gain_by_trade][trade.id] %>
+                        <div class="flex justify-between pl-2" data-testid="realized-gain-line">
                           <span class="text-primary"><%= trade.security.ticker %></span>
-                          <span class="<%= gain ? "" : "text-secondary" %>" style="<%= gain ? "color: #{gain.color}" : "" %>">
-                            <%= gain ? format_money(Money.new(gain.value, Current.family.currency)) : t("reports.investment_performance.no_data") %>
+                          <span class="<%= amount ? "" : "text-secondary" %>" style="<%= amount ? "color: #{gain.color}" : "" %>">
+                            <%= amount ? format_money(amount) : t("reports.investment_performance.no_data") %>
                           </span>
                         </div>
                       <% end %>

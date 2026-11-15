@@ -216,4 +216,95 @@ class Account::MarketDataImporterTest < ActiveSupport::TestCase
     # No new rates should be added due to error
     assert_equal before, after
   end
+
+  test "imports the USD/UAH pair for a USD-priced holding in a UAH account" do
+    family = Family.create!(name: "Shevchenko", currency: "UAH")
+    account = family.accounts.create!(name: "Brokerage", currency: "UAH", balance: 0, accountable: Investment.new)
+    security = Security.create!(ticker: "AAPL", exchange_operating_mic: "XNAS")
+
+    # Securities are shared across families; prices older than this account's first
+    # trade must not pull the exchange rate start date back
+    Security::Price.create!(security: security, date: 2.years.ago.to_date, price: 90, currency: "USD")
+
+    trade_date = 10.days.ago.to_date
+    trade = Trade.new(security: security, qty: 1, price: 4_100, currency: "UAH", investment_activity_label: "Buy")
+    account.entries.create!(name: "Buy AAPL", date: trade_date, amount: 4_100, currency: "UAH", entryable: trade)
+
+    # Prices are imported before exchange rates, so a first sync already knows the USD price currency
+    fetch_sequence = sequence("fetch")
+
+    @provider.expects(:fetch_security_prices)
+             .with(symbol: security.ticker, exchange_operating_mic: security.exchange_operating_mic, start_date: anything, end_date: anything)
+             .in_sequence(fetch_sequence)
+             .returns(provider_success_response([
+               OpenStruct.new(security: security, date: trade_date, price: 110, currency: "USD")
+             ]))
+
+    @provider.stubs(:fetch_security_info).returns(provider_success_response(OpenStruct.new(name: "Apple", logo_url: nil)))
+
+    @provider.expects(:fetch_exchange_rates)
+             .with(has_entries(from: "USD", to: "UAH"))
+             .once
+             .in_sequence(fetch_sequence)
+             .returns(provider_success_response([
+               OpenStruct.new(from: "USD", to: "UAH", date: trade_date, rate: 41.5)
+             ]))
+
+    Account::MarketDataImporter.new(account).import_all
+
+    assert ExchangeRate.where(from_currency: "USD", to_currency: "UAH", date: trade_date).exists?
+  end
+
+  test "ignores price currencies that only occur before the account needs prices" do
+    family = Family.create!(name: "Smith", currency: "USD")
+    account = family.accounts.create!(name: "Brokerage", currency: "USD", balance: 0, accountable: Investment.new)
+
+    security = Security.create!(ticker: "SHEL", exchange_operating_mic: "XLON")
+    trade_date = 10.days.ago.to_date
+    trade = Trade.new(security: security, qty: 1, price: 100, currency: "USD", investment_activity_label: "Buy")
+    account.entries.create!(name: "Buy SHEL", date: trade_date, amount: 100, currency: "USD", entryable: trade)
+
+    # Older GBP prices from before this account traded the security, then USD prices
+    Security::Price.create!(security: security, date: 2.years.ago.to_date, price: 20, currency: "GBP")
+    Security::Price.create!(security: security, date: trade_date, price: 100, currency: "USD")
+
+    @provider.expects(:fetch_exchange_rates).never
+
+    Account::MarketDataImporter.new(account).import_exchange_rates
+  end
+
+  test "does not fetch exchange rates for security prices in the account currency" do
+    family = Family.create!(name: "Smith", currency: "USD")
+    account = family.accounts.create!(name: "Brokerage", currency: "USD", balance: 0, accountable: Investment.new)
+
+    security = Security.create!(ticker: "AAPL", exchange_operating_mic: "XNAS")
+    trade = Trade.new(security: security, qty: 1, price: 100, currency: "USD", investment_activity_label: "Buy")
+    account.entries.create!(name: "Buy AAPL", date: 10.days.ago.to_date, amount: 100, currency: "USD", entryable: trade)
+
+    Security::Price.create!(security: security, date: 10.days.ago.to_date, price: 100, currency: "USD")
+
+    @provider.expects(:fetch_exchange_rates).never
+
+    Account::MarketDataImporter.new(account).import_exchange_rates
+  end
+
+  test "a failed pair does not stop the other pairs and is logged" do
+    family = Family.create!(name: "Shevchenko", currency: "UAH")
+    account = family.accounts.create!(name: "Brokerage", currency: "UAH", balance: 0, accountable: Investment.new)
+    trade_date = 10.days.ago.to_date
+
+    { "AAPL" => "USD", "SAP" => "EUR" }.each do |ticker, price_currency|
+      security = Security.create!(ticker: ticker, exchange_operating_mic: "XNAS")
+      Security::Price.create!(security: security, date: trade_date, price: 100, currency: price_currency)
+      trade = Trade.new(security: security, qty: 1, price: 4_000, currency: "UAH", investment_activity_label: "Buy")
+      account.entries.create!(name: "Buy #{ticker}", date: trade_date, amount: 4_000, currency: "UAH", entryable: trade)
+    end
+
+    ExchangeRate.expects(:import_provider_rates).with(has_entries(from: "USD", to: "UAH")).raises(StandardError, "rate limit")
+    ExchangeRate.expects(:import_provider_rates).with(has_entries(from: "EUR", to: "UAH")).returns(10)
+
+    assert_difference -> { DebugLogEntry.where(category: "exchange_rates", source: "Account::MarketDataImporter", level: "error").count }, 1 do
+      assert_nothing_raised { Account::MarketDataImporter.new(account).import_exchange_rates }
+    end
+  end
 end
