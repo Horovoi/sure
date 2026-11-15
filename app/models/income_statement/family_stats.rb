@@ -50,6 +50,7 @@ class IncomeStatement::FamilyStats
           JOIN accounts a ON a.id = ae.account_id
           WHERE a.family_id = :family_id
             AND #{Account.visible_status_sql("a")}
+            AND #{Account.included_in_reports_sql("a")}
             AND t.kind NOT IN (#{Transaction.budget_excluded_kinds_sql})
             AND ae.excluded = false
             AND (

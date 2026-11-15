@@ -45,6 +45,9 @@ class Family < ApplicationRecord
   # Savings goals (w2-goals)
   has_many :goals, dependent: :destroy
 
+  # Insights feed (w3-reports): template insights written nightly by GenerateInsightsJob
+  has_many :insights, dependent: :delete_all
+
   validates :locale, inclusion: { in: I18n.available_locales.map(&:to_s) }
   validates :date_format, inclusion: { in: DATE_FORMATS.map(&:last) }
   validates :fiscal_month_start_day, inclusion: { in: 1..31 }, allow_nil: true

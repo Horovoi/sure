@@ -135,7 +135,8 @@ module Assistant::Configurable
           CONTEXT
         else
           lines = accounts.map do |account|
-            "- #{account.name}: #{account.accountable_type}, #{account.classification}, #{account.balance_money.format}"
+            excluded_note = account.exclude_from_reports? ? ", excluded from reports" : ""
+            "- #{account.name}: #{account.accountable_type}, #{account.classification}, #{account.balance_money.format}#{excluded_note}"
           end
 
           <<~CONTEXT

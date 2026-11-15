@@ -1,0 +1,50 @@
+<%# locals: (budget:) %>
+
+<%# w3-reports goals-free-cash. Beside the plan, never inside it: the figures above
+    answer "what did I plan to spend", these answer "what do I actually have". Hand-built
+    rows, not DS::DetailRow: the earmark is secondary and the free figure is the answer. %>
+<section id="budget_available_cash" class="w-full bg-container rounded-xl shadow-border-xs p-4">
+  <div class="flex items-start justify-between gap-3 mb-3">
+    <div class="min-w-0">
+      <h2 class="text-sm font-medium text-primary"><%= t("budgets.available_cash.heading") %></h2>
+      <p class="text-xs text-secondary mt-0.5"><%= t("budgets.available_cash.subtitle") %></p>
+    </div>
+    <%= render DS::Link.new(
+          text: t("budgets.available_cash.goals_link"),
+          href: goals_path,
+          variant: "outline",
+          size: "sm"
+        ) %>
+  </div>
+
+  <dl class="space-y-2">
+    <div class="flex items-baseline justify-between gap-3">
+      <dt class="text-sm text-secondary"><%= t("budgets.available_cash.available") %></dt>
+      <dd class="text-sm text-primary tabular-nums privacy-sensitive" data-testid="budget-available-cash">
+        <%= format_money budget.available_cash_money %>
+      </dd>
+    </div>
+
+    <div class="flex items-baseline justify-between gap-3 border-b border-subdued pb-2">
+      <dt class="text-sm text-secondary"><%= t("budgets.available_cash.earmarked") %></dt>
+      <dd class="text-sm text-secondary tabular-nums privacy-sensitive" data-testid="budget-earmarked-for-goals">
+        &minus;<%= format_money budget.earmarked_for_goals_money %>
+      </dd>
+    </div>
+
+    <div class="flex items-baseline justify-between gap-3 -mx-2 px-2 py-2 rounded-lg bg-surface-inset">
+      <dt class="text-sm font-medium text-primary"><%= t("budgets.available_cash.free") %></dt>
+      <dd class="text-2xl font-medium text-primary tabular-nums privacy-sensitive" data-testid="budget-free-cash">
+        <%= format_money budget.free_cash_money %>
+      </dd>
+    </div>
+  </dl>
+
+  <% missing = budget.missing_cash_currencies %>
+  <% if missing.any? %>
+    <div class="mt-3">
+      <%= render DS::Alert.new(variant: :warning,
+            message: t("budgets.available_cash.currency_warning", count: missing.size, currencies: missing.to_sentence, currency: budget.currency)) %>
+    </div>
+  <% end %>
+</section>

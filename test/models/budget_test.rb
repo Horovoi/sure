@@ -513,4 +513,125 @@ class BudgetTest < ActiveSupport::TestCase
     assert_equal 12, budget.budget_category_actual_spending(budget_category)
     assert_equal 12, budget.actual_spending
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "spending in an account excluded from reports does not count in the budget" do
+    groceries = budget_test_category("Groceries")
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget_test_entry(category: groceries, amount: 120)
+    excluded = @family.accounts.create!(name: "Excluded", currency: "USD", balance: 0, accountable: Depository.new, exclude_from_reports: true)
+    excluded_entry = Entry.create!(account: excluded, entryable: Transaction.new(category: groceries), date: Date.current, name: "Elsewhere", amount: 900, currency: "USD")
+
+    budget = Budget.find(budget.id)
+
+    assert_equal 120, budget.actual_spending
+    assert_not_includes budget.transactions.map(&:id), excluded_entry.entryable_id
+  end
+
+  # -- w3-reports goals-free-cash --------------------------------------------
+
+  def free_cash_budget
+    Budget.find_or_bootstrap(@family, start_date: Date.current)
+  end
+
+  def free_cash_account(name, balance:, currency: "USD", **attributes)
+    @family.accounts.create!(name: name, currency: currency, balance: balance, accountable: Depository.new, **attributes)
+  end
+
+  test "free cash is the cash balance minus what a live goal earmarks" do
+    checking = free_cash_account("Checking", balance: 3_000)
+    free_cash_account("Savings", balance: 2_000)
+    @family.goals.create!(name: "Trip", target_amount: 5_000, currency: "USD",
+                          goal_accounts: [ GoalAccount.new(account: checking, allocated_amount: 1_200) ])
+
+    budget = free_cash_budget
+
+    assert_equal 5_000, budget.available_cash
+    assert_equal 1_200, budget.earmarked_for_goals
+    assert_equal 3_800, budget.free_cash
+    assert_equal Money.new(3_800, budget.currency), budget.free_cash_money
+    assert_empty budget.missing_cash_currencies
+  end
+
+  test "an account excluded from reports is left out of the cash and its earmark too" do
+    free_cash_account("Checking", balance: 3_000)
+    excluded = free_cash_account("Hidden savings", balance: 9_000, exclude_from_reports: true)
+    @family.goals.create!(name: "Hidden", target_amount: 1_000, currency: "USD",
+                          goal_accounts: [ GoalAccount.new(account: excluded, allocated_amount: 500) ])
+
+    budget = free_cash_budget
+
+    assert_equal 3_000, budget.available_cash
+    assert_equal 0, budget.earmarked_for_goals
+    assert_equal 3_000, budget.free_cash
+  end
+
+  test "a completed or archived goal earmarks nothing" do
+    checking = free_cash_account("Checking", balance: 3_000)
+    done = @family.goals.create!(name: "Done", target_amount: 500, currency: "USD",
+                                 goal_accounts: [ GoalAccount.new(account: checking, allocated_amount: 500) ])
+    shelved = @family.goals.create!(name: "Shelved", target_amount: 800, currency: "USD",
+                                    goal_accounts: [ GoalAccount.new(account: checking, allocated_amount: 800) ])
+    done.complete!
+    shelved.archive!
+
+    budget = free_cash_budget
+
+    assert_equal 0, budget.earmarked_for_goals
+    assert_equal 3_000, budget.free_cash
+  end
+
+  test "an earmark on an investment account is not subtracted from cash it was never in" do
+    free_cash_account("Checking", balance: 1_000)
+    brokerage = @family.accounts.create!(name: "Brokerage", currency: "USD", balance: 50_000, accountable: Investment.new)
+    @family.goals.create!(name: "House", target_amount: 40_000, currency: "USD",
+                          goal_accounts: [ GoalAccount.new(account: brokerage, allocated_amount: 40_000) ])
+
+    budget = free_cash_budget
+
+    assert_equal 1_000, budget.available_cash
+    assert_equal 0, budget.earmarked_for_goals
+    assert_equal 1_000, budget.free_cash
+  end
+
+  test "free cash never goes below zero" do
+    checking = free_cash_account("Checking", balance: 100)
+    @family.goals.create!(name: "Big", target_amount: 900, currency: "USD",
+                          goal_accounts: [ GoalAccount.new(account: checking) ])
+    budget = free_cash_budget
+
+    assert_equal 100, budget.earmarked_for_goals
+    assert_equal 0, budget.free_cash
+
+    budget.stubs(:earmarked_for_goals).returns(250.to_d)
+    assert_equal 0, budget.free_cash
+  end
+
+  test "a cash balance with no exchange rate is left out and named, never counted at 1" do
+    free_cash_account("Checking", balance: 1_000)
+    free_cash_account("Euro account", balance: 400, currency: "EUR")
+    ExchangeRate.where(from_currency: "EUR", to_currency: "USD").delete_all
+
+    budget = free_cash_budget
+
+    assert_equal 1_000, budget.available_cash
+    assert_equal [ "EUR" ], budget.missing_cash_currencies
+  end
+
+  test "drafts, disabled accounts and investment cash are not cash on hand" do
+    free_cash_account("Checking", balance: 1_000)
+    free_cash_account("Draft", balance: 700, status: "draft")
+    free_cash_account("Off", balance: 300).disable!
+    @family.accounts.create!(name: "Brokerage", currency: "USD", balance: 5_000, cash_balance: 5_000, accountable: Investment.new)
+
+    assert_equal 1_000, free_cash_budget.available_cash
+  end
+
+  test "the cash panel shows for the current period only" do
+    assert free_cash_budget.shows_available_cash?
+
+    past = Budget.find_or_bootstrap(@family, start_date: @family.budget_period_start_for(Date.current) - 1.month)
+    assert_not past.shows_available_cash?
+  end
 end

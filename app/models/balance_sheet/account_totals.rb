@@ -27,12 +27,15 @@ class BalanceSheet::AccountTotals
       @visible_accounts ||= family.accounts.visible.with_attached_logo
     end
 
-    # Draft accounts are listed but count as zero in every total and weight.
+    # Draft accounts, and accounts excluded from reports (w3-reports), are listed with
+    # their own balance but count as zero in every total and weight.
     def account_rows
       @account_rows ||= accounts_with_display_associations.map do |account_row|
+        counted = account_row.counted_in_totals? && account_row.included_in_reports?
+
         AccountRow.new(
           account: account_row,
-          converted_balance: account_row.counted_in_totals? ? account_row.converted_balance : 0,
+          converted_balance: counted ? account_row.converted_balance : 0,
           is_syncing: sync_status_monitor.account_syncing?(account_row)
         )
       end

@@ -2,15 +2,17 @@
 #
 # Active accounts count on every day. A disabled account counts up to the day before
 # it was disabled, so turning an account off does not rewrite the history it was part
-# of. Drafts (unfinished setup) and accounts being deleted never count.
+# of. Drafts (unfinished setup), accounts being deleted and accounts excluded from
+# reports never count.
 class BalanceSheet::HistoricalAccountScope
   def initialize(family, accounts: nil)
     @family = family
     @base = accounts || family.accounts
   end
 
+  # w3-reports: an account excluded from reports counts on no day
   def relation
-    base.counted_in_history
+    base.counted_in_history.included_in_reports
   end
 
   def account_ids

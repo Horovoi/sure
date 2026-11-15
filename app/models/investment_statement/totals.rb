@@ -42,6 +42,7 @@ class InvestmentStatement::Totals
         JOIN accounts a ON a.id = ae.account_id
         WHERE a.family_id = :family_id
           AND #{Account.visible_status_sql("a")}
+          AND #{Account.included_in_reports_sql("a")}
           AND ae.excluded = false
       SQL
     end

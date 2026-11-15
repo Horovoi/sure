@@ -146,6 +146,23 @@ class Assistant::Function::GetTransactionsTest < ActiveSupport::TestCase
     assert_includes ids, entry.entryable.id
   end
 
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "a row from an account excluded from reports is listed with a flag" do
+    @transaction.entry.account.update!(exclude_from_reports: true)
+
+    row = find_row(@function.call("order" => "asc", "search" => @transaction.entry.name), @transaction)
+
+    assert_not_nil row
+    assert_equal true, row[:account_excluded_from_reports]
+  end
+
+  test "a row from an included account has no exclusion flag" do
+    row = find_row(@function.call("order" => "asc", "search" => @transaction.entry.name), @transaction)
+
+    assert_not row.key?(:account_excluded_from_reports)
+  end
+
   private
     def find_row(result, transaction)
       result[:transactions].find { |item| item[:id] == transaction.id }

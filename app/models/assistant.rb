@@ -52,7 +52,10 @@ class Assistant
 
         # Budgets: one period's amounts and spending, then one amount at a time
         Assistant::Function::GetBudget,
-        Assistant::Function::UpdateBudget
+        Assistant::Function::UpdateBudget,
+
+        # Savings goals (w3-reports goal-ai-hooks): create only
+        Assistant::Function::CreateGoal
       ]
     end
 

@@ -693,6 +693,27 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "the export and the breakdown leave out an account excluded from reports" do
+    excluded = @family.accounts.create!(name: "Hidden savings", currency: @family.currency, balance: 0, accountable: Depository.new, exclude_from_reports: true)
+    hidden_category = @family.categories.create!(name: "Only in the excluded account", classification: "expense")
+    shown_category = @family.categories.create!(name: "In an included account", classification: "expense")
+    create_transaction(account: excluded, amount: 75, category: hidden_category, currency: @family.currency)
+    create_transaction(account: accounts(:depository), amount: 25, category: shown_category, currency: @family.currency)
+
+    get export_transactions_reports_path(format: :csv, period_type: :monthly)
+    assert_response :ok
+    assert_includes @response.body, shown_category.name
+    assert_not_includes @response.body, hidden_category.name
+
+    get reports_path(period_type: :monthly)
+    assert_response :ok
+    breakdown_names = controller.instance_variable_get(:@transactions).flat_map { |group| [ group[:category_name], *Array(group[:subcategories]).map { |sub| sub[:category_name] } ] }
+    assert_includes breakdown_names, shown_category.name
+    assert_not_includes breakdown_names, hidden_category.name
+  end
+
   private
     def assert_report_period(expected, **query)
       get reports_path(query)

@@ -150,4 +150,34 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     delete chat_url(other_chat)
     assert_response :not_found
   end
+
+  # --- "Dig in with AI" (w3-reports insights-feed) ---
+
+  test "a new chat from an insight has its facts in the message box" do
+    insight = @user.family.insights.create!(
+      kind: "idle_cash", dedupe_key: "a", period_start: Date.current.beginning_of_month, priority: "low",
+      template_key: "idle_cash", facts: { account: "Savings", balance: "$5,000.00", idle_days: 60 },
+      metadata: {}, generated_at: Time.current
+    )
+
+    assert_no_difference("Chat.count") do
+      get new_chat_url(insight_id: insight.id)
+    end
+
+    assert_response :success
+    assert_select "textarea[name='chat[content]'][autofocus]", text: /Idle cash in Savings/
+    assert_select "textarea[name='chat[content]']", text: /Balance: \$5,000\.00/
+  end
+
+  test "a new chat ignores another family's insight" do
+    insight = families(:empty).insights.create!(
+      kind: "idle_cash", dedupe_key: "a", priority: "low", template_key: "idle_cash",
+      facts: { account: "Elsewhere", balance: "$1.00", idle_days: 60 }, generated_at: Time.current
+    )
+
+    get new_chat_url(insight_id: insight.id)
+
+    assert_response :success
+    assert_select "textarea[name='chat[content]']", text: ""
+  end
 end

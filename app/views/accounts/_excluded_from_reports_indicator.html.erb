@@ -1,0 +1,5 @@
+<%# locals: (account:) %>
+<%# w3-reports exclude-from-reports: eye-off mark on an account that no report or total counts. Rendered as a span: the sidebar puts it inside the account link. %>
+<% if account.exclude_from_reports? %>
+  <%= render DS::Tooltip.new(text: t("accounts.exclude_from_reports.indicator_tooltip"), icon: "eye-off", size: "xs", as: :span, html_class: "shrink-0") %>
+<% end %>

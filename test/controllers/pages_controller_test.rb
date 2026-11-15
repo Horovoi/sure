@@ -286,7 +286,58 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_select "section[data-section-key='balance_sheet'] form input[name='spending_category_ids[]'][value=?]", name
   end
 
+  # --- Insights feed (w3-reports insights-feed) ---
+
+  test "the insights section shows the visible insights" do
+    create_dashboard_insight(dedupe_key: "a", account: "Savings")
+
+    get root_path
+
+    assert_response :ok
+    assert_select "section[data-section-key='insights_feed'] #insights-feed", text: /Idle cash in Savings/
+  end
+
+  test "a hidden insights section builds nothing" do
+    create_dashboard_insight(dedupe_key: "a", account: "Savings")
+    @user.update_dashboard_preferences({ "hidden_sections" => { "insights_feed" => true } })
+    Insight.expects(:visible).never
+
+    get root_path
+
+    assert_response :ok
+    assert_select "#insights-feed", count: 0
+  end
+
+  test "dismissing an insight hides only that one" do
+    dismissed = create_dashboard_insight(dedupe_key: "a", account: "Savings")
+    create_dashboard_insight(dedupe_key: "b", account: "Travel fund")
+
+    patch dismiss_insight_path(dismissed), as: :turbo_stream
+    get root_path
+
+    assert_response :ok
+    assert_select "#insights-feed [data-testid=insight-row]", count: 1
+    assert_select "#insights-feed", text: /Idle cash in Travel fund/
+    assert_select "#insights-feed", text: /Idle cash in Savings/, count: 0
+  end
+
+  test "no visible insight leaves the section out" do
+    create_dashboard_insight(dedupe_key: "a", account: "Savings").dismiss!
+
+    get root_path
+
+    assert_select "section[data-section-key='insights_feed']", count: 0
+  end
+
   private
+    def create_dashboard_insight(dedupe_key:, account:)
+      @family.insights.create!(
+        kind: "idle_cash", dedupe_key: dedupe_key, period_start: Date.current.beginning_of_month, priority: "low",
+        template_key: "idle_cash", facts: { account: account, balance: "$5,000.00", idle_days: 60 },
+        metadata: {}, generated_at: Time.current
+      )
+    end
+
     def curve_account
       @curve_account ||= @family.accounts.create!(name: "Curve checking", currency: @family.currency, balance: 0, accountable: Depository.new)
     end

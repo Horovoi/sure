@@ -23,6 +23,11 @@ class Assistant::Function::GetHoldings < Assistant::Function
 
         Note: This function only returns holdings from Investment and Crypto accounts.
 
+        A holding with `account_excluded_from_reports: true` sits in an account the
+        user keeps out of every report; the investment reports and net worth do not
+        count it. `total_value` is in the family currency and covers every listed
+        holding.
+
         Note on pagination:
 
         This function can be paginated. You can expect the following properties in the response:
@@ -95,7 +100,7 @@ class Assistant::Function::GetHoldings < Assistant::Function
       request: { params: {} }
     )
 
-    total_value = holdings_query.sum(:amount)
+    total_value = converted_total(holdings_query)
 
     normalized_holdings = paginated_holdings.map do |holding|
       {
@@ -111,7 +116,7 @@ class Assistant::Function::GetHoldings < Assistant::Function
         formatted_average_cost: holding.avg_cost&.format,
         account: holding.account.name,
         date: holding.date
-      }
+      }.tap { |row| row[:account_excluded_from_reports] = true if holding.account.exclude_from_reports? }
     end
 
     {
@@ -155,6 +160,18 @@ class Assistant::Function::GetHoldings < Assistant::Function
 
     def investment_accounts
       family.accounts.visible.where(accountable_type: SUPPORTED_ACCOUNT_TYPES)
+    end
+
+    # In the family currency, each holding at today's nearest stored rate. It used to add
+    # up the raw amounts of every currency; one with no rate at all is left out.
+    def converted_total(holdings)
+      rate = ExchangeRate.rate_sql(
+        from: "holdings.currency",
+        to: ActiveRecord::Base.connection.quote(family.currency),
+        on: ActiveRecord::Base.connection.quote(Date.current)
+      )
+
+      holdings.sum(Arel.sql("COALESCE(holdings.amount * #{rate}, 0)"))
     end
 
     def investment_account_names

@@ -242,6 +242,33 @@ class DashboardTest < ApplicationSystemTestCase
     assert_no_current_path(/net_worth_period=custom/)
   end
 
+  # --- w3-reports exclude-from-reports ---
+
+  test "excluding an account from the account menu takes it out of the dashboard totals" do
+    savings = @family.accounts.create!(name: "Excluded savings", currency: @family.currency, balance: 123_456, accountable: Depository.new)
+    with_savings = BalanceSheet.new(@family).assets.total_money.format(precision: 0)
+
+    visit root_path
+    within("#balance-sheet") { assert_text with_savings }
+
+    visit account_path(savings)
+    within_testid("account-menu") do
+      find("button").click
+      click_on I18n.t("accounts.exclude_from_reports.menu_exclude")
+    end
+    assert_text I18n.t("accounts.exclude_from_reports.excluded", name: savings.name)
+    assert savings.reload.exclude_from_reports?
+
+    without_savings = BalanceSheet.new(@family.reload).assets.total_money.format(precision: 0)
+    assert_not_equal with_savings, without_savings
+
+    visit root_path
+    within("#balance-sheet") do
+      assert_text without_savings
+      assert_no_text with_savings
+    end
+  end
+
   private
     # Large enough that the chart's label rule keeps the Shopping label
     def make_shopping_prominent

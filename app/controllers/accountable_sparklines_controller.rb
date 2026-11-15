@@ -32,7 +32,8 @@ class AccountableSparklinesController < ApplicationController
     end
 
     def account_ids
-      family.accounts.counted_in_totals.where(accountable_type: accountable.name).pluck(:id)
+      # The sidebar group's total leaves out accounts excluded from reports (w3-reports)
+      family.accounts.counted_in_totals.included_in_reports.where(accountable_type: accountable.name).pluck(:id)
     end
 
     def cache_key

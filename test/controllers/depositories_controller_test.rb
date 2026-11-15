@@ -92,4 +92,18 @@ class DepositoriesControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal "Depository", @account.reload.accountable_type
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "update sets exclude_from_reports from the form toggle" do
+    patch depository_path(@account), params: {
+      account: { name: @account.name, balance: @account.balance, currency: @account.currency, exclude_from_reports: "1" }
+    }
+    assert @account.reload.exclude_from_reports?
+
+    patch depository_path(@account), params: {
+      account: { name: @account.name, balance: @account.balance, currency: @account.currency, exclude_from_reports: "0" }
+    }
+    assert_not @account.reload.exclude_from_reports?
+  end
 end

@@ -198,6 +198,16 @@ class IncomeStatement::DailyExpenseTotalsTest < ActiveSupport::TestCase
     end
   end
 
+  # --- w3-reports exclude-from-reports ---
+
+  test "an account excluded from reports stays out of the daily rows" do
+    savings = @family.accounts.create! name: "Savings", currency: "USD", balance: 0, accountable: Depository.new, exclude_from_reports: true
+    create_transaction(account: @checking, amount: 10, category: @food)
+    create_transaction(account: savings, amount: 70, category: @food)
+
+    assert_equal 10, query_rows.sum(&:amount)
+  end
+
   private
     def income_statement
       IncomeStatement.new(@family)

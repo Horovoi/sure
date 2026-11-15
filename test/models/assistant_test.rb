@@ -376,6 +376,13 @@ class AssistantTest < ActiveSupport::TestCase
     assert_equal 1, AiToolAudit.where(chat_id: @chat.id).count
   end
 
+  # --- create_goal (w3-reports goal-ai-hooks) ---
+
+  test "the built-in chat gets create_goal" do
+    assert_includes Assistant.config_for(@chat)[:functions], Assistant::Function::CreateGoal
+    assert_includes Assistant.function_classes, Assistant::Function::CreateGoal
+  end
+
   private
     def use_llm(*steps)
       ScriptedLlm.new(*steps).tap do |llm|

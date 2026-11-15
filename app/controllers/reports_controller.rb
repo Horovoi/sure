@@ -563,7 +563,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible).merge(Account.included_in_reports)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: :parent)
@@ -575,7 +575,7 @@ class ReportsController < ApplicationController
       trades = Trade
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible).merge(Account.included_in_reports)
         .where(entries: { entryable_type: "Trade", excluded: false, date: @period.date_range })
         .includes(entry: :account)
 
@@ -749,9 +749,11 @@ class ReportsController < ApplicationController
 
       # Get sell trades in period with realized gains
       # Eager-load security, account, and accountable to avoid N+1
+      # Only the accounts the holdings above come from: visible, and not excluded from
+      # reports (the sales of a disabled or excluded account used to count here)
       sell_trades = Current.family.trades
         .joins(:entry)
-        .where(entries: { date: @period.date_range })
+        .where(entries: { date: @period.date_range, account_id: investment_statement.investment_accounts.select(:id) })
         .where("trades.qty < 0")
         # A transfer out has the same negative quantity as a sale. Nothing was sold, so
         # it is neither counted nor listed as one.
@@ -954,7 +956,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: Current.family.id }).merge(Account.visible)
+        .where(accounts: { family_id: Current.family.id }).merge(Account.visible).merge(Account.included_in_reports)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])
@@ -1001,7 +1003,7 @@ class ReportsController < ApplicationController
       transactions = Transaction
         .joins(:entry)
         .joins(entry: :account)
-        .where(accounts: { family_id: family.id }).merge(Account.visible)
+        .where(accounts: { family_id: family.id }).merge(Account.visible).merge(Account.included_in_reports)
         .where(entries: { entryable_type: "Transaction", excluded: false, date: @period.date_range })
         .where.not(kind: [ "funds_movement", "one_time", "cc_payment" ])
         .includes(entry: :account, category: [])

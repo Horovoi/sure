@@ -742,6 +742,35 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ transaction.id ], audit.result_record_ids
   end
 
+  # --- w3-reports exclude-from-reports ------------------------------------------------------------------------
+
+  test "tools/call get_balance_sheet leaves out an account excluded from reports" do
+    accounts(:depository).update!(exclude_from_reports: true)
+
+    with_mcp_env do
+      mcp_post "tools/call", params: { name: "get_balance_sheet", arguments: { period: "last_30_days" } }
+
+      assert_response :success
+      result = rpc_result
+      assert_equal false, result["isError"]
+      assert_equal BalanceSheet.new(@user.family).net_worth_money.format, result.dig("structuredContent", "net_worth", "current")
+    end
+  end
+
+  # --- create_goal (w3-reports goal-ai-hooks) ---
+
+  test "tools/list serves create_goal as a write tool that is not destructive" do
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      tool = rpc_result["tools"].find { |entry| entry["name"] == "create_goal" }
+      assert tool, "create_goal is missing from tools/list"
+      assert_equal false, tool.dig("annotations", "readOnlyHint")
+      assert_equal false, tool.dig("annotations", "destructiveHint")
+      assert_includes tool.dig("inputSchema", "required"), "account_ids"
+    end
+  end
+
   private
     def with_mcp_env(&block)
       with_env_overrides(MCP_API_TOKEN: TOKEN, MCP_USER_EMAIL: @user.email, &block)

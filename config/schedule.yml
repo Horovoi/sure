@@ -55,3 +55,12 @@ refresh_maintained_goal_targets:
   queue: "scheduled"
   active_job: true
   description: "Recomputes the target of reserves set in months of expenses on the first day of each fiscal month"
+
+# Insights feed (w3-reports). Nightly after the backup; the job fans out one run per
+# family, each in the family's time zone.
+generate_insights:
+  cron: "30 4 * * * Europe/Kyiv" # daily at 04:30 Kyiv time
+  class: "GenerateInsightsJob"
+  queue: "scheduled"
+  active_job: true
+  description: "Writes the dashboard insights feed (budget, cash flow, idle cash, net worth, savings rate, spending) from templates"

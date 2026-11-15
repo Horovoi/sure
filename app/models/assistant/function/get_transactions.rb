@@ -46,10 +46,16 @@ class Assistant::Function::GetTransactions < Assistant::Function
         - `category`, `merchant`, `tags` and `notes` appear only when set;
           `pending` and `excluded` appear only when true. An absent key means
           none or false.
+        - `account_excluded_from_reports` (only when true): the row's account is
+          one the user keeps out of every report. The row is listed, as on the
+          transactions page, but dashboards and get_income_statement never
+          count it.
 
         `total_income` and `total_expenses` are computed over the whole
         filtered set the way the dashboard counts them (transfers and excluded
-        rows left out), so they do not always equal the sum of this page.
+        rows left out), so they do not always equal the sum of this page. Like
+        the transactions page, they do count accounts excluded from reports;
+        filter those accounts out to match the dashboard.
 
         Note on pagination:
 
@@ -276,6 +282,7 @@ class Assistant::Function::GetTransactions < Assistant::Function
       row[:is_transfer] = true if row[:classification] == "transfer"
       row[:pending] = true if txn.pending?
       row[:excluded] = true if entry.excluded?
+      row[:account_excluded_from_reports] = true if entry.account.exclude_from_reports?
       row
     end
 

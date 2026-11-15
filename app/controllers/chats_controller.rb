@@ -16,6 +16,9 @@ class ChatsController < ApplicationController
 
   def new
     @chat = Current.user.chats.new(title: "New chat #{Time.current.strftime("%Y-%m-%d %H:%M")}")
+    # "Dig in with AI" (w3-reports insights-feed): the insight's facts go in the message
+    # box, so the user can edit them before sending
+    @insight = Current.family.insights.find_by(id: params[:insight_id]) if params[:insight_id].present?
   end
 
   def create

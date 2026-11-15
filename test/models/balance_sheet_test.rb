@@ -176,6 +176,54 @@ class BalanceSheetTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 3, 8), dates.fetch(account.id)
   end
 
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "an account excluded from reports is listed but not counted in totals" do
+    create_account(balance: 1000, accountable: CreditCard.new)
+    create_account(balance: 10000, accountable: Depository.new)
+    excluded = create_account(balance: 5000, accountable: Depository.new, exclude_from_reports: true)
+
+    balance_sheet = BalanceSheet.new(@family)
+
+    assert_equal 10000 - 1000, balance_sheet.net_worth
+    assert_equal 10000, balance_sheet.assets.total
+    assert_equal 1000, balance_sheet.liabilities.total
+
+    depository_group = balance_sheet.assets.account_groups.find { |group| group.key == "depository" }
+    assert_equal 10000, depository_group.total
+    row = depository_group.accounts.find { |account| account.id == excluded.id }
+    assert row, "the excluded account is still listed"
+    assert_equal 0, row.converted_balance
+    assert_equal 5000, row.balance_money.amount
+  end
+
+  test "an account excluded from reports never counts in past net worth" do
+    zone = @family.resolved_time_zone
+    period = Period.custom(start_date: Date.new(2026, 3, 8), end_date: Date.new(2026, 3, 10))
+
+    included = create_account(balance: 10_000, accountable: Depository.new)
+    excluded = create_account(balance: 5_000, accountable: Depository.new, exclude_from_reports: true)
+    [ included, excluded ].each { |account| create_balance(account: account, date: Date.new(2026, 3, 7), balance: account.balance) }
+
+    travel_to zone.local(2026, 3, 10, 12) do
+      values = BalanceSheet.new(@family).net_worth_series(period: period).values.map { |v| v.value.amount }
+      assert_equal [ 10_000, 10_000, 10_000 ], values
+    end
+
+    assert_not_includes BalanceSheet::HistoricalAccountScope.new(@family).account_ids, excluded.id
+  end
+
+  test "excluding an account changes net worth right away" do
+    create_account(balance: 10000, accountable: Depository.new)
+    savings = create_account(balance: 5000, accountable: Depository.new)
+
+    assert_equal 15000, BalanceSheet.new(@family).net_worth
+
+    savings.update!(exclude_from_reports: true)
+
+    assert_equal 10000, BalanceSheet.new(@family).net_worth
+  end
+
   private
     def create_account(attributes = {})
       account = @family.accounts.create! name: "Test", **{ currency: "USD" }.merge(attributes)

@@ -1,0 +1,18 @@
+<%# locals: (insights:) %>
+<div id="insights-list">
+  <% if insights.any? %>
+    <div class="bg-container rounded-xl shadow-border-xs p-1 divide-y divide-primary">
+      <% insights.each do |insight| %>
+        <%= render "insights/insight", insight: insight %>
+      <% end %>
+    </div>
+  <% else %>
+    <%= render DS::Card.new do %>
+      <%= render DS::EmptyState.new(
+            icon: "lightbulb",
+            title: t("insights.index.empty.title"),
+            description: t("insights.index.empty.description")
+          ) %>
+    <% end %>
+  <% end %>
+</div>

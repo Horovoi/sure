@@ -34,6 +34,7 @@
           <div class="min-w-0 grow">
             <div class="flex items-center gap-2 mb-0.5">
               <%= tag.p account.name, class: class_names("text-sm text-primary font-medium truncate", "animate-pulse" => account.syncing?) %>
+              <%= render "accounts/excluded_from_reports_indicator", account: account %>
             </div>
             <%= tag.p account.short_subtype_label, class: "text-sm text-secondary truncate" %>
           </div>

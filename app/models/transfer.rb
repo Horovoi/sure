@@ -71,7 +71,11 @@ class Transfer < ApplicationRecord
     # auto-match, manual match, rules) reaches it through apply_transaction_kinds, on create
     # when confirmed or on the confirm event.
     def outflow_kind_for(source_account:, destination_account:)
-      if destination_account.loan?
+      # w3-reports exclude-from-reports: money to or from an account the reports leave out
+      # is a plain movement, never spending (no loan payment, no contribution)
+      if source_account.exclude_from_reports? || destination_account.exclude_from_reports?
+        "funds_movement"
+      elsif destination_account.loan?
         "loan_payment"
       elsif destination_account.liability?
         "cc_payment"
@@ -80,6 +84,19 @@ class Transfer < ApplicationRecord
       else
         "funds_movement"
       end
+    end
+
+    # w3-reports exclude-from-reports: sets the kinds again on every confirmed transfer
+    # with this account on one side, after its exclude_from_reports flag changed. Pending
+    # transfers keep their legs' own kinds until confirmed, as always.
+    def reapply_kinds_for!(account)
+      account_transaction_ids = Transaction.joins(:entry).where(entries: { account_id: account.id }).select(:id)
+
+      confirmed
+        .where(outflow_transaction_id: account_transaction_ids)
+        .or(confirmed.where(inflow_transaction_id: account_transaction_ids))
+        .includes(inflow_transaction: { entry: :account }, outflow_transaction: { entry: :account })
+        .find_each(&:reapply_kinds!)
     end
 
     private
@@ -222,6 +239,11 @@ class Transfer < ApplicationRecord
     return "loan_payment" if loan_payment?
     return "liability_payment" if liability_payment?
     "transfer"
+  end
+
+  # Sets both legs' kinds again from the accounts (see reapply_kinds_for!)
+  def reapply_kinds!
+    apply_transaction_kinds if confirmed?
   end
 
   # Decided by the two accounts rather than the outflow's stored kind, so a pending match

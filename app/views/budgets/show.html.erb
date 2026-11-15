@@ -42,6 +42,11 @@
       <% end %>
     </div>
 
+    <%# w3-reports goals-free-cash: cash on hand, for the current period only %>
+    <% if @budget.shows_available_cash? %>
+      <%= render "budgets/available_cash", budget: @budget %>
+    <% end %>
+
     <%# Bottom Section: Categories full width. The filter tabs show only for a set-up budget with a row over budget. %>
     <% has_over_budget = budget_has_over_budget?(@budget) %>
     <%= tag.div class: "w-full bg-container rounded-xl shadow-border-xs p-4",

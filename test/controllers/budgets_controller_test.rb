@@ -100,4 +100,28 @@ class BudgetsControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_select "[data-testid=copy-previous-prompt]", text: /#{Regexp.escape(newer.name)}/
   end
+
+  # -- w3-reports goals-free-cash --------------------------------------------
+
+  test "the current budget shows the cash panel with the earmark line" do
+    get budget_path(@budget)
+
+    assert_response :ok
+    assert @budget.shows_available_cash?
+    assert_select "#budget_available_cash" do
+      assert_select "h2", text: I18n.t("budgets.available_cash.heading")
+      assert_select "dt", text: I18n.t("budgets.available_cash.earmarked")
+      assert_select "[data-testid='budget-free-cash']", text: /#{Regexp.escape(@budget.free_cash_money.format)}/
+      assert_select "a[href=?]", goals_path
+    end
+  end
+
+  test "a past budget shows no cash panel" do
+    past = Budget.find_or_bootstrap(@family, start_date: @family.budget_period_start_for(Date.current) - 1.month)
+
+    get budget_path(past)
+
+    assert_response :ok
+    assert_select "#budget_available_cash", count: 0
+  end
 end

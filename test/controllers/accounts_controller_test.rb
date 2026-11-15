@@ -423,6 +423,44 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_select "##{ActionView::RecordIdentifier.dom_id(@account)}", text: /#{I18n.t("accounts.account.default_label")}/
   end
 
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "toggle_exclude_from_reports flips the flag and keeps the account active" do
+    assert_not @account.exclude_from_reports?
+
+    patch toggle_exclude_from_reports_account_url(@account)
+    assert_redirected_to account_path(@account)
+    assert_equal I18n.t("accounts.exclude_from_reports.excluded", name: @account.name), flash[:notice]
+    @account.reload
+    assert @account.exclude_from_reports?
+    assert @account.active?
+
+    patch toggle_exclude_from_reports_account_url(@account)
+    assert_equal I18n.t("accounts.exclude_from_reports.included", name: @account.name), flash[:notice]
+    assert_not @account.reload.exclude_from_reports?
+  end
+
+  test "toggle_exclude_from_reports refuses an account being deleted" do
+    @account.mark_for_deletion!
+
+    patch toggle_exclude_from_reports_account_url(@account)
+
+    assert_redirected_to accounts_path
+    assert_not @account.reload.exclude_from_reports?
+  end
+
+  test "the account page menu offers the toggle and the sidebar marks an excluded account" do
+    get account_url(@account)
+    assert_response :success
+    assert_select "[data-testid='account-menu']"
+    assert_includes response.body, I18n.t("accounts.exclude_from_reports.menu_exclude")
+
+    @account.update!(exclude_from_reports: true)
+    get account_url(@account)
+    assert_includes response.body, I18n.t("accounts.exclude_from_reports.menu_include")
+    assert_includes response.body, I18n.t("accounts.exclude_from_reports.indicator_tooltip")
+  end
+
   private
     def empty_series
       Series.new(start_date: 1.day.ago.to_date, end_date: Date.current, interval: "1 day", values: [])

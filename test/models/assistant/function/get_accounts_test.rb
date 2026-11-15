@@ -115,4 +115,16 @@ class Assistant::Function::GetAccountsTest < ActiveSupport::TestCase
 
     assert_not payload.key?(:terms)
   end
+
+  # -- w3-reports exclude-from-reports ---------------------------------------
+
+  test "an account excluded from reports is listed and says so" do
+    excluded = accounts(:depository)
+    excluded.update!(exclude_from_reports: true)
+
+    rows = @fn.call[:accounts].index_by { |a| a[:id] }
+
+    assert_equal true, rows.fetch(excluded.id)[:excluded_from_reports]
+    assert_not rows.fetch(accounts(:credit_card).id).key?(:excluded_from_reports)
+  end
 end
