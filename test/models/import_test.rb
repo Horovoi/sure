@@ -190,6 +190,38 @@ class ImportTest < ActiveSupport::TestCase
     assert_equal "mine", entry.notes
   end
 
+  test "CSV-only date formats are not offered as a global family preference" do
+    assert_empty Import::CSV_ONLY_DATE_FORMATS & Family::DATE_FORMATS
+    assert_empty Import::CSV_ONLY_DATE_FORMATS.map(&:last) & Family::DATE_FORMATS.map(&:last)
+  end
+
+  test "DD/MM/YY and DD.MM.YY rows parse" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n15/05/24,Coffee,10\n", date_format: "%d/%m/%y")
+    row = import.rows.first
+    assert row.valid?, row.errors.full_messages.to_sentence
+    assert_equal "2024-05-15", row.date_iso
+
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n01.11.26,Coffee,10\n", date_format: "%d.%m.%y")
+    row = import.rows.first
+    assert row.valid?, row.errors.full_messages.to_sentence
+    assert_equal "2026-11-01", row.date_iso
+  end
+
+  test "a 4-digit year under a 2-digit year format is a row error" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n01.11.2025,Coffee,10\n", date_format: "%d.%m.%y")
+    row = import.rows.first
+
+    refute row.valid?
+    assert row.errors.added?(:date, "must exactly match the format: %d.%m.%y")
+    refute import.cleaned?
+  end
+
+  test "a 4-digit year format still accepts a trailing time" do
+    import = configure_csv(imports(:transaction), csv: "date,name,amount\n01.11.2025 10:30,Coffee,10\n", date_format: "%d.%m.%Y")
+
+    assert import.rows.first.valid?
+  end
+
   private
     def configure_csv(import, account: @account, csv: "date,name,amount\n01/01/2024,Coffee,10\n", **labels)
       import.update!(

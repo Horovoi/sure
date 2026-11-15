@@ -35,6 +35,23 @@ class Import::UploadsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "CSV uploaded successfully.", flash[:notice]
   end
 
+  test "uploads a Windows-1251 csv file and stores it as UTF-8" do
+    patch import_upload_url(@import), params: {
+      import: {
+        csv_file: file_fixture_upload("imports/windows1251.csv", "text/csv"),
+        col_sep: ";"
+      }
+    }
+
+    assert_redirected_to import_configuration_url(@import, template_hint: true)
+
+    raw = @import.reload.raw_file_str
+    assert_equal Encoding::UTF_8, raw.encoding
+    assert raw.valid_encoding?
+    assert_includes raw, "Сільпо, їжа на тиждень"
+    assert_includes raw, "Ґудзик і нитки"
+  end
+
   test "invalid csv cannot be uploaded" do
     patch import_upload_url(@import), params: {
       import: {

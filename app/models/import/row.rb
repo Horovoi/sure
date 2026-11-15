@@ -70,7 +70,7 @@ class Import::Row < ApplicationRecord
 
       parsed_date = Date.strptime(date, import.date_format) rescue nil
 
-      if parsed_date.nil?
+      if parsed_date.nil? || leftover_digits?
         errors.add(:date, "must exactly match the format: #{import.date_format}")
         return
       end
@@ -81,6 +81,13 @@ class Import::Row < ApplicationRecord
       if parsed_date < min_date || parsed_date > max_date
         errors.add(:date, "must be between #{min_date} and #{max_date}")
       end
+    end
+
+    # Date.strptime ignores text after the match, so "01.11.2026" under "%d.%m.%y"
+    # parses as 2020-11-01 with "26" left over. Digits left over mean the year (or
+    # another field) is longer than the format allows.
+    def leftover_digits?
+      Date._strptime(date, import.date_format)&.dig(:leftover).to_s.match?(/\A\d/)
     end
 
     def currency_is_valid

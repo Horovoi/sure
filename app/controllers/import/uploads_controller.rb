@@ -24,9 +24,9 @@ class Import::UploadsController < ApplicationController
       # Rows and mappings came from the previous file and account
       @import.reset_configuration!
 
-      redirect_to import_configuration_path(@import, template_hint: true), notice: "CSV uploaded successfully."
+      redirect_to import_configuration_path(@import, template_hint: true), notice: t(".success")
     else
-      flash.now[:alert] = "Must be valid CSV with headers and at least one row of data"
+      flash.now[:alert] = t(".invalid_csv")
 
       render :show, status: :unprocessable_entity
     end
@@ -43,6 +43,8 @@ class Import::UploadsController < ApplicationController
 
     def csv_valid?(str)
       begin
+        # A non-UTF-8 file (Windows-1251) is checked as bytes; Import converts it on save
+        str = str.b if str && !str.valid_encoding?
         csv = Import.parse_csv_str(str, col_sep: upload_params[:col_sep])
         return false if csv.headers.empty?
         return false if csv.count == 0

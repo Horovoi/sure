@@ -31,6 +31,15 @@ class Import < ApplicationRecord
     "1,234"    => { separator: "",  delimiter: "," }   # Zero-decimal currencies like JPY
   }.freeze
 
+  # 2-digit years are ambiguous (Ruby reads %y as 1969-2068), so these stay out of
+  # Family::DATE_FORMATS (the global preference) and are offered only when mapping a
+  # CSV file, where the preview shows the parsed dates. Import::Row rejects a
+  # 4-digit year under a %y format.
+  CSV_ONLY_DATE_FORMATS = [
+    [ "DD/MM/YY", "%d/%m/%y" ],
+    [ "DD.MM.YY", "%d.%m.%y" ]
+  ].freeze
+
   AMOUNT_TYPE_STRATEGIES = %w[signed_amount custom_column].freeze
 
   belongs_to :family
@@ -38,6 +47,8 @@ class Import < ApplicationRecord
 
   before_validation :set_default_number_format
   before_validation :ensure_utf8_encoding
+  # Uploads are saved with validate: false, which skips before_validation
+  before_save :ensure_utf8_encoding
 
   scope :ordered, -> { order(created_at: :desc) }
 
@@ -510,6 +521,13 @@ class Import < ApplicationRecord
       @parsed_csv = self.class.parse_csv_str(csv_content, col_sep: col_sep)
     end
 
+    # Normalizes a raw CSV numeric string into a plain, parseable decimal string
+    # based on the import's configured +number_format+ (thousands delimiter and
+    # decimal separator). Returns "" when the value is blank, the format is
+    # unknown, or the result is not a valid number.
+    #
+    # @param value [String, nil] the raw cell value from the CSV
+    # @return [String] a normalized number like "1234.56", or "" if invalid
     def sanitize_number(value)
       return "" if value.nil?
 
@@ -521,7 +539,20 @@ class Import < ApplicationRecord
 
       # Handle French/Scandinavian format specially
       if format[:delimiter] == " "
-        sanitized = sanitized.gsub(/\s+/, "") # Remove all spaces first
+        # The thousands "space" can be an ASCII space, a non-breaking space
+        # (U+00A0) or a narrow no-break space (U+202F) depending on the locale
+        # or exporter. Ruby's \s does not match those Unicode spaces, so strip
+        # every kind of whitespace via the Unicode property.
+        sanitized = sanitized.gsub(/\p{Space}/, "")
+
+        # Strip currency symbols/codes only at the leading/trailing edges (e.g.
+        # "€1 234,56" or "1 234,56 kr"). Interior characters are deliberately
+        # left in place so a misconfigured US-style value like "1,234.56" keeps
+        # its period and is rejected by the numeric guard below, rather than
+        # being silently reinterpreted as 1.23456. Digits, the separator, and a
+        # minus sign are preserved so signed values and the guard still work.
+        edge_junk = /\A[^\d#{Regexp.escape(format[:separator])}\-]+|[^\d#{Regexp.escape(format[:separator])}\-]+\z/
+        sanitized = sanitized.gsub(edge_junk, "")
       else
         sanitized = sanitized.gsub(/[^\d#{Regexp.escape(format[:delimiter])}#{Regexp.escape(format[:separator])}\-]/, "")
 
@@ -548,9 +579,18 @@ class Import < ApplicationRecord
       self.number_format ||= "1,234.56" # Default to US/UK format
     end
 
-    # Common encodings to try when UTF-8 detection fails
-    # Windows-1250 is prioritized for Central/Eastern European languages
+    # Encodings to try when the file is not UTF-8 and the detector gives no
+    # confident answer. Windows-1251 (Ukrainian and Russian bank exports) is tried
+    # first under the whole-word check in #cyrillic_text?; Windows-1250 follows for
+    # Central/Eastern European languages.
     COMMON_ENCODINGS = [ "Windows-1250", "Windows-1252", "ISO-8859-1", "ISO-8859-2" ].freeze
+    CYRILLIC_ENCODING = "Windows-1251"
+
+    # rchardet guesses that mean "some Cyrillic single-byte encoding". Banks in
+    # Ukraine export Windows-1251 and the detector often names a sibling, so such a
+    # guess is never used as named: the file is read as Windows-1251 under the
+    # whole-word check, or falls back to the common encodings.
+    CYRILLIC_GUESSES = %w[MACCYRILLIC KOI8-R KOI8-U IBM855 IBM866 ISO-8859-5 WINDOWS-1251].freeze
 
     def ensure_utf8_encoding
       # Handle nil or empty string first (before checking if changed)
@@ -560,40 +600,44 @@ class Import < ApplicationRecord
       # Use will_save_change_to_attribute? which is safer for binary data
       return unless will_save_change_to_raw_file_str?
 
-      # If already valid UTF-8, nothing to do
-      begin
-        if raw_file_str.encoding == Encoding::UTF_8 && raw_file_str.valid_encoding?
-          return
-        end
-      rescue ArgumentError
-        # raw_file_str might have invalid encoding, continue to detection
+      # Already valid UTF-8, or UTF-8 bytes read as binary (File.binread, uploads)
+      return if raw_file_str.encoding == Encoding::UTF_8 && raw_file_str.valid_encoding?
+
+      utf8 = raw_file_str.dup.force_encoding(Encoding::UTF_8)
+      if utf8.valid_encoding?
+        self.raw_file_str = utf8
+        return
       end
 
-      # Detect encoding using rchardet
+      # A Cyrillic file is decided before the detector: on short files rchardet
+      # often reports a confident Latin encoding (ISO-8859-2) for Windows-1251 text.
+      return if adopt_cyrillic_encoding
+
       begin
         require "rchardet"
         detection = CharDet.detect(raw_file_str)
         detected_encoding = detection["encoding"]
-        confidence = detection["confidence"]
+        confidence = detection["confidence"].to_f
 
-        # Only convert if we have reasonable confidence in the detection
-        if detected_encoding && confidence > 0.75
-          # Force encoding and convert to UTF-8
-          self.raw_file_str = raw_file_str.force_encoding(detected_encoding).encode("UTF-8", invalid: :replace, undef: :replace)
+        # Only convert if we have reasonable confidence in a non-Cyrillic guess.
+        # Cyrillic guesses already failed the Windows-1251 check above.
+        if detected_encoding && confidence > 0.75 && !detected_encoding.upcase.in?(CYRILLIC_GUESSES)
+          self.raw_file_str = raw_file_str.dup.force_encoding(detected_encoding).encode("UTF-8", invalid: :replace, undef: :replace)
         else
-          # Fallback: try common encodings
           try_common_encodings
         end
       rescue LoadError
         # rchardet not available, fallback to trying common encodings
         try_common_encodings
-      rescue ArgumentError, Encoding::CompatibilityError => e
-        # Handle encoding errors by falling back to common encodings
+      rescue ArgumentError, Encoding::CompatibilityError, Encoding::ConverterNotFoundError
+        # Unknown or incompatible encoding name from the detector
         try_common_encodings
       end
     end
 
     def try_common_encodings
+      return if adopt_cyrillic_encoding
+
       COMMON_ENCODINGS.each do |encoding|
         begin
           test = raw_file_str.dup.force_encoding(encoding)
@@ -607,7 +651,31 @@ class Import < ApplicationRecord
       end
 
       # If nothing worked, force UTF-8 and replace invalid bytes
-      self.raw_file_str = raw_file_str.force_encoding("UTF-8").scrub("?")
+      self.raw_file_str = raw_file_str.dup.force_encoding("UTF-8").scrub("?")
+    end
+
+    # Decodes the file as Windows-1251 and keeps the result only when it reads as
+    # Cyrillic text. Returns true when the file was converted.
+    def adopt_cyrillic_encoding
+      decoded = raw_file_str.dup.force_encoding(CYRILLIC_ENCODING).encode("UTF-8", invalid: :replace, undef: :replace)
+      return false unless cyrillic_text?(decoded)
+
+      self.raw_file_str = decoded
+      true
+    rescue Encoding::InvalidByteSequenceError, Encoding::UndefinedConversionError
+      false
+    end
+
+    # Every high byte decodes to something in Windows-1251, so a Polish or French
+    # file decoded that way also contains Cyrillic letters, but inside Latin words
+    # ("Pіatnoњж", "Cafй"). Real Cyrillic text has whole Cyrillic words and almost
+    # no words that mix both scripts.
+    def cyrillic_text?(text)
+      words = text.scan(/\p{L}+/)
+      cyrillic_words = words.count { |word| word.length >= 2 && word.match?(/\A\p{Cyrillic}+\z/) }
+      mixed_words = words.count { |word| word.match?(/\p{Cyrillic}/) && word.match?(/\p{Latin}/) }
+
+      cyrillic_words.positive? && mixed_words * 4 <= cyrillic_words
     end
 
     def account_belongs_to_family

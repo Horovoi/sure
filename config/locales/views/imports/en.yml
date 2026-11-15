@@ -68,6 +68,9 @@ en:
         instructions_4: Columns marked with an asterisk (*) are required data.
         instructions_5: No commas, no currency symbols, and no parentheses in numbers.
         title: Import your data
+      update:
+        invalid_csv: Must be valid CSV with headers and at least one row of data
+        success: CSV uploaded successfully.
   imports:
     not_editable: This import can no longer be changed.
     destroy:
