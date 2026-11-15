@@ -19,6 +19,10 @@ export default class extends Controller {
     selectPeriodParam: { type: String, default: "period" },
     selectStartParam: { type: String, default: "start_date" },
     selectEndParam: { type: String, default: "end_date" },
+    // The Turbo Frame that holds the widget (the dashboard's net_worth_section):
+    // the range then loads into that frame, as the widget's period select does,
+    // so the dashboard keeps its scroll position instead of reloading at the top.
+    selectFrame: { type: String, default: "" },
   };
 
   _d3SvgMemo = null;
@@ -639,7 +643,11 @@ export default class extends Controller {
     url.searchParams.set(this.selectStartParamValue, formatDate(startDate));
     url.searchParams.set(this.selectEndParamValue, formatDate(endDate));
 
-    Turbo.visit(url.toString());
+    if (this.selectFrameValue && document.getElementById(this.selectFrameValue)) {
+      Turbo.visit(url.toString(), { frame: this.selectFrameValue, action: "advance" });
+    } else {
+      Turbo.visit(url.toString());
+    }
   }
 
   _nearestDataPointForPixel(xPos) {
@@ -940,6 +948,8 @@ export default class extends Controller {
       const fmt = new Intl.NumberFormat(undefined, {
         style: currency ? "currency" : "decimal",
         currency: currency || undefined,
+        // "₴33.43K", as the amounts around the chart, not "UAH 33.43K"
+        currencyDisplay: currency ? "narrowSymbol" : undefined,
         notation: "compact",
         maximumFractionDigits: 2,
       });

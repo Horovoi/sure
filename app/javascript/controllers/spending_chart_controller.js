@@ -60,17 +60,23 @@ export default class extends Controller {
     const minValue = Math.min(0, d3.min(values) ?? 0);
     if (maxValue === 0 && minValue === 0) return;
 
-    // Room on the right for the amount labels; the curves run to the axis
-    const margin = { top: 8, right: 56, bottom: 20, left: 4 };
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
-
     const svg = d3
       .select(this.element)
       .append("svg")
       .attr("width", width)
       .attr("height", height)
       .attr("viewBox", [0, 0, width, height]);
+
+    // Room on the right for the amount labels, as wide as the widest one: a
+    // fixed 56px cut "₴100K" to "UAH 100". The curves run to the axis.
+    const yTicks = d3
+      .scaleLinear()
+      .domain([minValue * 1.05, maxValue * 1.05])
+      .nice()
+      .ticks(4);
+    const margin = { top: 8, right: this.#axisLabelWidth(svg, yTicks) + 12, bottom: 20, left: 4 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
 
     const group = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -164,6 +170,25 @@ export default class extends Controller {
       .attr("class", "text-secondary fill-current")
       .style("font-size", "12px")
       .style("font-weight", "500");
+  }
+
+  // The widest y-axis label, measured with an invisible probe in the label style
+  #axisLabelWidth(svg, ticks) {
+    const probe = svg
+      .append("text")
+      .attr("class", "text-secondary fill-current")
+      .style("font-size", "12px")
+      .style("font-weight", "500")
+      .style("visibility", "hidden");
+    const width = Math.max(
+      0,
+      ...ticks.map((tick) => {
+        probe.text(this.#formatCompact(tick));
+        return probe.node().getComputedTextLength();
+      }),
+    );
+    probe.remove();
+    return Math.ceil(width);
   }
 
   #drawXAxis(group, x, days, innerHeight, axisLabels) {
@@ -295,7 +320,11 @@ export default class extends Controller {
 
   #formatCurrency(value) {
     try {
-      return new Intl.NumberFormat(undefined, { style: "currency", currency: this.currencyValue }).format(value);
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: this.currencyValue,
+        currencyDisplay: "narrowSymbol",
+      }).format(value);
     } catch {
       return String(value);
     }
@@ -306,6 +335,8 @@ export default class extends Controller {
       return new Intl.NumberFormat(undefined, {
         style: "currency",
         currency: this.currencyValue,
+        // "₴80K", as the amounts around the chart, not "UAH 80K"
+        currencyDisplay: "narrowSymbol",
         notation: "compact",
         maximumFractionDigits: 1,
       }).format(value);

@@ -207,11 +207,21 @@ class DashboardTest < ApplicationSystemTestCase
   test "a drag across the net worth chart selects that date range" do
     original_order = page.all("[data-section-key]").map { |el| el["data-section-key"] }
 
+    # Scrolled down to the chart, as a user is when they drag across it
+    page.execute_script("document.getElementById('netWorthChart').scrollIntoView({ block: 'center' })")
+    scroll_before = page.evaluate_script("document.querySelector('main').scrollTop")
+    assert_operator scroll_before, :>, 0
+
     # The chart sits in a draggable dashboard section. The gesture must reach
     # the chart's brush, not the section's drag-and-drop reordering.
     drag_across find("#netWorthChart .drag-select-brush .overlay", visible: :all)
 
     assert_current_path(/net_worth_period=custom/)
+
+    # The range loads into the widget's frame: the dashboard stays where it was
+    # instead of reloading at the top
+    assert_selector "#netWorthChart .drag-select-brush .overlay", visible: :all
+    assert_in_delta scroll_before, page.evaluate_script("document.querySelector('main').scrollTop"), 40
     query = Rack::Utils.parse_query(URI.parse(current_url).query)
     start_date = Date.parse(query.fetch("net_worth_start_date"))
     end_date = Date.parse(query.fetch("net_worth_end_date"))

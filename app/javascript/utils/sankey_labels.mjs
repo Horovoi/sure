@@ -11,7 +11,9 @@
 // On a narrow chart a label can also run across the gap into the next
 // column. When the caller passes each label's measured box (keyed by
 // node.index), a label yields if it would cover another node's bar, or a
-// more prominent label from another column.
+// more prominent label already kept. That includes its own column: the
+// tighter spacing of a large graph (and the tall-bar rule) is shorter than a
+// two-line label, so the boxes catch the overlap the spacing rule lets by.
 export function hiddenSankeyLabels(nodes, { height, minSpacing, labelBoxes }) {
   const hiddenLabels = new Set();
   const isLargeGraph = height > 600;
@@ -38,13 +40,12 @@ export function hiddenSankeyLabels(nodes, { height, minSpacing, labelBoxes }) {
       !box ||
       !(
         bars.some((bar) => bar.node !== node && overlaps(box, bar)) ||
-        // Same-column spacing is the rule above's job.
-        keptBoxes.some((kept) => kept.column !== column && overlaps(box, kept.box))
+        keptBoxes.some((kept) => overlaps(box, kept.box))
       );
 
     if (spaced && clear) {
       keptYsByColumn.set(column, [...keptYs, nodeY]);
-      if (box) keptBoxes.push({ column, box });
+      if (box) keptBoxes.push({ box });
     } else {
       hiddenLabels.add(node.index);
     }

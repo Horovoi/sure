@@ -2,7 +2,9 @@
 
 <div class="space-y-6" id="balance-sheet">
   <% balance_sheet.classification_groups.each do |classification_group| %>
-    <div class="space-y-4 px-4">
+    <%# @container: the weight column gives way when the dashboard column is narrow
+        (both side panels open), so the value column stays in view %>
+    <div class="space-y-4 px-4 @container">
       <div class="flex items-center gap-2">
         <h2 class="text-lg font-medium inline-flex items-center gap-1.5">
           <span class="<%= "animate-pulse" if classification_group.syncing? %>">
@@ -37,13 +39,13 @@
 
         <div class="bg-container-inset rounded-xl p-1 space-y-1 overflow-x-auto">
           <div class="px-4 py-2 flex items-center uppercase text-xs font-medium text-secondary">
-            <div class="w-40">Name</div>
+            <div class="w-40"><%= t("pages.dashboard.balance_sheet.name") %></div>
             <div class="ml-auto text-right flex items-center gap-6">
-              <div class="w-24">
-                <p>Weight</p>
+              <div class="w-24 hidden @lg:block">
+                <p><%= t("pages.dashboard.balance_sheet.weight") %></p>
               </div>
               <div class="w-40">
-                <p>Value</p>
+                <p><%= t("pages.dashboard.balance_sheet.value") %></p>
               </div>
             </div>
           </div>
@@ -62,7 +64,7 @@
                   </div>
 
                   <div class="flex items-center justify-between text-right gap-6">
-                    <div class="w-28 shrink-0 flex items-center justify-end gap-2">
+                    <div class="w-28 shrink-0 hidden @lg:flex items-center justify-end gap-2">
                       <%= render "pages/dashboard/group_weight", weight: account_group.weight, color: account_group.color %>
                     </div>
 
@@ -82,7 +84,7 @@
                       </div>
 
                       <div class="ml-auto flex items-center text-right gap-6">
-                        <div class="w-28 shrink-0 flex items-center justify-end gap-2">
+                        <div class="w-28 shrink-0 hidden @lg:flex items-center justify-end gap-2">
                           <%
                               # Calculate weight as percentage of classification total
                               classification_total = classification_group.total_money.amount
