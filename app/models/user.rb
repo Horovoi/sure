@@ -112,8 +112,12 @@ class User < ApplicationRecord
     show_ai_sidebar
   end
 
+  # OpenAI is configured, or the Claude bridge on the Mac is (CLAUDE_BRIDGE_URL and CLAUDE_BRIDGE_TOKEN)
   def ai_available?
-    !Rails.application.config.app_mode.self_hosted? || ENV["OPENAI_ACCESS_TOKEN"].present? || Setting.openai_access_token.present?
+    !Rails.application.config.app_mode.self_hosted? ||
+      ENV["OPENAI_ACCESS_TOKEN"].present? ||
+      Setting.openai_access_token.present? ||
+      Assistant::Claude.configured?
   end
 
   def ai_enabled?

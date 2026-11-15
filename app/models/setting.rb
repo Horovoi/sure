@@ -54,6 +54,10 @@ class Setting < RailsSettings::Base
   # chat's per-turn token is gated by the user's ai_enabled instead (decision 13).
   field :mcp_enabled, type: :boolean, default: true
 
+  # Claude chat: the model new chat turns use, picked on Settings > AI. Blank = automatic (Claude's "sonnet" when
+  # the bridge is configured, else the OpenAI model). See Chat.default_model.
+  field :chat_model, type: :string
+
   AUTO_SYNC_TIME_FORMAT = /\A([01]?\d|2[0-3]):([0-5]\d)\z/
 
   def self.valid_auto_sync_time?(time_str)

@@ -517,9 +517,144 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # --- Turn token (the in-app Claude chat) -----------------------------------------------------------------
+  # The turn token always has scope :full: the chat gets every tool with no approval prompt (owner answer 2).
+  # No test may assert that the Claude chat lacks write, delete, rule or transfer tools.
+
+  test "a turn token lists every tool while its turn streams, writes and deletes included" do
+    turn = streaming_claude_turn
+
+    mcp_post "tools/list", headers: turn_auth(turn)
+
+    assert_response :success
+    names = rpc_result["tools"].map { |tool| tool["name"] }
+    assert_equal Assistant.function_classes_for(:full).map(&:name), names
+    %w[create_transaction update_transaction delete_transaction record_balance].each { |name| assert_includes names, name }
+    %w[apply_rule unmatch_transfer].each do |name|
+      assert_includes names, name if Assistant.function_classes.map(&:name).include?(name)
+    end
+    assert_equal true, rpc_result["tools"].find { |tool| tool["name"] == "delete_transaction" }.dig("annotations", "destructiveHint")
+  end
+
+  test "a turn token works without MCP_API_TOKEN and with the MCP switch off" do
+    turn = streaming_claude_turn
+    Setting.mcp_enabled = false
+
+    with_env_overrides(MCP_API_TOKEN: nil, MCP_USER_EMAIL: nil) do
+      mcp_post "tools/list", headers: turn_auth(turn)
+    end
+
+    assert_response :success
+    assert rpc_result["tools"].any?
+  ensure
+    Setting.mcp_enabled = true
+  end
+
+  test "a turn token is refused when its user turned AI off" do
+    turn = streaming_claude_turn
+    @user.update!(ai_enabled: false)
+
+    mcp_post "tools/list", headers: turn_auth(turn)
+
+    assert_response :forbidden
+    assert_equal McpController::JSON_RPC_INVALID_REQUEST, rpc_error["code"]
+  end
+
+  test "a turn token is 401 once its turn completed or failed" do
+    turn = streaming_claude_turn
+    token = Mcp::TurnToken.generate(turn)
+
+    turn.update!(content: "Done")
+    turn.complete!("sess_1")
+    mcp_post "tools/list", headers: { "Authorization" => "Bearer #{token}" }
+    assert_response :unauthorized
+
+    failed = streaming_claude_turn
+    failed_token = Mcp::TurnToken.generate(failed)
+    failed.fail!(StandardError.new("x"))
+    mcp_post "tools/list", headers: { "Authorization" => "Bearer #{failed_token}" }
+    assert_response :unauthorized
+  end
+
+  test "an expired turn token is 401" do
+    turn = streaming_claude_turn
+    token = Mcp::TurnToken.generate(turn)
+
+    travel Mcp::TurnToken::EXPIRES_IN + 1.minute do
+      turn.touch
+      mcp_post "tools/list", headers: { "Authorization" => "Bearer #{token}" }
+    end
+
+    assert_response :unauthorized
+  end
+
+  test "a tampered turn token is 401" do
+    token = Mcp::TurnToken.generate(streaming_claude_turn)
+    data, digest = token.split("--")
+
+    [ "#{data}x--#{digest}", "#{data}--#{digest.reverse}", "#{data}--" ].each do |tampered|
+      mcp_post "tools/list", headers: { "Authorization" => "Bearer #{tampered}" }
+      assert_response :unauthorized
+    end
+  end
+
+  test "a turn token naming another user's message is 401" do
+    turn = streaming_claude_turn
+    other = users(:family_member)
+    forged = Rails.application.message_verifier(:mcp_turn).generate(
+      { "user_id" => other.id, "assistant_message_id" => turn.id, "scope" => "full" },
+      expires_in: 15.minutes, purpose: :mcp_turn
+    )
+
+    mcp_post "tools/list", headers: { "Authorization" => "Bearer #{forged}" }
+
+    assert_response :unauthorized
+  end
+
+  test "a turn token tool call is audited as claude_chat with the chat and message ids" do
+    turn = streaming_claude_turn
+
+    assert_difference -> { AiToolAudit.count }, 1 do
+      mcp_post "tools/call", params: { name: "get_accounts", arguments: {} }, headers: turn_auth(turn)
+    end
+
+    assert_response :success
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "claude_chat", audit.source
+    assert_equal turn.chat_id, audit.chat_id
+    assert_equal turn.id, audit.assistant_message_id
+    assert_equal @user, audit.user
+    assert_equal "ok", audit.status
+  end
+
+  test "a turn token can call a write tool and the audit names the record" do
+    turn = streaming_claude_turn
+    transaction = transactions(:one)
+
+    mcp_post "tools/call", params: { name: "update_transaction", arguments: { id: transaction.id, notes: "Set by Claude" } },
+      headers: turn_auth(turn)
+
+    assert_response :success
+    assert_equal false, rpc_result["isError"]
+    assert_equal "Set by Claude", transaction.reload.entry.notes
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "claude_chat", audit.source
+    assert_equal [ transaction.id ], audit.result_record_ids
+  end
+
   private
     def with_mcp_env(&block)
       with_env_overrides(MCP_API_TOKEN: TOKEN, MCP_USER_EMAIL: @user.email, &block)
+    end
+
+    def streaming_claude_turn
+      chat = Chat.create!(user: @user, title: "Claude")
+      UserMessage.create!(chat: chat, content: "Hi", ai_model: "sonnet")
+      AssistantMessage.create!(chat: chat, ai_model: "sonnet", status: "streaming")
+    end
+
+    def turn_auth(turn)
+      { "Authorization" => "Bearer #{Mcp::TurnToken.generate(turn)}" }
     end
 
     def envelope

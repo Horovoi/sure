@@ -64,41 +64,52 @@ class Assistant
 
   # Streams the response for a claimed (streaming) assistant message and completes it.
   # Raises on failure; AssistantMessage#generate_response fails the turn.
+  #
+  # The turn's model picks the engine: a Claude model goes to the bridge on the Mac (Assistant::Claude), anything
+  # else to the built-in OpenAI path (decision 16).
   def respond_to(assistant_message)
-    prompt = assistant_message.prompt
-    raise StandardError, "No user message to respond to" unless prompt
-
-    llm_provider = get_model_provider(assistant_message.ai_model)
-
-    unless llm_provider
-      error_message = build_no_provider_error_message(assistant_message.ai_model)
-      raise StandardError, error_message
+    if Assistant::Claude.handles?(assistant_message.ai_model)
+      Assistant::Claude.new(chat, instructions: instructions).respond_to(assistant_message)
+    else
+      respond_with_builtin(assistant_message)
     end
-
-    responder = Assistant::Responder.new(
-      message: prompt,
-      instructions: instructions,
-      function_tool_caller: function_tool_caller(assistant_message),
-      llm: llm_provider
-    )
-
-    responder.on(:output_text) do |text|
-      assistant_message.append_text!(text)
-    end
-
-    responder.on(:function_tool_calls) do |function_tool_calls|
-      # Saved right away, so they stay with the turn even if a later request fails
-      assistant_message.tool_calls << function_tool_calls
-      update_thinking("Analyzing your data...")
-    end
-
-    final_response = responder.respond(previous_response_id: chat.latest_assistant_response_id)
-
-    assistant_message.complete!(final_response.id)
   end
 
   private
     attr_reader :functions
+
+    def respond_with_builtin(assistant_message)
+      prompt = assistant_message.prompt
+      raise StandardError, "No user message to respond to" unless prompt
+
+      llm_provider = get_model_provider(assistant_message.ai_model)
+
+      unless llm_provider
+        error_message = build_no_provider_error_message(assistant_message.ai_model)
+        raise StandardError, error_message
+      end
+
+      responder = Assistant::Responder.new(
+        message: prompt,
+        instructions: instructions,
+        function_tool_caller: function_tool_caller(assistant_message),
+        llm: llm_provider
+      )
+
+      responder.on(:output_text) do |text|
+        assistant_message.append_text!(text)
+      end
+
+      responder.on(:function_tool_calls) do |function_tool_calls|
+        # Saved right away, so they stay with the turn even if a later request fails
+        assistant_message.tool_calls << function_tool_calls
+        update_thinking(I18n.t("assistant.thinking.analyzing"))
+      end
+
+      final_response = responder.respond(previous_response_id: chat.latest_assistant_response_id)
+
+      assistant_message.complete!(final_response.id)
+    end
 
     # Built per turn, so every tool call is audited with the assistant message it answers
     def function_tool_caller(assistant_message)

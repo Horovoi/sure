@@ -62,8 +62,8 @@ class AssistantTest < ActiveSupport::TestCase
   end
 
   test "shows available providers in error message when model not supported" do
-    @turn.update!(ai_model: "claude-3")
-    @assistant.expects(:get_model_provider).with("claude-3").returns(nil)
+    @turn.update!(ai_model: "llama-3")
+    @assistant.expects(:get_model_provider).with("llama-3").returns(nil)
 
     mock_provider = mock("openai_provider")
     mock_provider.stubs(:provider_name).returns("OpenAI")
@@ -76,7 +76,7 @@ class AssistantTest < ActiveSupport::TestCase
     @turn.generate_response
 
     error = JSON.parse(@chat.reload.error)
-    assert_includes error, "No LLM provider configured that supports model 'claude-3'"
+    assert_includes error, "No LLM provider configured that supports model 'llama-3'"
     assert_includes error, "Available providers:"
     assert_includes error, "OpenAI: models starting with: gpt-4, gpt-5, o1, o3"
     assert_includes error, "Use a supported model from the list above"
@@ -266,6 +266,37 @@ class AssistantTest < ActiveSupport::TestCase
     output = llm.calls.last[:function_results].first[:output]
     assert_equal "get_accounts failed unexpectedly", output[:error]
     refute_match "internals", output.to_json
+  end
+
+  # --- Engine dispatch -----------------------------------------------------------------------------------
+
+  test "a Claude model goes to the Claude adapter, not the OpenAI path" do
+    @turn.update!(ai_model: "sonnet")
+    Assistant::Claude.any_instance.expects(:respond_to).with(@turn)
+    @assistant.expects(:get_model_provider).never
+
+    @assistant.respond_to(@turn)
+  end
+
+  test "a Claude model id goes to the Claude adapter with the chat's instructions" do
+    @turn.update!(ai_model: "claude-opus-5-5")
+    claude = mock("claude")
+    claude.expects(:respond_to).with(@turn)
+    Assistant::Claude.expects(:new).with(@chat, instructions: @assistant.instructions).returns(claude)
+
+    @assistant.respond_to(@turn)
+  end
+
+  test "a GPT model goes to the built-in path" do
+    Assistant::Claude.expects(:new).never
+    response = provider_response(id: "1", text: "Hi")
+    use_llm(step(response: provider_success_response(response)))
+    @turn.start!
+
+    @assistant.respond_to(@turn)
+
+    assert @turn.reload.complete?
+    assert_equal "1", @chat.reload.latest_assistant_response_id
   end
 
   # --- Tool registry --------------------------------------------------------------------------------------

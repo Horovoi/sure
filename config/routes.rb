@@ -405,6 +405,12 @@ Rails.application.routes.draw do
   end
   # --- end AI tool-call audit ---
 
+  # --- Claude chat (w2-ai): the Claude card on Settings > AI (loaded lazily) and the chat model select ---
+  namespace :settings do
+    resource :ai_chat, only: %i[show update]
+  end
+  # --- end Claude chat ---
+
 
 
   resources :currencies, only: %i[show]
