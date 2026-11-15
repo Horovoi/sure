@@ -128,4 +128,22 @@ class StaleWorkReaperJobTest < ActiveJob::TestCase
     assert_equal "warn", entry.level
     assert_equal rule.family, entry.family
   end
+
+  # goal-pledges: expiry is a reaper rule, not a separate sweep job
+  test "expires open pledges past their window, quietly, and leaves live ones alone" do
+    old = goal_pledges(:open_transfer)
+    old.update_columns(expires_at: 1.hour.ago)
+    live = goals(:vacation_italy).goal_pledges.create!(account: accounts(:depository), amount: 412)
+    matched = goal_pledges(:matched_transfer)
+
+    result = nil
+    assert_no_difference -> { DebugLogEntry.where(category: "stale_work").where("message LIKE ?", "GoalPledge%").count } do
+      result = StaleWorkReaperJob.perform_now
+    end
+
+    assert old.reload.expired?
+    assert live.reload.open?
+    assert matched.reload.matched?, "a kept pledge is never expired, though its window has passed"
+    assert_equal 1, result["GoalPledge"]
+  end
 end

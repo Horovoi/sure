@@ -63,7 +63,7 @@
       <span class="text-xs text-subdued whitespace-nowrap"><%= linked_accounts_count_label %></span>
     </div>
     <span class="text-xs text-subdued tabular-nums <%= "privacy-sensitive" if footer_has_money? %>">
-      <%= footer_line %>
+      <%= footer_line %><% if has_pending_pledge? %> · <%= t("goals.goal_card.pending_count", count: pending_pledges_count) %><% end %>
     </span>
   </div>
 </div>

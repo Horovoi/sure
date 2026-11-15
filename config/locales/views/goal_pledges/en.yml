@@ -1,0 +1,20 @@
+---
+en:
+  goal_pledges:
+    new:
+      helper_transfer: The pledge stays pending for 7 days and is confirmed when a matching deposit or transfer into this account is recorded.
+      helper_manual: The pledge stays pending for 7 days and is confirmed when you record the deposit or update this account's balance.
+      amount_label: Amount
+      account_label: Into account
+      submit: Record pledge
+      preview_zero: "Currently {current} of {target} saved."
+      preview_nonzero: "Reaches {percent}%, {newTotal} of {target}."
+      preview_reached: "Hits your {target} target. Goal reached."
+    create:
+      success: Pledge recorded. It is confirmed when the money shows up in the account.
+    renew:
+      success: Pledge window extended by 7 days.
+      not_open: Only open pledges can be extended.
+    destroy:
+      success: Pledge cancelled.
+      not_open: Only open pledges can be cancelled.

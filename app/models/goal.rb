@@ -2,7 +2,7 @@
 # make toward it. Ported from upstream Sure (savings-goals): earmarks with a shared
 # pool, one-off goals and maintained reserves, months-of-expenses targets and
 # multi-currency funding. Pledges (goal-pledges) and spending from a goal
-# (goal-spending) extend this model in their own units.
+# (goal-spending) have their own sections below.
 class Goal < ApplicationRecord
   include AASM, Monetizable
 
@@ -55,6 +55,9 @@ class Goal < ApplicationRecord
   # autosave, so an earmark edit on an already linked account is saved with the goal
   has_many :goal_accounts, dependent: :destroy, autosave: true
   has_many :linked_accounts, through: :goal_accounts, source: :account
+  # Pledges (goal-pledges): "I just put X in for this goal", kept when the money arrives
+  has_many :goal_pledges, dependent: :destroy
+  has_many :open_pledges, -> { pending }, class_name: "GoalPledge", inverse_of: :goal
 
   monetize :target_amount
 
@@ -192,7 +195,7 @@ class Goal < ApplicationRecord
     # Goals loaded ready to render: preloads plus the family-wide backing math, so a
     # list of goals does not query once per goal
     def prepared_for(family, scope: family.goals)
-      goals = scope.alphabetically.includes(:goal_accounts, linked_accounts: :account_providers).to_a
+      goals = scope.alphabetically.includes(:goal_accounts, :open_pledges, linked_accounts: :account_providers).to_a
       inject_backing_math!(goals, family)
       goals
     end
@@ -580,9 +583,43 @@ class Goal < ApplicationRecord
     Money.new(delta, currency)
   end
 
-  # Open pledge total in goal currency. Zero until goal-pledges overrides it.
+  # Open pledge total in goal currency (a pledge is always in the goal's currency).
+  # Counted as this month's inflow, so the catch-up figure does not ask for money the
+  # user has just pledged.
   def pending_pledged_amount
-    0.to_d
+    open_pledges.sum { |pledge| pledge.amount.to_d }
+  end
+
+  # ---------------------------------------------------------------------------
+  # Pledges (w2-goals goal-pledges)
+  # ---------------------------------------------------------------------------
+
+  # The date of the entry that kept the latest pledge, nil when none has been kept.
+  # The entry's date, not the pledge's updated_at, so it reads the same after a resave.
+  def last_matched_pledge_on
+    return @last_matched_pledge_on if defined?(@last_matched_pledge_on)
+
+    @last_matched_pledge_on = goal_pledges.where(status: "matched").maximum(:matched_on)
+  end
+
+  def last_matched_pledge_days_ago
+    last = last_matched_pledge_on
+    last && (Date.current - last).to_i
+  end
+
+  # The pledge button says what the user just did: a transfer for an investment or
+  # linked account, money set aside for a manual cash account
+  def pledge_action_label_key
+    pledges_use_transfer? ? "goals.show.pledge_just_transferred" : "goals.show.pledge_just_saved"
+  end
+
+  def pledges_use_transfer?
+    linked_accounts.any? { |account| account.default_pledge_kind == "transfer" }
+  end
+
+  # Whether the goal page offers a new pledge: a goal still being funded
+  def accepts_pledges?
+    active? && !(status == :reached || status == :funded) && linked_accounts.any?
   end
 
   # ---------------------------------------------------------------------------
@@ -734,7 +771,7 @@ class Goal < ApplicationRecord
   end
 
   # Shared by the show page menu and the index card menu. Deleting a goal removes only
-  # the goal and its account links; accounts, balances and transactions stay.
+  # the goal, its account links and its pledges; accounts, balances and transactions stay.
   def deletion_confirm
     CustomConfirm.new(
       destructive: true,

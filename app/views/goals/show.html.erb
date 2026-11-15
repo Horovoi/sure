@@ -17,6 +17,12 @@
               " · "
             ) %>
       </p>
+      <% last_days = @goal.last_matched_pledge_days_ago %>
+      <% unless last_days.nil? %>
+        <p class="text-xs text-subdued mt-0.5">
+          <%= last_days.zero? ? t("goals.goal_card.footer_last_today") : t("goals.goal_card.footer_last_days", count: last_days) %>
+        </p>
+      <% end %>
     </div>
     <div class="shrink-0">
       <%= render DS::Menu.new do |menu| %>
@@ -84,6 +90,10 @@
 
   <%= render "status_callout", goal: @goal %>
 
+  <% @open_pledges.each do |pledge| %>
+    <%= render "pending_pledge_banner", pledge: pledge %>
+  <% end %>
+
   <% if @unattributed_outflows.any? %>
     <%= render "unattributed_outflows", goal: @goal, outflows: @unattributed_outflows %>
   <% end %>
@@ -139,6 +149,21 @@
       <% end %>
       <% unless @goal.completed? %>
         <p class="text-xs text-subdued tabular-nums mt-0.5 privacy-sensitive"><%= t(".ring.to_go", amount: @goal.remaining_amount_money.format(precision: 0)) %></p>
+      <% end %>
+      <% if @goal.accepts_pledges? %>
+        <%# The one pledge entry point on the page. Behind pace, it is filled with
+            the catch-up amount, so accepting once closes the gap. %>
+        <% prefill_amount = @goal.status == :behind && @goal.catch_up_delta_money.amount.positive? ? @goal.catch_up_delta_money.amount.to_f : nil %>
+        <div class="mt-4">
+          <%= render DS::Link.new(
+            text: t(".record_pledge_cta"),
+            variant: "primary",
+            size: "sm",
+            href: new_goal_pledge_path(@goal, amount: prefill_amount),
+            icon: "plus",
+            frame: :modal
+          ) %>
+        </div>
       <% end %>
     </div>
 

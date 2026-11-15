@@ -85,6 +85,10 @@
       </div>
     </section>
 
+    <% if @any_pending_pledge %>
+      <%= render DS::Alert.new(variant: "info", message: t(".pending_pledges_callout"), live: :polite) %>
+    <% end %>
+
     <%# Goals section %>
     <section data-controller="goals-filter"
              data-goals-filter-empty-query-value="<%= t(".search.empty_with_query", query: "__QUERY__") %>"

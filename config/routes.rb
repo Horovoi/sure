@@ -177,7 +177,7 @@ Rails.application.routes.draw do
     resources :budget_categories, only: %i[index show update]
   end
 
-  # --- Savings goals (w2-goals): goals and their lifecycle; pledges and spending add their own routes below ---
+  # --- Savings goals (w2-goals): goals, their lifecycle, spending and pledges ---
   resources :goals do
     member do
       patch :pause
@@ -191,6 +191,13 @@ Rails.application.routes.draw do
       # spent from more than once, so the write is a POST.
       get :consume
       post :consume, action: :record_consumption, as: nil
+    end
+
+    # Pledges (goal-pledges): delete cancels the pledge, renew extends its window
+    resources :pledges, only: %i[new create destroy], controller: "goal_pledges" do
+      member do
+        patch :renew
+      end
     end
   end
   # --- end savings goals ---

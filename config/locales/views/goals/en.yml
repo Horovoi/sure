@@ -20,6 +20,7 @@ en:
       subtitle: Save toward what matters.
       new_goal: New goal
       empty_filtered: No goals match.
+      pending_pledges_callout: Some goals have pending pledges. Each one is confirmed when the money shows up in its account.
       kpi:
         contributed_label: Contributed · last 30d
         velocity_delta_up: "↑ %{percent}%% vs. prior 30d"
@@ -128,6 +129,22 @@ en:
     show:
       edit: Edit
       consume: I used some of this money
+      record_pledge_cta: Record pledge
+      pledge_just_transferred: Log a transfer you made
+      pledge_just_saved: Log money you set aside
+      pending_pledge:
+        title:
+          zero: "Pending: %{amount} into %{account} · expires today"
+          one: "Pending: %{amount} into %{account} · 1 day left"
+          other: "Pending: %{amount} into %{account} · %{count} days left"
+        body_transfer: Confirmed when a matching deposit or transfer into this account is recorded.
+        body_manual: Confirmed when a matching deposit is recorded or you update this account's balance.
+        pledged_at: "Pledged %{time_ago} ago"
+        extend: Extend 7 days
+        cancel: Cancel
+        confirm_cancel_title: Cancel this pledge?
+        confirm_cancel_body: "The %{amount} pledge will be removed. You can record a new one anytime."
+        confirm_cancel_cta: Cancel pledge
       pause: Pause
       resume: Resume
       complete: Mark complete
@@ -192,7 +209,7 @@ en:
       confirm_archive_body: Archived goals disappear from the main list. You can restore them later. Archiving does not record what you reached — mark the goal complete first if you want that kept.
       confirm_archive_cta: Archive
       confirm_delete_title: Delete this goal?
-      confirm_delete_body: "%{name} is removed for good. Your linked accounts, balances and transactions are not affected. To keep it as a record instead, archive it."
+      confirm_delete_body: "%{name} and its pledge history are removed for good. Your linked accounts, balances and transactions are not affected. To keep it as a record instead, archive it."
       confirm_delete_cta: Delete goal
       paused_banner:
         title: This goal is paused
@@ -261,6 +278,13 @@ en:
       footer_catch_up: "Save %{amount}/mo to catch up"
       footer_no_deadline: Open
       footer_on_track: On pace
+      pending_count:
+        one: 1 pending
+        other: "%{count} pending"
+      footer_last_today: Last pledge kept today
+      footer_last_days:
+        one: Last pledge kept 1 day ago
+        other: "Last pledge kept %{count} days ago"
     form:
       target_modes:
         fixed: A fixed amount

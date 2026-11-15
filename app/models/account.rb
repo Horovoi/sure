@@ -19,6 +19,8 @@ class Account < ApplicationRecord
   # Savings goals (w2-goals). The links go before the account: their FK is RESTRICT.
   has_many :goal_accounts, dependent: :destroy
   has_many :goals, through: :goal_accounts
+  # Goal pledges (w2-goals goal-pledges). Before the account too: their FK is RESTRICT.
+  has_many :goal_pledges, dependent: :destroy
 
   monetize :balance, :cash_balance
 
@@ -362,6 +364,14 @@ class Account < ApplicationRecord
   # means the account is over-earmarked (the goals then progress pro rata).
   def free_to_earmark
     balance.to_d - goal_earmarked_total
+  end
+
+  # How a pledge into this account is kept (goal-pledges). A manual cash account's
+  # pledge is also kept by a balance update. An investment or crypto account's is kept
+  # only by an inflow transaction (a rise in its balance may be the market), and so is
+  # a provider-linked account's, whose balance the provider writes.
+  def default_pledge_kind
+    linked? || balance_type == :investment ? "transfer" : "manual_save"
   end
   # --- end savings goals -----------------------------------------------------
 end

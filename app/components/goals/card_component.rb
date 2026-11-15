@@ -1,4 +1,4 @@
-# One goal on the goals index. Pledge counts join the footer when goal-pledges lands.
+# One goal on the goals index, with its open pledges counted in the footer.
 class Goals::CardComponent < ApplicationComponent
   def initialize(goal:, filterable: true)
     @goal = goal
@@ -22,6 +22,15 @@ class Goals::CardComponent < ApplicationComponent
 
   def linked_accounts
     @linked_accounts ||= goal.linked_accounts.to_a
+  end
+
+  # Open pledges are preloaded by Goal.prepared_for, so this reads memory
+  def has_pending_pledge?
+    pending_pledges_count.positive?
+  end
+
+  def pending_pledges_count
+    @pending_pledges_count ||= goal.open_pledges.size
   end
 
   def linked_accounts_count_label
@@ -90,7 +99,14 @@ class Goals::CardComponent < ApplicationComponent
     elsif goal.status == :no_target_date
       I18n.t("goals.goal_card.footer_no_deadline")
     else
-      I18n.t("goals.goal_card.footer_on_track")
+      days = goal.last_matched_pledge_days_ago
+      if days.nil?
+        I18n.t("goals.goal_card.footer_on_track")
+      elsif days.zero?
+        I18n.t("goals.goal_card.footer_last_today")
+      else
+        I18n.t("goals.goal_card.footer_last_days", count: days)
+      end
     end
   end
 

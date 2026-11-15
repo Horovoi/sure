@@ -1,6 +1,6 @@
-# Savings goals (w2-goals). Ported from upstream without the preview gate, the Plan hub
-# and account sharing: one family, so the linkable accounts are the family's active
-# manual accounts of a fundable type.
+# Savings goals (w2-goals), with spending and pledges. Ported from upstream without the
+# preview gate, the Plan hub and account sharing: one family, so the linkable accounts
+# are the family's active manual accounts of a fundable type.
 class GoalsController < ApplicationController
   before_action :set_goal, only: %i[show edit update destroy pause resume complete archive unarchive reopen consume record_consumption]
 
@@ -25,11 +25,13 @@ class GoalsController < ApplicationController
 
     @linkable_account_count = linkable_accounts_scope.count
     @kpi = kpi_payload(@active_goals)
+    @any_pending_pledge = @active_goals.any? { |goal| goal.open_pledges.any? }
     @show_search = @grid_goals.size > 6
     @breadcrumbs = [ [ t(".home"), root_path ], [ t(".title"), nil ] ]
   end
 
   def show
+    @open_pledges = @goal.open_pledges.sort_by(&:created_at).reverse
     @unattributed_outflows = withdrawal_detector.unattributed_outflows.to_a
     @breadcrumbs = [ [ t("goals.index.home"), root_path ], [ t("goals.index.title"), goals_path ], [ @goal.name, nil ] ]
   end
@@ -94,8 +96,8 @@ class GoalsController < ApplicationController
     render_edit_with_errors
   end
 
-  # Allowed in any state: only the goal and its account links go. Accounts, balances
-  # and transactions are untouched.
+  # Allowed in any state: only the goal, its account links and its pledges go (a kept
+  # pledge's id is taken off its transaction). Accounts, balances and transactions stay.
   def destroy
     @goal.destroy!
     redirect_to goals_path, notice: t(".success")
@@ -131,7 +133,7 @@ class GoalsController < ApplicationController
 
   private
     def set_goal
-      @goal = Current.family.goals.includes(:goal_accounts, linked_accounts: :account_providers).find(params[:id])
+      @goal = Current.family.goals.includes(:goal_accounts, :open_pledges, linked_accounts: :account_providers).find(params[:id])
     end
 
     # ---- spending ----

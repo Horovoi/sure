@@ -1,0 +1,29 @@
+# goal-pledges. The open pledge uses an odd amount, so the inflows other tests create on
+# `depository` do not keep it by accident.
+open_transfer:
+  goal: vacation_italy
+  account: depository
+  amount: 237
+  currency: USD
+  kind: transfer
+  status: open
+  expires_at: <%= 7.days.from_now %>
+
+matched_transfer:
+  goal: vacation_italy
+  account: connected
+  amount: 300
+  currency: USD
+  kind: transfer
+  status: matched
+  matched_on: <%= 3.days.ago.to_date %>
+  expires_at: <%= 6.days.ago %>
+
+expired_transfer:
+  goal: emergency_fund
+  account: depository
+  amount: 100
+  currency: USD
+  kind: transfer
+  status: expired
+  expires_at: <%= 8.days.ago %>
