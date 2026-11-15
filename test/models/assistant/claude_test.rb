@@ -76,7 +76,7 @@ class Assistant::ClaudeTest < ActiveSupport::TestCase
       .with(headers: { "Authorization" => "Bearer #{BRIDGE_TOKEN}" }) { |request| request_body = JSON.parse(request.body) }
       .to_return(status: 200, body: ndjson({ type: "text", delta: "Hi" }, result_event))
 
-    with_bridge { @turn.generate_response }
+    with_bridge(PORT: nil, CLAUDE_BRIDGE_MCP_URL: nil) { @turn.generate_response }
 
     assert @turn.reload.complete?
     assert_equal "sonnet", request_body["model"]
