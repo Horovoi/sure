@@ -7,6 +7,19 @@ en:
       new: "New"
       drag_to_reorder: "Drag to reorder section"
       toggle_section: "Toggle section visibility"
+      breadcrumb: "Dashboard"
+      sections_aria_label: "Dashboard sections"
+      section_aria_label: "%{title} section. Press Enter or Space to grab for reordering, then use arrow keys to move."
+      customize:
+        start: "Customize"
+        done: "Done"
+        hide: "Hide %{title}"
+        show: "Show %{title}"
+        hidden_title: "Hidden widgets"
+        hidden_description: "Add a widget back to the dashboard."
+        none_hidden: "Every widget is shown. Hide one with its eye button."
+        all_hidden_title: "Every widget is hidden"
+        all_hidden_description: "Customize the dashboard to add widgets back."
       net_worth_chart:
         data_not_available: Data not available for the selected period
         title: Net Worth

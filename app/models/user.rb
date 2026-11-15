@@ -247,8 +247,27 @@ class User < ApplicationRecord
     preferences&.[]("section_order") || default_dashboard_section_order
   end
 
-  def update_dashboard_preferences(prefs)
+  # laid_out_order is the order the dashboard laid its widgets out in. It also places
+  # widgets the saved order does not list yet.
+  def update_dashboard_preferences(prefs, laid_out_order: nil)
+    prefs = prefs.to_h.stringify_keys
+    if prefs["section_order"]
+      prefs["section_order"] = keep_hidden_sections_in_order(Array(prefs["section_order"]), laid_out_order || dashboard_section_order)
+    end
+
     merge_preferences(prefs)
+  end
+
+  # Dashboard widgets the user hid in Customize mode. Stored as
+  # hidden_sections: { key => true/false }, merged key by key like collapsed_sections,
+  # so a stale tab that hides one widget cannot bring back another.
+  def dashboard_section_hidden?(section_key)
+    preferences&.dig("hidden_sections", section_key) == true
+  end
+
+  def dashboard_hidden_sections
+    hidden = preferences&.[]("hidden_sections")
+    hidden.is_a?(Hash) ? hidden.select { |_key, value| value == true }.keys : []
   end
 
   # Reports preferences management
@@ -298,6 +317,16 @@ class User < ApplicationRecord
 
     def skip_password_validation?
       skip_password_validation == true
+    end
+
+    # The dashboard sends only the order of the widgets it rendered, so each hidden
+    # widget goes back after the widget it followed before
+    def keep_hidden_sections_in_order(new_order, old_order)
+      hidden = dashboard_hidden_sections
+      (old_order & hidden).reduce(new_order - hidden) do |order, key|
+        predecessor = old_order[0...old_order.index(key)].reverse.find { |k| order.include?(k) }
+        order.insert(predecessor ? order.index(predecessor) + 1 : 0, key)
+      end
     end
 
     def default_dashboard_section_order

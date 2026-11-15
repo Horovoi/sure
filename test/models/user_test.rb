@@ -389,4 +389,30 @@ class UserTest < ActiveSupport::TestCase
 
     assert_equal 1, user.sessions.count
   end
+
+  test "hidden dashboard sections are saved and read key by key" do
+    @user.update!(preferences: {})
+    assert_equal [], @user.dashboard_hidden_sections
+    assert_not @user.dashboard_section_hidden?("net_worth_chart")
+
+    @user.update_dashboard_preferences({ "hidden_sections" => { "net_worth_chart" => true } })
+    @user.update_dashboard_preferences({ "hidden_sections" => { "balance_sheet" => true } })
+    assert_equal %w[net_worth_chart balance_sheet], @user.reload.dashboard_hidden_sections
+    assert @user.dashboard_section_hidden?("balance_sheet")
+
+    @user.update_dashboard_preferences({ "hidden_sections" => { "net_worth_chart" => false } })
+    assert_equal %w[balance_sheet], @user.reload.dashboard_hidden_sections
+    assert_not @user.dashboard_section_hidden?("net_worth_chart")
+  end
+
+  test "reordering the shown dashboard sections keeps a hidden section in its place" do
+    @user.update!(preferences: {
+      "section_order" => %w[cashflow_sankey net_worth_chart balance_sheet outflows_donut],
+      "hidden_sections" => { "net_worth_chart" => true }
+    })
+
+    @user.update_dashboard_preferences({ "section_order" => %w[outflows_donut cashflow_sankey balance_sheet] })
+
+    assert_equal %w[outflows_donut cashflow_sankey net_worth_chart balance_sheet], @user.reload.dashboard_section_order
+  end
 end

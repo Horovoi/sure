@@ -9,34 +9,102 @@
       </p>
     </div>
 
-    <%= render DS::Link.new(
-      icon: "plus",
-      text: t("pages.dashboard.new"),
-      href: new_account_path,
-      frame: :modal,
-      class: "hidden lg:inline-flex"
-    ) %>
+    <div class="flex items-center gap-2">
+      <% if @has_accounts %>
+        <% if @customizing_dashboard %>
+          <%= render DS::Link.new(
+            variant: "outline",
+            icon: "check",
+            text: t("pages.dashboard.customize.done"),
+            href: root_path(@dashboard_view_params)
+          ) %>
+        <% else %>
+          <%= render DS::Link.new(
+            variant: "outline",
+            icon: "layout-grid",
+            href: root_path(@dashboard_view_params.merge(customize: 1)),
+            aria: { label: t("pages.dashboard.customize.start") },
+            title: t("pages.dashboard.customize.start")
+          ) %>
+        <% end %>
+      <% end %>
 
-    <%= render DS::Link.new(
-        variant: "icon-inverse",
+      <%= render DS::Link.new(
         icon: "plus",
+        text: t("pages.dashboard.new"),
         href: new_account_path,
         frame: :modal,
-        class: "rounded-full lg:hidden"
+        class: "hidden lg:inline-flex"
       ) %>
+
+      <%= render DS::Link.new(
+          variant: "icon-inverse",
+          icon: "plus",
+          href: new_account_path,
+          frame: :modal,
+          class: "rounded-full lg:hidden"
+        ) %>
+    </div>
   </div>
 <% end %>
 
 <%= render "shared/exchange_rate_notes", family: Current.family, classes: "mb-6" %>
 
-<div class="w-full space-y-6 pb-6 lg:pb-12" data-controller="dashboard-sortable" data-action="dragover->dashboard-sortable#dragOver drop->dashboard-sortable#drop" role="list" aria-label="Dashboard sections">
-  <% if Current.family.accounts.any? %>
+<% if @customizing_dashboard && @has_accounts %>
+  <%= render DS::Card.new(class: "mb-6 gap-3", data: { testid: "dashboard-hidden-sections" }) do %>
+    <div class="space-y-1">
+      <h2 class="text-base font-medium text-primary"><%= t("pages.dashboard.customize.hidden_title") %></h2>
+      <p class="text-sm text-secondary">
+        <%= @hidden_dashboard_sections.any? ? t("pages.dashboard.customize.hidden_description") : t("pages.dashboard.customize.none_hidden") %>
+      </p>
+    </div>
+    <% if @hidden_dashboard_sections.any? %>
+      <div class="flex flex-wrap gap-2">
+        <% @hidden_dashboard_sections.each do |section| %>
+          <%= render DS::Button.new(
+            variant: "outline",
+            size: "sm",
+            icon: "eye",
+            text: t(section[:title]),
+            href: dashboard_preferences_path,
+            method: :patch,
+            params: @dashboard_view_params.merge(customize: 1, preferences: { hidden_sections: { section[:key] => false } }),
+            aria_label: t("pages.dashboard.customize.show", title: t(section[:title])),
+            autofocus: @just_hidden_section == section[:key]
+          ) %>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+<% end %>
+
+<% if @has_accounts && @dashboard_sections.empty? && !@customizing_dashboard %>
+  <%= render DS::Card.new(class: "mb-6") do %>
+    <%= render DS::EmptyState.new(
+      icon: "layout-grid",
+      title: t("pages.dashboard.customize.all_hidden_title"),
+      description: t("pages.dashboard.customize.all_hidden_description")
+    ) do |empty_state| %>
+      <% empty_state.with_action do %>
+        <%= render DS::Link.new(
+          variant: "outline",
+          icon: "layout-grid",
+          text: t("pages.dashboard.customize.start"),
+          href: root_path(@dashboard_view_params.merge(customize: 1))
+        ) %>
+      <% end %>
+    <% end %>
+  <% end %>
+<% end %>
+
+<div class="w-full space-y-6 pb-6 lg:pb-12" data-controller="dashboard-sortable" data-action="dragover->dashboard-sortable#dragOver drop->dashboard-sortable#drop" role="list" aria-label="<%= t("pages.dashboard.sections_aria_label") %>">
+  <% if @has_accounts %>
     <% @dashboard_sections.each do |section| %>
-      <% next unless section[:visible] %>
       <section
         class="bg-container rounded-xl shadow-border-xs transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
         data-dashboard-sortable-target="section"
         data-section-key="<%= section[:key] %>"
+        <%= "autofocus" if @just_shown_section == section[:key] %>
         data-controller="dashboard-section"
         data-dashboard-section-section-key-value="<%= section[:key] %>"
         data-dashboard-section-collapsed-value="<%= Current.user.dashboard_section_collapsed?(section[:key]) %>"
@@ -44,7 +112,7 @@
         tabindex="0"
         role="listitem"
         aria-grabbed="false"
-        aria-label="<%= t(section[:title]) %> section. Press Enter or Space to grab for reordering, then use arrow keys to move."
+        aria-label="<%= t("pages.dashboard.section_aria_label", title: t(section[:title])) %>"
         data-action="
           dragstart->dashboard-sortable#dragStart
           dragend->dashboard-sortable#dragEnd
@@ -64,18 +132,33 @@
               <%= t(section[:title]) %>
             </h2>
           </div>
-          <button
-            type="button"
-            class="cursor-grab active:cursor-grabbing text-secondary hover:text-primary transition-colors p-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
-            data-dashboard-sortable-target="handle"
-            data-action="
-              touchstart->dashboard-sortable#touchStart
-              touchmove->dashboard-sortable#touchMove
-              touchend->dashboard-sortable#touchEnd
-              touchcancel->dashboard-sortable#touchCancel"
-            aria-label="<%= t("pages.dashboard.drag_to_reorder") %>">
-            <%= icon("grip-vertical", size: "sm") %>
-          </button>
+          <div class="flex items-center gap-1">
+            <% if @customizing_dashboard %>
+              <% hide_label = t("pages.dashboard.customize.hide", title: t(section[:title])) %>
+              <%= render DS::Button.new(
+                variant: "icon",
+                size: "sm",
+                icon: "eye-off",
+                href: dashboard_preferences_path,
+                method: :patch,
+                params: @dashboard_view_params.merge(customize: 1, preferences: { hidden_sections: { section[:key] => true } }),
+                aria_label: hide_label,
+                title: hide_label
+              ) %>
+            <% end %>
+            <button
+              type="button"
+              class="cursor-grab active:cursor-grabbing text-secondary hover:text-primary transition-colors p-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
+              data-dashboard-sortable-target="handle"
+              data-action="
+                touchstart->dashboard-sortable#touchStart
+                touchmove->dashboard-sortable#touchMove
+                touchend->dashboard-sortable#touchEnd
+                touchcancel->dashboard-sortable#touchCancel"
+              aria-label="<%= t("pages.dashboard.drag_to_reorder") %>">
+              <%= icon("grip-vertical", size: "sm") %>
+            </button>
+          </div>
         </div>
         <div class="py-4" data-dashboard-section-target="content">
           <%= render partial: section[:partial], locals: section[:locals] %>
@@ -83,18 +166,11 @@
       </section>
     <% end %>
 
-    <%# Fullscreen dialog for cashflow moved outside the frame so it stays open during frame updates %>
-    <%= render partial: "pages/dashboard/cashflow_sankey_dialog", locals: {
-      sankey_data: @cashflow_sankey_data,
-      period: @cashflow_period,
-      show_subcategories: @cashflow_show_subcategories
-    } %>
-
-    <%# Fullscreen dialog for net worth moved outside its frame so it stays open during frame updates %>
-    <%= render partial: "pages/dashboard/net_worth_chart_dialog", locals: {
-      balance_sheet: @balance_sheet,
-      period: @net_worth_period
-    } %>
+    <%# Fullscreen dialogs sit outside their section's frame, so they stay open while the frame reloads %>
+    <% @dashboard_sections.each do |section| %>
+      <% next unless section[:dialog] %>
+      <%= render partial: section[:dialog][:partial], locals: section[:dialog][:locals] %>
+    <% end %>
   <% else %>
     <section>
       <%= render "pages/dashboard/no_accounts_graph_placeholder" %>

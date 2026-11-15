@@ -133,4 +133,79 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_select "[data-testid=missing-exchange-rates]", count: 0
     assert_select "[data-testid=stale-exchange-rates]", count: 0
   end
+
+  # --- Hidden widgets and lazy builders (w2-dash dashboard-lazy-hide) ---
+
+  test "a hidden Sankey section builds no payload" do
+    @user.update!(preferences: { "hidden_sections" => { "cashflow_sankey" => true } })
+    IncomeStatement::Sankey.expects(:new).never
+
+    get root_path
+
+    assert_response :ok
+    assert_select "section[data-section-key='cashflow_sankey']", count: 0
+    assert_select "#cashflow_sankey_dialog", count: 0
+    assert_select "section[data-section-key='net_worth_chart']"
+  end
+
+  test "a widget's own frame request builds only that widget" do
+    IncomeStatement::Sankey.expects(:new).never
+
+    get root_path(outflows_period: "last_30_days"), headers: { "Turbo-Frame" => "outflows_donut_section" }
+
+    assert_response :ok
+  end
+
+  test "customize mode hides a widget and redirects back with the view params" do
+    patch dashboard_preferences_path, params: {
+      customize: 1,
+      cashflow_period: "last_90_days",
+      preferences: { hidden_sections: { net_worth_chart: "true" } }
+    }
+
+    assert_redirected_to root_path(cashflow_period: "last_90_days", customize: 1, hidden_section: "net_worth_chart")
+    assert @user.reload.dashboard_section_hidden?("net_worth_chart")
+
+    follow_redirect!
+    assert_select "section[data-section-key='net_worth_chart']", count: 0
+    assert_select "[data-testid=dashboard-hidden-sections] button", text: /#{Regexp.escape(I18n.t("pages.dashboard.net_worth_chart.title"))}/
+  end
+
+  test "customize mode shows a hidden widget again" do
+    @user.update!(preferences: { "hidden_sections" => { "net_worth_chart" => true } })
+
+    patch dashboard_preferences_path, params: { customize: 1, preferences: { hidden_sections: { net_worth_chart: "false" } } }
+
+    assert_redirected_to root_path(customize: 1, shown_section: "net_worth_chart")
+    assert_not @user.reload.dashboard_section_hidden?("net_worth_chart")
+    follow_redirect!
+    assert_select "section[data-section-key='net_worth_chart'][autofocus]"
+  end
+
+  test "hidden flags are kept only for dashboard widgets" do
+    patch dashboard_preferences_url, params: { preferences: { hidden_sections: { balance_sheet: true, not_a_widget: true } } }, as: :json
+
+    assert_response :ok
+    assert_equal({ "balance_sheet" => true }, @user.reload.preferences["hidden_sections"])
+  end
+
+  test "every widget hidden shows an empty state that links to customize mode" do
+    hidden = PagesController::DASHBOARD_SECTION_KEYS.index_with(true)
+    @user.update!(preferences: { "hidden_sections" => hidden })
+
+    get root_path
+
+    assert_response :ok
+    assert_select "[data-dashboard-sortable-target=section]", count: 0
+    assert_select "a[href=?]", root_path(customize: 1), text: I18n.t("pages.dashboard.customize.start")
+  end
+
+  test "customize mode puts a hide button on each widget" do
+    get root_path(customize: 1)
+
+    assert_response :ok
+    assert_select "section[data-section-key='balance_sheet'] button[aria-label=?]",
+      I18n.t("pages.dashboard.customize.hide", title: I18n.t("pages.dashboard.balance_sheet.title"))
+    assert_select "[data-testid=dashboard-hidden-sections]", text: /#{Regexp.escape(I18n.t("pages.dashboard.customize.none_hidden"))}/
+  end
 end

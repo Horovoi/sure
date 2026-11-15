@@ -150,6 +150,30 @@ class DashboardTest < ApplicationSystemTestCase
     assert_selector "#cashflowSankeyChart g[data-node-id='cash_flow_node']", visible: :all
   end
 
+  test "hide a widget in customize mode, it stays hidden after a reload, then show it again" do
+    net_worth = I18n.t("pages.dashboard.net_worth_chart.title")
+    visit root_path
+    click_link I18n.t("pages.dashboard.customize.start"), match: :first
+
+    click_button I18n.t("pages.dashboard.customize.hide", title: net_worth), enable_aria_label: true
+    assert_no_selector "section[data-section-key='net_worth_chart']"
+    assert_selector "[data-testid=dashboard-hidden-sections]", text: net_worth
+
+    visit root_path
+    assert_selector "section[data-section-key='balance_sheet']"
+    assert_no_selector "section[data-section-key='net_worth_chart']"
+
+    click_link I18n.t("pages.dashboard.customize.start"), match: :first
+    within "[data-testid=dashboard-hidden-sections]" do
+      click_button net_worth
+    end
+    assert_selector "section[data-section-key='net_worth_chart']"
+
+    click_link I18n.t("pages.dashboard.customize.done")
+    assert_no_button I18n.t("pages.dashboard.customize.hide", title: net_worth), enable_aria_label: true
+    assert_selector "section[data-section-key='net_worth_chart']"
+  end
+
   private
     # Large enough that the chart's label rule keeps the Shopping label
     def make_shopping_prominent
