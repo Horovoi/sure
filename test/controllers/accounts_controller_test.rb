@@ -1,11 +1,26 @@
 require "test_helper"
 
 class AccountsControllerTest < ActionDispatch::IntegrationTest
-  include EntriesTestHelper
+  include EntriesTestHelper, RowQueryCountTestHelper
 
   setup do
     sign_in @user = users(:family_admin)
     @account = accounts(:depository)
+  end
+
+  test "show runs the same queries however many rows the activity shows" do
+    create_varied_transaction_rows(from: @account, to: accounts(:credit_card), date: 1.day.ago.to_date)
+    get account_url(@account, per_page: 100) # warm up: first-request work is not a row's
+    few = count_sql_queries { get account_url(@account, per_page: 100) }
+    assert_response :success
+    few_rows = css_select("turbo-frame[id^='entry_']").size
+
+    4.times { |i| create_varied_transaction_rows(from: @account, to: accounts(:credit_card), date: (i + 2).days.ago.to_date) }
+    many = count_sql_queries { get account_url(@account, per_page: 100) }
+    assert_response :success
+
+    assert_operator css_select("turbo-frame[id^='entry_']").size, :>=, few_rows + 20
+    assert_equal few, many, "an activity row runs its own queries"
   end
 
   test "should get index" do

@@ -1,11 +1,27 @@
 require "test_helper"
 
 class TransactionsControllerTest < ActionDispatch::IntegrationTest
-  include EntryableResourceInterfaceTest, EntriesTestHelper
+  include EntryableResourceInterfaceTest, EntriesTestHelper, RowQueryCountTestHelper
 
   setup do
     sign_in @user = users(:family_admin)
     @entry = entries(:transaction)
+  end
+
+  test "index runs the same queries however many rows the page shows" do
+    from, to = accounts(:depository), accounts(:credit_card)
+    create_varied_transaction_rows(from: from, to: to, date: 1.day.ago.to_date)
+    get transactions_url(per_page: 100) # warm up: first-request work is not a row's
+    few = count_sql_queries { get transactions_url(per_page: 100) }
+    assert_response :success
+    few_rows = css_select("turbo-frame[id^='entry_']").size
+
+    4.times { |i| create_varied_transaction_rows(from: from, to: to, date: (i + 2).days.ago.to_date) }
+    many = count_sql_queries { get transactions_url(per_page: 100) }
+    assert_response :success
+
+    assert_operator css_select("turbo-frame[id^='entry_']").size, :>=, few_rows + 20
+    assert_equal few, many, "a transaction row runs its own queries"
   end
 
   test "creates with transaction details" do
