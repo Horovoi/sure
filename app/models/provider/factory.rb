@@ -86,14 +86,33 @@ class Provider::Factory
       adapters_for_account_type(account_type).any?
     end
 
-    # Get all available provider connection configs for a given account type
+    # Get all available provider connection configs for a given account type, from the
+    # bank connection providers that are switched on (BankConnections)
     # @param account_type [String] The account type class name (e.g., "Depository")
     # @param family [Family] The family to check connection availability for
     # @return [Array<Hash>] Array of connection configurations from all providers
     def connection_configs_for_account_type(account_type:, family:)
-      adapters_for_account_type(account_type).flat_map do |adapter_class|
+      enabled_adapters.select { |adapter_class| adapter_class.supported_account_types.include?(account_type) }.flat_map do |adapter_class|
         adapter_class.connection_configs(family: family)
       end
+    end
+
+    # Every connection config of the bank connection providers that are switched on
+    # @param family [Family]
+    # @return [Array<Hash>]
+    def enabled_connection_configs(family:)
+      enabled_adapters.flat_map { |adapter_class| adapter_class.connection_configs(family: family) }
+    end
+
+    # Adapters registered for a provider account class whose provider is switched on
+    # (BankConnections), in registration order
+    # @return [Array<Class>]
+    def enabled_adapters
+      ensure_adapters_loaded
+      enabled = BankConnections.enabled_account_class_names
+      return [] if enabled.empty?
+
+      registry.select { |provider_type, _| enabled.include?(provider_type) }.values.uniq
     end
 
     # Clear all registered adapters (useful for testing)

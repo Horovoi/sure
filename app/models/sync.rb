@@ -283,15 +283,26 @@ class Sync < ApplicationRecord
       end
     end
 
+    # More than DAILY_SYNC_WARNING syncs of one record in a day is worth a look. A bank
+    # connection that syncs hourly (and after each page of a multi-job history fetch)
+    # is allowed HOURLY_DAILY_SYNC_WARNING.
+    DAILY_SYNC_WARNING = 10
+    HOURLY_DAILY_SYNC_WARNING = 100
+
     def report_warnings
       todays_sync_count = syncable.syncs.where(created_at: Date.current.all_day).count
+      threshold = daily_sync_warning_threshold
 
-      if todays_sync_count > 10
+      if todays_sync_count > threshold
         Sentry.capture_exception(
-          Error.new("#{syncable_type} (#{syncable.id}) has exceeded 10 syncs today (count: #{todays_sync_count})"),
+          Error.new("#{syncable_type} (#{syncable.id}) has exceeded #{threshold} syncs today (count: #{todays_sync_count})"),
           level: :warning
         )
       end
+    end
+
+    def daily_sync_warning_threshold
+      BankConnections.provider_for_item_class(syncable_type)&.hourly? ? HOURLY_DAILY_SYNC_WARNING : DAILY_SYNC_WARNING
     end
 
     def handle_start_transition

@@ -15,6 +15,10 @@ class ImportsController < ApplicationController
         return
       end
 
+      if refuse_provider_linked_account(account, fallback: import_path(@import))
+        return
+      end
+
       Import.transaction do
         @import.update!(account: account)
         # PDF rows carry the currency guessed at extraction (the family currency); the
@@ -34,6 +38,8 @@ class ImportsController < ApplicationController
     redirect_to import_path(@import), notice: "Your import has started in the background."
   rescue Import::MaxRowCountExceededError
     redirect_back_or_to import_path(@import), alert: "Your import exceeds the maximum row count of #{@import.max_row_count}."
+  rescue Import::ProviderLinkedAccountError => error
+    redirect_to import_path(@import), alert: error.message
   rescue Import::NotPublishableError, AASM::InvalidTransition
     redirect_to import_path(@import), alert: t(".not_publishable")
   end
@@ -81,6 +87,8 @@ class ImportsController < ApplicationController
     type = "TransactionImport" unless Import::TYPES.include?(type)
 
     account = Current.family.accounts.find_by(id: params.dig(:import, :account_id))
+    return if Import::ACCOUNT_TARGET_TYPES.include?(type) && refuse_provider_linked_account(account, fallback: new_import_path)
+
     import = Current.family.imports.create!(
       type: type,
       account: account,
@@ -167,6 +175,15 @@ class ImportsController < ApplicationController
   end
 
   private
+    # A bank connection keeps this account: statement imports into it are refused
+    # (see Import#target_accounts_not_provider_linked). Redirects and returns true then.
+    def refuse_provider_linked_account(account, fallback:)
+      return false unless account&.linked?
+
+      redirect_back_or_to fallback, alert: Import.provider_linked_message(account)
+      true
+    end
+
     def set_import
       @import = Current.family.imports.includes(:account).find(params[:id])
     end

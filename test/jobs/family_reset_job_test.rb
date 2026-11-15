@@ -110,13 +110,16 @@ class FamilyResetJobTest < ActiveJob::TestCase
     @plaid_provider.stubs(:remove_item)
     create_provider_items
 
-    BankConnections::ITEM_ASSOCIATIONS.each do |association|
+    # The built-in providers' items (create_provider_items); a provider registered later
+    # adds its own item there
+    %i[plaid_items lunchflow_items enable_banking_items coinstats_items coinbase_items].each do |association|
       assert @family.public_send(association).exists?, "#{association} should exist before the reset"
     end
 
+    # The reset does not depend on which providers are switched on
     FamilyResetJob.perform_now(@family)
 
-    BankConnections::ITEM_ASSOCIATIONS.each do |association|
+    BankConnections.item_associations.each do |association|
       assert_equal 0, @family.public_send(association).reload.count, "#{association} should be gone after the reset"
     end
     assert @family.family_exports.reload.where(status: "completed").exists?, "the pre-reset export should survive the reset"

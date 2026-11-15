@@ -14,6 +14,19 @@ module ProviderConnectionsHelper
     t("provider_connections.cutover_text", date: format_date(cutover), provider: provider_label_for(account))
   end
 
+  # Whether an enabled bank connection provider can link an account of this type, for
+  # the "Link provider" button. Read once per account type and request.
+  def provider_link_available?(account)
+    return false unless BankConnections.enabled?
+
+    @provider_link_available ||= {}
+    @provider_link_available.fetch(account.accountable_type) do
+      @provider_link_available[account.accountable_type] = Provider::Factory.connection_configs_for_account_type(
+        account_type: account.accountable_type, family: account.family
+      ).any?
+    end
+  end
+
   # One status line for a provider item (a *_item record)
   def provider_item_status(item)
     if item.respond_to?(:scheduled_for_deletion?) && item.scheduled_for_deletion?

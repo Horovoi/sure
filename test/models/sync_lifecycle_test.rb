@@ -96,6 +96,8 @@ class SyncLifecycleTest < ActiveSupport::TestCase
 
     child_types = family_sync.children.map(&:syncable_type).uniq
     assert_equal [ "Account" ], child_types, "bank-connection items are skipped while bank connections are off"
-    assert_equal family.accounts.visible.manual.count, family_sync.children.count
+    # Accounts linked to a provider that is off sync like manual ones
+    assert_equal family.accounts.visible.outside_enabled_providers.count, family_sync.children.count
+    assert_equal family.accounts.visible.count, family_sync.children.count
   end
 end

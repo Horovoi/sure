@@ -307,6 +307,7 @@ class Account::ProviderImportAdapter
   #
   # @return [Account::CurrentBalanceManager::Result]
   def update_balance(balance:, cash_balance: nil, source: nil)
+    make_room_for_current_anchor!(source) if account.linked?
     result = Account::CurrentBalanceManager.new(account).set_current_balance(balance)
 
     if result.success?
@@ -883,6 +884,34 @@ class Account::ProviderImportAdapter
   end
 
   private
+    # An account has one valuation per day, and the current anchor moves to today. A
+    # reconciliation the user entered today (on an account with hand-kept history) would
+    # make that fail and the provider balance would never be written, so it becomes the
+    # current anchor (the provider's balance replaces its amount; the old amount is
+    # logged), and an older current anchor stays as a reconciliation on its own day. A
+    # balance calculated back from the provider ignores reconciliations anyway.
+    def make_room_for_current_anchor!(source)
+      today = account.entries.valuations.includes(:entryable).find_by(date: Date.current)
+      return unless today&.entryable&.reconciliation?
+
+      Account.transaction do
+        account.entries.valuations.includes(:entryable).where.not(id: today.id).each do |entry|
+          next unless entry.entryable.current_anchor?
+
+          entry.entryable.update!(kind: "reconciliation")
+          entry.update!(name: Valuation.build_reconciliation_name(account.accountable_type))
+        end
+        today.entryable.update!(kind: "current_anchor")
+        today.update!(name: Valuation.build_current_anchor_name(account.accountable_type))
+      end
+
+      DebugLogEntry.capture(
+        category: "sync", level: "info", source: self.class.name, account: account, provider_key: source,
+        message: "Today's reconciliation of #{account.name} became the #{source} current balance",
+        metadata: { entry_id: today.id, previous_amount: today.amount.to_s }
+      )
+    end
+
     def parse_date(date)
       date.is_a?(Date) ? date : Date.parse(date.to_s)
     end

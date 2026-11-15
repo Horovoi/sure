@@ -147,12 +147,10 @@ module AccountableResource
       Current.family.accounts.build(attributes)
     end
 
+    # The connection configs of the enabled bank connection providers for this type
     def set_link_options
-      return @provider_configs = [] unless BankConnections.enabled?
-
       account_type_name = accountable_type.name
 
-      # Get all available provider configs dynamically for this account type
       @provider_configs = Provider::Factory.connection_configs_for_account_type(
         account_type: account_type_name,
         family: Current.family

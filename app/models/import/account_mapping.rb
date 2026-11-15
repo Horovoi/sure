@@ -4,8 +4,9 @@ class Import::AccountMapping < Import::Mapping
   class << self
     def mappables_by_key(import)
       unique_values = import.rows.map(&:account).uniq
-      # Never match a disabled account or one being deleted
-      accounts = import.family.accounts.visible.where(name: unique_values).index_by(&:name)
+      # Never match a disabled account, one being deleted, or one a bank connection
+      # keeps (statement imports into it are refused)
+      accounts = import.family.accounts.visible_manual.where(name: unique_values).index_by(&:name)
 
       unique_values.index_with { |value| accounts[value] }
     end

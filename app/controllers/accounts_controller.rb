@@ -4,19 +4,24 @@ class AccountsController < ApplicationController
   include Periodable
 
   def index
-    # With bank connections off there are no provider cards, so accounts that
-    # are still linked are listed with the manual ones, where they can be unlinked.
+    # Accounts of a provider that is off have no provider card, so they are listed with
+    # the manual ones, where they can be unlinked.
     @manual_accounts = family.accounts
-          .then { |accounts| BankConnections.enabled? ? accounts.listable_manual : accounts.listable }
+          .listable
+          .outside_enabled_providers
           .order(:name)
           .preload(:accountable, :account_providers)
           .with_attached_logo
     Account.preload_syncing(@manual_accounts)
-    @plaid_items = provider_items(family.plaid_items).includes(:syncs, :plaid_accounts)
-    @lunchflow_items = provider_items(family.lunchflow_items).includes(:syncs, :lunchflow_accounts)
-    @enable_banking_items = provider_items(family.enable_banking_items).includes(:syncs)
-    @coinstats_items = provider_items(family.coinstats_items).includes(:coinstats_accounts, :accounts, :syncs)
-    @coinbase_items = provider_items(family.coinbase_items).includes(:coinbase_accounts, :accounts, :syncs)
+    @plaid_items = provider_items(family.plaid_items, :plaid).includes(:syncs, :plaid_accounts)
+    @lunchflow_items = provider_items(family.lunchflow_items, :lunchflow).includes(:syncs, :lunchflow_accounts)
+    @enable_banking_items = provider_items(family.enable_banking_items, :enable_banking).includes(:syncs)
+    @coinstats_items = provider_items(family.coinstats_items, :coinstats).includes(:coinstats_accounts, :accounts, :syncs)
+    @coinbase_items = provider_items(family.coinbase_items, :coinbase).includes(:coinbase_accounts, :accounts, :syncs)
+    # Providers that render their own item card (BankConnections generic_listing)
+    @generic_provider_items = BankConnections.enabled_providers.select(&:generic_listing?).flat_map do |provider|
+      family.public_send(provider.association).ordered.to_a
+    end
 
     # Build sync stats maps for all providers
     build_sync_stats_maps
@@ -27,14 +32,8 @@ class AccountsController < ApplicationController
   end
 
   def new
-    # Get all registered providers with any credentials configured
-    @provider_configs = if BankConnections.enabled?
-      Provider::Factory.registered_adapters.flat_map do |adapter_class|
-        adapter_class.connection_configs(family: family)
-      end
-    else
-      []
-    end
+    # The connection configs of the enabled providers with any credentials configured
+    @provider_configs = Provider::Factory.enabled_connection_configs(family: family)
   end
 
   def sync_all
@@ -57,15 +56,19 @@ class AccountsController < ApplicationController
 
   def sync
     unless @account.syncing?
-      if @account.linked? && BankConnections.enabled?
-        # Sync all provider items for this account
+      enabled_links = @account.account_providers.select do |account_provider|
+        BankConnections.enabled_account_class_names.include?(account_provider.provider_type)
+      end
+
+      if enabled_links.any?
+        # Sync the provider items of this account (enabled providers only).
         # Each provider item will trigger an account sync when complete
-        @account.account_providers.each do |account_provider|
+        enabled_links.each do |account_provider|
           item = account_provider.adapter&.item
           item&.sync_later if item && !item.syncing?
         end
       else
-        # Manual accounts just need balance materialization
+        # Manual accounts, and accounts of a provider that is off, just need balance materialization
         @account.sync_later
       end
     end
@@ -150,19 +153,8 @@ class AccountsController < ApplicationController
     end
 
     begin
-      Account.transaction do
-        # Detach holdings from provider links before destroying them
-        provider_link_ids = @account.account_providers.pluck(:id)
-        if provider_link_ids.any?
-          Holding.where(account_provider_id: provider_link_ids).update_all(account_provider_id: nil)
-        end
-
-        # Remove new system links (account_providers join table)
-        @account.account_providers.destroy_all
-
-        # Remove legacy system links (foreign keys)
-        @account.update!(plaid_account_id: nil)
-      end
+      # Keeps today's balance and the history; detaches holdings; removes the links
+      Account::ProviderLink.unlink!(@account)
 
       redirect_to accounts_path, notice: t("accounts.unlink.success")
     rescue ActiveRecord::RecordInvalid => e
@@ -229,8 +221,8 @@ class AccountsController < ApplicationController
       Current.family
     end
 
-    def provider_items(items)
-      BankConnections.enabled? ? items.ordered : items.none
+    def provider_items(items, key)
+      BankConnections.enabled?(key) ? items.ordered : items.none
     end
 
     def set_account

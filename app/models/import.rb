@@ -5,6 +5,9 @@ class Import < ApplicationRecord
   MappingError = Class.new(StandardError)
   NotPublishableError = Class.new(RuntimeError)
   NotRevertableError = Class.new(RuntimeError)
+  # The import would write into an account a bank connection keeps (see
+  # target_accounts_not_provider_linked)
+  ProviderLinkedAccountError = Class.new(NotPublishableError)
 
   MAX_CSV_SIZE = 10.megabytes
   MAX_PDF_SIZE = 25.megabytes
@@ -149,6 +152,10 @@ class Import < ApplicationRecord
   validate :account_belongs_to_family
   validate :rows_to_skip_within_file_bounds
   validate :amount_type_values_exclusive
+  validate :target_accounts_not_provider_linked
+
+  # Import types whose rows become entries of existing accounts
+  ACCOUNT_TARGET_TYPES = %w[TransactionImport TradeImport PdfImport MintImport].freeze
 
   has_many :rows, dependent: :destroy
   has_many :mappings, dependent: :destroy
@@ -173,6 +180,7 @@ class Import < ApplicationRecord
 
   def publish_later
     raise MaxRowCountExceededError if row_count_exceeded?
+    raise_if_provider_linked_targets!
     raise NotPublishableError, "Import is not publishable" unless publishable?
 
     start_import!
@@ -193,6 +201,7 @@ class Import < ApplicationRecord
       end
 
       raise MaxRowCountExceededError if row_count_exceeded?
+      raise_if_provider_linked_targets!
 
       import!
       complete_import!
@@ -389,7 +398,30 @@ class Import < ApplicationRecord
   end
 
   def publishable?
-    cleaned? && mappings_valid?
+    cleaned? && mappings_valid? && provider_linked_target_accounts.empty?
+  end
+
+  # The accounts this import writes into (its account, or the accounts its rows are
+  # mapped to) that are linked to a bank connection. A linked account's transactions
+  # come from the provider: imported rows would claim the provider's entries, and
+  # reverting the import would delete them, so such an import is refused.
+  def provider_linked_target_accounts
+    return [] unless ACCOUNT_TARGET_TYPES.include?(type)
+
+    targets = [ account ] + mappings.accounts.includes(:mappable).map(&:mappable)
+    targets.compact.uniq.select { |target| target.is_a?(Account) && target.linked? }
+  end
+
+  # "Mono Visa is linked to monobank. Its transactions come from ..." for one account
+  def self.provider_linked_message(account)
+    I18n.t("activerecord.errors.models.import.attributes.account.provider_linked",
+      account: account.name, provider: provider_label_for(account))
+  end
+
+  def self.provider_label_for(account)
+    link = account.account_providers.first
+    provider = link && BankConnections.provider_for_account_class(link.provider_type)
+    provider&.label || account.provider_name.presence&.humanize || I18n.t("activerecord.errors.models.import.attributes.account.a_bank_connection")
   end
 
   def has_unassigned_account?
@@ -773,6 +805,18 @@ class Import < ApplicationRecord
       return if account.family_id == family_id
 
       errors.add(:account, "must belong to your family")
+    end
+
+    def target_accounts_not_provider_linked
+      return unless ACCOUNT_TARGET_TYPES.include?(type)
+      return unless account&.linked?
+
+      errors.add(:account, :provider_linked, account: account.name, provider: self.class.provider_label_for(account))
+    end
+
+    def raise_if_provider_linked_targets!
+      linked = provider_linked_target_accounts.first
+      raise ProviderLinkedAccountError, self.class.provider_linked_message(linked) if linked
     end
 
     def rows_to_skip_within_file_bounds

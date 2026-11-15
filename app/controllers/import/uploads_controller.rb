@@ -17,8 +17,14 @@ class Import::UploadsController < ApplicationController
   end
 
   def update
+    account = Current.family.accounts.find_by(id: params.dig(:import, :account_id))
+    if account&.linked? && Import::ACCOUNT_TARGET_TYPES.include?(@import.type)
+      redirect_back_or_to import_upload_path(@import), alert: Import.provider_linked_message(account)
+      return
+    end
+
     if csv_valid?(csv_str)
-      @import.account = Current.family.accounts.find_by(id: params.dig(:import, :account_id))
+      @import.account = account
       @import.assign_attributes(raw_file_str: csv_str, col_sep: upload_params[:col_sep])
       @import.save!(validate: false)
       # Rows and mappings came from the previous file and account

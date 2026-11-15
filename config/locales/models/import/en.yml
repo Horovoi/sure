@@ -13,5 +13,10 @@ en:
           amount_type_values_exclusive: Choose either an inflow value or an outflow
             value for the amount type column, not both.
           attributes:
+            account:
+              a_bank_connection: a bank connection
+              provider_linked: "%{account} is linked to %{provider}. Its transactions come
+                from the bank connection, so statement imports into it are turned off.
+                Unlink the account to import a statement."
             raw_file_str:
               invalid_csv_format: is not a valid CSV format
