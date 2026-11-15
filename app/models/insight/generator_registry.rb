@@ -12,7 +12,10 @@ class Insight::GeneratorRegistry
       Insight::Generators::NetWorthMilestoneGenerator,
       Insight::Generators::SavingsRateChangeGenerator,
       Insight::Generators::IdleCashGenerator,
-      Insight::Generators::BudgetInsightGenerator
+      Insight::Generators::BudgetInsightGenerator,
+
+      # goal-ai-hooks (w3-reports)
+      Insight::Generators::MaintainedGoalDepletedGenerator
     ]
   end
 

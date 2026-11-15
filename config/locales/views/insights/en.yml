@@ -93,6 +93,7 @@ en:
           one: One category is close to its limit
           other: "%{count} categories are close to their limits"
       budget_on_track: Your budget is on track
+      maintained_goal_depleted: "%{goal} has dropped below its level"
     templates:
       spending_anomaly:
         above: In the first %{days} days of this fiscal month you spent %{spent} on %{category}, about %{deviation_pct}% more than the %{normal} that is normal by this day.
@@ -110,3 +111,4 @@ en:
         over: "%{categories}: over budget this fiscal month. You have used %{budget_spent_pct}% of your total budget so far."
         near: "%{categories}: close to the limit this fiscal month. You have used %{budget_spent_pct}% of your total budget so far."
       budget_on_track: You have spent %{spent} of your %{budgeted} budget (%{budget_spent_pct}%), and every category is within its limit.
+      maintained_goal_depleted: "%{goal} holds %{saved} of the %{target} it is meant to keep. It is %{missing} short."
