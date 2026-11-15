@@ -8,6 +8,11 @@ en:
         custom_period: Custom
         date_range_separator: to
         no_data_available: No data available
+    account_page:
+      tabs:
+        activity: Activity
+        holdings: Holdings
+        overview: Overview
   ds:
     alert:
       variants:
