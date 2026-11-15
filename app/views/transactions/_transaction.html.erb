@@ -19,7 +19,7 @@
 
         <div class="max-w-full">
           <%= content_tag :div, class: ["flex items-center gap-3 lg:gap-4"] do %>
-            <div class="hidden lg:flex">
+            <div class="hidden lg:flex shrink-0">
               <% if transaction.merchant&.logo_url.present? %>
                 <%= image_tag Setting.transform_brand_fetch_url(transaction.merchant.logo_url),
                     class: "w-9 h-9 rounded-full",
@@ -134,6 +134,8 @@
             </div>
           <% end %>
         </div>
+
+        <%= render "tags/menu", entry: entry, transaction: transaction %>
       </div>
 
       <div class="hidden md:flex items-center gap-1 col-span-2">

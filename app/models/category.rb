@@ -10,13 +10,20 @@ class Category < ApplicationRecord
 
   validates :name, :color, :lucide_icon, :family, presence: true
   validates :name, uniqueness: { scope: :family_id }
+  # "Income" from a CSV import or an API caller means income; anything else is rejected,
+  # since a category that is neither shows up in no income or expense list.
+  normalizes :classification, with: ->(value) { value.to_s.strip.downcase }
+  validates :classification, inclusion: { in: %w[income expense] }
 
   validate :category_level_limit
   validate :nested_category_matches_parent_classification
+  validate :parent_in_same_family
 
+  before_validation :inherit_classification_from_parent, on: :create
   before_save :inherit_color_from_parent
 
   scope :alphabetically, -> { order(:name) }
+  scope :recently_used, -> { where.not(last_used_at: nil).order(last_used_at: :desc) }
   scope :alphabetically_by_hierarchy, -> {
     left_joins(:parent)
       .order(Arel.sql("COALESCE(parents_categories.name, categories.name)"))
@@ -87,6 +94,16 @@ class Category < ApplicationRecord
   class << self
     def grouped_select_options(categories)
       Category::Group.for(Array(categories)).map(&:to_grouped_options)
+    end
+
+    # Categories a family has assigned by hand recently: a shortcut above the
+    # alphabetical list in the pickers, not a replacement for it. See
+    # Transaction#record_category_usage! for where last_used_at is written.
+    # Pass classification to keep only the categories the form can use.
+    def recently_used_for(family:, excluding: [], limit: 4, classification: nil)
+      scope = family.categories.recently_used.where.not(id: Array(excluding).compact.map(&:id))
+      scope = scope.where(classification: classification) if classification.present?
+      scope.limit(limit)
     end
 
     def icon_codes
@@ -220,6 +237,19 @@ class Category < ApplicationRecord
   end
 
   private
+    # A new subcategory always takes its parent's classification, whatever the
+    # form sent: an inline create from an income transaction can't put an
+    # expense parent's child into income.
+    def inherit_classification_from_parent
+      self.classification = parent.classification if parent.present?
+    end
+
+    def parent_in_same_family
+      if parent.present? && parent.family_id != family_id
+        errors.add(:parent, :invalid)
+      end
+    end
+
     def category_level_limit
       if (subcategory? && parent.subcategory?) || (parent? && subcategory?)
         errors.add(:parent, "can't have more than 2 levels of subcategories")

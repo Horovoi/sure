@@ -6,6 +6,8 @@ en:
       error: 'Error creating tag: %{error}'
     destroy:
       deleted: Tag deleted
+    destroy_all:
+      all_deleted: All tags deleted
     edit:
       edit: Edit tag
     form:
@@ -16,6 +18,9 @@ en:
       tags: Tags
     new:
       new: New tag
+    summary:
+      add: Add tags
+      title: 'Tags: %{names}'
     tag:
       delete: Delete
       edit: Edit

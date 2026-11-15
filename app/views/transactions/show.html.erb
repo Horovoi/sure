@@ -79,12 +79,17 @@
             </div>
 
             <%= f.fields_for :entryable do |ef| %>
-              <%= ef.collection_select :category_id,
-                      Current.family.categories.alphabetically,
-                    :id, :name,
-                    { label: t(".category_label"),
-                      class: "text-subdued", include_blank: t(".uncategorized") },
-                    "data-auto-submit-form-target": "auto" %>
+              <% category_classification = @entry.amount.negative? ? "income" : "expense" %>
+              <%= render DS::CategorySelect.new(
+                    form: ef,
+                    categories: Current.family.categories.alphabetically_by_hierarchy.to_a,
+                    selected_id: ef.object.category_id,
+                    blank_label: t(".uncategorized"),
+                    label: t(".category_label"),
+                    classification: category_classification,
+                    recent_categories: Category.recently_used_for(family: Current.family, excluding: ef.object.category, classification: category_classification).to_a,
+                    auto_submit: true
+                  ) %>
             <% end %>
           <% end %>
 
@@ -109,22 +114,25 @@
 
             <%= f.fields_for :entryable do |ef| %>
 
-              <%= ef.collection_select :merchant_id,
-                    Current.family.available_merchants.alphabetically,
-                    :id, :name,
-                    { include_blank: t(".none"),
-                      label: t(".merchant_label"),
-                      class: "text-subdued" },
-                    "data-auto-submit-form-target": "auto" %>
+              <%= render DS::MerchantSelect.new(
+                    form: ef,
+                    method: :merchant_id,
+                    merchants: Current.family.available_merchants.alphabetically.to_a,
+                    selected_id: ef.object.merchant_id,
+                    include_blank: t(".none"),
+                    label: t(".merchant_label"),
+                    auto_submit: true
+                  ) %>
 
-              <%= ef.select :tag_ids,
-                    Current.family.tags.alphabetically.pluck(:name, :id),
-                    {
-                      include_blank: t(".none"),
-                      multiple: true,
-                      label:    t(".tags_label")
-                    },
-                    { "data-controller": "multi-select", "data-auto-submit-form-target": "auto" } %>
+              <%# Tags save on their own (update_tags), so a toggle doesn't wait for the form. %>
+              <%= render DS::TagSelect.new(
+                    form: ef,
+                    tags: Current.family.tags.alphabetically.to_a,
+                    selected_ids: ef.object.tag_ids,
+                    label: t(".tags_label"),
+                    auto_submit: true,
+                    update_url: tags_transaction_path(@entry)
+                  ) %>
             <% end %>
           <% end %>
 

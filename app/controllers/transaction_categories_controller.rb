@@ -7,6 +7,7 @@ class TransactionCategoriesController < ApplicationController
     @entry.update!(entry_params)
 
     transaction = @entry.transaction
+    transaction.record_category_usage!
 
     if needs_rule_notification?(transaction)
       flash[:cta] = {

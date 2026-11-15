@@ -1,0 +1,205 @@
+<div class="relative"
+     data-controller="category-select"
+     data-category-select-create-url-value="<%= helpers.categories_path(format: :json) %>"
+     data-category-select-default-color-value="<%= Category::COLORS.first %>"
+     data-category-select-classification-value="<%= classification %>"
+     data-category-select-disabled-value="<%= disabled %>"
+     data-category-select-auto-submit-value="<%= auto_submit %>"
+     data-category-select-locked-value="<%= !creatable %>"
+     data-category-select-create-label-value="<%= helpers.t("ds.category_select.create", name: "__CATEGORY_NAME__") %>"
+     data-category-select-create-error-message-value="<%= helpers.t("ds.category_select.create_error") %>"
+     data-category-select-parent-picker-label-value="<%= helpers.t("ds.category_select.choose_parent", name: "__CATEGORY_NAME__") %>"
+     data-action="click@window->category-select#handleOutsideClick">
+
+  <div class="form-field">
+    <div class="form-field__body">
+      <%= form.label :category_id, label_text, class: "form-field__label", for: trigger_id %>
+
+      <button type="button"
+              id="<%= trigger_id %>"
+              class="form-field__input min-h-7 flex items-center gap-2 pr-8"
+              data-category-select-target="button"
+              data-action="click->category-select#toggle"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="<%= menu_id %>"
+              <%= "disabled" if disabled %>>
+
+        <span data-category-select-target="selectionContainer"
+              class="text-secondary">
+          <% selected = selected_category %>
+
+          <% if selected %>
+            <%= render partial: "categories/badge",
+                       locals: { category: selected } %>
+          <% else %>
+            <%= blank_label.presence || helpers.t("ds.category_select.prompt") %>
+          <% end %>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <input type="hidden"
+         name="<%= field_name %>"
+         value="<%= selected_id %>"
+         data-category-select-target="hiddenInput"
+         <%= "disabled" if disabled %>>
+
+  <% unless disabled %>
+    <div class="absolute z-50 p-1.5 w-full min-w-48 rounded-lg shadow-lg bg-container mt-1.5 hidden"
+         data-category-select-target="menu"
+         data-action="keydown.esc->category-select#escape">
+
+      <%= render DS::SearchInput.new(
+        variant: :embedded,
+        placeholder: helpers.t("ds.category_select.search_placeholder"),
+        data: {
+          category_select_target: "search",
+          action: "input->category-select#filter keydown->category-select#handleSearchKeydown"
+        }
+      ) %>
+
+      <div class="flex flex-col gap-1 max-h-64 overflow-auto mt-1"
+           id="<%= menu_id %>"
+           role="listbox"
+           data-category-select-target="list">
+
+        <% if recent_categories.any? %>
+          <%# Hidden by the controller while a search is typed: the canonical rows are the results then. %>
+          <div class="flex flex-col gap-1"
+               role="group"
+               aria-label="<%= helpers.t("ds.category_select.recent") %>"
+               data-category-select-target="recentSection">
+            <p class="px-3 pt-1 text-xs font-medium text-secondary uppercase tracking-wide" aria-hidden="true">
+              <%= helpers.t("ds.category_select.recent") %>
+            </p>
+            <% recent_categories.each do |category| %>
+              <%= render partial: "DS/category_select/option",
+                         locals: {
+                           category: category,
+                           selected: category.id.to_s == selected_id,
+                           view_helpers: helpers
+                         } %>
+            <% end %>
+            <hr class="my-1 border-tertiary">
+          </div>
+        <% end %>
+
+        <% if blank_label.present? %>
+          <button type="button"
+                  role="option"
+                  aria-selected="<%= selected_id.blank? %>"
+                  data-category-select-target="option"
+                  data-category-id=""
+                  data-category-name="<%= Category.uncategorized_name %>"
+                  data-category-display-label="<%= Category.uncategorized_name %>"
+                  data-action="click->category-select#selectCategory"
+                  class="flex items-center gap-2 w-full px-3 py-1.5 text-sm rounded-lg hover:bg-container-inset-hover <%= "bg-container-inset" if selected_id.blank? %>">
+            <span class="check-icon w-4 <%= "invisible" unless selected_id.blank? %>">
+              <%= helpers.icon("check") %>
+            </span>
+
+            <%# A badge like the other rows, so "no category" reads as a choice, not a prompt. %>
+            <span data-category-select-badge>
+              <%= render partial: "categories/badge",
+                         locals: { category: Category.uncategorized } %>
+            </span>
+          </button>
+        <% end %>
+
+        <% groups.each do |group| %>
+          <%= render partial: "DS/category_select/option",
+                     locals: {
+                       category: group.category,
+                       selected: group.category.id.to_s == selected_id,
+                       view_helpers: helpers
+                     } %>
+
+          <% group.subcategories.each do |category| %>
+            <%= render partial: "DS/category_select/option",
+                       locals: {
+                         category: category,
+                         selected: category.id.to_s == selected_id,
+                         view_helpers: helpers
+                       } %>
+          <% end %>
+        <% end %>
+
+        <% if creatable %>
+          <%= render DS::ActionRow.new(
+                icon: "plus",
+                hidden: true,
+                data: { category_select_target: "createForm", action: "click->category-select#createCategory" }
+              ) do %>
+            <span data-category-select-target="createLabel"></span>
+          <% end %>
+
+          <%# Hidden by the controller while there is no top-level category to nest under. %>
+          <%= render DS::ActionRow.new(
+                text: helpers.t("ds.category_select.create_as_subcategory"),
+                icon: "corner-down-right",
+                tone: :secondary,
+                hidden: true,
+                data: { category_select_target: "createAsSubcategory", action: "click->category-select#showParentPicker" }
+              ) %>
+        <% else %>
+          <%# The controller still toggles these; they never show while creating is off. %>
+          <span class="hidden" data-category-select-target="createForm"></span>
+          <span class="hidden" data-category-select-target="createLabel"></span>
+        <% end %>
+
+        <p class="hidden px-3 py-1 text-xs text-destructive"
+           role="alert"
+           data-category-select-target="createError"></p>
+
+        <p class="hidden px-3 py-1 text-xs text-secondary"
+           data-category-select-target="emptyMessage"><%= helpers.t("ds.category_select.no_matching_categories") %></p>
+      </div>
+
+      <% if creatable %>
+        <%# Shown in place of the list after "Add as a subcategory…": pick a top-level parent. %>
+        <%# Only top-level categories can be parents (categories are at most two levels deep). %>
+        <div class="hidden flex-col gap-1 mt-1"
+             data-category-select-target="parentPicker"
+             role="group"
+             aria-labelledby="<%= parent_label_id %>">
+          <%# Back and the label sit above the scrolling rows, so Back stays in reach with many parents. %>
+          <div class="flex flex-col">
+            <%= render DS::ActionRow.new(
+                  text: helpers.t("ds.category_select.back_to_categories"),
+                  icon: "arrow-left",
+                  tone: :secondary,
+                  data: { action: "click->category-select#hideParentPicker" }
+                ) %>
+            <p id="<%= parent_label_id %>"
+               class="px-3 py-1 text-xs text-secondary"
+               data-category-select-target="parentPickerLabel"></p>
+          </div>
+
+          <div class="flex flex-col gap-1 max-h-64 overflow-auto"
+               data-category-select-target="parentRows">
+            <% parent_options.each do |parent| %>
+              <%= render DS::ActionRow.new(
+                    tone: :secondary,
+                    data: { category_select_target: "parentOption", parent_id: parent.id, parent_name: parent.name, action: "click->category-select#createUnderParent" }
+                  ) do %>
+                <%= render partial: "categories/badge", locals: { category: parent } %>
+              <% end %>
+            <% end %>
+
+            <%# Cloned for a top-level category created inline, so it can be a parent straight away. %>
+            <template data-category-select-target="parentOptionTemplate">
+              <%= render DS::ActionRow.new(
+                    tone: :secondary,
+                    data: { category_select_target: "parentOption", action: "click->category-select#createUnderParent" }
+                  ) do %>
+                <span data-category-select-parent-badge></span>
+              <% end %>
+            </template>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</div>

@@ -3,6 +3,9 @@ class Category::DropdownsController < ApplicationController
 
   def show
     @categories = categories_scope.to_a.excluding(@selected_category).prepend(@selected_category).compact
+    @recent_categories = Category.recently_used_for(family: Current.family, excluding: @selected_category).to_a
+    # A category created from this picker gets the nature of the transaction it is for.
+    @classification = @transaction&.entry&.amount&.negative? ? "income" : "expense"
   end
 
   private

@@ -1,0 +1,17 @@
+<%# locals: (entry:, transaction:) %>
+
+<%# The tags of a transaction row, with a picker that toggles tags in place.
+    Always mounted, even without tags, so the toggle stream can fill in the
+    first tag. Transfer rows are read-only: a transfer's legs keep their tags
+    in sync, so they are edited from the drawer. Desktop layout only. %>
+<div class="hidden lg:flex ml-auto min-w-0 max-w-1/2 shrink-0 items-center" data-tag-fit-bounds="1">
+  <% if transaction.transfer? %>
+    <%= render "tags/summary", transaction: transaction, editable: false %>
+  <% else %>
+    <%= render DS::Popover.new(variant: "button", frame_id: "tag_dropdown", frame_src: tag_dropdown_path(entry_id: entry.id)) do |popover| %>
+      <% popover.with_button(class: "group flex w-full min-w-0 items-center rounded-full focus-ring") do %>
+        <%= render "tags/summary", transaction: transaction %>
+      <% end %>
+    <% end %>
+  <% end %>
+</div>

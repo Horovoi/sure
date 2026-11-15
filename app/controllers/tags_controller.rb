@@ -15,9 +15,16 @@ class TagsController < ApplicationController
     @tag = Current.family.tags.new(tag_params)
 
     if @tag.save
-      redirect_to tags_path, notice: t(".created")
+      respond_to do |format|
+        format.html { redirect_to tags_path, notice: t(".created") }
+        # The tag picker's inline create: the new option comes back to insert and select.
+        format.json { render json: tag_json(@tag), status: :created }
+      end
     else
-      redirect_to tags_path, alert: t(".error", error: @tag.errors.full_messages.to_sentence)
+      respond_to do |format|
+        format.html { redirect_to tags_path, alert: t(".error", error: @tag.errors.full_messages.to_sentence) }
+        format.json { render json: { errors: @tag.errors.full_messages }, status: :unprocessable_entity }
+      end
     end
   end
 
@@ -36,7 +43,7 @@ class TagsController < ApplicationController
 
   def destroy_all
     Current.family.tags.destroy_all
-    redirect_back_or_to tags_path, notice: "All tags deleted"
+    redirect_back_or_to tags_path, notice: t(".all_deleted")
   end
 
   private
@@ -47,5 +54,15 @@ class TagsController < ApplicationController
 
     def tag_params
       params.expect(tag: [ :name, :color ])
+    end
+
+    def tag_json(tag)
+      tag.as_json(only: %i[id name color]).merge(
+        html: render_to_string(
+          partial: "DS/tag_select/option",
+          formats: [ :html ],
+          locals: { tag: tag, selected: true, view_helpers: helpers }
+        )
+      )
     end
 end

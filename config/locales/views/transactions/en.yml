@@ -14,6 +14,7 @@ en:
       details: Details
       expense: Expense
       income: Income
+      merchant_label: Merchant
       none: (none)
       note_label: Notes
       note_placeholder: Enter a note
@@ -209,3 +210,18 @@ en:
       form:
         filter: Filter
         toggle_selection_checkboxes: Toggle all checkboxes
+    bulk_updates:
+      new:
+        cancel: Cancel
+        category_label: Category
+        date_label: Date
+        header_title: Edit transactions
+        merchant_label: Merchant
+        merchant_prompt: Select a merchant
+        none: None
+        notes_label: Notes
+        notes_placeholder: Enter a note that will be applied to selected transactions
+        overview: Overview
+        save: Save
+        tags_label: Tags
+        transactions_section: Transactions

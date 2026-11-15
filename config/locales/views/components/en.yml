@@ -26,6 +26,33 @@ en:
     icon_picker:
       no_matching_icons: No matching icons
       search_placeholder: Search icons...
+    select:
+      default_label: Select...
+      search_placeholder: Search
+    category_select:
+      back_to_categories: Back to categories
+      choose_parent: 'Create "%{name}" under:'
+      create: Create "%{name}"
+      create_as_subcategory: Add as a subcategory…
+      create_error: Couldn't create that category. Please try again.
+      label: Category
+      no_matching_categories: No matching categories
+      prompt: Select a category
+      recent: Recent
+      search_placeholder: Search categories
+    merchant_select:
+      create_error: Couldn't create that merchant. Please try again.
+      create_html: Create "%{name}"
+      label: Merchant
+      none: "(none)"
+      search_placeholder: Search merchants
+    tag_select:
+      create_error: Couldn't create that tag. Please try again.
+      create_html: Create "%{name}"
+      label: Tags
+      none: "(none)"
+      save_error: Couldn't save the tags. Please try again.
+      search_placeholder: Search tags
   provider_sync_summary:
     title: Sync summary
     last_sync: "Last sync: %{time_ago} ago"

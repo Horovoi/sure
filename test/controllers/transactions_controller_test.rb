@@ -369,4 +369,103 @@ end
 
     assert_response :bad_request
   end
+
+  # --- DS pickers (w1-ds) ---
+
+  test "new renders the DS pickers with the categories of the form's nature" do
+    family = @user.family
+    salary = family.categories.create!(name: "Salary", color: "#22c55e", classification: "income", lucide_icon: "briefcase")
+
+    get new_transaction_url(nature: "inflow")
+
+    assert_response :success
+    assert_select "[data-controller=category-select][data-category-select-classification-value=income]"
+    assert_select "[data-category-select-target=option][data-category-id='#{salary.id}']"
+    assert_select "[data-category-select-target=option][data-category-id='#{categories(:food_and_drink).id}']", count: 0
+    assert_select "[data-controller=merchant-select]"
+    assert_select "[data-controller=tag-select]"
+  end
+
+  test "new shows recently used categories of the form's nature" do
+    category = categories(:food_and_drink)
+    category.update!(last_used_at: 1.minute.ago)
+
+    get new_transaction_url
+
+    assert_response :success
+    assert_select "[data-category-select-target=recentSection] [data-category-id='#{category.id}']"
+  end
+
+  test "a failed create re-renders the income form for an income transaction" do
+    post transactions_url, params: {
+      entry: { account_id: accounts(:depository).id, name: "", date: "", amount: "", nature: "inflow", entryable_type: "Transaction" }
+    }
+
+    assert_response :unprocessable_entity
+    assert_select "[data-category-select-classification-value=income]"
+  end
+
+  test "creating a transaction with a category records it as recently used" do
+    category = categories(:food_and_drink)
+
+    post transactions_url, params: {
+      entry: {
+        account_id: accounts(:depository).id, name: "Lunch", date: Date.current, amount: 12,
+        currency: "USD", nature: "outflow", entryable_type: "Transaction",
+        entryable_attributes: { category_id: category.id }
+      }
+    }
+
+    assert_not_nil category.reload.last_used_at
+  end
+
+  test "changing the category in the drawer records it as recently used" do
+    entry = entries(:transaction)
+    category = categories(:subcategory)
+
+    patch transaction_url(entry), params: {
+      entry: { entryable_type: "Transaction", entryable_attributes: { id: entry.entryable_id, category_id: category.id } }
+    }
+
+    assert_not_nil category.reload.last_used_at
+  end
+
+  test "update_tags replaces the tag set and answers JSON" do
+    entry = entries(:transaction)
+    tag = @user.family.tags.first
+
+    patch tags_transaction_url(entry), params: { tag_ids: [ tag.id ] }, as: :json
+
+    assert_response :success
+    assert_equal [ tag.id ], response.parsed_body["tag_ids"]
+    assert_equal [ tag.id ], entry.transaction.reload.tag_ids
+    assert entry.transaction.locked?(:tag_ids)
+  end
+
+  test "update_tags ignores tags of another family" do
+    entry = entries(:transaction)
+    foreign_tag = tags(:three)
+
+    patch tags_transaction_url(entry), params: { tag_ids: [ foreign_tag.id ] }, as: :json
+
+    assert_response :success
+    assert_empty entry.transaction.reload.tag_ids
+  end
+
+  test "update_tags toggles one tag and streams the row summary and the picker row" do
+    entry = entries(:transaction)
+    tag = @user.family.tags.first
+    entry.transaction.update!(tag_ids: [])
+
+    patch tags_transaction_url(entry), params: { toggle_tag_id: tag.id }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes entry.transaction.reload.tag_ids, tag.id
+    assert_includes response.body, ActionView::RecordIdentifier.dom_id(entry.transaction, :tag_summary_desktop)
+    assert_includes response.body, "#{ActionView::RecordIdentifier.dom_id(entry, :tag_option)}_#{tag.id}"
+
+    patch tags_transaction_url(entry), params: { toggle_tag_id: tag.id }, as: :turbo_stream
+
+    assert_not_includes entry.transaction.reload.tag_ids, tag.id
+  end
 end

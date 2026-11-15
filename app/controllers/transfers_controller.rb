@@ -9,7 +9,12 @@ class TransfersController < ApplicationController
   end
 
   def show
-    @categories = Current.family.categories.expenses
+    @categories = Current.family.categories.expenses.alphabetically_by_hierarchy.to_a
+    @recent_categories = Category.recently_used_for(
+      family: Current.family,
+      excluding: @transfer.outflow_transaction.category,
+      classification: "expense"
+    ).to_a
   end
 
   def create
@@ -76,8 +81,14 @@ class TransfersController < ApplicationController
       end
     end
 
+    # Only the fields the request sent: the row's "Confirm" button sends just
+    # the status, and must not wipe the category and notes.
     def update_transfer_details
-      @transfer.outflow_transaction.update!(category_id: transfer_update_params[:category_id])
-      @transfer.update!(notes: transfer_update_params[:notes])
+      if transfer_update_params.key?(:category_id)
+        @transfer.outflow_transaction.update!(category_id: transfer_update_params[:category_id])
+        @transfer.outflow_transaction.record_category_usage!
+      end
+
+      @transfer.update!(notes: transfer_update_params[:notes]) if transfer_update_params.key?(:notes)
     end
 end

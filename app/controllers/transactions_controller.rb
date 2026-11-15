@@ -5,7 +5,8 @@ class TransactionsController < ApplicationController
   USER_SETTABLE_KINDS = %w[standard one_time].freeze
 
   before_action :store_params!, only: :index
-  before_action :load_category_groups, only: %i[new create]
+  before_action :set_new_transaction_form_options, only: %i[new create]
+  before_action :set_entry_for_tags, only: :update_tags
 
   def new
     super
@@ -89,6 +90,7 @@ class TransactionsController < ApplicationController
     @entry = account.entries.new(entry_params)
 
     if @entry.save
+      @entry.transaction.record_category_usage!
       @entry.sync_account_later
       @entry.lock_saved_attributes!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
@@ -107,6 +109,7 @@ class TransactionsController < ApplicationController
   def update
     if @entry.update(entry_params)
       transaction = @entry.transaction
+      transaction.record_category_usage!
 
       if needs_rule_notification?(transaction)
         flash[:cta] = {
@@ -137,6 +140,50 @@ class TransactionsController < ApplicationController
       end
     else
       render :show, status: :unprocessable_entity
+    end
+  end
+
+  # The tag pickers: the edit drawer's DS::TagSelect sends the whole set
+  # (tag_ids, JSON), the list row's picker toggles one tag (toggle_tag_id,
+  # turbo stream).
+  def update_tags
+    if params[:toggle_tag_id].present?
+      @toggled_tag = Current.family.tags.find(params[:toggle_tag_id])
+      @entry.transaction.toggle_tag!(@toggled_tag)
+    else
+      @entry.transaction.tag_ids = Current.family.tags.where(id: tag_ids_param).pluck(:id)
+    end
+
+    @entry.lock_saved_attributes!
+    @entry.mark_user_modified!
+    @entry.transaction.lock_attr!(:tag_ids)
+    @entry.sync_account_later
+
+    respond_to do |format|
+      # JSON stays first so Accept: */* callers keep the JSON response.
+      format.json { render json: { tag_ids: @entry.transaction.tag_ids } }
+      # Without Turbo the row picker's button_to posts as plain HTML.
+      format.html { redirect_back_or_to transaction_path(@entry) }
+      format.turbo_stream do
+        transaction = @entry.transaction
+        streams = [
+          turbo_stream.replace(
+            dom_id(transaction, :tag_summary_desktop),
+            partial: "tags/summary",
+            locals: { transaction: transaction }
+          )
+        ]
+        if @toggled_tag
+          # autofocus hands keyboard focus back to the re-rendered option,
+          # which Turbo focuses after the stream renders.
+          streams << turbo_stream.replace(
+            "#{dom_id(@entry, :tag_option)}_#{@toggled_tag.id}",
+            partial: "tag/dropdowns/row",
+            locals: { tag: @toggled_tag, entry: @entry, selected: transaction.tag_ids.include?(@toggled_tag.id), autofocus: true }
+          )
+        end
+        render turbo_stream: streams
+      end
     end
   end
 
@@ -455,16 +502,24 @@ class TransactionsController < ApplicationController
       params.expect(preferences: [ collapsed_sections: {} ]).to_h
     end
 
-    def load_category_groups
-      category_scope = Current.family.categories.includes(:subcategories)
+    # The new-transaction form's pickers. The category list follows the form's
+    # nature (an income transaction picks from income categories), and so do
+    # the recent categories and the classification of a category created inline.
+    def set_new_transaction_form_options
+      nature = params[:nature].presence || params.dig(:entry, :nature)
+      @category_classification = nature == "inflow" ? "income" : "expense"
+      @categories = Current.family.categories.where(classification: @category_classification).alphabetically_by_hierarchy.to_a
+      @recent_categories = Category.recently_used_for(family: Current.family, classification: @category_classification).to_a
+      @merchants = Current.family.available_merchants.alphabetically.to_a
+      @tags = Current.family.tags.alphabetically.to_a
+    end
 
-      @income_category_groups = Category.grouped_select_options(
-        category_scope.incomes.roots.alphabetically
-      )
+    def set_entry_for_tags
+      @entry = Current.family.entries.transactions.find(params[:id])
+    end
 
-      @expense_category_groups = Category.grouped_select_options(
-        category_scope.expenses.roots.alphabetically
-      )
+    def tag_ids_param
+      Array(params[:tag_ids]).reject(&:blank?)
     end
 
     def find_subscriptions_category

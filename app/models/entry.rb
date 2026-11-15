@@ -141,6 +141,8 @@ class Entry < ApplicationRecord
           if bulk_attributes.present?
             bulk_attributes[:entryable_attributes][:id] = entry.entryable_id if bulk_attributes[:entryable_attributes].present?
             entry.update! bulk_attributes
+            # Bulk edit is a manual pick, so it counts toward the pickers' "Recent" group.
+            entry.transaction.record_category_usage! if entry.transaction?
 
             if entry.saved_change_to_date?
               start_date = [ entry.date_previously_was, entry.date ].compact.min
