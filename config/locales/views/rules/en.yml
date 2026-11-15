@@ -76,6 +76,26 @@ en:
       value_placeholder: Enter a value
     action_executors:
       bayes_categorize: Categorize with the local classifier (no AI)
+    condition_filters:
+      transaction_type:
+        income: Income
+        expense: Expense
+        transfer: Transfer
+      operators:
+        contains: Contains
+        does_not_contain: Does not contain
+        starts_with: Starts with
+        ends_with: Ends with
+        matches_regex: Matches regex
+        equal_to: Equal to
+        is_equal_to: Is equal to
+        not_equal_to: Not equal to
+        is_empty: Is empty
+        is_not_empty: Is not empty
+        greater_than: Greater than
+        greater_or_equal_to: Greater or equal to
+        less_than: Less than
+        less_than_or_equal_to: Less than or equal to
     apply_all:
       button: Apply All
       confirm_title: Apply All Rules

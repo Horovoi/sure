@@ -408,4 +408,25 @@ class Family::DataExporterTest < ActiveSupport::TestCase
       refute ndjson_content.include?(other_rule.name)
     end
   end
+
+  test "exports transaction_tag conditions with tag names and imports them back" do
+    tag_rule = @family.rules.build(name: "Tag condition export", resource_type: "transaction", active: true)
+    tag_rule.conditions.build(condition_type: "transaction_tag", operator: "=", value: @tag.id)
+    tag_rule.actions.build(action_type: "exclude_transaction")
+    tag_rule.save!
+
+    rules_csv = @exporter.send(:generate_rules_csv)
+    row = CSV.parse(rules_csv, headers: true).find { |csv_row| csv_row["name"] == "Tag condition export" }
+    conditions = JSON.parse(row["conditions"])
+
+    assert_equal [ { "condition_type" => "transaction_tag", "operator" => "=", "value" => "Test Tag" } ], conditions
+
+    tag_rule.destroy!
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: rules_csv, col_sep: ",")
+    import.generate_rows_from_csv
+    import.send(:import!)
+
+    imported = @family.rules.find_by!(name: "Tag condition export")
+    assert_equal @tag.id, imported.conditions.first.value
+  end
 end

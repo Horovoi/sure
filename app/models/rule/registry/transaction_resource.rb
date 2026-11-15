@@ -5,6 +5,7 @@ class Rule::Registry::TransactionResource < Rule::Registry
     Rule::ConditionFilter::TransactionType,
     Rule::ConditionFilter::TransactionMerchant,
     Rule::ConditionFilter::TransactionCategory,
+    Rule::ConditionFilter::TransactionTag,
     Rule::ConditionFilter::TransactionDetails,
     Rule::ConditionFilter::TransactionNotes,
     Rule::ConditionFilter::TransactionAccount
@@ -27,6 +28,16 @@ class Rule::Registry::TransactionResource < Rule::Registry
   ].freeze
 
   AI_ACTION_KEYS = %w[auto_categorize auto_detect_merchants].freeze
+
+  # The types a saved condition or action may have. Validation reads these static
+  # lists, not the offered menu, so a saved AI action stays valid without a provider.
+  def self.condition_filter_keys
+    CONDITION_FILTER_CLASSES.map(&:key)
+  end
+
+  def self.action_executor_keys
+    ACTION_EXECUTOR_CLASSES.map(&:key)
+  end
 
   def resource_scope
     family.transactions.visible.with_entry.where(entry: { date: rule.effective_date.. })

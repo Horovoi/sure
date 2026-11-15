@@ -1,0 +1,13 @@
+---
+en:
+  rule:
+    conditions:
+      condition:
+        and: and
+        value_placeholder: Enter a value
+      condition_group:
+        and: and
+        match: match
+        all: all
+        any: any
+        of_the_following: of the following conditions

@@ -5,14 +5,14 @@ class Rule::ConditionFilter::TransactionType < Rule::ConditionFilter
 
   def options
     [
-      [ "Income", "income" ],
-      [ "Expense", "expense" ],
-      [ "Transfer", "transfer" ]
+      [ I18n.t("rules.condition_filters.transaction_type.income"), "income" ],
+      [ I18n.t("rules.condition_filters.transaction_type.expense"), "expense" ],
+      [ I18n.t("rules.condition_filters.transaction_type.transfer"), "transfer" ]
     ]
   end
 
   def operators
-    [ [ "Equal to", "=" ] ]
+    [ [ operator_label(:equal_to), "=" ] ]
   end
 
   def prepare(scope)

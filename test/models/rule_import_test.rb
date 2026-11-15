@@ -376,4 +376,81 @@ class RuleImportTest < ActiveSupport::TestCase
 
     assert_equal 'C:\new\test', condition.value
   end
+
+  test "maps tag names in transaction_tag conditions to ids and creates missing tags" do
+    existing_tag = @family.tags.create!(name: "Work")
+
+    csv = CSV.generate do |out|
+      out << %w[name resource_type active effective_date conditions actions]
+      out << [
+        "Tag condition rule",
+        "transaction",
+        true,
+        "",
+        [
+          { condition_type: "transaction_tag", operator: "=", value: "Work" },
+          { condition_type: "transaction_tag", operator: "!=", value: "Personal" },
+          { condition_type: "transaction_tag", operator: "is_not_null", value: nil }
+        ].to_json,
+        [ { action_type: "set_transaction_category", value: "Groceries" } ].to_json
+      ]
+    end
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+
+    assert_difference -> { @family.tags.count }, 1 do
+      import.send(:import!)
+    end
+
+    personal = @family.tags.find_by!(name: "Personal")
+    conditions = Rule.find_by!(family: @family, name: "Tag condition rule").conditions.index_by(&:operator)
+
+    assert_equal existing_tag.id, conditions["="].value
+    assert_equal personal.id, conditions["!="].value
+    assert_nil conditions["is_not_null"].value
+  end
+
+  test "rejects a condition value with a null byte as invalid text" do
+    csv = CSV.generate do |out|
+      out << %w[name resource_type active effective_date conditions actions]
+      out << [
+        "Null byte rule",
+        "transaction",
+        true,
+        "",
+        [ { condition_type: "transaction_name", operator: "like", value: "bad\u0000value" } ].to_json,
+        [ { action_type: "set_transaction_category", value: "Groceries" } ].to_json
+      ]
+    end
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+
+    assert_no_difference -> { Rule.where(family: @family).count } do
+      assert_raises(ActiveRecord::RecordInvalid) { import.send(:import!) }
+    end
+    assert_includes import.errors.full_messages.to_sentence, "Value is invalid"
+  end
+
+  test "rejects an unknown action type instead of importing a broken rule" do
+    csv = CSV.generate do |out|
+      out << %w[name resource_type active effective_date conditions actions]
+      out << [
+        "Unknown action rule",
+        "transaction",
+        true,
+        "",
+        [ { condition_type: "transaction_name", operator: "like", value: "coffee" } ].to_json,
+        [ { action_type: "send_email_notification", value: "me@example.com" } ].to_json
+      ]
+    end
+
+    import = @family.imports.create!(type: "RuleImport", raw_file_str: csv, col_sep: ",")
+    import.generate_rows_from_csv
+
+    assert_no_difference -> { Rule.where(family: @family).count } do
+      assert_raises(ActiveRecord::RecordInvalid) { import.send(:import!) }
+    end
+  end
 end

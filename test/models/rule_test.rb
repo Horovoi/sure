@@ -331,7 +331,7 @@ class RuleTest < ActiveSupport::TestCase
     assert_equal "transaction_name", displayed.condition_type
     assert_equal "starbucks", displayed.value
     assert_equal 0, rule.additional_displayable_conditions_count
-    assert_equal "If transaction name like starbucks", rule.primary_condition_title
+    assert_equal "If transaction name contains starbucks", rule.primary_condition_title
   end
 
   test "a rule with only an empty compound condition has no condition title" do
@@ -455,6 +455,63 @@ class RuleTest < ActiveSupport::TestCase
 
     assert_equal "auto_categorize", rule.actions.first.executor.key
     assert_not_includes Rule.new(family: @family, resource_type: "transaction").action_executors.map(&:key), "auto_categorize"
+  end
+
+  test "rejects an unknown resource type" do
+    rule = @family.rules.build(resource_type: "account", actions: [ Rule::Action.new(action_type: "exclude_transaction") ])
+
+    assert_not rule.valid?
+    assert rule.errors.of_kind?(:resource_type, :inclusion)
+  end
+
+  test "rejects an unknown action type, and keeps a saved AI action valid without a provider" do
+    rule = @family.rules.build(resource_type: "transaction", actions: [ Rule::Action.new(action_type: "send_email_notification") ])
+
+    assert_not rule.valid?
+    assert rule.actions.first.errors.of_kind?(:action_type, :inclusion)
+
+    Provider::Registry.stubs(:get_provider).with(:openai).returns(nil)
+    ai_rule = @family.rules.build(resource_type: "transaction", actions: [ Rule::Action.new(action_type: "auto_categorize") ])
+    assert ai_rule.valid?, ai_rule.errors.full_messages.to_sentence
+  end
+
+  test "rejects null bytes in the rule name and action value" do
+    rule = @family.rules.build(
+      name: "Bad\u0000name",
+      resource_type: "transaction",
+      actions: [ Rule::Action.new(action_type: "set_transaction_name", value: "bad\u0000value") ]
+    )
+
+    assert_no_difference -> { Rule.count } do
+      assert_not rule.save
+    end
+    assert rule.errors.of_kind?(:name, :invalid)
+    assert rule.actions.first.errors.of_kind?(:value, :invalid)
+  end
+
+  test "the condition summary shows the operator label" do
+    rule = @family.rules.create!(
+      resource_type: "transaction",
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "starts_with", value: "AMZN") ],
+      actions: [ Rule::Action.new(action_type: "exclude_transaction") ]
+    )
+
+    assert_equal "If transaction name starts with AMZN", rule.primary_condition_title
+  end
+
+  test "a starts with rule applies its action" do
+    amazon = create_transaction(date: Date.current, account: @account, name: "AMZN Mktp US")
+    other = create_transaction(date: Date.current, account: @account, name: "Not AMZN")
+
+    rule = @family.rules.create!(
+      resource_type: "transaction",
+      conditions: [ Rule::Condition.new(condition_type: "transaction_name", operator: "starts_with", value: "amzn") ],
+      actions: [ Rule::Action.new(action_type: "set_transaction_category", value: @groceries_category.id) ]
+    )
+    rule.apply
+
+    assert_equal @groceries_category, amazon.reload.transaction.category
+    assert_nil other.reload.transaction.category
   end
 
   private

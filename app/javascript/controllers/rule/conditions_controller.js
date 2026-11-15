@@ -3,7 +3,11 @@ import { nextNestedAttributeKey } from "services/nested_attribute_key";
 
 // Connects to data-controller="rule--conditions"
 export default class extends Controller {
-  static values = { conditionFilters: Array };
+  static values = {
+    conditionFilters: Array,
+    valuelessOperators: Array,
+    valuePlaceholder: String,
+  };
   static targets = [
     "destroyField",
     "filterValue",
@@ -13,7 +17,7 @@ export default class extends Controller {
   ];
 
   connect() {
-    // Hide value field on initial load if operator is "is_null"
+    // Hide the value field on initial load for valueless operators ("is_null", "is_not_null")
     this.#toggleValueFieldVisibility();
   }
 
@@ -101,7 +105,7 @@ export default class extends Controller {
 
   #buildTextInputFor(conditionFilter) {
     const textInput = this.#convertFormFieldTo("input", this.valueInputEl);
-    textInput.placeholder = "Enter a value";
+    textInput.placeholder = this.valuePlaceholderValue;
     textInput.type = conditionFilter.type; // "text" || "number"
     if (conditionFilter.type === "number") {
       textInput.step = conditionFilter.number_step;
@@ -124,9 +128,12 @@ export default class extends Controller {
   }
 
   #toggleValueFieldVisibility() {
+    // A condition group shares this controller but has no operator or value of its own
+    if (!this.hasOperatorSelectTarget || !this.hasFilterValueTarget) return;
+
     const operator = this.operatorSelectTarget.value;
 
-    if (operator === "is_null") {
+    if (this.valuelessOperatorsValue.includes(operator)) {
       this.filterValueTarget.classList.add("hidden");
       // Clear the value since it's not needed
       if (this.valueInputEl) {

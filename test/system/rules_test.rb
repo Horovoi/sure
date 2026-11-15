@@ -43,6 +43,37 @@ class RulesTest < ApplicationSystemTestCase
     end
   end
 
+  test "a valueless operator hides the value field and the rule saves with it" do
+    visit edit_rule_path(@first)
+
+    operator = find("select[name='rule[conditions_attributes][0][operator]']")
+    value_field = find("[data-rule--conditions-target='filterValue']", match: :first)
+
+    operator.select I18n.t("rules.condition_filters.operators.is_not_empty")
+    assert value_field.matches_css?(".hidden", wait: 2)
+
+    operator.select I18n.t("rules.condition_filters.operators.starts_with")
+    assert value_field.not_matches_css?(".hidden", wait: 2)
+
+    operator.select I18n.t("rules.condition_filters.operators.is_not_empty")
+    operator.ancestor("form").find("[type='submit']").click
+
+    assert_eventually { @first.reload.conditions.first.operator == "is_not_null" }
+    assert_nil @first.conditions.first.value.presence
+  end
+
+  test "the tag condition offers the family's tags and the select operators" do
+    @family.tags.create!(name: "Work trip")
+    visit edit_rule_path(@first)
+
+    find("select[name='rule[conditions_attributes][0][condition_type]']").select "Transaction tag"
+
+    operator_options = find("select[name='rule[conditions_attributes][0][operator]']").all("option").map(&:text)
+    assert_includes operator_options, I18n.t("rules.condition_filters.operators.not_equal_to")
+    assert_includes operator_options, I18n.t("rules.condition_filters.operators.is_not_empty")
+    assert_includes find("select[name='rule[conditions_attributes][0][value]']").all("option").map(&:text), "Work trip"
+  end
+
   private
     def create_rule(name)
       @family.rules.create!(

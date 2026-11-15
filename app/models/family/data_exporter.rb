@@ -335,6 +335,11 @@ class Family::DataExporter
         return operand_record(:merchants, condition.value)&.name || condition.value
       end
 
+      # Map tag UUIDs to names for portability
+      if condition.condition_type == "transaction_tag"
+        return operand_record(:tags, condition.value)&.name || condition.value
+      end
+
       condition.value
     end
 

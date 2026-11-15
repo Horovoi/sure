@@ -22,7 +22,7 @@ class RulesController < ApplicationController
 
   def new
     @rule = Current.family.rules.build(
-      resource_type: params[:resource_type] || "transaction",
+      resource_type: params[:resource_type].presence_in(Rule::SUPPORTED_RESOURCE_TYPES) || "transaction",
     )
 
     if params[:name].present?
@@ -34,7 +34,7 @@ class RulesController < ApplicationController
       )
     end
 
-    if params[:action_type].present? && params[:action_value].present?
+    if params[:action_type].in?(Rule::Action::SUPPORTED_ACTION_TYPES) && params[:action_value].present?
       @rule.actions.build(
         action_type: params[:action_type],
         value: params[:action_value]
@@ -48,7 +48,7 @@ class RulesController < ApplicationController
     if @rule.save
       redirect_to confirm_rule_path(@rule, reload_on_close: true)
     else
-      render :new, status: :unprocessable_entity
+      render_invalid_rule :new
     end
   end
 
@@ -87,7 +87,7 @@ class RulesController < ApplicationController
         format.turbo_stream { stream_redirect_back_or_to rules_path, notice: t(".success") }
       end
     else
-      render :edit, status: :unprocessable_entity
+      render_invalid_rule :edit
     end
   end
 
@@ -136,6 +136,26 @@ class RulesController < ApplicationController
   end
 
   private
+    # The form cannot show a type it does not offer: a native select drops the
+    # unknown option, and the action partial cannot resolve an unknown executor.
+    # Such a request (a crafted post, not the form) gets the errors as text.
+    def render_invalid_rule(template)
+      invalid_selector = @rule.errors[:resource_type].any? ||
+        @rule.actions.any? { |action| action.errors[:action_type].any? || !action.action_type.in?(Rule::Action::SUPPORTED_ACTION_TYPES) } ||
+        @rule.conditions.any? { |condition| invalid_condition_selector?(condition) }
+
+      if invalid_selector
+        render plain: @rule.errors.full_messages.to_sentence, status: :unprocessable_entity
+      else
+        render template, status: :unprocessable_entity
+      end
+    end
+
+    def invalid_condition_selector?(condition)
+      condition.errors[:condition_type].any? || condition.errors[:operator].any? ||
+        condition.sub_conditions.any? { |sub_condition| invalid_condition_selector?(sub_condition) }
+    end
+
     def set_rule
       @rule = Current.family.rules.find(params[:id])
     end
