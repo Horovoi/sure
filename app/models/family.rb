@@ -400,18 +400,25 @@ class Family < ApplicationRecord
       account_ids = accounts.visible.select(:id)
       latest = Holding.where(account_id: account_ids).group(:account_id).select("account_id, MAX(date) AS date")
 
+      held_now = Arel.sql("TRUE AS held_now")
+      not_held = Arel.sql("FALSE AS held_now")
       parts = [
-        [ Account.where(id: account_ids).select(:currency), true ],
-        [ Entry.where(account_id: account_ids).select(:currency), false ],
-        [ Trade.joins(:entry).where(entries: { account_id: account_ids }).select("trades.currency"), false ],
-        [ Holding.where(account_id: account_ids).select(:currency), false ],
-        [ Holding.joins("JOIN (#{latest.to_sql}) latest ON latest.account_id = holdings.account_id AND latest.date = holdings.date").select("holdings.currency"), true ],
-        [ recurring_transactions.active_subscriptions.select(:currency), true ]
-      ]
-      union = parts.map { |scope, held_now| "SELECT DISTINCT currency, #{held_now} AS held_now FROM (#{scope.to_sql}) part" }.join(" UNION ALL ")
+        Account.where(id: account_ids).select(:currency, held_now),
+        Entry.where(account_id: account_ids).select(:currency, not_held),
+        Trade.joins(:entry).where(entries: { account_id: account_ids }).select("trades.currency", not_held),
+        Holding.where(account_id: account_ids).select(:currency, not_held),
+        Holding.joins("JOIN (#{latest.to_sql}) latest ON latest.account_id = holdings.account_id AND latest.date = holdings.date").select("holdings.currency", held_now),
+        recurring_transactions.active_subscriptions.select(:currency, held_now)
+      ].map { |scope| scope.distinct.arel }
+      union = parts.reduce { |all, part| Arel::Nodes::UnionAll.new(all, part) }
 
-      self.class.connection.select_rows("SELECT currency, bool_or(held_now) FROM (#{union}) currencies WHERE currency IS NOT NULL GROUP BY currency")
-        .to_h
+      query = Arel::SelectManager.new
+        .project(Arel.sql("currency"), Arel.sql("bool_or(held_now)"))
+        .from(Arel::Nodes::TableAlias.new(Arel::Nodes::Grouping.new(union), "currencies"))
+        .where(Arel.sql("currency IS NOT NULL"))
+        .group(Arel.sql("currency"))
+
+      self.class.connection.select_rows(query).to_h
     end
   end
 
