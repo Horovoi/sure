@@ -1,0 +1,38 @@
+---
+en:
+  # The merchant page, merchant logos and the merchants list search (w2-rules merchant-page).
+  # The older merchant keys are in config/locales/views/merchants/en.yml.
+  family_merchants:
+    family_merchant:
+      delete: Delete
+      edit: Edit
+    form:
+      logo_hint: Shown instead of the website logo. JPEG, PNG or WebP, up to %{max_megabytes} MB.
+      logo_label: Logo
+      remove_logo_label: Remove uploaded logo
+    index:
+      breadcrumb_home: Home
+      no_family_merchants_found: No merchants match your search
+      search_family_merchants: Search merchants
+    merge:
+      no_merchants_found: No merchants match your search
+      sources_search_placeholder: Search merchants
+    show:
+      average_transaction: Average expense
+      breadcrumb_home: Home
+      col_amount: Amount
+      col_category: Category
+      col_transaction: Transaction
+      edit: Edit
+      first_transaction: First transaction
+      last_transaction: Last transaction
+      no_transactions: No transactions match these filters.
+      search_placeholder: Search this merchant's transactions
+      select_page: Select all transactions on this page
+      summary: Summary
+      total_income: Total income
+      total_spending: Total spending
+      total_transactions: Transactions
+  transactions:
+    merchant_link:
+      title: All transactions from %{name}

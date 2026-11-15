@@ -1,0 +1,11 @@
+<%# locals: (merchant:, size: "md") %>
+<%# The uploaded logo, else the website logo, else the letter avatar in the merchant's colour. %>
+<% size_classes = { "sm" => "w-6 h-6", "md" => "w-8 h-8", "lg" => "w-9 h-9" }.fetch(size.to_s, "w-8 h-8") %>
+<% if merchant.logo_url.present? %>
+  <%= image_tag Setting.transform_brand_fetch_url(merchant.logo_url),
+        class: "#{size_classes} rounded-full border border-secondary shrink-0",
+        alt: "",
+        loading: "lazy" %>
+<% else %>
+  <%= render DS::FilledIcon.new(variant: :text, text: merchant.name, hex_color: merchant.color, size: size.to_s, rounded: true) %>
+<% end %>

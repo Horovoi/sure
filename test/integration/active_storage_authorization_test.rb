@@ -210,6 +210,35 @@ class ActiveStorageAuthorizationTest < ActionDispatch::IntegrationTest
     assert_empty unchecked.uniq, "Add new attachment owners to PROTECTED_RECORD_TYPES or mark them public here"
   end
 
+  test "a family merchant logo loads for its family only" do
+    merchant = merchants(:netflix) # dylan_family
+    merchant.logo.attach(io: file_fixture("square-placeholder.png").open, filename: "logo.png", content_type: "image/png")
+
+    sign_in @member
+    get rails_blob_path(merchant.logo)
+    assert_response :redirect
+    disk_url = response.location
+    follow_redirect!
+    assert_response :success
+
+    sign_out @member
+    sign_in @outsider
+    get rails_blob_path(merchant.logo)
+    assert_response :not_found
+    get disk_url
+    assert_response :not_found
+  end
+
+  test "a file attached to a provider merchant fails closed" do
+    merchant = ProviderMerchant.create!(name: "Shared", source: "plaid")
+    merchant.logo.attach(io: file_fixture("square-placeholder.png").open, filename: "logo.png", content_type: "image/png")
+
+    sign_in @admin
+    get rails_blob_path(merchant.logo)
+
+    assert_response :not_found
+  end
+
   private
     def attach_family_export(family)
       export = family.family_exports.create!(status: :completed)

@@ -11,10 +11,11 @@ class Transaction < ApplicationRecord
   accepts_nested_attributes_for :taggings, allow_destroy: true
 
   # What a transaction row reads besides the transaction itself (see transactions/_transaction):
-  # category, merchant, tags, and for transfers the account the money went to.
+  # category, merchant (with its uploaded logo, which FamilyMerchant#logo_url reads), tags,
+  # and for transfers the account the money went to.
   # Preload these when rendering a list, so rows do not look them up one by one.
   ROW_ASSOCIATIONS = [
-    :category, :merchant, :tags,
+    :category, { merchant: { logo_attachment: :blob } }, :tags,
     {
       transfer_as_inflow: { inflow_transaction: { entry: :account } },
       transfer_as_outflow: { inflow_transaction: { entry: :account } }

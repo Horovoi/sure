@@ -189,6 +189,12 @@ Rails.application.routes.draw do
     end
   end
 
+  # --- Merchant page (w2-rules): after the block above, so /family_merchants/new and /merge are not read as an :id ---
+  resources :family_merchants, only: :show do
+    delete :clear_filter, on: :member
+  end
+  # --- end merchant page ---
+
   resources :transfers, only: %i[new create destroy show update]
 
   resources :imports, only: %i[index new show create update destroy] do

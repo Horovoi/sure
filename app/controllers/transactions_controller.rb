@@ -33,7 +33,7 @@ class TransactionsController < ApplicationController
                                   .where("next_expected_date <= ? AND next_expected_date >= ?",
                                          1.month.from_now.to_date,
                                          Date.current)
-                                  .includes(:merchant)
+                                  .includes(merchant: { logo_attachment: :blob })
 
     respond_to do |format|
       format.html do
@@ -492,7 +492,7 @@ class TransactionsController < ApplicationController
       @category_classification = nature == "inflow" ? "income" : "expense"
       @categories = Current.family.categories.where(classification: @category_classification).alphabetically_by_hierarchy.to_a
       @recent_categories = Category.recently_used_for(family: Current.family, classification: @category_classification).to_a
-      @merchants = Current.family.available_merchants.alphabetically.to_a
+      @merchants = Current.family.available_merchants.with_attached_logo.alphabetically.to_a
       @tags = Current.family.tags.alphabetically.to_a
     end
 
