@@ -20,7 +20,8 @@ class MerchantPageTest < ApplicationSystemTestCase
     visit transactions_url
 
     within "##{dom_id(@entry)}" do
-      click_link @merchant.name, match: :first
+      # Exact: the row's "Netflix March" name link opens the transaction drawer
+      click_link @merchant.name, exact: true, match: :first
     end
 
     assert_selector "h1", text: @merchant.name

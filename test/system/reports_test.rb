@@ -181,8 +181,9 @@ class ReportsTest < ApplicationSystemTestCase
     def wait_for_hotkeys
       find("a[aria-keyshortcuts='ArrowLeft']").hover
       assert_selector "[role='tooltip']", text: "Previous period (←)"
-      # Move the pointer away so the tooltip does not cover the page
-      find("h1").hover
+      # Move the pointer away so the tooltip does not cover the page. The page's own
+      # heading: the chat sidebar has an h1 of its own.
+      find("main h1").hover
     end
 
     # Records the links the hotkeys click instead of following them. A hotkey

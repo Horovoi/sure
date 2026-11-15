@@ -456,6 +456,8 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "breakdown amount and date filters apply to trades" do
+    # The fixture trade (2,140, a day ago) would pass the minimum and the start date
+    entries(:trade).destroy!
     create_trade(securities(:aapl), account: accounts(:investment), qty: 1, date: 10.days.ago.to_date, price: 100)
 
     get reports_path(breakdown_period_params)

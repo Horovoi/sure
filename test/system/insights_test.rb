@@ -14,6 +14,9 @@ class InsightsTest < ApplicationSystemTestCase
     with_env_overrides OPENAI_ACCESS_TOKEN: "test-token" do
       @user.update!(ai_enabled: true)
       login_as(@user)
+      # The sidebar chat frame loads lazily. A late first load would replace the new
+      # chat that Dig in opens, so wait for it first.
+      assert_selector "turbo-frame#sidebar_chat[complete]", visible: :all
 
       within "#insights-feed" do
         assert_text "Idle cash in Rainy day pot"

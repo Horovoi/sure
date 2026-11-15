@@ -55,6 +55,9 @@ class SubscriptionServiceTest < ActiveSupport::TestCase
 
   test "logo_url returns static icon path when icon file exists" do
     service = subscription_services(:netflix)
+    # public/icons is generated and not in git, so a fresh checkout has no file
+    Pathname.any_instance.stubs(:exist?).returns(true)
+
     assert_equal "/icons/netflix.png", service.logo_url
   end
 

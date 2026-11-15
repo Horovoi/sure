@@ -235,13 +235,16 @@ class CategoryTest < ActiveSupport::TestCase
 
   test "find_or_create_by_name! keeps the caller's transaction usable after a unique violation" do
     family = families(:empty)
-    family.categories.create!(name: "Raced", color: "#000000", lucide_icon: "shapes")
+    raced = family.categories.create!(name: "Raced", color: "#000000", lucide_icon: "shapes")
     Category.any_instance.stubs(:valid?).returns(true)
-    # Skip the lookup and the validation, so the insert itself hits the unique index
-    Category.stubs(:find_by).returns(nil)
+    # Skip the lookup and the validation, so the insert itself hits the unique index.
+    # The rescue's find_by! goes through find_by too (ActiveRecord::Core), so the
+    # second call returns the row the other request created.
+    Category.stubs(:find_by).returns(nil).then.returns(raced)
 
     Category.transaction do
-      family.categories.find_or_create_by_name!("Raced")
+      assert_equal raced, family.categories.find_or_create_by_name!("Raced")
+      # A query after the violation works: the failed insert ran in a savepoint
       assert family.categories.exists?(name: "Raced")
     end
   end

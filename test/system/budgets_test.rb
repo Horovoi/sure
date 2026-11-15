@@ -50,6 +50,9 @@ class BudgetsTest < ApplicationSystemTestCase
   test "a budget with nothing over budget has no filter tabs" do
     budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
     budget.update!(budgeted_spending: 100_000, expected_income: 100_000)
+    # Spending with no budget counts as over budget, and the fixtures spend in this
+    # month (Starbucks, food and drink): every category gets money to cover it
+    budget.budget_categories.reject(&:subcategory?).each { |bc| bc.update!(budgeted_spending: 1_000) }
 
     visit budget_path(budget)
 
