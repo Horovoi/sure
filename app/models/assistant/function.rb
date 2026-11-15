@@ -49,10 +49,38 @@ class Assistant::Function
     def build_schema(properties: {}, required: [])
       {
         type: "object",
-        properties: properties,
+        properties: prune_empty_enums(properties),
         required: required,
         additionalProperties: false
       }
+    end
+
+    # Enum values are built from family data (account names, categories, merchants, tags, tickers) and are empty
+    # for a family that has none. An empty enum is invalid JSON Schema, which strict providers and MCP clients
+    # reject, so the constraint is dropped and the node falls back to a plain string.
+    def prune_empty_enums(node)
+      case node
+      when Hash
+        dropped_enum = false
+
+        pruned = node.each_with_object({}) do |(key, value), result|
+          # Enum members are literal values, not subschemas, so they are kept verbatim
+          if key.to_sym == :enum && value.is_a?(Array) && value.empty?
+            dropped_enum = true
+          elsif key.to_sym == :enum && value.is_a?(Array)
+            result[key] = value
+          else
+            result[key] = prune_empty_enums(value)
+          end
+        end
+
+        pruned[:type] = "string" if dropped_enum && !pruned.key?(:type) && !pruned.key?("type")
+        pruned
+      when Array
+        node.map { |item| prune_empty_enums(item) }
+      else
+        node
+      end
     end
 
     def family_account_names

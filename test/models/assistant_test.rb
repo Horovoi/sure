@@ -190,6 +190,29 @@ class AssistantTest < ActiveSupport::TestCase
     assert_equal "resp_previous", @chat.reload.latest_assistant_response_id
   end
 
+  test "a failing tool still gives a completed turn and sends the error to the model" do
+    Assistant::Function::GetAccounts.any_instance.stubs(:call).raises(RuntimeError, "boom with internals")
+
+    call1 = provider_response(id: "1", function_requests: [ function_request("1") ])
+    call2 = provider_response(id: "2", text: "I could not load your accounts")
+
+    llm = use_llm(
+      step(response: provider_success_response(call1)),
+      step(chunks: [ provider_text_chunk("I could not load your accounts") ], response: provider_success_response(call2))
+    )
+
+    @turn.generate_response
+
+    @turn.reload
+    assert @turn.complete?
+    assert_equal 1, @turn.tool_calls.size
+    assert_equal "2", @chat.reload.latest_assistant_response_id
+
+    output = llm.calls.last[:function_results].first[:output]
+    assert_equal "get_accounts failed unexpectedly", output[:error]
+    refute_match "internals", output.to_json
+  end
+
   private
     def use_llm(*steps)
       ScriptedLlm.new(*steps).tap do |llm|
