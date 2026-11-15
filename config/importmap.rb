@@ -5,6 +5,8 @@ pin "@hotwired/turbo-rails", to: "turbo.min.js", preload: true
 pin "@hotwired/stimulus", to: "stimulus.min.js"
 pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"
 pin_all_from "app/javascript/controllers", under: "controllers"
+# The gem's controller, extended by controllers/hw_combobox_controller.js (which replaces the gem's own pin)
+pin "hotwire_combobox", to: "hotwire_combobox.esm.js"
 pin_all_from "app/components", under: "controllers", to: ""
 pin_all_from "app/javascript/services", under: "services", to: "services"
 pin_all_from "app/javascript/utils", under: "utils", to: "utils"
