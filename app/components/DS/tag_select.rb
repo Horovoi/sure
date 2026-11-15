@@ -24,6 +24,11 @@ class DS::TagSelect < DesignSystemComponent
     "#{form.object_name}[#{attribute}][]"
   end
 
+  # Only ids that match one of the listed tags, like the controller's selection
+  def selected_tags
+    tags.select { |tag| selected_ids.include?(tag.id.to_s) }
+  end
+
   def label_text
     label.presence || helpers.t("ds.tag_select.label")
   end

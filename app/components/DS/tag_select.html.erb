@@ -38,6 +38,11 @@
 
   <div data-tag-select-hidden-inputs>
     <input type="hidden" name="<%= field_name %>" value="" <%= "disabled" if disabled %>>
+    <%# The same inputs tag_select_controller.js#renderSelection builds, so the form keeps
+        the selection before the controller connects %>
+    <% selected_tags.each do |tag| %>
+      <input type="hidden" name="<%= field_name %>" value="<%= tag.id %>" <%= "disabled" if disabled %>>
+    <% end %>
   </div>
 
   <% unless disabled %>

@@ -8,6 +8,9 @@ class DS::TagSelectTest < ViewComponent::TestCase
     assert_selector "[data-tag-select-target=option][data-tag-id='#{tags(:two).id}'][aria-selected=false]", visible: :all
     # The blank value lets a form clear every tag.
     assert_selector "[data-tag-select-hidden-inputs] input[type=hidden][name='transaction[tag_ids][]'][value='']", visible: :all
+    # The selection is posted even before the Stimulus controller connects
+    assert_selector "[data-tag-select-hidden-inputs] input[type=hidden][name='transaction[tag_ids][]'][value='#{tags(:one).id}']", visible: :all
+    assert_no_selector "[data-tag-select-hidden-inputs] input[type=hidden][value='#{tags(:two).id}']", visible: :all
   end
 
   test "posts new tags to the JSON create endpoint and saves through update_url" do
@@ -19,8 +22,11 @@ class DS::TagSelectTest < ViewComponent::TestCase
   test "carries localized error messages for the controller" do
     render_select(tags: [], selected_ids: [])
 
-    assert_selector "[data-tag-select-error-message-value='#{I18n.t("ds.tag_select.create_error")}']"
-    assert_selector "[data-tag-select-save-error-message-value='#{I18n.t("ds.tag_select.save_error")}']"
+    # Compared as attribute values: the messages hold an apostrophe, which a quoted CSS
+    # attribute selector cannot carry
+    root = page.find("[data-controller=tag-select]")
+    assert_equal I18n.t("ds.tag_select.create_error"), root["data-tag-select-error-message-value"]
+    assert_equal I18n.t("ds.tag_select.save_error"), root["data-tag-select-save-error-message-value"]
   end
 
   test "without a visible label the trigger is named by the label text" do
