@@ -567,6 +567,9 @@ Rails.application.routes.draw do
     end
   end
 
+  draw(:monobank) if File.exist?(Rails.root.join("config/routes/monobank.rb"))
+  draw(:mcc) if File.exist?(Rails.root.join("config/routes/mcc.rb"))
+
   namespace :webhooks do
     post "plaid"
     post "plaid_eu"

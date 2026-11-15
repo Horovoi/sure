@@ -1,0 +1,49 @@
+<%# locals: (monobank_item:) %>
+<% new_record = monobank_item.new_record? %>
+
+<%= styled_form_with model: monobank_item,
+                     url: new_record ? monobank_items_path : monobank_item_path(monobank_item),
+                     scope: :monobank_item,
+                     method: new_record ? :post : :patch,
+                     namespace: dom_id(monobank_item),
+                     data: { turbo: true },
+                     class: "space-y-3" do |form| %>
+  <%= form.text_field :name,
+                      label: t("monobank_items.connection_form.name_label"),
+                      placeholder: t("monobank_items.defaults.name") %>
+
+  <%= form.password_field :access_token,
+                          label: t("monobank_items.connection_form.token_label"),
+                          placeholder: new_record ? t("monobank_items.connection_form.token_placeholder") : t("monobank_items.connection_form.token_keep_placeholder"),
+                          value: nil,
+                          autocomplete: "off",
+                          required: new_record %>
+
+  <%= form.date_field :sync_start_date,
+                      label: t("monobank_items.connection_form.history_start_label"),
+                      max: Date.current %>
+  <p class="text-xs text-secondary"><%= t("monobank_items.connection_form.history_start_hint", days: Rails.configuration.x.monobank.initial_history_days) %></p>
+
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <p class="text-sm text-primary"><%= t("monobank_items.connection_form.include_pending_label") %></p>
+      <p class="text-xs text-secondary"><%= t("monobank_items.connection_form.include_pending_hint") %></p>
+    </div>
+    <%= form.toggle :include_pending %>
+  </div>
+
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <p class="text-sm text-primary"><%= t("monobank_items.connection_form.apply_mcc_label") %></p>
+      <p class="text-xs text-secondary"><%= t("monobank_items.connection_form.apply_mcc_hint") %></p>
+    </div>
+    <%= form.toggle :apply_mcc_categories %>
+  </div>
+
+  <div class="flex justify-end">
+    <%= render DS::Button.new(
+      text: new_record ? t("monobank_items.connection_form.connect") : t("monobank_items.connection_form.save"),
+      type: "submit"
+    ) %>
+  </div>
+<% end %>

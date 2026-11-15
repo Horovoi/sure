@@ -1,0 +1,19 @@
+<%# locals: (monobank_item:) %>
+<% status = provider_item_status(monobank_item) %>
+<% progress = monobank_item.backfill_progress %>
+
+<div class="space-y-1 text-sm">
+  <p class="<%= status.state.in?(%i[error requires_update]) ? "text-destructive" : "text-secondary" %> flex items-center gap-1">
+    <% if status.state.in?(%i[syncing fetching]) %>
+      <%= icon "loader", size: "sm", class: "animate-spin" %>
+    <% elsif status.state.in?(%i[error requires_update]) %>
+      <%= icon "alert-circle", size: "sm", color: "destructive" %>
+    <% end %>
+    <span><%= status.text %></span>
+  </p>
+  <% if status.state != :fetching && progress[:windows_remaining].positive? %>
+    <p class="text-xs text-secondary">
+      <%= t("monobank_items.progress.windows_left", count: progress[:windows_remaining], minutes: [ (progress[:eta_seconds] / 60.0).ceil, 1 ].max) %>
+    </p>
+  <% end %>
+</div>

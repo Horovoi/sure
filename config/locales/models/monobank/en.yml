@@ -1,0 +1,44 @@
+---
+en:
+  activerecord:
+    models:
+      monobank_item: monobank connection
+      monobank_account: monobank account
+    attributes:
+      monobank_item:
+        name: Connection name
+        access_token: Personal token
+        sync_start_date: History from
+  monobank_items:
+    registration:
+      description: Ukrainian monobank cards, currency accounts, FOP accounts and jars, with a personal API token.
+    defaults:
+      name: monobank
+      description: Your monobank cards, currency accounts, FOP accounts and jars
+    card_types:
+      black: Black card
+      white: White card
+      platinum: Platinum card
+      iron: Iron card
+      yellow: Children's card
+      eaid: eSupport card
+      fop: FOP account
+      jar: Jar
+      unknown: monobank card
+    errors:
+      account_processing_failed: A monobank account could not be updated
+      account_sync_schedule_failed: A monobank account balance could not be recalculated
+      requires_update: monobank refused the token. Add a new token in Settings, Sync Providers.
+      no_token: The monobank connection has no token
+      client_info_failed: Could not load your monobank accounts. Try again later.
+    sync_status:
+      no_accounts: No accounts found yet
+      all_synced:
+        one: 1 account linked
+        other: "%{count} accounts linked"
+      partial: "%{linked} linked, %{unlinked} to set up"
+    sync:
+      status:
+        importing: Loading accounts from monobank...
+        processing: Processing transactions...
+        calculating: Calculating balances...

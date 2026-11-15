@@ -1,0 +1,107 @@
+<% items = Current.family.monobank_items.active.ordered.to_a %>
+<% error_message = local_assigns[:error_message] %>
+
+<div class="space-y-4">
+  <div class="prose prose-sm text-secondary">
+    <p class="text-primary font-medium"><%= t("monobank_items.panel.steps_title") %></p>
+    <ol>
+      <li><%= t("monobank_items.panel.step_1_html", link: link_to("api.monobank.ua", "https://api.monobank.ua/", target: "_blank", rel: "noopener noreferrer", class: "text-link underline")) %></li>
+      <li><%= t("monobank_items.panel.step_2") %></li>
+      <li><%= t("monobank_items.panel.step_3") %></li>
+    </ol>
+  </div>
+
+  <%= render DS::Alert.new(message: t("monobank_items.panel.rate_limit_notice"), variant: :info) %>
+
+  <% if error_message.present? %>
+    <%= render DS::Alert.new(message: error_message, variant: :error) %>
+  <% end %>
+
+  <% items.each do |item| %>
+    <%= render DS::Disclosure.new(variant: :card, open: items.one?) do |disclosure| %>
+      <% disclosure.with_summary_content do %>
+        <div class="flex items-center justify-between gap-2 w-full">
+          <div>
+            <p class="font-medium text-primary"><%= item.name %></p>
+            <p class="text-xs text-secondary"><%= item.sync_status_summary %></p>
+          </div>
+
+          <%= render DS::Menu.new do |menu| %>
+            <% menu.with_item(
+              variant: "button",
+              text: t("monobank_items.panel.disconnect"),
+              icon: "trash-2",
+              href: monobank_item_path(item),
+              method: :delete,
+              destructive: true,
+              confirm: CustomConfirm.new(
+                title: t("monobank_items.panel.disconnect_title", name: item.name),
+                body: t("monobank_items.panel.disconnect_body"),
+                btn_text: t("monobank_items.panel.disconnect"),
+                destructive: true
+              )
+            ) %>
+          <% end %>
+        </div>
+      <% end %>
+
+      <div class="mt-4 space-y-4">
+        <%= render "monobank_items/progress", monobank_item: item %>
+
+        <% if item.monobank_accounts.any? %>
+          <ul class="text-sm text-secondary space-y-1">
+            <% item.monobank_accounts.ordered.each do |monobank_account| %>
+              <li class="flex items-center justify-between gap-2">
+                <span class="text-primary"><%= monobank_account.name %></span>
+                <span>
+                  <% if monobank_account.current_account %>
+                    <%= t("monobank_items.panel.linked_to", account: monobank_account.current_account.name) %>
+                  <% elsif monobank_account.ignored? %>
+                    <%= t("monobank_items.panel.skipped") %>
+                  <% else %>
+                    <%= t("monobank_items.panel.not_linked") %>
+                  <% end %>
+                  <% if monobank_account.jar? && monobank_account.goal.present? %>
+                    · <%= t("monobank_items.panel.jar_goal", goal: format_money(Money.new(monobank_account.goal, monobank_account.currency))) %>
+                  <% end %>
+                </span>
+              </li>
+            <% end %>
+          </ul>
+        <% end %>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <%= render DS::Link.new(
+            text: t("monobank_items.panel.setup_accounts"),
+            icon: "settings",
+            variant: "secondary",
+            size: :sm,
+            href: setup_accounts_monobank_item_path(item),
+            frame: :modal
+          ) %>
+          <%= render DS::Button.new(
+            text: t("monobank_items.panel.sync_now"),
+            icon: "refresh-cw",
+            variant: :outline,
+            size: :sm,
+            href: sync_monobank_item_path(item),
+            method: :post,
+            disabled: item.syncing?,
+            data: { turbo_frame: "_top" }
+          ) %>
+        </div>
+
+        <%= render "monobank_items/connection_form", monobank_item: item %>
+      </div>
+    <% end %>
+  <% end %>
+
+  <% if items.any? && lookup_context.exists?("section", [ "settings/mcc_mappings" ], true) %>
+    <%= render "settings/mcc_mappings/section", family: Current.family %>
+  <% end %>
+
+  <% if items.any? %>
+    <p class="text-sm font-medium text-primary"><%= t("monobank_items.panel.add_connection") %></p>
+  <% end %>
+  <%= render "monobank_items/connection_form", monobank_item: MonobankItem.new(family: Current.family, name: t("monobank_items.defaults.name")) %>
+</div>

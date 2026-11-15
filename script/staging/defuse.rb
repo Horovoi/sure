@@ -9,6 +9,7 @@ CREDENTIALS = {
   "CoinbaseItem" => %w[api_key api_secret],
   "CoinstatsItem" => %w[api_key],
   "EnableBankingItem" => %w[session_id client_certificate],
+  "MonobankItem" => %w[access_token],
   "SsoProvider" => %w[client_secret]
 }.freeze
 

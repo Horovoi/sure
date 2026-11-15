@@ -1,0 +1,69 @@
+<%# locals: (monobank_item:) %>
+
+<%= tag.div id: dom_id(monobank_item) do %>
+  <%= render DS::Disclosure.new(variant: :card, open: true) do |disclosure| %>
+    <% disclosure.with_summary_content do %>
+      <div class="flex items-center justify-between gap-2 w-full">
+        <div class="flex items-center gap-2">
+          <%= icon "chevron-right", class: "group-open:rotate-90 motion-safe:transition-transform motion-safe:duration-150" %>
+          <%= render DS::FilledIcon.new(variant: :text, text: "m", size: "md", rounded: true) %>
+
+          <div class="pl-1 text-sm">
+            <p class="font-medium text-primary"><%= monobank_item.name %></p>
+            <%= render "monobank_items/progress", monobank_item: monobank_item %>
+          </div>
+        </div>
+
+        <%= render DS::Menu.new do |menu| %>
+          <% menu.with_item(
+            variant: "button",
+            text: t("monobank_items.monobank_item.sync_now"),
+            icon: "refresh-cw",
+            href: sync_monobank_item_path(monobank_item),
+            method: :post
+          ) %>
+          <% if Current.user&.admin? %>
+            <% menu.with_item(
+              variant: "link",
+              text: t("monobank_items.monobank_item.settings"),
+              icon: "settings",
+              href: settings_providers_path
+            ) %>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% unless monobank_item.scheduled_for_deletion? %>
+      <div class="space-y-4 mt-4">
+        <% if monobank_item.accounts.any? %>
+          <%= render "accounts/index/account_groups", accounts: monobank_item.accounts %>
+        <% end %>
+
+        <%= render ProviderSyncSummary.new(
+          stats: monobank_item.syncs.ordered.first&.sync_stats || {},
+          provider_item: monobank_item,
+          institutions_count: monobank_item.connected_institutions.size
+        ) %>
+
+        <% if monobank_item.unlinked_accounts_count.positive? && Current.user&.admin? %>
+          <div class="p-4 flex flex-col gap-3 items-center justify-center">
+            <p class="text-primary font-medium text-sm"><%= t("monobank_items.monobank_item.setup_needed") %></p>
+            <p class="text-secondary text-sm">
+              <%= t("monobank_items.monobank_item.setup_description", linked: monobank_item.linked_accounts_count, total: monobank_item.total_accounts_count) %>
+            </p>
+            <%= render DS::Link.new(
+              text: t("monobank_items.monobank_item.setup_action"),
+              icon: "settings",
+              variant: "primary",
+              href: setup_accounts_monobank_item_path(monobank_item),
+              frame: :modal
+            ) %>
+          </div>
+        <% elsif monobank_item.total_accounts_count.zero? %>
+          <p class="p-4 text-secondary text-sm text-center"><%= t("monobank_items.monobank_item.no_accounts") %></p>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+<% end %>
