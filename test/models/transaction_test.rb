@@ -97,4 +97,40 @@ class TransactionTest < ActiveSupport::TestCase
 
     assert_not transaction.pending?
   end
+
+  # --- DS pickers (w1-ds) ---
+
+  test "record_category_usage! touches the category only after a category change" do
+    transaction = transactions(:one)
+    category = categories(:subscriptions)
+
+    transaction.update!(category: category)
+    transaction.record_category_usage!
+    assert_not_nil category.reload.last_used_at
+
+    first_use = category.last_used_at
+    transaction.update!(merchant: merchants(:netflix))
+    transaction.record_category_usage!
+    assert_equal first_use, category.reload.last_used_at
+  end
+
+  test "record_category_usage! does nothing when the category was cleared" do
+    transaction = transactions(:one)
+
+    transaction.update!(category: nil)
+
+    assert_nothing_raised { transaction.record_category_usage! }
+  end
+
+  test "toggle_tag! adds a missing tag and removes a present one" do
+    transaction = transactions(:one)
+    tag = tags(:one)
+    transaction.update!(tag_ids: [])
+
+    transaction.toggle_tag!(tag)
+    assert_equal [ tag.id ], transaction.tag_ids
+
+    transaction.toggle_tag!(tag)
+    assert_empty transaction.reload.tag_ids
+  end
 end

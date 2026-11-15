@@ -10,7 +10,7 @@
           <% menu.with_item(
               variant: "link",
               text: t("accounts.show.activity.new_balance"),
-              icon: "dollar-sign",
+              icon: "circle-dollar-sign",
               href: new_valuation_path(account_id: account.id),
               data: { turbo_frame: :modal }) %>
         <% end %>
@@ -36,7 +36,7 @@
         <% menu.with_item(
             variant: "link",
             text: t("accounts.show.activity.new_transfer"),
-            icon: "arrow-left-right",
+            icon: "arrow-right-left",
             href: new_transfer_path(from_account_id: account.id),
             data: { turbo_frame: :modal }) %>
       <% end %>
@@ -68,16 +68,16 @@
             </div>
           </div>
 
-          <%= render DS::Menu.new(variant: "button", no_padding: true) do |menu| %>
-            <% menu.with_button(
+          <%= render DS::Popover.new(variant: "button", no_padding: true) do |popover| %>
+            <% popover.with_button(
               id: "activity-filter-button",
               type: "button",
               text: t("accounts.show.activity.filter"),
               variant: "outline",
-              icon: "filter"
+              icon: "list-filter"
             ) %>
 
-            <% menu.with_custom_content do %>
+            <% popover.with_custom_content do %>
               <%= render "transactions/searches/menu",
                   form: form,
                   filters: helpers.account_search_filters,
@@ -93,7 +93,7 @@
                   action: "click->checkbox-toggle#toggle",
                   checkbox_toggle_target: "toggleButton"
                 } do %>
-            <%= helpers.icon("list-checks") %>
+            <%= helpers.icon("list-todo") %>
           <% end %>
         </div>
       <% end %>

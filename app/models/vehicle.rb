@@ -21,7 +21,7 @@ class Vehicle < ApplicationRecord
     end
 
     def icon
-      "car"
+      "car-front"
     end
 
     def classification

@@ -261,4 +261,39 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to settings_preferences_url
     assert_match "is invalid", flash[:alert]
   end
+
+  # --- Enabled currencies (w1-ds money field) ---
+
+  test "an admin narrows the family's currencies, keeping the base currency" do
+    family = @user.family
+    family.update!(currency: "UAH")
+
+    patch user_url(@user), params: {
+      user: { redirect_to: "preferences", family_attributes: { id: family.id, enabled_currencies: [ "UAH", "USD" ] } }
+    }
+
+    assert_equal [ "UAH", "USD" ], family.reload.enabled_currencies
+  end
+
+  test "ticking every currency stores nil, meaning all" do
+    family = @user.family
+
+    patch user_url(@user), params: {
+      user: { redirect_to: "preferences", family_attributes: { id: family.id, enabled_currencies: Money::Currency.as_options.map(&:iso_code) } }
+    }
+
+    assert_nil family.reload.enabled_currencies
+  end
+
+  test "a member cannot change the family's currencies" do
+    sign_in users(:family_member)
+    family = users(:family_member).family
+    family.update!(enabled_currencies: nil)
+
+    patch user_url(users(:family_member)), params: {
+      user: { redirect_to: "preferences", family_attributes: { id: family.id, enabled_currencies: [ "USD" ] } }
+    }
+
+    assert_nil family.reload.enabled_currencies
+  end
 end

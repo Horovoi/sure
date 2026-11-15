@@ -178,6 +178,8 @@ class Entry < ApplicationRecord
             # A category or merchant change skips the sync, which is what runs the
             # recurring-pattern detection; ask for it once per family instead.
             recurring_account_ids << entry.account_id if entry.saved_changes_affect_recurring_patterns?
+            # Bulk edit is a manual pick, so it counts toward the pickers' "Recent" group.
+            entry.transaction.record_category_usage! if entry.transaction?
 
             if entry.saved_change_to_date?
               start_date = [ entry.date_previously_was, entry.date ].compact.min

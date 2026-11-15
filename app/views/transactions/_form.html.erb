@@ -1,4 +1,6 @@
-<%# locals: (entry:, income_category_groups:, expense_category_groups:) %>
+<%# locals: (entry:, categories:, recent_categories:, category_classification:, merchants:, tags:) %>
+<%# On a re-render after a failed create the nature comes back inside entry[]. %>
+<% nature = params[:nature].presence || params.dig(:entry, :nature).presence || "outflow" %>
 
 <%= styled_form_with model: entry, url: transactions_path, class: "space-y-4" do |f| %>
   <% if entry.errors.any? %>
@@ -6,9 +8,9 @@
   <% end %>
 
   <section>
-    <%= render "shared/transaction_type_tabs", active_tab: params[:nature] == "inflow" ? "income" : "expense", account_id: params[:account_id] %>
+    <%= render "shared/transaction_type_tabs", active_tab: nature == "inflow" ? "income" : "expense", account_id: params[:account_id] %>
 
-    <%= f.hidden_field :nature, value: params[:nature] || "outflow" %>
+    <%= f.hidden_field :nature, value: nature %>
     <%= f.hidden_field :entryable_type, value: "Transaction" %>
   </section>
 
@@ -23,24 +25,37 @@
 
     <%= f.money_field :amount, label: t(".amount"), required: true %>
     <%= f.fields_for :entryable do |ef| %>
-      <% category_groups = (params[:nature] == "inflow" ? income_category_groups : expense_category_groups) || [] %>
-      <%= ef.select :category_id,
-                    grouped_options_for_select(category_groups, ef.object&.category_id),
-                    { prompt: t(".category_prompt"), label: t(".category") } %>
+      <%= render DS::CategorySelect.new(
+            form: ef,
+            categories: categories,
+            selected_id: ef.object&.category_id,
+            blank_label: t(".category_prompt"),
+            label: t(".category"),
+            classification: category_classification,
+            recent_categories: recent_categories
+          ) %>
     <% end %>
     <%= f.date_field :date, label: t(".date"), required: true, min: Entry.min_supported_date, max: Date.current, value: Date.current %>
   </section>
 
   <%= render DS::Disclosure.new(title: t(".details")) do %>
     <%= f.fields_for :entryable do |ef| %>
-      <%= ef.select :tag_ids,
-                    Current.family.tags.alphabetically.pluck(:name, :id),
-                    {
-                      include_blank: t(".none"),
-                      multiple: true,
-                      label:    t(".tags_label")
-                    },
-                    { "data-controller": "multi-select" } %>
+      <div class="space-y-2">
+        <%= render DS::MerchantSelect.new(
+              form: ef,
+              method: :merchant_id,
+              merchants: merchants,
+              selected_id: ef.object&.merchant_id,
+              include_blank: t(".none"),
+              label: t(".merchant_label")
+            ) %>
+        <%= render DS::TagSelect.new(
+              form: ef,
+              tags: tags,
+              selected_ids: Array(ef.object&.tag_ids),
+              label: t(".tags_label")
+            ) %>
+      </div>
     <% end %>
     <%= f.text_area :notes,
                     label: t(".note_label"),

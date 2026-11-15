@@ -28,8 +28,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     end
 
     def sign_out
-      find("#user-menu").click
-      click_button "Logout"
+      within "div[data-testid=user-menu]" do
+        find("button[aria-haspopup]").click
+      end
+      click_button I18n.t("users.user_menu.log_out")
 
       # Trigger Capybara's wait mechanism to avoid timing issues with logout
       find("a", text: "Sign in")

@@ -24,4 +24,21 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_equal "$0.00", totals_by_currency(collection: [ Account.new(currency: "USD", balance: 0) ], money_method: :balance_money)
     assert_equal "-$3.00 | €7.00", totals_by_currency(collection: [ @account1, @account2, @account3 ], money_method: :balance_money, negate: true)
   end
+
+  # --- Enabled currencies (w1-ds money field) ---
+
+  test "currency picker options are every currency without a family" do
+    assert_equal Money::Currency.as_options.map(&:iso_code), currency_picker_options_for_family(nil)
+  end
+
+  test "currency picker options are the family's currencies plus the record's own" do
+    family = families(:dylan_family)
+    family.update!(currency: "UAH", enabled_currencies: [ "UAH", "USD" ])
+
+    assert_equal [ "UAH", "USD", "EUR" ], currency_picker_options_for_family(family, extra: "EUR")
+  end
+
+  test "currency_label names the currency and its code" do
+    assert_equal "Ukrainian Hryvnia (UAH)", currency_label("UAH")
+  end
 end

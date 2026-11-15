@@ -14,4 +14,7 @@ CI.run do
 
   # The host-side Claude bridge (Node, no dependencies needed for its tests)
   step "Tests: Claude bridge", "node --test 'claude_bridge/*.test.ts'"
+
+  # w1-ds: the pure JS helpers the money field and charts share (amount parsing, paste)
+  step "Tests: JavaScript", "node --test 'test/javascript/*_test.mjs'"
 end

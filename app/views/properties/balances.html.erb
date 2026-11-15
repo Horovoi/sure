@@ -21,6 +21,7 @@
             <%= render DS::Button.new(
               text: @account.active? ? t("properties.balances.save") : t("properties.balances.next"),
               variant: "primary",
+              type: :submit
             ) %>
           </div>
         <% end %>

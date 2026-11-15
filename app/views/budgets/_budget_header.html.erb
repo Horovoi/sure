@@ -7,6 +7,7 @@
         variant: "icon",
         icon: "chevron-left",
         href: budget_path(budget.previous_budget_param),
+        aria: { label: t(".previous_budget") }
       ) %>
     <% else %>
       <span class="text-subdued">
@@ -19,6 +20,7 @@
         variant: "icon",
         icon: "chevron-right",
         href: budget_path(budget.next_budget_param),
+        aria: { label: t(".next_budget") }
       ) %>
     <% else %>
       <span class="text-subdued">
@@ -27,20 +29,20 @@
     <% end %>
   </div>
 
-  <%= render DS::Menu.new(variant: "button") do |menu| %>
-    <% menu.with_button class: "flex items-center gap-1 hover:bg-alpha-black-25 cursor-pointer rounded-md p-2"  do %>
+  <%= render DS::Popover.new(variant: "button") do |popover| %>
+    <% popover.with_button class: "flex items-center gap-1 hover:bg-surface-hover cursor-pointer rounded-md p-2"  do %>
       <span class="text-primary font-medium text-base md:text-lg"><%= @budget.name %></span>
       <%= icon("chevron-down") %>
     <% end %>
 
-    <% menu.with_custom_content do %>
+    <% popover.with_custom_content do %>
       <%= render "budgets/picker", family: Current.family, year: budget.start_date.year %>
     <% end %>
   <% end %>
 
   <div class="ml-auto">
     <%= render DS::Link.new(
-        text: "Today",
+        text: t(".today"),
         variant: "outline",
         href: budget_path(Budget.date_to_param(Date.current, family: Current.family)),
     ) %>
@@ -48,11 +50,11 @@
 </div>
 
 <div class="text-secondary text-xs mb-3">
-  <span>Period:</span>
+  <span><%= t(".period") %></span>
   <span class="text-primary">
     <%= @budget.start_date.strftime("%b %-d, %Y") %> — <%= @budget.end_date.strftime("%b %-d, %Y") %>
   </span>
   <% if Current.family.fiscal_month_enabled? %>
-    <span class="ml-2 px-1.5 py-0.5 border border-tertiary rounded-md">Fiscal months</span>
+    <span class="ml-2 px-1.5 py-0.5 border border-tertiary rounded-md"><%= t(".fiscal_months") %></span>
   <% end %>
 </div>

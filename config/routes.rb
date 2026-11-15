@@ -149,6 +149,13 @@ Rails.application.routes.draw do
     resource :dropdown, only: :show
   end
 
+  # --- DS pickers (w1-ds): tag picker of a transaction row, tag save of the edit drawer ---
+  namespace :tag do
+    resource :dropdown, only: :show
+  end
+  patch "transactions/:id/tags", to: "transactions#update_tags", as: :tags_transaction
+  # --- end DS pickers ---
+
   resources :categories, except: :show do
     resources :deletions, only: %i[new create], module: :category
 

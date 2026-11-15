@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import evaluateAmountExpression from "utils/evaluate_amount_expression"
 
 export default class extends Controller {
   static targets = ["nameField", "billingCycle", "monthField", "amountField", "currencySelect", "conversionHint", "conversionText"]
@@ -48,12 +49,14 @@ export default class extends Controller {
     const requestId = (this.hintRequestId = (this.hintRequestId || 0) + 1)
     const isStale = () => requestId !== this.hintRequestId
 
-    const amount = parseFloat(this.amountFieldTarget.value)
+    // Read the amount the way the money field will send it ("12,50" is 12.5,
+    // "120+35,5" is 155.5); anything it can't read hides the hint.
+    const amount = evaluateAmountExpression(this.amountFieldTarget.value)
     const selectedCurrency = this.currencySelectTarget.value
     const familyCurrency = this.familyCurrencyValue
 
     // Hide hint if no amount or invalid amount
-    if (!amount || amount <= 0 || isNaN(amount)) {
+    if (amount === null || amount <= 0) {
       this.conversionHintTarget.classList.add("hidden")
       return
     }

@@ -149,4 +149,28 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     assert_select "select[name='transfer[to_account_id]'] option[value='#{disabled_account.id}']", count: 0
     assert_select "select[name='transfer[from_account_id]'] option[value='#{accounts(:credit_card).id}']"
   end
+
+  # --- DS pickers (w1-ds) ---
+
+  test "confirming a transfer keeps its notes and category" do
+    transfer = transfers(:one)
+    category = categories(:food_and_drink)
+    transfer.update!(notes: "Rent split")
+    transfer.outflow_transaction.update!(category: category)
+
+    patch transfer_url(transfer), params: { transfer: { status: "confirmed" } }
+
+    assert_equal "Rent split", transfer.reload.notes
+    assert_equal category, transfer.outflow_transaction.reload.category
+  end
+
+  test "setting a transfer's category records it as recently used" do
+    transfer = transfers(:one)
+    category = categories(:food_and_drink)
+
+    patch transfer_url(transfer), params: { transfer: { category_id: category.id, notes: "" } }
+
+    assert_equal category, transfer.outflow_transaction.reload.category
+    assert_not_nil category.reload.last_used_at
+  end
 end

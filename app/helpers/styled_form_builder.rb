@@ -32,7 +32,16 @@ class StyledFormBuilder < ActionView::Helpers::FormBuilder
     end
   end
 
+  # A native <select> by default. Passing `variant:` (:simple, :logo, :badge)
+  # or `searchable: true` renders the DS::Select listbox instead, the way
+  # upstream call sites ask for it. The native element stays the default
+  # because it keeps `required` validation and the browser's own keyboard
+  # handling, which forms like the account pickers rely on.
   def collection_select(method, collection, value_method, text_method, options = {}, html_options = {})
+    if options.key?(:variant) || options[:searchable]
+      return ds_collection_select(method, collection, value_method, text_method, options, html_options)
+    end
+
     field_options = normalize_options(options, html_options)
 
     build_field(method, field_options, html_options) do |merged_html_options|
@@ -74,6 +83,7 @@ class StyledFormBuilder < ActionView::Helpers::FormBuilder
     @template.render(
       DS::Button.new(
         text: value,
+        type: "submit",
         data: (options[:data] || {}).merge({ turbo_submits_with: "Submitting..." }),
         full_width: true
       )
@@ -81,6 +91,35 @@ class StyledFormBuilder < ActionView::Helpers::FormBuilder
   end
 
   private
+    def ds_collection_select(method, collection, value_method, text_method, options, html_options)
+      selected_value =
+        if options.key?(:selected)
+          options[:selected]
+        elsif @object.respond_to?(method)
+          @object.public_send(method)
+        end
+      placeholder = options[:prompt] || options[:include_blank] || options[:placeholder] || I18n.t("ds.select.default_label")
+
+      @template.render(
+        DS::Select.new(
+          form: self,
+          method: method,
+          items: collection.map { |item| { value: item.public_send(value_method), label: item.public_send(text_method), object: item } },
+          selected: selected_value,
+          placeholder: placeholder,
+          searchable: options.fetch(:searchable, false),
+          menu_placement: options[:menu_placement],
+          variant: options.fetch(:variant, :simple),
+          include_blank: options[:include_blank],
+          label: options[:label],
+          container_class: options[:container_class],
+          scoped_ids: options.fetch(:scoped_ids, false),
+          disabled: html_options[:disabled],
+          html_options: html_options
+        )
+      )
+    end
+
     def build_field(method, options = {}, html_options = {}, &block)
       if options[:inline] || options[:label] == false
         return yield({ class: "form-field__input" }.merge(html_options))

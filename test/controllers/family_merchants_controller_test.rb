@@ -36,4 +36,24 @@ class FamilyMerchantsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to family_merchants_path
   end
+
+  # --- DS pickers: inline create through the JSON endpoint ---
+
+  test "JSON create returns the new merchant with its option markup" do
+    assert_difference "FamilyMerchant.count", +1 do
+      post family_merchants_url(format: :json), params: { family_merchant: { name: "Corner Bakery" } }, as: :json
+    end
+
+    assert_response :created
+    body = response.parsed_body
+    assert_equal "Corner Bakery", body["name"]
+    assert_includes body["html"], %(data-merchant-id="#{body["id"]}")
+  end
+
+  test "JSON create returns the validation errors" do
+    post family_merchants_url(format: :json), params: { family_merchant: { name: "" } }, as: :json
+
+    assert_response :unprocessable_entity
+    assert response.parsed_body["errors"].any?
+  end
 end

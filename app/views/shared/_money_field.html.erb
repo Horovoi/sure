@@ -5,21 +5,38 @@
                    elsif form.object && form.object.respond_to?(currency_method)
                      form.object.public_send(currency_method)
                    end
-   currency = Money::Currency.new(currency_value || options[:default_currency] || "USD") %>
+   currency = Money::Currency.new(currency_value || options[:default_currency] || Current.family&.currency || "USD")
+   # A text input has no native min/max constraint, so the bounds the old
+   # number_field enforced (the caller's, or these defaults) are handed to
+   # money_field_controller, which checks the evaluated amount against them.
+   amount_min = options[:min] || -99999999999999
+   amount_max = options[:max] || 99999999999999
+   label_text = options[:label] || t(".label") %>
 
-<div class="form-field <%= options[:container_class] %>" data-controller="money-field">
+<div class="form-field group/money-field <%= options[:container_class] %>"
+     data-controller="money-field"
+     data-money-field-separator-value="<%= currency.separator %>"
+     data-money-field-separator-currency-value="<%= currency.iso_code %>"
+     <% if options[:precision].present? %> data-money-field-precision-value="<%= options[:precision] %>"<% end %>
+     <% if options[:step].present? %> data-money-field-step-value="<%= options[:step] %>"<% end %>
+     <% if options[:currency_source].present? %> data-money-field-currency-source-value="<%= options[:currency_source] %>" data-action="change@document->money-field#followCurrencySource"<% end %>
+     data-money-field-min-value="<%= amount_min %>"
+     data-money-field-max-value="<%= amount_max %>"
+     data-money-field-invalid-message-value="<%= t(".invalid_amount") %>"
+     data-money-field-min-message-value="<%= t(".below_min", min: amount_min) %>"
+     data-money-field-max-message-value="<%= t(".above_max", max: amount_max) %>">
   <% if options[:label_tooltip] %>
     <div class="form-field__header">
-      <%= form.label options[:label] || t(".label"), class: "form-field__label" do %>
-        <%= options[:label] || t(".label") %>
+      <%= form.label amount_method, class: class_names("form-field__label", options[:label_class]) do %>
+        <%= label_text %>
         <% if options[:required] %>
-          <span class="text-red-500 ml-0.5">*</span>
+          <span class="text-destructive ml-0.5">*</span>
         <% end %>
       <% end %>
       <div class="form-field__actions">
         <div data-controller="tooltip">
           <%= icon "help-circle", size: "sm", color: "default", class: "cursor-help" %>
-          <div role="tooltip" data-tooltip-target="tooltip" class="tooltip bg-gray-700 text-sm p-2 rounded w-64 text-white">
+          <div role="tooltip" data-tooltip-target="tooltip" class="tooltip bg-inverse text-inverse text-sm p-2 rounded-md w-64">
             <%= options[:label_tooltip] %>
           </div>
         </div>
@@ -29,56 +46,93 @@
 
   <div class="form-field__body">
     <% unless options[:label_tooltip] %>
-      <%= form.label options[:label] || t(".label"), class: "form-field__label" do %>
-        <%= options[:label] || t(".label") %>
+      <%= form.label amount_method, class: class_names("form-field__label", options[:label_class]) do %>
+        <%= label_text %>
         <% if options[:required] %>
-          <span class="text-red-500 ml-0.5">*</span>
+          <span class="text-destructive ml-0.5">*</span>
         <% end %>
       <% end %>
     <% end %>
 
     <div class="flex items-center gap-1">
       <div class="flex items-center grow gap-1">
-        <span class="text-subdued text-sm" data-money-field-target="symbol">
-          <%= currency.symbol %>
-        </span>
+        <%# hide_symbol: for an amount whose currency the form does not know yet
+            (a transfer takes the source account's). %>
+        <% unless options[:hide_symbol] %>
+          <span class="text-subdued text-sm" data-money-field-target="symbol">
+            <%= currency.symbol %>
+          </span>
+        <% end %>
 
-        <%= form.number_field amount_method,
-          class: "form-field__input",
+        <%# A text input, not type="number": it takes a comma decimal ("12,50"),
+            a pasted statement amount ("1 234,56 ₴") and a calculation
+            ("120+35,5"), which money_field_controller turns into a plain
+            number before the form is sent. %>
+        <%= form.text_field amount_method,
+          class: class_names("form-field__input", options[:input_class]),
           inline: true,
-          placeholder: "100",
+          placeholder: options[:placeholder] || "100",
+          inputmode: "decimal",
+          autocomplete: "off",
           value: if options[:value]
             sprintf("%.#{options[:precision].presence || currency.default_precision}f", options[:value])
           elsif form.object && form.object.respond_to?(amount_method)
             val = form.object.public_send(amount_method)
             sprintf("%.#{options[:precision].presence || currency.default_precision}f", val) if val.present?
           end,
-          min: options[:min] || -99999999999999,
-          max: options[:max] || 99999999999999,
           step: options[:step] || currency.step,
           disabled: options[:disabled],
-          data: {
+          autofocus: options[:autofocus],
+          data: (options[:amount_data] || {}).merge({
             "money-field-target": "amount",
-            "auto-submit-form-target": ("auto" if options[:auto_submit])
-          }.compact,
-          required: options[:required] %>
+            "auto-submit-form-target": ("auto" if options[:auto_submit]),
+            action: [ options.dig(:amount_data, :action), "paste->money-field#pasteAmount", "blur->money-field#normalizeAmount" ].compact.join(" ")
+          }.compact),
+          required: options[:required],
+          aria: options[:aria],
+          **options.slice(:name) %>
       </div>
 
       <% unless options[:hide_currency] %>
         <div>
+          <%# Callers pass symbol keys (e.g. `action:`), so stringify first:
+              otherwise delete("action") below misses the caller's action and
+              both an :action and an "action" key get rendered, and the
+              browser keeps only the first data-action attribute, dropping
+              money-field#handleCurrencyChange. %>
+          <% currency_data = (options[:currency_data] || {}).stringify_keys.merge({
+               "money-field-target": "currency",
+               "auto-submit-form-target": ("auto" if options[:auto_submit])
+             }.compact)
+             existing_action = currency_data.delete("action")
+             currency_data["action"] = [ "change->money-field#handleCurrencyChange", existing_action ].compact.join(" ") %>
+          <%# The family's enabled currencies, plus this record's own currency
+              so an existing amount in a currency since turned off still shows. %>
           <%= form.select currency_method,
-                        Money::Currency.as_options.map(&:iso_code),
+                        currency_picker_options_for_family(extra: currency.iso_code),
                         { inline: true, selected: currency.iso_code },
                         {
                           class: "w-fit pr-5 disabled:text-subdued form-field__input",
                           disabled: options[:disable_currency],
-                          data: {
-                            "money-field-target": "currency",
-                            action: "change->money-field#handleCurrencyChange",
-                            "auto-submit-form-target": ("auto" if options[:auto_submit])
-                          }.compact
+                          data: currency_data
                         } %>
         </div>
+      <% end %>
+    </div>
+
+    <%# The decimal keypad (inputmode="decimal") has no +-×÷ keys, so this row
+        gives the same four operators to touch input. Hidden until the field
+        has focus; the named group keeps another .group ancestor (every
+        DS::Disclosure is one) from showing it. Bound to mousedown/touchstart
+        rather than click so the controller's preventDefault keeps the input
+        focused (and the on-screen keyboard up), plus keydown Enter/Space for
+        keyboard use. Positioned absolutely so showing it never shifts the
+        fields below at the moment the user clicks past it. %>
+    <div class="hidden group-focus-within/money-field:flex items-center gap-1 absolute left-0 right-0 top-full -mt-px z-10 bg-container border border-t-0 border-secondary rounded-b-md p-1">
+      <% [ [ "+", "+", :operator_add ], [ "−", "-", :operator_subtract ], [ "×", "*", :operator_multiply ], [ "÷", "/", :operator_divide ] ].each do |text, operator, label_key| %>
+        <%= render DS::Button.new(text: text, variant: :outline, size: :sm,
+              data: { action: "mousedown->money-field#insertOperator touchstart->money-field#insertOperator keydown.enter->money-field#insertOperator keydown.space->money-field#insertOperator", "money-field-operator-param": operator },
+              aria: { label: t(".#{label_key}") }) %>
       <% end %>
     </div>
   </div>

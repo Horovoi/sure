@@ -12,14 +12,21 @@ class Category < ApplicationRecord
   # Checked only when the colour changes, so an old row with another colour can still be renamed
   validates :color, format: { with: /\A#[0-9A-Fa-f]{6}\z/ }, if: :will_save_change_to_color?
   validates :name, uniqueness: { scope: :family_id }
+  # "Income" from a CSV import or an API caller means income; anything else is rejected,
+  # since a category that is neither shows up in no income or expense list.
+  normalizes :classification, with: ->(value) { value.to_s.strip.downcase }
+  validates :classification, inclusion: { in: %w[income expense] }
 
   validate :category_level_limit
   validate :nested_category_matches_parent_classification
+  validate :parent_in_same_family
 
+  before_validation :inherit_classification_from_parent, on: :create
   before_save :inherit_color_from_parent
   after_update :propagate_color_to_subcategories, if: :saved_change_to_color?
 
   scope :alphabetically, -> { order(:name) }
+  scope :recently_used, -> { where.not(last_used_at: nil).order(last_used_at: :desc) }
   scope :alphabetically_by_hierarchy, -> {
     left_joins(:parent)
       .order(Arel.sql("COALESCE(parents_categories.name, categories.name)"))
@@ -92,23 +99,38 @@ class Category < ApplicationRecord
       Category::Group.for(Array(categories)).map(&:to_grouped_options)
     end
 
+    # Categories a family has assigned by hand recently: a shortcut above the
+    # alphabetical list in the pickers, not a replacement for it. See
+    # Transaction#record_category_usage! for where last_used_at is written.
+    # Pass classification to keep only the categories the form can use.
+    def recently_used_for(family:, excluding: [], limit: 4, classification: nil)
+      scope = family.categories.recently_used.where.not(id: Array(excluding).compact.map(&:id))
+      scope = scope.where(classification: classification) if classification.present?
+      scope.limit(limit)
+    end
+
+    # The icons the category form offers. The first block is upstream's list.
+    # The second keeps the icons that an earlier version of this app gave to
+    # categories (its shorter list and its icon rename), so that every
+    # category that exists today still shows its icon as selected.
     def icon_codes
       %w[
-        apple award baby banknote scan bar-chart bath
-        battery beer bike bluetooth bone book book-open briefcase building bus
-        cake calculator calendar camera car
-        dollar-sign coffee coins compass cookie
-        credit-card dices droplet film flame flower
-        fuel gem gift glasses globe graduation-cap hammer
-        headphones heart home
-        key landmark laptop leaf lightbulb luggage mail map-pin
-        mic monitor moon music package palette pencil
-        percent phone pie-chart pizza plane plug power printer
-        puzzle scale scissors settings shield
-        shirt shopping-bag shopping-cart smartphone
-        stethoscope sun tag target tent thermometer ticket train
-        trending-up trophy truck tv umbrella undo-2 users utensils
-        video wallet waves wifi wine wrench zap layers
+        ambulance apple award baby badge-dollar-sign banknote barcode bar-chart-3 bath
+        battery bed-single beer bike bluetooth bone book book-open briefcase building bus
+        cake calculator calendar-heart calendar-range camera car cat chart-line
+        circle-dollar-sign circle-parking coffee coins compass cookie cooking-pot
+        credit-card dices dog drama drill droplet drum dumbbell film flame flower flower-2
+        fuel gamepad-2 gem gift glasses globe graduation-cap hammer hand-heart
+        hand-helping heart-handshake handshake headphones heart heart-pulse home hotel
+        house ice-cream-cone key landmark laptop leaf lightbulb luggage mail map-pin
+        martini mic monitor moon music package palette party-popper paw-print pen pencil
+        percent phone pie-chart piggy-bank pill pizza plane plug popcorn power printer
+        puzzle receipt receipt-text ribbon scale scissors settings shield shield-plus
+        shirt shopping-bag shopping-basket shopping-cart smartphone sparkles sprout
+        stethoscope store sun tablet-smartphone tag target tent thermometer ticket train
+        trees tree-palm trending-up trophy truck tv umbrella undo-2 unplug users utensils
+        video wallet wallet-cards waves wifi wine wrench zap
+        bar-chart calendar dollar-sign file-text layers scan shapes star
       ]
     end
 
@@ -126,7 +148,7 @@ class Category < ApplicationRecord
       new(
         name: I18n.t(UNCATEGORIZED_NAME_KEY),
         color: UNCATEGORIZED_COLOR,
-        lucide_icon: "circle-dot"
+        lucide_icon: "circle-dashed"
       )
     end
 
@@ -156,27 +178,27 @@ class Category < ApplicationRecord
     private
       def default_categories
         [
-          [ "Income", "#22c55e", "dollar-sign", "income" ],
+          [ "Income", "#22c55e", "circle-dollar-sign", "income" ],
           [ "Food & Drink", "#f97316", "utensils", "expense" ],
           [ "Groceries", "#407706", "shopping-bag", "expense" ],
           [ "Shopping", "#3b82f6", "shopping-cart", "expense" ],
           [ "Transportation", "#0ea5e9", "bus", "expense" ],
           [ "Travel", "#2563eb", "plane", "expense" ],
-          [ "Entertainment", "#a855f7", "film", "expense" ],
-          [ "Healthcare", "#4da568", "stethoscope", "expense" ],
+          [ "Entertainment", "#a855f7", "drama", "expense" ],
+          [ "Healthcare", "#4da568", "pill", "expense" ],
           [ "Personal Care", "#14b8a6", "scissors", "expense" ],
           [ "Home Improvement", "#d97706", "hammer", "expense" ],
           [ "Mortgage / Rent", "#b45309", "home", "expense" ],
           [ "Utilities", "#eab308", "lightbulb", "expense" ],
           [ "Subscriptions", "#6366f1", "wifi", "expense" ],
           [ "Insurance", "#0284c7", "shield", "expense" ],
-          [ "Sports & Fitness", "#10b981", "target", "expense" ],
-          [ "Gifts & Donations", "#61c9ea", "gift", "expense" ],
+          [ "Sports & Fitness", "#10b981", "dumbbell", "expense" ],
+          [ "Gifts & Donations", "#61c9ea", "hand-helping", "expense" ],
           [ "Taxes", "#dc2626", "landmark", "expense" ],
           [ "Loan Payments", "#e11d48", "credit-card", "expense" ],
           [ "Services", "#7c3aed", "briefcase", "expense" ],
-          [ "Fees", "#6b7280", "file-text", "expense" ],
-          [ "Savings & Investments", "#059669", "trending-up", "expense" ],
+          [ "Fees", "#6b7280", "receipt", "expense" ],
+          [ "Savings & Investments", "#059669", "piggy-bank", "expense" ],
           [ investment_contributions_name, "#0d9488", "trending-up", "expense" ]
         ]
       end
@@ -238,6 +260,19 @@ class Category < ApplicationRecord
     # parent's new colour to the existing ones.
     def propagate_color_to_subcategories
       subcategories.update_all(color: color, updated_at: Time.current)
+    end
+
+    # A new subcategory always takes its parent's classification, whatever the
+    # form sent: an inline create from an income transaction can't put an
+    # expense parent's child into income.
+    def inherit_classification_from_parent
+      self.classification = parent.classification if parent.present?
+    end
+
+    def parent_in_same_family
+      if parent.present? && parent.family_id != family_id
+        errors.add(:parent, :invalid)
+      end
     end
 
     def category_level_limit

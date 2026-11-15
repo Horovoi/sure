@@ -88,4 +88,102 @@ class CategoryTest < ActiveSupport::TestCase
     assert_equal :uncategorized, @family.categories.uncategorized.totals_key
     assert_equal :other_investments, @family.categories.other_investments.totals_key
   end
+
+  # --- DS pickers (w1-ds) ---
+
+  test "a new subcategory takes its parent's classification" do
+    parent = @family.categories.create!(name: "Salary", color: "#22c55e", classification: "income", lucide_icon: "briefcase")
+
+    child = @family.categories.create!(name: "Overtime", color: "#22c55e", classification: "expense", lucide_icon: "clock", parent: parent)
+
+    assert_equal "income", child.classification
+  end
+
+  test "an existing subcategory cannot move to a classification its parent doesn't have" do
+    child = categories(:subcategory)
+
+    assert_not child.update(classification: "income")
+    assert child.errors[:parent].any?
+  end
+
+  test "classification is normalized and must be income or expense" do
+    category = @family.categories.create!(name: "Gifts in", color: "#22c55e", classification: " Income ", lucide_icon: "gift")
+    assert_equal "income", category.classification
+
+    invalid = @family.categories.new(name: "Odd", color: "#22c55e", classification: "transfer", lucide_icon: "gift")
+    assert_not invalid.valid?
+    assert invalid.errors[:classification].any?
+  end
+
+  test "a parent must belong to the same family" do
+    foreign_parent = categories(:one)
+
+    category = @family.categories.new(name: "Cross", color: "#22c55e", classification: "expense", lucide_icon: "layers", parent: foreign_parent)
+
+    assert_not category.valid?
+    assert category.errors[:parent].any?
+  end
+
+  test "recently_used_for lists picked categories, newest first, without the excluded ones" do
+    older = categories(:food_and_drink)
+    newer = categories(:subscriptions)
+    excluded = categories(:subcategory)
+    older.update!(last_used_at: 2.days.ago)
+    newer.update!(last_used_at: 1.hour.ago)
+    excluded.update!(last_used_at: 1.minute.ago)
+
+    recent = Category.recently_used_for(family: @family, excluding: excluded).to_a
+
+    assert_equal [ newer, older ], recent
+  end
+
+  test "recently_used_for can keep one classification and caps the count" do
+    income = @family.categories.create!(name: "Salary", color: "#22c55e", classification: "income", lucide_icon: "briefcase", last_used_at: 1.minute.ago)
+    categories(:food_and_drink).update!(last_used_at: 1.hour.ago)
+
+    assert_equal [ income ], Category.recently_used_for(family: @family, classification: "income").to_a
+    assert_equal 1, Category.recently_used_for(family: @family, limit: 1).count
+  end
+
+  test "recently_used_for ignores categories never picked by hand" do
+    assert_empty Category.recently_used_for(family: @family)
+  end
+
+  test "every icon_codes name renders through lucide-rails" do
+    codes = Category.icon_codes
+
+    assert_equal codes.uniq, codes, "icon_codes has duplicates"
+    codes.each do |code|
+      svg = ApplicationController.helpers.lucide_icon(code)
+      assert_includes svg, "<svg", "#{code} did not render"
+    end
+  end
+
+  test "icon_codes keeps the modern upstream names and the icons categories already use" do
+    codes = Category.icon_codes
+
+    %w[shapes circle-dollar-sign drama pill dumbbell hand-helping receipt piggy-bank store].each do |modern|
+      assert_includes codes, modern
+    end
+    # Icons that existing categories got from the earlier shorter list and rename
+    %w[layers dollar-sign film stethoscope target gift file-text trending-up star building scan bar-chart calendar].each do |kept|
+      assert_includes codes, kept
+    end
+  end
+
+  test "bootstrap gives a new family the modern default icons, all of them in icon_codes" do
+    family = families(:empty)
+    family.categories.bootstrap!
+
+    assert_equal "circle-dollar-sign", family.categories.find_by!(name: "Income").lucide_icon
+    assert_equal "drama", family.categories.find_by!(name: "Entertainment").lucide_icon
+    assert_equal "piggy-bank", family.categories.find_by!(name: "Savings & Investments").lucide_icon
+    family.categories.each do |category|
+      assert_includes Category.icon_codes, category.lucide_icon, "#{category.name} has an icon the form does not offer"
+    end
+  end
+
+  test "the uncategorized placeholder uses the circle-dashed icon" do
+    assert_equal "circle-dashed", Category.uncategorized.lucide_icon
+  end
 end

@@ -7,14 +7,14 @@
         <%= render partial: "color_avatar", locals: { category: category } %>
 
         <details data-category-target="details" data-action="mousedown->category#handleOutsideClick">
-          <summary class="cursor-pointer absolute -bottom-2 -right-2 flex justify-center items-center bg-surface-inset hover:bg-surface-inset-hover border-2 w-7 h-7 border-subdued rounded-full text-secondary">
-            <%= icon("pencil", size: "sm") %>
+          <summary aria-label="<%= t(".trigger_label") %>" class="cursor-pointer absolute -bottom-2 -right-2 flex justify-center items-center bg-surface-inset hover:bg-surface-inset-hover border-2 w-7 h-7 border-subdued rounded-full text-secondary">
+            <%= icon("pen", size: "sm") %>
           </summary>
 
           <div class="fixed right-0 sm:right-auto mx-2 sm:ml-8 sm:mr-0 mt-2 z-50 bg-container p-4 border border-alpha-black-25 rounded-2xl shadow-xs h-fit" data-category-target="popup">
-            <div class="flex gap-2 flex-col mb-4" data-category-target="selection" style="<%= "display:none;" if @category.subcategory? %>">
+            <div class="flex gap-2 flex-col mb-4" data-category-target="selection" style="<%= "display:none;" if category.subcategory? %>">
               <div data-category-target="pickerSection"></div>
-              <h4 class="text-gray-500 text-sm">Color</h4>
+              <h4 class="text-secondary text-sm"><%= t(".color") %></h4>
               <div class="flex flex-wrap md:flex-nowrap gap-2 items-center" data-category-target="colorsSection">
                 <% Category::COLORS.each do |color| %>
                   <label class="relative">
@@ -33,7 +33,7 @@
                   <%= f.text_field :color, data: { category_target: "colorInput" }, inline: true, pattern: "^#[0-9A-Fa-f]{6}$" %>
                   <%= icon "palette", size: "2xl", data: { action: "click->category#toggleSections" } %>
                 </div>
-                <div data-category-target="validationMessage" class="hidden self-start flex gap-1 items-center text-xs text-destructive ">
+                <div data-category-target="validationMessage" class="hidden self-start flex gap-1 items-center text-xs text-destructive">
                   <span><%= t(".poor_contrast") %></span>
                   <button type="button" class="underline cursor-pointer" data-action="category#autoAdjust"><%= t(".auto_adjust") %></button>
                 </div>
@@ -41,17 +41,8 @@
             </div>
 
             <div class="flex flex-wrap gap-2 justify-center flex-col w-auto md:w-87">
-              <h4 class="text-secondary text-sm">Icon</h4>
-              <div class="flex flex-wrap gap-0.5 max-h-52 overflow-auto">
-                <% Category.icon_codes.each do |icon| %>
-                  <label class="relative">
-                    <%= f.radio_button :lucide_icon, icon, class: "sr-only peer", data: { action: "change->category#handleIconChange change->category#handleIconColorChange", category_target:"icon" } %>
-                    <div class="text-secondary w-7 h-7 flex m-0.5 items-center justify-center rounded-full cursor-pointer hover:bg-container-inset-hover peer-checked:bg-container-inset border-1 border-transparent">
-                      <%= icon(icon, size: "sm", color: "current") %>
-                    </div>
-                  </label>
-                <% end %>
-              </div>
+              <h4 class="text-secondary text-sm"><%= t(".icon") %></h4>
+              <%= render DS::IconPicker.new(form: f, method: :lucide_icon, icons: Category.icon_codes) %>
             </div>
           </div>
         </details>
@@ -62,10 +53,10 @@
       <% end %>
 
       <div class="space-y-2">
-        <%= f.select :classification, [["Income", "income"], ["Expense", "expense"]], { label: "Classification" }, required: true %>
-        <%= f.text_field :name, placeholder: t(".placeholder"), required: true, autofocus: true, label: "Name", data: { color_avatar_target: "name" } %>
+        <%= f.select :classification, [[t(".income"), "income"], [t(".expense"), "expense"]], { label: t(".classification_label") }, required: true %>
+        <%= f.text_field :name, placeholder: t(".placeholder"), required: true, autofocus: true, label: t(".name_label"), data: { color_avatar_target: "name" } %>
         <% unless category.parent? %>
-          <%= f.select :parent_id, categories.pluck(:name, :id), { include_blank: "(unassigned)", label: "Parent category (optional)" }, disabled: category.parent?, data: { action: "change->category#handleParentChange" } %>
+          <%= f.select :parent_id, categories.pluck(:name, :id), { include_blank: t(".unassigned"), label: t(".parent_category_label") }, disabled: category.parent?, data: { action: "change->category#handleParentChange" } %>
         <% end %>
       </div>
     </section>

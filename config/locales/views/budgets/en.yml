@@ -1,6 +1,12 @@
 ---
 en:
   budgets:
+    budget_header:
+      fiscal_months: Fiscal months
+      next_budget: Next budget
+      period: "Period:"
+      previous_budget: Previous budget
+      today: Today
     show:
       tabs:
         actual: Actual

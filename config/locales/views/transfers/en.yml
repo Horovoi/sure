@@ -18,6 +18,7 @@ en:
     new:
       title: New transfer
     show:
+      category_label: Category
       delete: Remove transfer
       delete_subtitle: This removes the transfer.  It will not delete the underlying
         transactions.
@@ -27,5 +28,6 @@ en:
       note_placeholder: Add a note to this transfer
       overview: Overview
       settings: Settings
+      uncategorized: Uncategorized
     update:
       success: Transfer updated

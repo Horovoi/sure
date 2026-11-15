@@ -26,6 +26,27 @@
   --color-destructive: var(--color-red-600);
   --color-shadow: --alpha(var(--color-black) / 6%);
 
+  /* Semantic colours. As theme colours (not @utility) they generate every
+     utility family (bg-, text-, border-, outline-, divide-, ring-) plus
+     opacity modifiers (bg-info/10), and the CSS variables stay available to
+     inline styles and JS. Dark values are in the @layer base block below. */
+  --color-info: var(--color-blue-600);
+  --color-link: var(--color-blue-600);
+  --color-focus-ring: var(--color-alpha-black-700);
+  --color-destructive-subtle: var(--color-red-200);
+  --color-toggle-track: var(--color-gray-300);
+  --color-nav-indicator: var(--color-black);
+
+  /* Surfaces (the page) and containers (cards and panels on it) */
+  --color-surface: var(--color-gray-50);
+  --color-surface-hover: var(--color-gray-100);
+  --color-surface-inset: var(--color-gray-100);
+  --color-surface-inset-hover: var(--color-gray-200);
+  --color-container: var(--color-white);
+  --color-container-hover: var(--color-gray-50);
+  --color-container-inset: var(--color-gray-50);
+  --color-container-inset-hover: var(--color-gray-100);
+
   /* Colors used in Stimulus controllers with SVGs (easier to define light/dark mode here than toggle within the controllers) */
   /* See @layer base block below for dark mode overrides */
   --budget-unused-fill: var(--color-gray-200);
@@ -259,6 +280,22 @@
     --color-destructive: var(--color-red-400);
     --color-shadow: --alpha(var(--color-white) / 8%);
 
+    --color-info: var(--color-blue-500);
+    --color-link: var(--color-blue-500);
+    --color-focus-ring: var(--color-alpha-white-700);
+    --color-destructive-subtle: var(--color-red-800);
+    --color-toggle-track: var(--color-gray-700);
+    --color-nav-indicator: var(--color-white);
+
+    --color-surface: var(--color-black);
+    --color-surface-hover: var(--color-gray-800);
+    --color-surface-inset: var(--color-gray-800);
+    --color-surface-inset-hover: var(--color-gray-800);
+    --color-container: var(--color-gray-900);
+    --color-container-hover: var(--color-gray-800);
+    --color-container-inset: var(--color-gray-800);
+    --color-container-inset-hover: var(--color-gray-700);
+
     /* Dark mode overrides for colors used in Stimulus controllers with SVGs */
     --budget-unused-fill: var(--color-gray-500);
     --budget-unallocated-fill: var(--color-gray-700);
@@ -272,6 +309,16 @@
     --shadow-md: 0px 4px 8px -2px --alpha(var(--color-white) / 8%);
     --shadow-lg: 0px 12px 16px -4px --alpha(var(--color-white) / 8%);
     --shadow-xl: 0px 20px 24px -4px --alpha(var(--color-white) / 8%);
+  }
+
+  /* Bind the CSS color-scheme to Sure's data-theme attribute so the CSS
+     light-dark() function (used by DS::Pill) resolves to the active theme. */
+  :root {
+    color-scheme: light;
+  }
+
+  [data-theme="dark"] {
+    color-scheme: dark;
   }
 
   /*
@@ -291,8 +338,17 @@
     min-height: 100dvh;
   }
 
+  /* Every <button> gets the canonical keyboard-focus outline (the same
+     recipe as .focus-ring below). The transparent resting outline keeps a
+     transition on the button from fading in through currentColor. */
   button {
-    @apply cursor-pointer focus-visible:outline-gray-900;
+    @apply cursor-pointer;
+    outline: 2px solid transparent;
+    outline-offset: 0;
+
+    &:focus-visible {
+      outline-color: var(--color-focus-ring);
+    }
   }
 
   hr {
@@ -328,6 +384,46 @@
 }
 
 @layer components {
+  /*
+    Canonical keyboard-focus indicator for every focusable DS primitive: a 2px
+    outline that hugs the control (offset 0, follows the border radius) in the
+    theme-aware focus-ring token, on :focus-visible only so it never shows for
+    mouse or touch. An outline rather than a box-shadow, so a utility-layer
+    shadow-* on the same element cannot hide it, and it doubles as the
+    forced-colors indicator. .focus-ring-within puts it on a wrapper whose
+    focus lands on a child input. .form-field keeps its own soft halo.
+  */
+  .focus-ring,
+  .focus-ring-within {
+    outline: 2px solid transparent;
+    outline-offset: 0;
+  }
+
+  .focus-ring:focus-visible,
+  .focus-ring-within:focus-within {
+    outline-color: var(--color-focus-ring);
+  }
+
+  /*
+    Themed hover-card surface (DS::Tooltip variant: :surface): a hairline ring
+    composed with a soft drop shadow (Tailwind shadow utilities don't compose,
+    hence the component class). Dark mode swaps the ring to alpha-white.
+  */
+  .chart-tooltip {
+    background: var(--color-container);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow:
+      0 0 0 1px var(--color-alpha-black-50),
+      0 8px 24px rgba(11, 11, 11, 0.12);
+
+    @variant theme-dark {
+      box-shadow:
+        0 0 0 1px var(--color-alpha-white-50),
+        0 8px 24px rgba(11, 11, 11, 0.12);
+    }
+  }
+
   /* Mobile bottom nav: safe-area adjustments
      - Default: respect safe-area insets
      - PWA standalone: reduce padding slightly to visually match Safari
@@ -412,9 +508,19 @@
     @apply whitespace-normal overflow-auto;
     text-overflow: clip;
   }
-  
-  select.form-field__input {
+
+  /* DS::TagSelect trigger: selected pills wrap onto more lines instead of clipping. */
+  .form-field__input--multiselect-trigger {
+    @apply whitespace-normal overflow-visible;
+    text-overflow: clip;
+  }
+
+  /* The DS pickers' triggers (DS::Select and the category, merchant and tag
+     selects) are buttons that open a listbox, drawn like a native select. */
+  select.form-field__input,
+  button.form-field__input {
     @apply pr-10 appearance-none;
+    text-align: left;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
     background-position: right -0.15rem center;
     background-repeat: no-repeat;
@@ -488,5 +594,58 @@
     @variant theme-dark {
       fill: var(--color-white);
     }
+  }
+
+  /*
+    DS::SegmentedControl: a track and its segments. The selected state is the
+    single --active class, so a Stimulus controller can toggle it as one unit.
+    The values mirror the tab tokens (tab-bg-group, tab-item-active,
+    tab-item-hover) but are inlined with @variant theme-dark, because
+    @apply-ing a custom utility drops its dark override. Focus comes from the
+    canonical recipe (focus-ring on link segments, the base button rule on
+    button segments).
+  */
+  .segmented-control {
+    @apply inline-flex items-center gap-0.5 p-1 rounded-lg bg-gray-50;
+    @variant theme-dark {
+      @apply bg-alpha-black-700;
+    }
+  }
+
+  .segmented-control__segment {
+    @apply inline-flex items-center justify-center px-2 py-1 rounded-md whitespace-nowrap;
+    @apply text-sm font-medium text-secondary cursor-pointer transition-colors duration-200;
+    @apply hover:bg-gray-200;
+    @variant theme-dark {
+      @apply hover:bg-gray-800;
+    }
+  }
+
+  .segmented-control__segment--active {
+    @apply bg-white text-primary shadow-sm hover:bg-white;
+    @variant theme-dark {
+      @apply bg-gray-700 hover:bg-gray-700;
+    }
+  }
+
+  /*
+    DS::Table scroll wrapper. Wide tables scroll sideways instead of clipping.
+    The cover gradients (--table-scroll-bg, container-inset by default) scroll
+    with the content (background-attachment: local) and hide the fixed shadow
+    gradients at the edges, so a soft edge shadow shows only while there is
+    more to scroll. Set --table-scroll-bg to match the wrapper.
+  */
+  .table-scroll {
+    --table-scroll-bg: var(--color-container-inset);
+    overflow-x: auto;
+    background:
+      linear-gradient(to right, var(--table-scroll-bg) 30%, transparent),
+      linear-gradient(to left, var(--table-scroll-bg) 30%, transparent) 100% 0,
+      radial-gradient(farthest-side at 0 50%, var(--color-shadow), transparent),
+      radial-gradient(farthest-side at 100% 50%, var(--color-shadow), transparent) 100% 0;
+    background-repeat: no-repeat;
+    background-color: var(--table-scroll-bg);
+    background-size: 32px 100%, 32px 100%, 12px 100%, 12px 100%;
+    background-attachment: local, local, scroll, scroll;
   }
 }

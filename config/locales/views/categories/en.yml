@@ -10,12 +10,23 @@ en:
       success: Category created successfully
     destroy:
       success: Category deleted successfully
+    destroy_all:
+      success: All categories deleted
     edit:
       edit: Edit category
     form:
       auto_adjust: auto-adjust.
       placeholder: Category name
-      poor_contrast: Poor contrast, choose darker color or
+      name_label: Name
+      classification_label: Classification
+      income: Income
+      expense: Expense
+      unassigned: "(unassigned)"
+      parent_category_label: "Parent category (optional)"
+      trigger_label: Choose color and icon
+      color: Color
+      icon: Icon
+      poor_contrast: "Poor contrast, choose a darker color or"
     index:
       bootstrap: Use defaults (recommended)
       categories: Categories

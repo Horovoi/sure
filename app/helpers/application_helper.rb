@@ -19,7 +19,7 @@ module ApplicationHelper
   def icon(key, size: "md", color: "default", custom: false, as_button: false, **opts)
     extra_classes = opts.delete(:class)
     sizes = { xs: "w-3 h-3", sm: "w-4 h-4", md: "w-5 h-5", lg: "w-6 h-6", xl: "w-7 h-7", "2xl": "w-8 h-8" }
-    colors = { default: "fg-gray", white: "fg-inverse", success: "text-success", warning: "text-warning", destructive: "text-destructive", current: "text-current" }
+    colors = { default: "fg-gray", white: "fg-inverse", success: "text-success", warning: "text-warning", destructive: "text-destructive", info: "text-info", current: "text-current" }
 
     icon_classes = class_names(
       "shrink-0",
@@ -35,6 +35,13 @@ module ApplicationHelper
     else
       lucide_icon(key, class: icon_classes, **opts)
     end
+  end
+
+  # The chevron for a <details> summary. It follows its own <details> (the
+  # arbitrary variant), not `group-open:`, which matches any open ancestor
+  # group: a disclosure nested in an open one would otherwise show as open.
+  def disclosure_chevron
+    icon "chevron-right", size: "sm", class: "[details[open]>summary_&]:rotate-90 motion-safe:transition-transform motion-safe:duration-150"
   end
 
   # Convert alpha (0-1) to 8-digit hex (00-FF)
@@ -83,6 +90,20 @@ module ApplicationHelper
               .transform_values { |item| calculate_total(item, money_method, negate) }
               .map { |_currency, money| format_money(money) }
               .join(separator)
+  end
+
+  # The money fields' currency options: the family's enabled currencies (all
+  # of them when the family has not narrowed the list), plus `extra:`, the
+  # record's own currency, so an existing amount never loses its currency.
+  def currency_picker_options_for_family(family = Current.family, extra: [])
+    return Money::Currency.as_options.map(&:iso_code) unless family
+
+    family.enabled_currency_codes(extra:)
+  end
+
+  def currency_label(currency_or_code)
+    currency = currency_or_code.is_a?(Money::Currency) ? currency_or_code : Money::Currency.new(currency_or_code)
+    "#{currency.name} (#{currency.iso_code})"
   end
 
   def show_super_admin_bar?

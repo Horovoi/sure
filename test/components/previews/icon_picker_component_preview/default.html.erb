@@ -1,0 +1,5 @@
+<%# No picker controller around it: the category controller needs the whole
+    category form. The search and the selection still work on their own. %>
+<%= form_with model: Category.new, url: "#" do |f| %>
+  <%= render DS::IconPicker.new(form: f, method: :lucide_icon, icons: icons) %>
+<% end %>

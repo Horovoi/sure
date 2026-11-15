@@ -43,4 +43,26 @@ class DialogComponentPreview < ViewComponent::Preview
       end
     end
   end
+
+  # A drawer on lg, a centred modal on phones.
+  def responsive
+    render DS::Dialog.new(frame: "drawer", responsive: true) do |dialog|
+      dialog.with_header(title: "Responsive dialog", meta: "Last 30 days")
+
+      dialog.with_body do
+        content_tag(:p, "Tab and Shift+Tab stay inside the dialog; closing it returns focus to the opener.", class: "text-sm")
+      end
+    end
+  end
+
+  # The fullscreen chart shape.
+  def expanded
+    render DS::Dialog.new(width: "expanded", heading_level: 3) do |dialog|
+      dialog.with_header(title: "Expanded dialog")
+
+      dialog.with_body do
+        content_tag(:div, "Wide content", class: "h-64 bg-surface-inset rounded-lg p-4")
+      end
+    end
+  end
 end
