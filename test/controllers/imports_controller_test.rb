@@ -192,6 +192,31 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "form[action='#{import_path(import)}'] input[name='_method'][value='delete']"
   end
 
+  test "a processing PDF import polls the page and keeps a refresh link" do
+    import = @user.family.imports.create!(type: "PdfImport")
+    import.update_column(:status, "processing")
+
+    get import_url(import)
+
+    assert_response :success
+    assert_select "turbo-frame##{dom_id(import, :pdf_import)}[target='_top'][data-controller='polling'][data-polling-url-value='#{import_path(import)}']"
+    assert_select "turbo-frame##{dom_id(import, :pdf_import)} a[href='#{import_path(import)}']", text: "Refresh status"
+  end
+
+  test "a PDF import that is not processing does not poll" do
+    import = @user.family.imports.create!(type: "PdfImport", account: accounts(:depository))
+
+    %w[pending processing_failed indexed complete].each do |status|
+      import.update_columns(status: status, ai_summary: "Summary", document_type: "bank_statement")
+
+      get import_url(import)
+
+      assert_response :success
+      assert_select "turbo-frame##{dom_id(import, :pdf_import)}", count: 1
+      assert_select "turbo-frame##{dom_id(import, :pdf_import)}[data-polling-url-value]", count: 0, message: "#{status} should not poll"
+    end
+  end
+
   test "a PDF whose processing failed can be retried" do
     import = @user.family.imports.create!(type: "PdfImport")
     import.pdf_file.attach(io: StringIO.new("%PDF-1.4 test"), filename: "statement.pdf", content_type: "application/pdf")

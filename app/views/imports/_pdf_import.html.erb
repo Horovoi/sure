@@ -1,5 +1,16 @@
 <%# locals: (import:) %>
 
+<%# While the document is processed the frame polls this page and swaps in the result;
+    the response without polling attributes (any other state) stops it. Links and forms
+    inside still navigate the whole page. %>
+<%= turbo_frame_tag dom_id(import, :pdf_import),
+      target: "_top",
+      class: "h-full",
+      data: import.processing? ? {
+        controller: "polling",
+        polling_url_value: import_path(import),
+        polling_interval_value: 3000
+      } : {} do %>
 <div class="h-full flex flex-col justify-center items-center">
   <div class="space-y-6 max-w-lg w-full">
     <% if import.processing? || (import.pending? && !import.ai_processed?) %>
@@ -152,3 +163,4 @@
     <% end %>
   </div>
 </div>
+<% end %>
