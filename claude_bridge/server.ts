@@ -318,7 +318,12 @@ export function cleanEnv(env: NodeJS.ProcessEnv): Record<string, string | undefi
 
 export function signedOut(account: AccountInfo | undefined): boolean {
   if (!account) return true;
-  return (!account.tokenSource || account.tokenSource === "none") && !account.apiKeySource;
+  if (account.apiKeySource) return false;
+  if (account.tokenSource === "none") return true;
+  if (account.tokenSource) return false;
+  // Claude Code 2.1.325 leaves tokenSource unset for a claude.ai login kept in the Keychain;
+  // the account it reports (email, plan) is what shows the login is there.
+  return !(account.email || account.subscriptionType);
 }
 
 function isoFromEpochSeconds(seconds: number | undefined | null): string | null {

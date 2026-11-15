@@ -17,6 +17,7 @@ import {
   denyForeignTools,
   isLoopback,
   mcpUrlAllowed,
+  signedOut,
   tokenMatches,
 } from "./server.ts";
 import type { QueryFn, Timing } from "./server.ts";
@@ -257,6 +258,17 @@ describe("helpers", () => {
     assert.equal(compareVersions("2.1.324", "2.1.325"), -1);
     assert.equal(compareVersions("2.2.0", "2.1.325"), 1);
     assert.equal(compareVersions("2.1.1000", "2.1.325"), 1);
+  });
+
+  test("signedOut reads a Keychain claude.ai login without tokenSource as signed in", () => {
+    // The shape Claude Code 2.1.325 reports for `claude auth login` on a Mac
+    assert.equal(signedOut({ email: "owner@example.com", subscriptionType: "Claude Ultra", apiProvider: "firstParty" }), false);
+    assert.equal(signedOut({ tokenSource: "claude.ai" }), false);
+    assert.equal(signedOut({ tokenSource: "none" }), true);
+    assert.equal(signedOut({ tokenSource: "none", email: "owner@example.com" }), true);
+    assert.equal(signedOut({ apiProvider: "firstParty" }), true);
+    assert.equal(signedOut({}), true);
+    assert.equal(signedOut(undefined), true);
   });
 
   test("tokenMatches compares the bearer token", () => {
