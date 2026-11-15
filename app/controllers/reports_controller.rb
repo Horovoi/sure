@@ -103,15 +103,17 @@ class ReportsController < ApplicationController
       @period = Period.custom(start_date: @start_date, end_date: @end_date)
       @previous_period = build_previous_period
 
-      # Get aggregated data
-      @current_income_totals = Current.family.income_statement.income_totals(period: @period)
-      @current_expense_totals = Current.family.income_statement.expense_totals(period: @period)
+      # Get aggregated data. One income statement for the whole page: it memoizes each
+      # period's totals, so a trend month equal to the selected period is not built again.
+      @income_statement = Current.family.income_statement
+      @current_income_totals = @income_statement.income_totals(period: @period)
+      @current_expense_totals = @income_statement.expense_totals(period: @period)
 
-      @previous_income_totals = Current.family.income_statement.income_totals(period: @previous_period)
-      @previous_expense_totals = Current.family.income_statement.expense_totals(period: @previous_period)
+      @previous_income_totals = @income_statement.income_totals(period: @previous_period)
+      @previous_expense_totals = @income_statement.expense_totals(period: @previous_period)
 
       # Build trend data (last 6 months) — must be before summary metrics (sparklines)
-      @trends_data = build_trends_data
+      @trends_data = build_trends_data(income_statement: @income_statement)
 
       # Calculate summary metrics
       @summary_metrics = build_summary_metrics
@@ -403,7 +405,7 @@ class ReportsController < ApplicationController
       nil
     end
 
-    def build_trends_data
+    def build_trends_data(income_statement:)
       # Generate month-by-month data based on the current period filter
       trends = []
       use_fiscal = @fiscal_mode == "true" && Current.family.fiscal_month_enabled?
@@ -419,8 +421,8 @@ class ReportsController < ApplicationController
 
           period = Period.custom(start_date: current_start, end_date: month_end)
 
-          income = family.income_statement.income_totals(period: period).total
-          expenses = family.income_statement.expense_totals(period: period).total
+          income = income_statement.income_totals(period: period).total
+          expenses = income_statement.expense_totals(period: period).total
 
           current_fiscal_start = family.budget_period_start_for(Date.current)
 
@@ -448,8 +450,8 @@ class ReportsController < ApplicationController
 
           period = Period.custom(start_date: month_start, end_date: month_end)
 
-          income = family.income_statement.income_totals(period: period).total
-          expenses = family.income_statement.expense_totals(period: period).total
+          income = income_statement.income_totals(period: period).total
+          expenses = income_statement.expense_totals(period: period).total
 
           trends << {
             month: month_start.strftime("%b %Y"),

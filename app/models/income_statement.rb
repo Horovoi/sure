@@ -28,12 +28,14 @@ class IncomeStatement
     )
   end
 
+  # Memoized per instance and period: a page that shows several figures of one period
+  # (the dashboard, a budget, the reports) builds each total once.
   def expense_totals(period: Period.current_month)
-    build_period_total(classification: "expense", period: period)
+    period_total(classification: "expense", period: period)
   end
 
   def income_totals(period: Period.current_month)
-    build_period_total(classification: "income", period: period)
+    period_total(classification: "income", period: period)
   end
 
   def median_expense(interval: "month", category: nil, exclude_current_period: false)
@@ -66,36 +68,56 @@ class IncomeStatement
     PeriodTotal = Data.define(:classification, :total, :currency, :category_totals)
     CategoryTotal = Data.define(:category, :total, :currency, :weight)
 
+    # Every category of the family, loaded once, with the parent that views and
+    # callers read from a subcategory.
     def categories
-      @categories ||= family.categories.all.to_a
+      @categories ||= family.categories.includes(:parent).to_a
+    end
+
+    def period_memo_key(period)
+      [ period.start_date, period.end_date ]
+    end
+
+    def period_total(classification:, period:)
+      @period_totals ||= {}
+      @period_totals[[ classification, *period_memo_key(period) ]] ||= build_period_total(classification: classification, period: period)
+    end
+
+    # One totals query per period serves both classifications.
+    def totals_for_period(period)
+      @totals_for_period ||= {}
+      # Exclude pending transactions from budget calculations
+      @totals_for_period[period_memo_key(period)] ||= totals_query(
+        transactions_scope: family.transactions.visible.excluding_pending.in_period(period),
+        date_range: period.date_range
+      )
     end
 
     def build_period_total(classification:, period:)
-      # Exclude pending transactions from budget calculations
-      totals = totals_query(transactions_scope: family.transactions.visible.excluding_pending.in_period(period), date_range: period.date_range).select { |t| t.classification == classification }
+      totals = totals_for_period(period).select { |t| t.classification == classification }
       classification_total = totals.sum(&:total)
+
+      # Indexed once, so each category reads its rows without scanning every row.
+      # The nil category_id holds both uncategorized rows and uncategorized investments.
+      totals_by_category_id = totals.group_by(&:category_id)
+      totals_by_parent_id = totals.select(&:parent_category_id).group_by(&:parent_category_id)
+      uncategorized_rows = totals_by_category_id.fetch(nil, [])
 
       uncategorized_category = family.categories.uncategorized
       other_investments_category = family.categories.other_investments
 
       category_totals = [ *categories, uncategorized_category, other_investments_category ].map do |category|
-        subcategory = categories.find { |c| c.id == category.parent_id }
-
         parent_category_total = if category.uncategorized?
           # Regular uncategorized: NULL category_id and NOT uncategorized investment
-          totals.select { |t| t.category_id.nil? && !t.is_uncategorized_investment }&.sum(&:total) || 0
+          uncategorized_rows.reject(&:is_uncategorized_investment).sum(&:total)
         elsif category.other_investments?
           # Other investments: NULL category_id AND is_uncategorized_investment
-          totals.select { |t| t.category_id.nil? && t.is_uncategorized_investment }&.sum(&:total) || 0
+          uncategorized_rows.select(&:is_uncategorized_investment).sum(&:total)
         else
-          totals.select { |t| t.category_id == category.id }&.sum(&:total) || 0
+          totals_by_category_id.fetch(category.id, []).sum(&:total)
         end
 
-        children_totals = if category.synthetic?
-          0
-        else
-          totals.select { |t| t.parent_category_id == category.id }&.sum(&:total) || 0
-        end
+        children_totals = category.synthetic? ? 0 : totals_by_parent_id.fetch(category.id, []).sum(&:total)
 
         category_total = parent_category_total + children_totals
 
@@ -113,7 +135,7 @@ class IncomeStatement
         classification: classification,
         total: category_totals.reject { |ct| ct.category.subcategory? }.sum(&:total),
         currency: family.currency,
-        category_totals: category_totals
+        category_totals: category_totals.freeze
       )
     end
 
