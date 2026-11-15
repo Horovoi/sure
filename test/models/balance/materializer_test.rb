@@ -162,9 +162,13 @@ class Balance::MaterializerTest < ActiveSupport::TestCase
     account = families(:empty).accounts.create!(name: "Batches", balance: 0, cash_balance: 0, currency: "USD", accountable: Depository.new)
     account.entries.create!(name: "Opening", date: 4.days.ago.to_date, amount: 500, currency: "USD",
                             entryable: Valuation.new(kind: "opening_anchor"))
+    # The forward history ends at the last entry, so this makes it run up to today
+    account.entries.create!(name: "Reconciliation", date: Date.current, amount: 500, currency: "USD",
+                            entryable: Valuation.new(kind: "reconciliation"))
 
     calculated = Balance::ForwardCalculator.new(account).calculate
     assert calculated.all? { |b| b.is_a?(Balance::BalanceData) }
+    assert_operator calculated.size, :>, 2, "the history must need more than one batch"
 
     stub_const(Balance::Materializer, :PERSIST_BATCH_SIZE, 2) do
       Balance::Materializer.new(account, strategy: :forward).materialize_balances

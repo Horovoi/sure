@@ -36,7 +36,8 @@ class Transfer::Creator
     )
 
     if (error = amount_error || conversion_error || fee_error)
-      transfer.errors.add(:base, *error)
+      type, options = error
+      transfer.errors.add(:base, type, **(options || {}))
       return transfer
     end
 

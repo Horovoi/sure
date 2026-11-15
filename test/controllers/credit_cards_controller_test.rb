@@ -139,7 +139,7 @@ class CreditCardsControllerTest < ActionDispatch::IntegrationTest
       create_balance(account: @account, date: Date.new(2026, 10, 1), balance: 1_200)
       @account.entries.create!(name: "Groceries", date: Date.new(2026, 10, 1), amount: 200, currency: "USD", entryable: Transaction.new)
 
-      get credit_card_path(@account)
+      get account_path(@account)
 
       assert_response :ok
       assert_select "[role='tab'], button, a", text: I18n.t("UI.account_page.tabs.overview")
@@ -157,7 +157,7 @@ class CreditCardsControllerTest < ActionDispatch::IntegrationTest
   test "the overview tab asks for the cycle when none is set" do
     @account.accountable.update!(statement_close_day: nil, due_day: nil)
 
-    get credit_card_path(@account)
+    get account_path(@account)
 
     assert_response :ok
     assert_match I18n.t("credit_cards.tabs.overview.no_cycle_title"), response.body

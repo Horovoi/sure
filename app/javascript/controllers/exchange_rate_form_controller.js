@@ -50,7 +50,7 @@ export default class extends Controller {
   // An account, currency or date changed: show or hide the tabs and look the
   // market rate up again
   refresh() {
-    const context = this.context()
+    const context = this.conversionContext()
 
     if (!context || context.from === context.to) {
       this.hide()
@@ -101,7 +101,9 @@ export default class extends Controller {
 
   // --- context ---
 
-  context() {
+  // Not named context(): Stimulus sets this.context on every controller, which
+  // would hide the method
+  conversionContext() {
     const date = this.hasDateTarget ? this.dateTarget.value : ""
 
     if (this.modeValue === "transaction") {

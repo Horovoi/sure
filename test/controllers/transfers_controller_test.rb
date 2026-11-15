@@ -1,6 +1,8 @@
 require "test_helper"
 
 class TransfersControllerTest < ActionDispatch::IntegrationTest
+  include EntriesTestHelper
+
   setup do
     sign_in users(:family_admin)
   end
@@ -145,9 +147,12 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     get new_transfer_url
 
     assert_response :success
-    assert_select "select[name='transfer[from_account_id]'] option[value='#{disabled_account.id}']", count: 0
-    assert_select "select[name='transfer[to_account_id]'] option[value='#{disabled_account.id}']", count: 0
-    assert_select "select[name='transfer[from_account_id]'] option[value='#{accounts(:credit_card).id}']"
+    # The pickers are design-system listboxes (transfer-form-fixes): one option per account
+    %w[from_account_id to_account_id].each do |field|
+      picker = "[data-controller~=select]:has(input[type=hidden][name='transfer[#{field}]'])"
+      assert_select "#{picker} [role=option][data-value='#{disabled_account.id}']", count: 0
+      assert_select "#{picker} [role=option][data-value='#{accounts(:credit_card).id}']", count: 1
+    end
   end
 
   # --- DS pickers (w1-ds) ---
@@ -165,7 +170,12 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "setting a transfer's category records it as recently used" do
-    transfer = transfers(:one)
+    # Only a loan payment or an investment contribution takes a category (Transfer#categorizable?)
+    transfer = Transfer::Creator.new(
+      family: users(:family_admin).family, source_account_id: accounts(:depository).id,
+      destination_account_id: accounts(:loan).id, date: Date.current, amount: 100
+    ).create
+    assert transfer.categorizable?
     category = categories(:food_and_drink)
 
     patch transfer_url(transfer), params: { transfer: { category_id: category.id, notes: "" } }

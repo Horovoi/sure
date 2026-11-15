@@ -24,8 +24,10 @@
       <% end %>
     </div>
 
+    <%# After a failed update the entry holds the invalid input: show the stored date %>
+    <% header_date = entry.date || entry.date_in_database %>
     <span class="text-sm text-secondary">
-      <%= I18n.l(entry.date, format: :long) %>
+      <%= header_date ? I18n.l(header_date, format: :long) : "—" %>
     </span>
   <% end %>
 

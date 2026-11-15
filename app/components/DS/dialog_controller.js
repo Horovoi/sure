@@ -32,6 +32,7 @@ export default class extends Controller {
     this.element.addEventListener("keydown", this._onKeydown);
     this.element.addEventListener("close", this._onClose);
     this.element.addEventListener("cancel", this.handleCancel);
+    this.element.addEventListener("turbo:before-morph-attribute", this.keepOpenOnMorph);
     document.addEventListener("turbo:before-cache", this.handleBeforeCache);
 
     if (this.element.matches(":modal")) return;
@@ -50,6 +51,7 @@ export default class extends Controller {
     this.element.removeEventListener("keydown", this._onKeydown);
     this.element.removeEventListener("close", this._onClose);
     this.element.removeEventListener("cancel", this.handleCancel);
+    this.element.removeEventListener("turbo:before-morph-attribute", this.keepOpenOnMorph);
     document.removeEventListener("turbo:before-cache", this.handleBeforeCache);
 
     // Replaced while still open: one drawer linking to the next inside the
@@ -89,6 +91,16 @@ export default class extends Controller {
 
     event.preventDefault();
     this.close();
+  };
+
+  // A page refresh morphs this element in place, so it does not reconnect and
+  // auto-open never runs again. The server renders it closed, and the morph
+  // would remove `open`: a form shown again after an error (422 on the same
+  // URL) would vanish. Whether the dialog is open stays the browser's state.
+  keepOpenOnMorph = (event) => {
+    if (event.target === this.element && event.detail.attributeName === "open") {
+      event.preventDefault();
+    }
   };
 
   // Never cache an open dialog: the snapshot cannot keep it modal. A dialog
