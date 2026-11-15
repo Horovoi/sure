@@ -288,7 +288,7 @@ cmd_status() {
         if (h.code === "unauthorized") { console.log("the bridge refused the token in config.json"); process.exit(5); }
         if (h.signed_in === false) { console.log("Claude is signed out"); process.exit(3); }
         if (!h.ok) { console.log(`health check failed: ${h.error?.message ?? "unknown"}`); process.exit(4); }
-        const lines = [`Signed in as ${h.account?.email ?? "?"} (plan ${h.plan ?? "?"}, ${h.token_source ?? "?"}), Claude Code ${h.cli_version}`];
+        const lines = [`Signed in as ${h.account?.email ?? "?"} (plan ${[h.plan, h.token_source].filter(Boolean).join(", ") || "?"}), Claude Code ${h.cli_version}`];
         for (const name of ["five_hour", "seven_day"]) {
           const w = h.usage?.[name];
           if (w && typeof w.utilization === "number") {
