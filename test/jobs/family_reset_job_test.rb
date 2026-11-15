@@ -167,6 +167,19 @@ class FamilyResetJobTest < ActiveJob::TestCase
     assert_equal 0, @family.accounts.reload.count
   end
 
+
+  # Savings goals (w2-goals): goals go with the accounts that fund them
+  test "deletes the family's goals and their account links" do
+    @plaid_provider.stubs(:remove_item)
+    goal_ids = @family.goals.pluck(:id)
+    assert_not_empty goal_ids
+
+    FamilyResetJob.perform_now(@family)
+
+    assert_equal 0, @family.goals.reload.count
+    assert_empty GoalAccount.where(goal_id: goal_ids)
+  end
+
   private
     def create_provider_items
       @family.enable_banking_items.create!(name: "Test Enable Banking", country_code: "FI", application_id: "app-id", client_certificate: "cert")
