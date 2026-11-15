@@ -80,6 +80,7 @@
                   </div>
 
                   <div class="flex items-center gap-1 flex-shrink-0">
+                    <%= render "transactions/reconcile_badge", entry: entry, compact: true %><%# w3-toolstrx %>
                     <% if transaction.one_time? %>
                       <span class="text-orange-500" title="One-time <%= entry.amount.negative? ? "income" : "expense" %> (excluded from averages)">
                         <%= icon "asterisk", size: "sm", color: "current" %>

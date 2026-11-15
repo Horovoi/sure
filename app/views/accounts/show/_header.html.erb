@@ -12,6 +12,7 @@
             <% if account.tax_treatment.present? %>
               <%= render partial: "accounts/tax_treatment_badge", locals: { account: account } %>
             <% end %>
+            <%= render "accounts/show/reconciliation_indicator", account: account %><%# w3-toolstrx %>
             <% if account.draft? %>
               <%= render DS::Link.new(
                   text: "Complete setup",

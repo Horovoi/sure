@@ -18,6 +18,25 @@ class Entry < ApplicationRecord
   delegated_type :entryable, types: Entryable::TYPES, dependent: :destroy, inverse_of: :entry
   accepts_nested_attributes_for :entryable
 
+  # --- Reconciliation status (w3-toolstrx reconciliation-status) ---
+  # The user's own mark for checking a transaction off against a bank statement:
+  # unreconciled (not checked yet), cleared (seen on a statement) and reconciled (the
+  # statement period is done). It is not the provider's pending flag. Only transactions
+  # of manual accounts show it or take it. The attribute is declared so the enum boots
+  # before the column's migration has run.
+  attribute :reconciled_status, :string, default: "unreconciled"
+  enum :reconciled_status, {
+    unreconciled: "unreconciled",
+    cleared: "cleared",
+    reconciled: "reconciled"
+  }, default: "unreconciled", validate: true
+
+  # The order a click on the status badge moves through, back to the start after the last
+  RECONCILED_STATUS_CYCLE = reconciled_statuses.keys.freeze
+
+  scope :needs_reconciliation, -> { where(reconciled_status: %w[unreconciled cleared]) }
+  # --- end reconciliation status ---
+
   validates :date, :name, :amount, :currency, presence: true
   validates :date, uniqueness: { scope: [ :account_id, :entryable_type ] }, if: -> { valuation? }
   validates :date, comparison: { greater_than: -> { min_supported_date } }
@@ -172,6 +191,18 @@ class Entry < ApplicationRecord
     update!(user_modified: true)
   end
 
+  # Whether the reconciliation mark applies: a transaction of a manual account
+  def reconcilable?
+    transaction? && account.manual?
+  end
+
+  # Moves the reconciliation mark one step along RECONCILED_STATUS_CYCLE. A check
+  # against a statement is not an edit, so nothing is locked or marked user-modified.
+  def advance_reconciled_status!
+    index = RECONCILED_STATUS_CYCLE.index(reconciled_status) || 0
+    update!(reconciled_status: RECONCILED_STATUS_CYCLE[(index + 1) % RECONCILED_STATUS_CYCLE.size])
+  end
+
   class << self
     def search(params)
       EntrySearch.new(params).build_query(all)
@@ -195,9 +226,18 @@ class Entry < ApplicationRecord
       }.compact_blank
 
       tag_ids = Array.wrap(bulk_update_params[:tag_ids]).reject(&:blank?)
-      has_updates = bulk_attributes.present? || update_tags
+      reconciled_status = bulk_update_params[:reconciled_status].presence
+      has_updates = bulk_attributes.present? || update_tags || reconciled_status.present?
 
       return 0 unless has_updates
+
+      if reconciled_status && !reconciled_statuses.key?(reconciled_status)
+        raise ArgumentError, "unknown reconciled_status #{reconciled_status.inspect}"
+      end
+
+      updated_count = 0
+      # One query for the selection's manual accounts, not one per entry
+      manual_account_ids = reconciled_status ? Account.manual.where(id: select(:account_id)).pluck(:id).to_set : Set.new
 
       # A date change moves the entry in the balance history, so its account must
       # resync from the earlier of the two dates, as a single update does.
@@ -208,7 +248,12 @@ class Entry < ApplicationRecord
         all.each do |entry|
           attrs = bulk_attributes_for(entry, bulk_attributes)
           update_entry_tags = update_tags && entry.transaction?
-          next if attrs.blank? && !update_entry_tags
+          # Only transactions of manual accounts take the reconciliation mark; the rest skip it
+          reconcile = reconciled_status.present? && entry.transaction? &&
+            manual_account_ids.include?(entry.account_id) && entry.reconciled_status != reconciled_status
+          next if attrs.blank? && !update_entry_tags && !reconcile
+
+          updated_count += 1
 
           if attrs.present?
             entry.update! attrs
@@ -232,8 +277,14 @@ class Entry < ApplicationRecord
             entry.entryable.lock_attr!(:tag_ids) if entry.transaction.tags.any?
           end
 
-          entry.lock_saved_attributes!
-          entry.mark_user_modified!
+          # A reconcile-only change is a check, not an edit: nothing to lock
+          if attrs.present? || update_entry_tags
+            entry.lock_saved_attributes!
+            entry.mark_user_modified!
+          end
+
+          # After the lock, so the mark itself is never a locked attribute
+          entry.update!(reconciled_status: reconciled_status) if reconcile
         end
       end
 
@@ -248,7 +299,9 @@ class Entry < ApplicationRecord
         end
       end
 
-      all.size
+      # The entries that changed: a skipped one (a valuation given only a category, an
+      # entry already at the asked status) is not counted
+      updated_count
     end
 
     private

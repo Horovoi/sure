@@ -48,6 +48,11 @@
       <%= icon("paperclip", size: "sm") %>
       <p><%= t(".attachment_#{param_value}") %></p>
     </div>
+  <% elsif param_key == "reconcile_status" && param_value.in?(Entry::RECONCILED_STATUS_CYCLE) %>
+    <div class="flex items-center gap-2 px-1">
+      <%= icon(reconcile_status_presentation(param_value)[:icon], size: "sm") %>
+      <p><%= t("transactions.reconcile.statuses.#{param_value}") %></p>
+    </div>
   <% elsif param_key == "categories" && Category.uncategorized_filter_value?(param_value) %>
     <div class="flex items-center gap-2">
       <p><%= Category.uncategorized_name %></p>

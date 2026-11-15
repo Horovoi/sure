@@ -18,6 +18,7 @@ class Transaction::Search
   attribute :merchants, array: true
   attribute :tags, array: true
   attribute :attachment_status, array: true
+  attribute :reconcile_status, array: true
   attribute :active_accounts_only, :boolean, default: true
 
   attr_reader :family
@@ -39,6 +40,7 @@ class Transaction::Search
       query = apply_merchant_filter(query, merchants)
       query = apply_tag_filter(query, tags)
       query = apply_attachment_status_filter(query, attachment_status)
+      query = apply_reconcile_status_filter(query, reconcile_status)
       # Enforce minimum search length of 2 characters for name search
       query = EntrySearch.apply_search_filter(query, search.to_s.length >= 2 ? search : nil)
       query = EntrySearch.apply_date_filters(query, start_date, end_date)
@@ -205,6 +207,16 @@ class Transaction::Search
 
       attached = EntrySearch.attachment_condition(Transaction.arel_table[:id])
       query.where(wanted == [ "with" ] ? attached : attached.not)
+    end
+
+    # The user's reconciliation mark (Entry#reconciled_status). Only manual accounts take
+    # it, so a synced account's transactions, which are all "unreconciled", stay out.
+    # Any subset of the three values is a filter (w3-toolstrx reconciliation-status).
+    def apply_reconcile_status_filter(query, statuses)
+      wanted = Array(statuses) & Entry::RECONCILED_STATUS_CYCLE
+      return query if wanted.empty?
+
+      query.where(entries: { reconciled_status: wanted, account_id: family.accounts.manual.select(:id) })
     end
 
     def apply_status_filter(query, statuses)

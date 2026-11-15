@@ -219,6 +219,20 @@ class EntrySearchTest < ActiveSupport::TestCase
     assert_not_includes without_results, valuation
   end
 
+  # w3-toolstrx reconciliation-status
+  test "reconciliation filter on the account page lists transactions only" do
+    cleared = create_transaction(account: @account, name: "Cleared", reconciled_status: "cleared")
+    open = create_transaction(account: @account, name: "Open")
+    valuation = create_valuation(account: @account, amount: 500, date: 18.days.ago.to_date)
+
+    results = @account.entries.search(reconcile_status: %w[unreconciled])
+    assert_includes results, open
+    assert_not_includes results, cleared
+    assert_not_includes results, valuation
+
+    assert_equal [ cleared ], @account.entries.search(reconcile_status: %w[cleared]).to_a
+  end
+
   private
 
     def create_pending_transaction(account:, name:, provider:, date: Date.current, amount: 100, **transaction_attributes)

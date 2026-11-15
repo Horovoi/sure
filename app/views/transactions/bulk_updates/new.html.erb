@@ -26,6 +26,11 @@
                 and a sent empty set would clear every selected transaction's tags. %>
             <%= form.select :tag_ids, Current.family.tags.alphabetically.pluck(:name, :id), { include_blank: t(".none"), multiple: true, label: t(".tags_label"), container_class: "h-40", include_hidden: false } %>
             <%= form.text_area :notes, label: t(".notes_label"), placeholder: t(".notes_placeholder"), rows: 5 %>
+            <%# w3-toolstrx reconciliation-status: blank leaves each mark as it is %>
+            <%= form.select :reconciled_status,
+                  Entry::RECONCILED_STATUS_CYCLE.map { |status| [ t("transactions.reconcile.statuses.#{status}"), status ] },
+                  { include_blank: t("transactions.reconcile.bulk.no_change"), label: t("transactions.reconcile.bulk.label") } %>
+            <p class="text-xs text-secondary"><%= t("transactions.reconcile.bulk.hint") %></p>
           </div>
         <% end %>
       </div>

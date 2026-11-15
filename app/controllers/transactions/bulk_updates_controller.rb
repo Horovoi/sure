@@ -3,6 +3,13 @@ class Transactions::BulkUpdatesController < ApplicationController
   end
 
   def create
+    # An unknown status would raise inside the batch; refuse it before anything changes
+    reconciled_status = bulk_update_params[:reconciled_status]
+    if reconciled_status.present? && !Entry.reconciled_statuses.key?(reconciled_status)
+      redirect_back_or_to transactions_path, alert: t("transactions.reconcile.failure")
+      return
+    end
+
     updated = Current.family
                      .entries
                      .where(id: bulk_update_params[:entry_ids])
@@ -17,7 +24,7 @@ class Transactions::BulkUpdatesController < ApplicationController
 
   private
     def bulk_update_params
-      params.expect(bulk_update: [ :date, :notes, :name, :category_id, :merchant_id, entry_ids: [], tag_ids: [] ])
+      params.expect(bulk_update: [ :date, :notes, :name, :category_id, :merchant_id, :reconciled_status, entry_ids: [], tag_ids: [] ])
     end
 
     def tags_provided?

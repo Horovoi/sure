@@ -576,6 +576,24 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     assert_equal both_ids.sort, unknown_ids.sort
   end
 
+  # --- w3-toolstrx reconciliation-status ---------------------------------------------------------------------------
+  test "reconciliation filter takes any subset of the statuses and leaves synced accounts out" do
+    connected = accounts(:connected)
+    connected.entries.delete_all
+    open = create_transaction(account: @checking_account, amount: 10)
+    cleared = create_transaction(account: @checking_account, amount: 20, reconciled_status: "cleared")
+    done = create_transaction(account: @checking_account, amount: 30, reconciled_status: "reconciled")
+    synced = create_transaction(account: connected, amount: 40)
+
+    ids = ->(statuses) { Transaction::Search.new(@family, filters: { reconcile_status: statuses }).transactions_scope.pluck(:id) }
+
+    assert_equal [ open.entryable.id ], ids.call([ "unreconciled" ])
+    assert_equal [ open.entryable.id, cleared.entryable.id ].sort, ids.call(%w[unreconciled cleared]).sort
+    assert_equal [ open, cleared, done ].map(&:entryable_id).sort, ids.call(%w[unreconciled cleared reconciled]).sort
+    assert_not_includes ids.call(Entry::RECONCILED_STATUS_CYCLE), synced.entryable.id
+    assert_includes ids.call([ "bogus" ]), synced.entryable.id # an unknown value is no filter
+  end
+
   private
     def attach_receipt(transaction, filename)
       transaction.attachments.attach(io: file_fixture("receipt.pdf").open, filename: filename, content_type: "application/pdf")

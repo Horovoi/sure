@@ -1,0 +1,27 @@
+<%# locals: (account:) %>
+<%# The account header's reconciliation status (w3-toolstrx reconciliation-status).
+    The wrapper always renders, so a status change in a transaction row can replace it. %>
+<% indicator = Account::ReconciliationIndicator.for(account) %>
+<%= tag.span id: dom_id(account, :reconciliation_indicator), class: "inline-flex", data: { testid: "reconciliation-indicator" } do %>
+  <% if indicator&.matched? %>
+    <%= render DS::Pill.new(
+          label: t("accounts.show.reconciliation_indicator.matched"),
+          tone: :success,
+          marker: false,
+          icon: "circle-check",
+          title: t("accounts.show.reconciliation_indicator.matched_tooltip", count: indicator.reconciled_count)
+        ) %>
+  <% elsif indicator %>
+    <%= link_to account_path(account, tab: "activity", q: { reconcile_status: %w[unreconciled cleared] }),
+          data: { turbo_frame: "_top" },
+          class: "inline-flex hover:opacity-80 transition-opacity",
+          title: t("accounts.show.reconciliation_indicator.needs_attention_tooltip", unreconciled: indicator.unreconciled_count, cleared: indicator.cleared_count) do %>
+      <%= render DS::Pill.new(
+            label: t("accounts.show.reconciliation_indicator.needs_attention", count: indicator.open_count),
+            tone: :warning,
+            marker: false,
+            icon: "circle-dot"
+          ) %>
+    <% end %>
+  <% end %>
+<% end %>

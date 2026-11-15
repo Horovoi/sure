@@ -1,0 +1,24 @@
+<%# locals: (entry:, compact: false) %>
+<%# The reconciliation mark of a transaction on a manual account (w3-toolstrx
+    reconciliation-status). A click moves it one step: unreconciled, cleared,
+    reconciled, back to unreconciled. compact: the icon of a list row; otherwise the
+    pill of the drawer header. The reconcile response replaces both by id. %>
+<% if entry_reconcilable?(entry) %>
+  <% status = entry.reconciled_status %>
+  <% presentation = reconcile_status_presentation(status) %>
+  <% label = t("transactions.reconcile.statuses.#{status}") %>
+  <% tooltip = t("transactions.reconcile.badge.#{status}_tooltip") %>
+
+  <%= link_to reconcile_transaction_path(entry.transaction),
+        id: dom_id(entry, compact ? :reconcile_badge : :reconcile_pill),
+        title: tooltip,
+        aria: { label: "#{label}. #{tooltip}" },
+        data: { turbo_method: :patch, testid: "reconcile-badge" },
+        class: "inline-flex items-center hover:opacity-80 transition-opacity" do %>
+    <% if compact %>
+      <%= icon(presentation[:icon], size: "sm", color: "current", class: presentation[:text_class]) %>
+    <% else %>
+      <%= render DS::Pill.new(label: label, tone: presentation[:tone], marker: false, icon: presentation[:icon]) %>
+    <% end %>
+  <% end %>
+<% end %>

@@ -15,6 +15,7 @@ class EntrySearch
   attribute :merchants, array: true
   attribute :tags, array: true
   attribute :attachment_status, array: true
+  attribute :reconcile_status, array: true
   TRANSACTIONS_JOIN = "INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'"
   ALL_FILTER_TYPES = %w[balance_update expense income trade transfer].freeze
   ENTRYABLE_TYPE_MAP = {
@@ -148,6 +149,7 @@ class EntrySearch
     query = apply_merchant_conditions(query, merchants)
     query = apply_tag_conditions(query, tags)
     query = apply_attachment_conditions(query, attachment_status)
+    query = apply_reconcile_status_conditions(query, reconcile_status)
     query
   end
 
@@ -248,6 +250,15 @@ class EntrySearch
 
       attached = self.class.attachment_condition(Entry.arel_table[:entryable_id])
       query.where(entryable_type: "Transaction").where(wanted == [ "with" ] ? attached : attached.not)
+    end
+
+    # The reconciliation mark is a transaction's, on a manual account: balance updates,
+    # trades and synced accounts stay out (w3-toolstrx reconciliation-status)
+    def apply_reconcile_status_conditions(query, statuses)
+      wanted = Array(statuses) & Entry::RECONCILED_STATUS_CYCLE
+      return query if wanted.empty?
+
+      query.where(entryable_type: "Transaction", reconciled_status: wanted, account_id: Account.manual.select(:id))
     end
 
     def build_transaction_type_condition(txn_types)

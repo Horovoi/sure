@@ -325,6 +325,12 @@ Rails.application.routes.draw do
   end
   # --- end transaction attachments ---
 
+  # --- Reconciliation status (w3-toolstrx): the status badge of a transaction, by transaction id ---
+  resources :transactions, only: [] do
+    patch :reconcile, on: :member
+  end
+  # --- end reconciliation status ---
+
   resources :subscriptions, only: %i[index new create show edit update destroy] do
     collection do
       get :calendar

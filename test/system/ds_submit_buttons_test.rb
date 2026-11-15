@@ -71,7 +71,7 @@ class DsSubmitButtonsTest < ApplicationSystemTestCase
       click_button "Save"
     end
 
-    assert_text "1 transactions updated"
+    assert_text I18n.t("transactions.bulk_updates.create.success", count: 1)
     assert_equal "Bulk note", entry.reload.notes
   end
 end

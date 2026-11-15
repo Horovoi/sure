@@ -241,6 +241,31 @@ class TransactionsController < ApplicationController
     redirect_back_or_to transactions_path
   end
 
+  # --- Reconciliation status (w3-toolstrx reconciliation-status) ---
+  # A click on the status badge: unreconciled -> cleared -> reconciled -> unreconciled.
+  # Only a transaction of a manual account takes the mark.
+  def reconcile
+    transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
+    @entry = transaction.entry
+
+    unless @entry.reconcilable?
+      redirect_back_or_to transactions_path, alert: t("transactions.reconcile.not_manual_account")
+      return
+    end
+
+    @entry.advance_reconciled_status!
+    message = t("transactions.reconcile.success", status: t("transactions.reconcile.statuses.#{@entry.reconciled_status}"))
+
+    respond_to do |format|
+      format.turbo_stream { flash.now[:notice] = message }
+      format.html { redirect_back_or_to transactions_path, notice: message }
+    end
+  rescue ActiveRecord::RecordInvalid => e
+    Rails.logger.error("Failed to change the reconciliation status of transaction #{params[:id]}: #{e.message}")
+    redirect_back_or_to transactions_path, alert: t("transactions.reconcile.failure")
+  end
+  # --- end reconciliation status ---
+
   # Puts back the generated subscription charge this real charge replaced
   # (RecurringTransaction::Reconciler or a merge) and undoes what it carried over.
   def restore_subscription_charge
@@ -490,7 +515,8 @@ class TransactionsController < ApplicationController
                 :amount_operator, :active_accounts_only,
                 accounts: [], account_ids: [],
                 categories: [], merchants: [], types: [], tags: [], status: [],
-                attachment_status: [] # w3-toolstrx transaction-attachments
+                attachment_status: [], # w3-toolstrx transaction-attachments
+                reconcile_status: [] # w3-toolstrx reconciliation-status
               )
               .to_h
               # A blank member (q[account_ids][]=) is no filter, not a filter that matches nothing
