@@ -18,8 +18,6 @@ class SubscriptionService < ApplicationRecord
     return "/#{static_path}" if Rails.root.join("public", static_path).exist?
 
     # Otherwise return Brandfetch CDN URL
-    return nil unless Setting.brand_fetch_client_id.present?
-    size ||= Setting.brand_fetch_logo_size
-    "https://cdn.brandfetch.io/#{domain}/icon/fallback/lettermark/w/#{size}/h/#{size}?c=#{Setting.brand_fetch_client_id}"
+    Setting.brand_fetch_icon_url(domain, width: size, height: size)
   end
 end

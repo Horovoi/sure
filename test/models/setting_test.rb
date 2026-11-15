@@ -131,4 +131,47 @@ class SettingTest < ActiveSupport::TestCase
     assert_nil result
     assert_equal "test-model", Setting.openai_model
   end
+
+  test "brand_fetch_icon_url builds a lettermark URL at the configured size" do
+    Setting.stubs(:brand_fetch_client_id).returns("test-client-id")
+    Setting.stubs(:brand_fetch_logo_size).returns(40)
+
+    assert_equal(
+      "https://cdn.brandfetch.io/example.com/icon/fallback/lettermark/w/40/h/40?c=test-client-id",
+      Setting.brand_fetch_icon_url("example.com")
+    )
+  end
+
+  test "brand_fetch_icon_url takes a fallback and explicit dimensions" do
+    Setting.stubs(:brand_fetch_client_id).returns("test-client-id")
+    Setting.stubs(:brand_fetch_logo_size).returns(40)
+
+    assert_equal(
+      "https://cdn.brandfetch.io/example.com/icon/fallback/404/w/80/h/60?c=test-client-id",
+      Setting.brand_fetch_icon_url("example.com", fallback: "404", width: 80, height: 60)
+    )
+  end
+
+  test "brand_fetch_icon_url returns nil without an identifier or a client id" do
+    Setting.stubs(:brand_fetch_client_id).returns("test-client-id")
+    assert_nil Setting.brand_fetch_icon_url(nil)
+    assert_nil Setting.brand_fetch_icon_url("")
+
+    Setting.stubs(:brand_fetch_client_id).returns(nil)
+    assert_nil Setting.brand_fetch_icon_url("example.com")
+  end
+
+  test "brand_fetch_icon_url output matches the pattern that transform_brand_fetch_url resizes" do
+    Setting.stubs(:brand_fetch_client_id).returns("test-client-id")
+    Setting.stubs(:brand_fetch_logo_size).returns(40)
+    url = Setting.brand_fetch_icon_url("example.com")
+
+    assert_match Setting::BRAND_FETCH_URL_PATTERN, url
+
+    Setting.stubs(:brand_fetch_logo_size).returns(120)
+    assert_equal(
+      "https://cdn.brandfetch.io/example.com/icon/fallback/lettermark/w/120/h/120?c=test-client-id",
+      Setting.transform_brand_fetch_url(url)
+    )
+  end
 end

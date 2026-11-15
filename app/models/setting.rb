@@ -29,6 +29,18 @@ class Setting < RailsSettings::Base
     url.gsub(BRAND_FETCH_URL_PATTERN, "\\1w/#{size}/h/#{size}\\2")
   end
 
+  # Builds a Brandfetch icon URL for a domain or ticker. Every logo URL in the
+  # app goes through here, so the stored URLs keep the shape that
+  # BRAND_FETCH_URL_PATTERN (and transform_brand_fetch_url) expect.
+  def self.brand_fetch_icon_url(identifier, fallback: "lettermark", width: nil, height: nil)
+    return nil if identifier.blank? || brand_fetch_client_id.blank?
+
+    w = width || brand_fetch_logo_size
+    h = height || brand_fetch_logo_size
+
+    "https://cdn.brandfetch.io/#{identifier}/icon/fallback/#{fallback}/w/#{w}/h/#{h}?c=#{brand_fetch_client_id}"
+  end
+
   # Provider selection
   field :exchange_rate_provider, type: :string, default: ENV.fetch("EXCHANGE_RATE_PROVIDER", "twelve_data")
   field :securities_provider, type: :string, default: ENV.fetch("SECURITIES_PROVIDER", "twelve_data")
