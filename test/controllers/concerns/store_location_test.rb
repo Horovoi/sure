@@ -17,6 +17,30 @@ class StoreLocationTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a short return_to is stored unchanged" do
+    get settings_profile_path(return_to: "/transactions?q[search]=coffee")
+    assert_equal "/transactions?q[search]=coffee", session[:return_to]
+  end
+
+  test "a return_to over the cap with a query keeps only its path" do
+    long_query = Array.new(200) { |i| "q[account_ids][]=#{i}" }.join("&")
+    return_to = "/transactions?#{long_query}"
+    assert_operator return_to.bytesize, :>, StoreLocation::MAX_STORED_RETURN_TO_BYTES
+
+    get settings_profile_path(return_to: return_to)
+
+    assert_equal "/transactions", session[:return_to]
+  end
+
+  test "a bare path over the cap stores nothing and clears the older value" do
+    get settings_profile_path(return_to: "/accounts")
+    assert_equal "/accounts", session[:return_to]
+
+    get settings_profile_path(return_to: "/#{"a" * (StoreLocation::MAX_STORED_RETURN_TO_BYTES + 1)}")
+
+    assert_nil session[:return_to]
+  end
+
   test "sanitize_return_to accepts only site-relative paths" do
     controller = ApplicationController.new
 
