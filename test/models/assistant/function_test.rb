@@ -134,6 +134,22 @@ class Assistant::FunctionTest < ActiveSupport::TestCase
     assert_nil function.record_type
   end
 
+  test "every write and destructive tool names the record type its result ids point to" do
+    user = users(:family_admin)
+
+    Assistant.function_classes.reject(&:read_only?).each do |function_class|
+      assert function_class.new(user).record_type.present?, "#{function_class.name} must name its record_type for the audit"
+    end
+  end
+
+  test "audit_refs reads id and ids from a result" do
+    function = EmptyEnumFunction.new(users(:family_admin))
+
+    assert_equal [ "a", "b", "c" ], function.audit_refs({ id: "a", ids: [ "b", "c", "a" ] })
+    assert_equal [ "x" ], function.audit_refs({ "id" => "x" })
+    assert_equal [], function.audit_refs("text")
+  end
+
   private
     def assert_no_empty_enums(node, function_name, location = "params_schema")
       case node

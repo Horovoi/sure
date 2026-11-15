@@ -455,6 +455,68 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # --- Write tools ------------------------------------------------------------------------------------------
+
+  test "the full-scope tools/list has the write tools with annotations from their tags" do
+    with_mcp_env do
+      mcp_post "tools/list"
+
+      tools = rpc_result["tools"].index_by { |tool| tool["name"] }
+      %w[create_transaction update_transaction delete_transaction create_category update_category create_tag update_tag
+         set_opening_balance record_balance get_uncategorized_transactions].each { |name| assert tools.key?(name), name }
+
+      assert_equal({ "destructiveHint" => true, "idempotentHint" => false, "openWorldHint" => false, "readOnlyHint" => false },
+        tools["delete_transaction"]["annotations"])
+      assert_equal true, tools["update_transaction"].dig("annotations", "idempotentHint")
+      assert_equal false, tools["create_transaction"].dig("annotations", "idempotentHint")
+      assert_equal true, tools["record_balance"].dig("annotations", "destructiveHint")
+      assert_equal true, tools["get_uncategorized_transactions"].dig("annotations", "readOnlyHint")
+    end
+  end
+
+  test "a read-scope credential cannot call create_transaction" do
+    Mcp::Credential.stubs(:static).returns(Mcp::Credential.new(user: @user, kind: :static, scope: :read))
+
+    with_mcp_env do
+      mcp_post "tools/call", params: { name: "create_transaction", arguments: { account_id: accounts(:depository).id, date: Date.current.iso8601, amount: 1, name: "x" } }
+
+      assert_response :bad_request
+      assert_equal(-32602, rpc_error["code"])
+    end
+  end
+
+  test "tools/call update_transaction changes it and audits the ids and the state before" do
+    transaction = transactions(:one)
+
+    with_mcp_env do
+      mcp_post "tools/call", params: { name: "update_transaction", arguments: { id: transaction.id, notes: "Updated through MCP" } }
+
+      assert_response :success
+      assert_equal false, rpc_result["isError"]
+    end
+
+    assert_equal "Updated through MCP", transaction.reload.entry.notes
+    audit = AiToolAudit.order(:created_at).last
+    assert_equal "update_transaction", audit.tool_name
+    assert_equal "write", audit.scope_tag
+    assert_equal "Transaction", audit.result_record_type
+    assert_equal [ transaction.id ], audit.result_record_ids
+    assert_nil audit.audit_before["notes"]
+  end
+
+  test "create_transaction with the same external_id twice creates one entry" do
+    arguments = { account_id: accounts(:depository).id, date: Date.current.iso8601, amount: 12.5, name: "Coffee", external_id: "mcp-test-1" }
+
+    with_mcp_env do
+      assert_difference -> { Entry.count }, 1 do
+        mcp_post "tools/call", params: { name: "create_transaction", arguments: arguments }
+        mcp_post "tools/call", params: { name: "create_transaction", arguments: arguments }, id: 2
+      end
+
+      assert_equal false, rpc_result.dig("structuredContent", "created")
+    end
+  end
+
   private
     def with_mcp_env(&block)
       with_env_overrides(MCP_API_TOKEN: TOKEN, MCP_USER_EMAIL: @user.email, &block)

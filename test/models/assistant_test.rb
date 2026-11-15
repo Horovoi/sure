@@ -231,6 +231,13 @@ class AssistantTest < ActiveSupport::TestCase
     assert_not_includes read, Assistant::Function::ImportBankStatement
   end
 
+  test "the chat gets the write, delete and balance tools" do
+    names = Assistant.config_for(@chat)[:functions].map(&:name)
+
+    %w[create_transaction update_transaction delete_transaction create_category update_category create_tag update_tag
+       set_opening_balance record_balance get_uncategorized_transactions].each { |name| assert_includes names, name }
+  end
+
   test "an unknown tool scope is refused" do
     assert_raises(ArgumentError) { Assistant.function_classes_for(:admin) }
   end

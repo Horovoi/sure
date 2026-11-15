@@ -86,13 +86,21 @@ through the official `mcp` gem (`MCP::Server::Transports::StreamableHTTPTranspor
   same order as the chat. A tool returns its result as a JSON text block plus `structuredContent`; a
   failure is an `isError` result built by `Assistant::FunctionToolCaller.error_result` (the full
   exception goes only to the log). `tools/list` and `server/discover` carry `ttlMs` 60000 and
-  `cacheScope` private (the schemas hold family names).
+  `cacheScope` private (the instructions name the family's currency and time zone).
 - Read tools: `get_accounts` (ids, loan and card `terms`, opt-in balance series), `get_balance_sheet`
   (named or custom period, interval), `get_income_statement` (budget-month series, previous period,
   account filter; totals match `IncomeStatement`), `get_transactions` (one row per transfer,
   `classification` income/expense/transfer, compact rows), `get_holdings`, `get_valuations`,
   `get_categories`, `get_tags`, `get_merchants`, `search_family_files`. Filters take exact names from the
   get_* tools, not enums. A soft failure is `{error, hint}`, like a raised one.
+- Write tools: `create_transaction` (optional `external_id` makes it idempotent; entries get source `mcp`,
+  which `Entry#linked?` treats as manual), `update_transaction`, `delete_transaction`, `create_category`,
+  `update_category`, `create_tag`, `update_tag` (creating an existing name returns it with `created: false`),
+  `set_opening_balance` (dry_run; serialized per account by `Account::OpeningBalanceManager`) and
+  `record_balance` (today's balance through `Account#set_current_balance`, manual accounts only, a required
+  `source` citation stored in the valuation's notes); plus the read `get_uncategorized_transactions`. They
+  follow the UI controllers (locks, user-modified, account sync), never write transfer kinds, and refuse
+  linked accounts where balances are concerned. No category delete: the merge flow covers it.
 - Scope tags: each `Assistant::Function` declares `scope_tag :read` (default), `:write` or `:destructive`.
   `#mcp_annotations` follow the tag (read gives readOnlyHint, destructive gives destructiveHint; a tool
   overrides `#idempotent?` / `#open_world?`). `#mcp_input_schema` makes nullable properties optional and

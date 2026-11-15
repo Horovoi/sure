@@ -28,7 +28,19 @@ class Assistant
         Assistant::Function::SearchFamilyFiles,
 
         # Imports
-        Assistant::Function::ImportBankStatement
+        Assistant::Function::ImportBankStatement,
+
+        # Transactions, categories, tags and balances: the uncategorized backlog, then writes
+        Assistant::Function::GetUncategorizedTransactions,
+        Assistant::Function::CreateTransaction,
+        Assistant::Function::UpdateTransaction,
+        Assistant::Function::DeleteTransaction,
+        Assistant::Function::CreateCategory,
+        Assistant::Function::UpdateCategory,
+        Assistant::Function::CreateTag,
+        Assistant::Function::UpdateTag,
+        Assistant::Function::SetOpeningBalance,
+        Assistant::Function::RecordBalance
       ]
     end
 

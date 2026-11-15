@@ -5,9 +5,9 @@
 class Mcp::ServerBuilder
   SERVER_NAME = "sure".freeze
 
-  # tools/list and server/discover may be cached by the client for this long. The tool set is fixed, but enums
-  # in the schemas come from family data (account, category, merchant and tag names), so the cache is short
-  # and private to the token.
+  # tools/list and server/discover may be cached by the client for this long. The tool set is fixed and no schema
+  # holds family data any more, but the instructions and some descriptions name the family's currency, time zone
+  # and today's date, so the cache is short and private to the token.
   LIST_TTL_MS = 60_000
   CACHE_SCOPE = "private".freeze
 

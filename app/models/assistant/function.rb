@@ -189,13 +189,6 @@ class Assistant::Function
         Array(property[:anyOf]).any? { |option| option.is_a?(Hash) && option[:type].to_s == "null" }
     end
 
-    # Tag lists are small, so a tool that names tags may still offer them as an enum. The large data-driven enums
-    # (accounts, categories, merchants) are gone from schemas: they grew with family data and changed the tool
-    # definitions whenever a name did. Filters take exact names from the sibling get_* tools instead.
-    def family_tag_names
-      @family_tag_names ||= family.tags.pluck(:name)
-    end
-
     # Page size for a paginated tool that declares a page_size param, clamped to 1..MAX_PAGE_SIZE
     def resolved_page_size(params)
       return self.class.default_page_size if params["page_size"].blank?
