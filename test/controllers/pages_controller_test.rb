@@ -57,4 +57,15 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :bad_request
   end
+
+  test "the self-hosted user menu shows the build tag and no upstream links" do
+    Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
+
+    get root_path
+
+    assert_response :ok
+    assert_select "[data-testid=build-tag]", text: Sure.build_tag
+    assert_select "a[href*='we-promise']", count: 0
+    assert_select "a[href*='discord.gg']", count: 0
+  end
 end

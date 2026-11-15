@@ -4,6 +4,8 @@ en:
     user_menu:
       log_out: Log out
       settings: Settings
+      unknown_build: unknown
+      version: "Version:"
     destroy:
       success: Your account has been deleted.
     update:
