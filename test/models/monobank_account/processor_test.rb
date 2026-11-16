@@ -65,8 +65,8 @@ class MonobankAccount::ProcessorTest < ActiveSupport::TestCase
 
     goal = jar.reload.linked_goal
     assert_equal [ "Відпустка", BigDecimal("20000"), [ jar_account ] ], [ goal.name, goal.target_amount, goal.linked_accounts.to_a ]
-    assert_nil reserve.reload.goal_id
-    assert_nil card.reload.goal_id
+    assert_nil reserve.reload.linked_goal_id
+    assert_nil card.reload.linked_goal_id
   end
 
   test "nothing for an unlinked product" do

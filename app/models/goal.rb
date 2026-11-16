@@ -112,6 +112,11 @@ class Goal < ApplicationRecord
   # the non-bang `goal.complete` (which does not save) never stamps a snapshot
   after_save :apply_state_change_side_effects, if: :saved_change_to_state?
 
+  # A goal made from a monobank jar's target: deleting it tells the jar's sync not to make
+  # it again. Prepended, so the jar's link row is locked before any row of the goal: the
+  # sync (MonobankAccount::JarGoal) locks the link row first too, so the two cannot deadlock.
+  before_destroy :release_monobank_jar_goal_links, prepend: true
+
   scope :alphabetically, -> { order(Arel.sql("LOWER(goals.name) ASC")) }
   scope :not_released, -> { where.not(state: RELEASED_STATES) }
 
@@ -1184,6 +1189,13 @@ class Goal < ApplicationRecord
       ids = own_whole_account_ids
       ids |= goal_accounts.filter_map { |link| link.account_id if link.will_save_change_to_allocated_amount? }
       ids.compact.uniq.sort.each { |account_id| self.class.lock_whole_account_claims!(account_id) }
+    end
+
+    def release_monobank_jar_goal_links
+      links = MonobankJarGoalLink.where(goal_id: id).lock.to_a
+      return if links.empty?
+
+      MonobankJarGoalLink.where(id: links.map(&:id)).update_all(goal_id: nil, dismissed_at: Time.current, updated_at: Time.current)
     end
 
     # Accounts this goal claims in full, from the loaded links (right for unsaved ones too)

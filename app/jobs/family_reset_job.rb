@@ -30,6 +30,9 @@ class FamilyResetJob < ApplicationJob
       # Goals are funded by the accounts deleted below; without them a goal has no links
       # left and could not be saved again
       family.goals.destroy_all
+      # Deleting the goals marked the jars' goals as dismissed; a reset starts over, so a
+      # jar linked again gets its goal again
+      family.monobank_jar_goal_links.delete_all
 
       # Delete accounts and related data
       family.accounts.destroy_all

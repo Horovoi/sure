@@ -356,24 +356,24 @@ module MonobankFake
           linked = mono&.current_account
           goals = linked ? Goal.joins(:goal_accounts).where(goal_accounts: { account_id: linked.id }).distinct.to_a : []
           if want.nil?
-            record("jar #{fake_id} without a target has no goal", linked && goals.empty? && mono.goal_id.nil?,
+            record("jar #{fake_id} without a target has no goal", linked && goals.empty? && mono.linked_goal_id.nil?,
                    linked ? "#{goals.size} goals" : "no account")
             next
           end
 
           goal = goals.first
           links = goal ? goal.goal_accounts.map { |link| [ link.account_id, link.allocated_amount ] } : []
-          ok = goals.size == 1 && mono.goal_id == goal.id && goal.name == want["name"] &&
+          ok = goals.size == 1 && mono.linked_goal_id == goal.id && goal.name == want["name"] &&
                (goal.target_amount.to_d - want["target"].to_d).abs < BigDecimal("0.005") &&
                goal.currency == linked.currency && links == [ [ linked.id, nil ] ]
           detail = if goal.nil? then linked ? "no goal" : "no account"
-          else "#{goals.size} goals; #{goal.name.inspect} #{goal.target_amount.to_d.round(2)} #{goal.currency}, #{links.size} links, linked #{mono.goal_id == goal.id}"
+          else "#{goals.size} goals; #{goal.name.inspect} #{goal.target_amount.to_d.round(2)} #{goal.currency}, #{links.size} links, linked #{mono.linked_goal_id == goal.id}"
           end
           record("jar #{fake_id}: goal #{want['name'].inspect}, target #{format('%.2f', want['target'])}", ok, detail)
         end
 
         jar_ids = Array(fixture["jars"]).map { |jar| jar["id"].to_s }
-        with_goal = monobank_accounts.reject { |mono| jar_ids.include?(mono.account_id.to_s) }.select(&:goal_id)
+        with_goal = monobank_accounts.reject { |mono| jar_ids.include?(mono.account_id.to_s) }.select(&:linked_goal_id)
         record("no goal for a card or currency account", with_goal.empty?, with_goal.map(&:account_id).join(", ").presence)
       end
 

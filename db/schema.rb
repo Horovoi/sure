@@ -1020,11 +1020,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100007) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "page_balance_minor"
-    t.uuid "goal_id"
-    t.decimal "goal_synced_target", precision: 19, scale: 4
-    t.string "goal_synced_title"
-    t.datetime "goal_dismissed_at"
-    t.index ["goal_id"], name: "index_monobank_accounts_on_goal_id"
     t.index ["monobank_item_id", "account_id"], name: "index_monobank_accounts_on_monobank_item_id_and_account_id", unique: true
     t.index ["monobank_item_id"], name: "index_monobank_accounts_on_monobank_item_id"
   end
@@ -1053,6 +1048,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100007) do
     t.datetime "updated_at", null: false
     t.index ["family_id"], name: "index_monobank_items_on_family_id"
     t.index ["status"], name: "index_monobank_items_on_status"
+  end
+
+  create_table "monobank_jar_goal_links", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "jar_id", null: false
+    t.uuid "goal_id"
+    t.uuid "funding_account_id"
+    t.decimal "synced_target", precision: 19, scale: 4
+    t.string "synced_title"
+    t.datetime "dismissed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id", "jar_id"], name: "index_monobank_jar_goal_links_on_family_id_and_jar_id", unique: true
+    t.index ["funding_account_id"], name: "index_monobank_jar_goal_links_on_funding_account_id"
+    t.index ["goal_id"], name: "index_monobank_jar_goal_links_on_goal_id"
   end
 
   create_table "oauth_access_grants", force: :cascade do |t|
@@ -1623,9 +1633,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100007) do
   add_foreign_key "merchants", "families"
   add_foreign_key "messages", "chats"
   add_foreign_key "mobile_devices", "users"
-  add_foreign_key "monobank_accounts", "goals", on_delete: :nullify
   add_foreign_key "monobank_accounts", "monobank_items"
   add_foreign_key "monobank_items", "families"
+  add_foreign_key "monobank_jar_goal_links", "accounts", column: "funding_account_id", on_delete: :nullify
+  add_foreign_key "monobank_jar_goal_links", "families", on_delete: :cascade
+  add_foreign_key "monobank_jar_goal_links", "goals", on_delete: :nullify
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "oidc_identities", "users"

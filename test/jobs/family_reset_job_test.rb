@@ -185,6 +185,18 @@ class FamilyResetJobTest < ActiveJob::TestCase
     assert_empty GoalAccount.where(goal_id: goal_ids)
   end
 
+  # A reset starts over: a monobank jar linked again gets its goal again, even when the
+  # reset deleted it (deleting a goal otherwise marks it as dismissed)
+  test "forgets the goals made from monobank jars" do
+    @plaid_provider.stubs(:remove_item)
+    goal = @family.goals.first
+    @family.monobank_jar_goal_links.create!(jar_id: "jar", goal: goal, synced_target: goal.target_amount, synced_title: goal.name)
+
+    FamilyResetJob.perform_now(@family)
+
+    assert_empty MonobankJarGoalLink.where(family: @family)
+  end
+
   private
     def create_provider_items
       @family.enable_banking_items.create!(name: "Test Enable Banking", country_code: "FI", application_id: "app-id", client_certificate: "cert")

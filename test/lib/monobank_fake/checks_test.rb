@@ -10,7 +10,7 @@ class MonobankFake::ChecksTest < ActiveSupport::TestCase
   START = ZONE.local(2026, 11, 15, 15, 0, 0)
   CUTOVER = Date.new(2026, 11, 15)
 
-  StandIn = Struct.new(:account_id, :current_account, :goal_id)
+  StandIn = Struct.new(:account_id, :current_account, :linked_goal_id)
   StandInItem = Struct.new(:syncs) do
     def reload = self
     def backfill_progress = { chain_active: false, windows_remaining: 0, eta_seconds: 0 }

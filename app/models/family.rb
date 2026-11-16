@@ -45,6 +45,8 @@ class Family < ApplicationRecord
 
   # Savings goals (w2-goals)
   has_many :goals, dependent: :destroy
+  # What the monobank sync remembers about the goals made from jars (MonobankAccount::JarGoal)
+  has_many :monobank_jar_goal_links, dependent: :delete_all
 
   # Insights feed (w3-reports): template insights written nightly by GenerateInsightsJob
   has_many :insights, dependent: :delete_all

@@ -28,10 +28,6 @@ class MonobankAccount < ApplicationRecord
   has_one :account_provider, as: :provider, dependent: :destroy
   has_one :account, through: :account_provider, source: :account
   has_one :linked_account, through: :account_provider, source: :account
-  # The Sure goal made from a jar's target (MonobankAccount::JarGoal). Not `goal`: that
-  # column is the jar's target as monobank sends it. Deleting the goal clears the link.
-  belongs_to :linked_goal, class_name: "Goal", foreign_key: :goal_id, optional: true, inverse_of: false
-
   validates :name, :currency, :account_id, :account_kind, presence: true
   validates :account_id, uniqueness: { scope: :monobank_item_id }
   validates :account_kind, inclusion: { in: [ CARD_KIND, JAR_KIND ] }
@@ -65,6 +61,23 @@ class MonobankAccount < ApplicationRecord
 
   def jar?
     account_kind == JAR_KIND
+  end
+
+  # What the sync remembers about the Sure goal made from this jar's target
+  # (MonobankAccount::JarGoal). Kept per family and jar id, not on this row, so it
+  # survives a disconnect and reconnect of monobank.
+  def jar_goal_link
+    MonobankJarGoalLink.find_by(family_id: monobank_item.family_id, jar_id: account_id) if jar?
+  end
+
+  # The Sure goal made from this jar's target. Not `goal`: that column is the jar's target
+  # as monobank sends it.
+  def linked_goal
+    jar_goal_link&.goal
+  end
+
+  def linked_goal_id
+    jar_goal_link&.goal_id
   end
 
   # The jar's savings target in major units, nil for a card or a jar without one
