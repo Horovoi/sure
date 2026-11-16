@@ -11,6 +11,11 @@ class Assistant
       new(chat, instructions: config[:instructions], functions: config[:functions])
     end
 
+    # An OpenAI key is set, in OPENAI_ACCESS_TOKEN or in Self-Hosting. The other engine is Assistant::Claude.configured?.
+    def openai_configured?
+      ENV["OPENAI_ACCESS_TOKEN"].present? || Setting.openai_access_token.present?
+    end
+
     # Every tool, in one fixed order: the in-app chat and /mcp both serve this list (tools/list keeps the order).
     # Each tool unit adds its classes in its own block.
     def function_classes
@@ -154,7 +159,7 @@ class Assistant
 
       if available_providers.empty?
         "No LLM provider configured that supports model '#{requested_model}'. " \
-        "Please configure an LLM provider (e.g., OpenAI) in settings."
+        "Connect an AI engine in Settings > AI Prompts: Claude through the bridge on this Mac, or an OpenAI API key."
       else
         provider_details = available_providers.map do |provider|
           "  - #{provider.provider_name}: #{provider.supported_models_description}"

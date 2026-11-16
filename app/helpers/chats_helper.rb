@@ -9,4 +9,16 @@ module ChatsHelper
 
     chat.persisted? ? chat_path(chat) : new_chat_path
   end
+
+  # The AI avatar SVG inline, with its gradient and filter ids made unique to this copy. A page holds several
+  # avatars (the chat sidebar, the AI box, each answer), some hidden with display: none, and a url(#id) the
+  # browser resolves into a hidden copy paints nothing: the avatar turned into a flat gray square.
+  def ai_avatar_svg(file, **options)
+    suffix = SecureRandom.hex(4)
+
+    inline_svg_tag(file, **options).to_str
+      .gsub(/\bid="([^"]+)"/) { %(id="#{Regexp.last_match(1)}-#{suffix}") }
+      .gsub(/url\(#([^)]+)\)/) { "url(##{Regexp.last_match(1)}-#{suffix})" }
+      .html_safe
+  end
 end

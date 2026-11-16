@@ -58,7 +58,7 @@ class AssistantTest < ActiveSupport::TestCase
 
     assert @turn.reload.failed?
     assert_includes @chat.reload.error, "No LLM provider configured that supports model 'gpt-4.1'"
-    assert_includes @chat.error, "Please configure an LLM provider (e.g., OpenAI) in settings."
+    assert_includes JSON.parse(@chat.error), "Claude through the bridge on this Mac, or an OpenAI API key"
   end
 
   test "shows available providers in error message when model not supported" do
