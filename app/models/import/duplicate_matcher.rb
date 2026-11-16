@@ -104,7 +104,9 @@ class Import::DuplicateMatcher
       @candidate_entries ||= begin
         dates = keyed_rows.map(&:date)
 
+        # A split transaction is the bank line of its parent, never one of its parts
         scope = account.entries
+                       .excluding_split_children
                        .where(entryable_type: "Transaction", currency: account.currency)
                        .where(date: (dates.min - DATE_WINDOW)..(dates.max + DATE_WINDOW))
                        .where("entries.import_id IS DISTINCT FROM ?", import.id)

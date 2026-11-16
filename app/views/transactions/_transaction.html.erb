@@ -1,4 +1,4 @@
-<%# locals: (entry:, balance_trend: nil, view_ctx: "global") %>
+<%# locals: (entry:, balance_trend: nil, view_ctx: "global", in_split_group: false) %>
 
 <% transaction = entry.entryable %>
 
@@ -80,6 +80,13 @@
                   </div>
 
                   <div class="flex items-center gap-1 flex-shrink-0">
+                    <%# A part of a split shown outside its group (EntriesHelper#render_entry_rows) says so %>
+                    <% if entry.split_child? && !in_split_group %>
+                      <span class="text-secondary" title="<%= t("transactions.transaction.split_child_tooltip") %>">
+                        <%= icon "split", size: "sm", color: "current" %>
+                        <span class="sr-only"><%= t("transactions.transaction.split_child_tooltip") %></span>
+                      </span>
+                    <% end %>
                     <%= render "transactions/reconcile_badge", entry: entry, compact: true %><%# w3-toolstrx %>
                     <% if transaction.one_time? %>
                       <span class="text-warning" title="<%= t(entry.amount.negative? ? "transactions.transaction.one_time_income_tooltip" : "transactions.transaction.one_time_expense_tooltip") %>">

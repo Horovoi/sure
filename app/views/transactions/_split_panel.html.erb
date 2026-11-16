@@ -1,0 +1,85 @@
+<%# locals: (entry:) %>
+<%# The drawer's split box (Entry::Splittable): on a split transaction its parts, on a part
+    the transaction it belongs to. Nothing for a transaction that is not split. %>
+
+<% if entry.split_parent? %>
+  <% children = entry.child_entries.includes(entryable: :category) %>
+  <section class="rounded-lg border border-secondary bg-container-inset p-3 space-y-3" aria-labelledby="<%= dom_id(entry, :split_title) %>">
+    <div class="flex items-start justify-between gap-3">
+      <div class="space-y-0.5 min-w-0">
+        <h4 id="<%= dom_id(entry, :split_title) %>" class="text-sm font-medium text-primary flex items-center gap-1.5">
+          <%= icon "split", size: "sm" %>
+          <%= t("transactions.split_panel.parent_title", count: children.size) %>
+        </h4>
+        <p class="text-xs text-secondary"><%= t("transactions.split_panel.parent_description") %></p>
+      </div>
+    </div>
+
+    <ul class="bg-container rounded-md shadow-border-xs divide-y divide-alpha-black-100 theme-dark:divide-alpha-white-100">
+      <% children.each do |child| %>
+        <li>
+          <%= link_to entry_path(child),
+                class: "flex items-center gap-3 px-3 py-2 text-sm hover:bg-container-hover rounded-md focus-visible:outline-2 focus-visible:outline-offset-[-2px]",
+                data: { turbo_frame: "drawer", turbo_prefetch: false } do %>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-primary <%= "line-through text-subdued" if child.excluded? %>"><%= child.name %></span>
+              <span class="block truncate text-xs text-secondary">
+                <%= child.transaction.category&.name || t("transactions.split_panel.uncategorized") %><%= " · #{t("transactions.split_panel.excluded")}" if child.excluded? %>
+              </span>
+            </span>
+            <span class="shrink-0 font-medium privacy-sensitive <%= child.amount.negative? ? "text-success" : "text-primary" %>"><%= format_money(-child.amount_money) %></span>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+
+    <div class="flex flex-wrap gap-2">
+      <%= render DS::Link.new(
+            text: t("transactions.split_panel.edit"),
+            icon: "pencil",
+            variant: "outline",
+            size: "sm",
+            href: edit_transaction_split_path(entry),
+            frame: :modal
+          ) %>
+      <%= render DS::Button.new(
+            text: t("transactions.split_panel.unsplit"),
+            icon: "undo-2",
+            variant: "outline",
+            size: "sm",
+            href: transaction_split_path(entry),
+            method: :delete,
+            confirm: CustomConfirm.new(
+              title: t("transactions.split_panel.unsplit_confirm_title"),
+              body: t("transactions.split_panel.unsplit_confirm_body"),
+              btn_text: t("transactions.split_panel.unsplit"),
+              destructive: true
+            ),
+            frame: "_top"
+          ) %>
+    </div>
+  </section>
+<% elsif entry.split_child? %>
+  <% parent = entry.parent_entry %>
+  <section class="rounded-lg border border-secondary bg-container-inset p-3 space-y-2">
+    <p class="text-sm text-primary flex items-center gap-1.5">
+      <%= icon "split", size: "sm" %>
+      <%= t("transactions.split_panel.child_title") %>
+    </p>
+    <%= link_to entry_path(parent),
+          class: "flex items-center gap-3 rounded-md bg-container shadow-border-xs px-3 py-2 text-sm hover:bg-container-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px]",
+          data: { turbo_frame: "drawer", turbo_prefetch: false } do %>
+      <span class="min-w-0 flex-1 truncate text-primary"><%= parent.name %></span>
+      <span class="shrink-0 font-medium text-primary privacy-sensitive"><%= format_money(-parent.amount_money) %></span>
+    <% end %>
+    <p class="text-xs text-secondary"><%= t("transactions.split_panel.child_description") %></p>
+    <%= render DS::Link.new(
+          text: t("transactions.split_panel.edit"),
+          icon: "pencil",
+          variant: "outline",
+          size: "sm",
+          href: edit_transaction_split_path(parent),
+          frame: :modal
+        ) %>
+  </section>
+<% end %>

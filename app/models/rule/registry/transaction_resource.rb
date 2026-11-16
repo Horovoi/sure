@@ -39,8 +39,11 @@ class Rule::Registry::TransactionResource < Rule::Registry
     ACTION_EXECUTOR_CLASSES.map(&:key)
   end
 
+  # Rules act on what a transaction is for: the parts of a split, never its parent
+  # (Entry::Splittable). A part's category, merchant and tags picked in the split
+  # editor are locked, so a rule only fills what the user left open.
   def resource_scope
-    family.transactions.visible.with_entry.where(entry: { date: rule.effective_date.. })
+    family.transactions.visible.with_entry.merge(Entry.excluding_split_parents).where(entry: { date: rule.effective_date.. })
   end
 
   def condition_filters

@@ -67,6 +67,10 @@ module Family::AutoTransferMatchable
       .where(Account.visible_status_sql("inflow_accounts"))
       .where(Account.visible_status_sql("outflow_accounts"))
       .where("inflow_candidates.entryable_type = 'Transaction' AND outflow_candidates.entryable_type = 'Transaction'")
+      # A split transaction and its parts are spending or income, never a transfer leg
+      .where("inflow_candidates.parent_entry_id IS NULL AND outflow_candidates.parent_entry_id IS NULL")
+      .where(Entry.split_parent_sql("inflow_candidates", negate: true))
+      .where(Entry.split_parent_sql("outflow_candidates", negate: true))
       .where(
         transfer_amounts_match_sql(restrict_cross_currency_to_routes: restrict_cross_currency_to_routes),
         family_currency: primary_currency_code, min_ratio: 1 - tolerance, max_ratio: 1 + tolerance

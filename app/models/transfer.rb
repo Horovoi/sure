@@ -56,6 +56,7 @@ class Transfer < ApplicationRecord
   # impossible to confirm or annotate.
   validate :transfer_has_opposite_amounts, on: :create
   validate :transfer_within_date_range, on: :create
+  validate :legs_not_split, on: :create
 
   after_create :apply_transaction_kinds, if: :confirmed?
   after_create :clear_rejection
@@ -345,6 +346,20 @@ class Transfer < ApplicationRecord
       else
         # For different currencies, just check the signs are opposite
         errors.add(:base, "Must have opposite amounts") unless inflow_amount.negative? && outflow_amount.positive?
+      end
+    end
+
+    # A split transaction is spending or income divided by purpose, never a movement
+    # between accounts: neither a split parent nor a part of a split is a transfer leg
+    def legs_not_split
+      [ inflow_transaction, outflow_transaction ].compact.each do |txn|
+        entry = txn.entry
+        next if entry.nil?
+
+        if entry.split_child? || entry.split_parent?
+          errors.add(:base, :split_leg)
+          break
+        end
       end
     end
 

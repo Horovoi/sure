@@ -178,6 +178,11 @@ class Transaction < ApplicationRecord
     update!(category: category)
   end
 
+  # Whether the entry can be divided into parts now (Entry::Splittable#split_blocker)
+  def splittable?
+    entry.present? && entry.splittable?
+  end
+
   def pending?
     extra_data = extra.is_a?(Hash) ? extra : {}
     extra_data.values.any? do |provider_data|
@@ -453,6 +458,8 @@ class Transaction < ApplicationRecord
     # --- Goal pledges (w2-goals goal-pledges) ---
     def keep_goal_pledge
       return unless entry && entry.amount.to_d.negative?
+      # A part of a split is not a deposit; its parent is the one that arrived
+      return if entry.split_child?
       return unless GoalPledge::Reconciler.pending_on?(entry.account_id)
 
       GoalPledge::Reconciler.new(entry).run

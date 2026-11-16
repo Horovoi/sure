@@ -89,6 +89,8 @@ class GoalPledge::Reconciler
       return false if entry.nil? || entry.account_id.blank?
       return entry.delta.present? if balance_change?
       return false if entry.excluded?
+      # A part of a split is not a deposit; its parent is the one that arrived
+      return false if transaction? && entry.split_child?
 
       transaction? || valuation?
     end

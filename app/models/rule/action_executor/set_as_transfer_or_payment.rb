@@ -23,6 +23,8 @@ class Rule::ActionExecutor::SetAsTransferOrPayment < Rule::ActionExecutor
       # Check the Transfer row, not the kind: an investment contribution leg is a transfer
       # even though Transaction#transfer? is false for it.
       next false if transaction.transfer.present?
+      # A part of a split is spending or income, never a transfer leg (Transfer#legs_not_split)
+      next false if transaction.entry.split_child?
       next false if target_account.id == transaction.entry.account_id
 
       transfer = build_transfer(target_account, transaction.entry)

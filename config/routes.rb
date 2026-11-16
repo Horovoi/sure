@@ -350,6 +350,12 @@ Rails.application.routes.draw do
   end
   # --- end transaction attachments ---
 
+  # --- Split transactions: the split editor of a transaction, by entry id like the drawer ---
+  resources :transactions, only: [] do
+    resource :split, only: %i[new create edit update destroy]
+  end
+  # --- end split transactions ---
+
   # --- Reconciliation status (w3-toolstrx): the status badge of a transaction, by transaction id ---
   resources :transactions, only: [] do
     patch :reconcile, on: :member

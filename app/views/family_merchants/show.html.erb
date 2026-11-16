@@ -111,7 +111,7 @@
 
         <div class="space-y-6">
           <%= entries_by_date(@transactions.map(&:entry), totals: true) do |entries| %>
-            <%= render entries %>
+            <%= render_entry_rows(entries) %>
           <% end %>
         </div>
       <% else %>

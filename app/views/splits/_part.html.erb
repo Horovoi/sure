@@ -1,0 +1,103 @@
+<%# locals: (part:, index:, categories:, merchants:, tags:, step:, precision:, classification:) %>
+<%# One part of the split editor. index is a number, or __INDEX__ in the template that
+    split_editor_controller copies for a new part. %>
+<% details_open = part.merchant_id.present? && part.merchant_id != @entry.transaction.merchant_id ||
+                  part.tag_ids.present? || part.notes.present? || part.excluded %>
+
+<%= fields_for "split[parts][#{index}]", part, builder: StyledFormBuilder do |pf| %>
+  <fieldset class="rounded-lg border border-secondary bg-container p-3 space-y-2"
+            data-split-editor-target="part">
+    <legend class="sr-only"><%= t("splits.form.part_legend") %></legend>
+    <%= pf.hidden_field :id if part.id.present? %>
+
+    <div class="flex flex-col sm:flex-row gap-2">
+      <%= pf.text_field :name,
+            label: t("splits.form.name_label"),
+            placeholder: t("splits.form.name_placeholder"),
+            autocomplete: "off",
+            container_class: "flex-1 min-w-0" %>
+
+      <div class="flex gap-2 items-stretch">
+        <%= pf.number_field :amount,
+              label: t("splits.form.amount_label"),
+              step: step,
+              inputmode: "decimal",
+              placeholder: "0",
+              autocomplete: "off",
+              value: part.amount && format("%.#{precision}f", part.amount),
+              container_class: "w-36 sm:w-32",
+              data: { split_editor_target: "amount", action: "input->split-editor#recalculate" } %>
+
+        <%= render DS::Button.new(
+              text: t("splits.form.fill"),
+              variant: "outline",
+              size: "sm",
+              type: "button",
+              icon: "corner-down-left",
+              title: t("splits.form.fill_title"),
+              class: "self-center",
+              data: { action: "split-editor#fill", split_editor_fill: true }
+            ) %>
+
+        <%= render DS::Button.new(
+              variant: "ghost",
+              size: "sm",
+              type: "button",
+              icon: "x",
+              title: t("splits.form.remove"),
+              "aria-label": t("splits.form.remove"),
+              class: "self-center",
+              data: { action: "split-editor#remove", split_editor_remove: true }
+            ) %>
+      </div>
+    </div>
+
+    <%= render DS::CategorySelect.new(
+          form: pf,
+          categories: categories,
+          selected_id: part.category_id,
+          blank_label: t("splits.form.uncategorized"),
+          label: t("splits.form.category_label"),
+          classification: classification,
+          creatable: false
+        ) %>
+
+    <details class="group" <%= "open" if details_open %>>
+      <summary class="cursor-pointer select-none text-sm text-secondary hover:text-primary rounded-md inline-flex items-center gap-1 py-1 focus-visible:outline-2 focus-visible:outline-offset-2">
+        <%= icon "chevron-right", size: "sm", class: "group-open:rotate-90 transition-transform" %>
+        <%= t("splits.form.more_details") %>
+      </summary>
+
+      <div class="pt-2 space-y-2">
+        <%= render DS::MerchantSelect.new(
+              form: pf,
+              method: :merchant_id,
+              merchants: merchants,
+              selected_id: part.merchant_id,
+              include_blank: t("splits.form.no_merchant"),
+              label: t("splits.form.merchant_label")
+            ) %>
+
+        <%= render DS::TagSelect.new(
+              form: pf,
+              tags: tags,
+              selected_ids: Array(part.tag_ids),
+              label: t("splits.form.tags_label")
+            ) %>
+
+        <%= pf.text_field :notes,
+              label: t("splits.form.notes_label"),
+              autocomplete: "off" %>
+
+        <label class="flex items-start gap-2 text-sm text-primary py-1 cursor-pointer">
+          <%= pf.hidden_field :excluded, value: "0", id: nil %>
+          <%= pf.check_box :excluded, { class: "checkbox checkbox--light mt-0.5", checked: part.excluded }, "1", nil %>
+          <span>
+            <span class="block"><%= t("splits.form.excluded_label") %></span>
+            <span class="block text-secondary"><%= t("splits.form.excluded_hint") %></span>
+          </span>
+        </label>
+      </div>
+    </details>
+  </fieldset>
+<% end %>

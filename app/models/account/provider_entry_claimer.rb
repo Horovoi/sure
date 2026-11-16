@@ -11,7 +11,8 @@
 # (Entry::MANUAL_SOURCES, e.g. an idempotency key given through the assistant), so an
 # entry a provider already owns is never claimed again. They are not generated
 # subscription charges (the subscription reconciler owns those), not excluded, not
-# pending holds and carry no provider_claim marker. A row in another currency never
+# pending holds and carry no provider_claim marker. A split transaction is claimed as
+# its parent (the line the bank shows), never as one of its parts. A row in another currency never
 # matches. Each entry and each row is used once.
 #
 # Pending rows match too, so the entry a hold stands for is never handed to another
@@ -90,7 +91,11 @@ class Account::ProviderEntryClaimer
     def candidate_entries(dates)
       account.entries
         .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
-        .where(currency: account.currency, excluded: false)
+        .where(currency: account.currency)
+        # The bank's line of a split transaction is its parent (excluded only because it
+        # is split), never one of its parts
+        .where(parent_entry_id: nil)
+        .where("entries.excluded = false OR EXISTS (SELECT 1 FROM entries split_children WHERE split_children.parent_entry_id = entries.id)")
         .where("entries.external_id IS NULL OR entries.source IN (?)", Entry::MANUAL_SOURCES)
         .where(date: (dates.min - window)..(dates.max + window))
         .where("entries.source IS DISTINCT FROM ?", "subscription")

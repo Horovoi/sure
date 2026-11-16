@@ -15,7 +15,10 @@ class Account::ReconciliationIndicator
       manual_ids = Account.manual.where(id: accounts.map(&:id)).pluck(:id).to_set
       return {} if manual_ids.empty?
 
-      counts = Entry.where(account_id: manual_ids.to_a, entryable_type: "Transaction", excluded: false)
+      # A split transaction is one statement line: its parent counts (though excluded from
+      # the figures), its parts do not
+      counts = Entry.where(account_id: manual_ids.to_a, entryable_type: "Transaction", parent_entry_id: nil)
+        .where("entries.excluded = false OR EXISTS (SELECT 1 FROM entries split_children WHERE split_children.parent_entry_id = entries.id)")
         .group(:account_id, :reconciled_status)
         .count
 

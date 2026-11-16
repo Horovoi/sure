@@ -59,7 +59,36 @@ en:
       hint: Leave blank to use the market rate.
       label: Exchange rate, 1 %{from} in %{to}
       no_market_rate: No stored rate from %{from} to %{to}, so this amount is left out of the balance until you enter one.
+    split_panel:
+      parent_title:
+        one: Split into %{count} part
+        other: Split into %{count} parts
+      parent_description: Budgets and reports count the parts. The account balance moves
+        by the whole amount, as the bank booked it.
+      child_title: Part of a split transaction
+      child_description: Its amount and date are set in the split. Category, merchant,
+        tags, notes and exclusion are its own.
+      uncategorized: Uncategorized
+      excluded: Excluded
+      edit: Edit split
+      unsplit: Unsplit
+      unsplit_confirm_title: Unsplit this transaction?
+      unsplit_confirm_body: Its parts are deleted, with their categories, tags and notes.
+        The transaction counts as one again.
+    split_group:
+      label: Split
+      parts:
+        one: "%{count} part"
+        other: "%{count} parts"
     show:
+      split_title: Split transaction
+      split_description: Divide it into parts with their own categories, for a purchase
+        that covered several things.
+      split_button: Split
+      split_category_note: This transaction is split, so each part has its own category.
+      delete_split_confirm_title: Delete this split transaction?
+      delete_split_confirm_body: The transaction and all its parts are deleted. This
+        cannot be undone.
       category_set_on_outflow: This is the incoming side of a transfer. Its category belongs
         to the outgoing side and can only be changed there, so budgets count it once.
       transfer_matcher_button: Open matcher
@@ -124,6 +153,7 @@ en:
     settings: Settings
     tags_label: Tags
     transaction:
+      split_child_tooltip: Part of a split transaction
       pending: Pending
       pending_tooltip: Pending transaction — may change when posted
       activity_type_tooltip: Investment activity type

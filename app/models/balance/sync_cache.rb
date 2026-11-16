@@ -131,9 +131,11 @@ class Balance::SyncCache
     # future entry does not count before its date. Filtering them out (upstream) would
     # leave the stored balance for that date wrong until the next sync, since this fork
     # has no job that syncs an account on an entry's date.
+    # The parts of a split transaction are left out: its parent alone moves the balance
+    # (Entry::Splittable).
     def entries_scope
       scope = include_pending ? account.entries.excluding_released_holds : account.entries.excluding_pending
-      scope.order(:date)
+      scope.excluding_split_children.order(:date)
     end
 
     # The one place an entry's amount is converted. A foreign-currency transaction with a

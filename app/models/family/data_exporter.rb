@@ -68,8 +68,10 @@ class Family::DataExporter
       CSV.generate do |csv|
         csv << [ "date", "account_name", "amount", "name", "category", "tags", "notes", "currency" ]
 
-        # Only export transactions from accounts belonging to this family
+        # Only export transactions from accounts belonging to this family. A split
+        # transaction is written as its parts: its parent would count the money twice.
         @family.transactions
+          .merge(Entry.excluding_split_parents)
           .includes(:category, :tags, entry: :account)
           .find_each do |transaction|
             csv << [
@@ -211,6 +213,8 @@ class Family::DataExporter
             name: transaction.entry.name,
             notes: transaction.entry.notes,
             excluded: transaction.entry.excluded,
+            # A part of a split names its parent; the parent is excluded while it is split
+            parent_entry_id: transaction.entry.parent_entry_id,
             category_id: transaction.category_id,
             merchant_id: transaction.merchant_id,
             tag_ids: transaction.tag_ids,

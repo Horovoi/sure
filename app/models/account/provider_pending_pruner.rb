@@ -44,6 +44,8 @@ class Account::ProviderPendingPruner
 
     entry.notes.present? ||
       entry.import_id.present? ||
+      # A hold is never split (Entry::Splittable), but a split must never be deleted
+      entry.split_parent? ||
       extra["goal"].present? ||
       extra["provider_claim"].present? ||
       transaction.recurring_transaction_id.present? ||

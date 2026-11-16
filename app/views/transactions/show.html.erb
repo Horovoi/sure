@@ -4,6 +4,15 @@
   <% end %>
 
   <% dialog.with_body do %>
+    <%# Split transactions (Entry::Splittable): a split's amount, date, category and
+        exclusion are fixed by its parts, and a part's amount and date by its split %>
+    <% split_parent = @entry.split_parent?
+       split_child = @entry.split_child?
+       split_locked = split_parent || split_child %>
+    <% if split_locked %>
+      <div class="mb-3"><%= render "transactions/split_panel", entry: @entry %></div>
+    <% end %>
+
     <%# Potential duplicate alert %>
     <% if @entry.transaction.has_potential_duplicate? %>
       <% potential_match = @entry.transaction.potential_duplicate_entry %>
@@ -65,7 +74,7 @@
           <%= f.date_field :date,
                 label: t(".date_label"),
                 max: Date.current,
-                disabled: @entry.linked?,
+                disabled: @entry.linked? || split_child,
                 "data-auto-submit-form-target": "auto" %>
 
           <% unless @entry.transaction.transfer? %>
@@ -73,15 +82,15 @@
               <%= f.select :nature,
                     [[t("transactions.form.expense"), "outflow"], [t("transactions.form.income"), "inflow"]],
                     { container_class: "w-2/5 sm:w-1/3", label: t(".nature"), selected: @entry.amount.negative? ? "inflow" : "outflow" },
-                    { data: { "auto-submit-form-target": "auto" }, disabled: @entry.linked? } %>
+                    { data: { "auto-submit-form-target": "auto" }, disabled: @entry.linked? || split_locked } %>
 
               <%= f.money_field :amount, label: t(".amount"),
                     container_class: "w-3/5 sm:w-2/3",
                     auto_submit: true,
                     min: 0,
                     value: @entry.amount.abs,
-                    disabled: @entry.linked?,
-                    disable_currency: @entry.linked? %>
+                    disabled: @entry.linked? || split_locked,
+                    disable_currency: @entry.linked? || split_locked %>
             </div>
 
             <%# w2-transfers custom-exchange-rate %>
@@ -91,7 +100,9 @@
           <%# w2-transfers transfer-form-fixes: the category follows who owns it (Transaction#category_editable?),
               so the outflow leg of a loan payment or an investment contribution takes one, and the
               inflow leg shows the outflow's category read-only %>
-          <% if @entry.transaction.category_editable? %>
+          <% if split_parent %>
+            <p class="text-xs text-secondary px-1"><%= t(".split_category_note") %></p>
+          <% elsif @entry.transaction.category_editable? %>
             <%= f.fields_for :entryable do |ef| %>
               <% category_classification = @entry.amount.negative? ? "income" : "expense" %>
               <%= render DS::CategorySelect.new(
@@ -187,7 +198,7 @@
     <% end %>
 
     <% dialog.with_section(title: t(".settings")) do %>
-      <div class="pb-4">
+      <div class="pb-4 <%= "hidden" if split_parent %>">
         <%= styled_form_with model: @entry,
               url: transaction_path(@entry),
               class: "p-3",
@@ -231,9 +242,10 @@
       <% end %>
 
       <div class="pb-4">
+        <%# A split's parts are one-time or not each on their own %>
         <%= styled_form_with model: @entry,
               url: transaction_path(@entry),
-              class: "p-3",
+              class: class_names("p-3", hidden: split_parent),
               data: { controller: "auto-submit-form" } do |f| %>
           <%= f.fields_for :entryable do |ef| %>
             <div class="flex cursor-pointer items-center gap-4 justify-between">
@@ -250,6 +262,24 @@
           <% end %>
         <% end %>
 
+        <% if @entry.splittable? %>
+          <div class="flex items-center justify-between gap-4 p-3">
+            <div class="text-sm space-y-1">
+              <h4 class="text-primary"><%= t(".split_title") %></h4>
+              <p class="text-secondary"><%= t(".split_description") %></p>
+            </div>
+
+            <%= render DS::Link.new(
+              text: t(".split_button"),
+              icon: "split",
+              variant: "outline",
+              href: new_transaction_split_path(@entry),
+              frame: :modal
+            ) %>
+          </div>
+        <% end %>
+
+        <% unless split_locked %>
         <div class="flex items-center justify-between gap-4 p-3">
           <div class="text-sm space-y-1">
             <h4 class="text-primary"><%= t(".transfer_matcher_title") %></h4>
@@ -264,9 +294,10 @@
             frame: :modal
           ) %>
         </div>
+        <% end %>
 
         <!-- Convert to Trade (Investment Accounts Only, not already converted) -->
-        <% if @entry.account.investment? && @entry.entryable.is_a?(Transaction) && !@entry.excluded? %>
+        <% if @entry.account.investment? && @entry.entryable.is_a?(Transaction) && !@entry.excluded? && !split_locked %>
           <div class="flex items-center justify-between gap-2 p-3">
             <div class="text-sm space-y-1">
               <h4 class="text-primary"><%= t(".convert_to_trade_title") %></h4>
@@ -284,9 +315,10 @@
           </div>
         <% end %>
 
-        <%= render "transactions/mark_recurring", transaction: @entry.transaction %>
+        <%= render "transactions/mark_recurring", transaction: @entry.transaction unless split_child %>
 
-        <!-- Delete Transaction Form -->
+        <!-- Delete Transaction Form: a part of a split goes through its split -->
+        <% unless split_child %>
         <div class="flex items-center justify-between gap-2 p-3">
           <div class="text-sm space-y-1">
             <h4 class="text-primary"><%= t(".delete_title") %></h4>
@@ -298,10 +330,11 @@
             variant: "outline-destructive",
             href: entry_path(@entry),
             method: :delete,
-            confirm: CustomConfirm.for_resource_deletion("transaction"),
+            confirm: split_parent ? CustomConfirm.new(title: t(".delete_split_confirm_title"), body: t(".delete_split_confirm_body"), btn_text: t(".delete"), destructive: true) : CustomConfirm.for_resource_deletion("transaction"),
             frame: "_top"
           ) %>
         </div>
+        <% end %>
       </div>
     <% end %>
   <% end %>
