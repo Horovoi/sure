@@ -4,8 +4,12 @@
   <% balance_sheet.classification_groups.each do |classification_group| %>
     <%# @container: the weight column gives way when the dashboard column is narrow
         (both side panels open), so the value column stays in view %>
-    <div class="space-y-4 px-4 @container">
-      <div class="flex items-center gap-2">
+    <div class="space-y-4 px-4 @container"
+         data-controller="disclosure-group"
+         data-disclosure-group-storage-key-value="sure.balanceSheetGroups.open"
+         data-disclosure-group-expand-label-value="<%= t("shared.expand_all_toggle.expand_all") %>"
+         data-disclosure-group-collapse-label-value="<%= t("shared.expand_all_toggle.collapse_all") %>">
+      <div class="flex items-center justify-between gap-2">
         <h2 class="text-lg font-medium inline-flex items-center gap-1.5">
           <span class="<%= "animate-pulse" if classification_group.syncing? %>">
             <%= classification_group.name %>
@@ -16,6 +20,10 @@
             <span class="text-secondary font-medium text-lg privacy-sensitive"><%= classification_group.total_money.format(precision: 0) %></span>
           <% end %>
         </h2>
+
+        <% if classification_group.account_groups.any? %>
+          <%= render "shared/expand_all_toggle" %>
+        <% end %>
       </div>
 
       <% if classification_group.account_groups.any? %>
@@ -38,7 +46,7 @@
         </div>
 
         <div class="bg-container-inset rounded-xl p-1 space-y-1 overflow-x-auto">
-          <div class="px-4 py-2 flex items-center uppercase text-xs font-medium text-secondary">
+          <div class="px-4 py-2 flex items-center text-xs font-medium text-secondary">
             <div class="w-40"><%= t("pages.dashboard.balance_sheet.name") %></div>
             <div class="ml-auto text-right flex items-center gap-6">
               <div class="w-24 hidden @lg:block">
@@ -52,7 +60,7 @@
 
           <div class="rounded-lg bg-container font-medium text-sm min-w-fit">
             <% classification_group.account_groups.each_with_index do |account_group, idx| %>
-              <details class="group open:bg-container
+              <details data-disclosure-group-key="<%= account_group.key %>" class="group open:bg-container
                 <%= idx == 0 ? "rounded-t-lg" : "" %>
                 <%= idx == classification_group.account_groups.size - 1 ? "rounded-b-lg" : "" %>
               ">

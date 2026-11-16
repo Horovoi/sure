@@ -1,0 +1,12 @@
+<%# The button of a disclosure-group controller: expands every group, or collapses them
+    all when every one is open. Its label, aria-expanded and icon follow the groups. %>
+<button type="button"
+        class="shrink-0 inline-flex items-center justify-center rounded-lg p-2 text-secondary hover:text-primary hover:bg-surface-hover focus-ring"
+        aria-expanded="false"
+        aria-label="<%= t("shared.expand_all_toggle.expand_all") %>"
+        title="<%= t("shared.expand_all_toggle.expand_all") %>"
+        data-disclosure-group-target="toggle"
+        data-action="disclosure-group#toggleAll">
+  <span data-disclosure-group-target="expandIcon"><%= icon("chevrons-up-down", size: "sm", color: "current") %></span>
+  <span data-disclosure-group-target="collapseIcon" hidden><%= icon("chevrons-down-up", size: "sm", color: "current") %></span>
+</button>

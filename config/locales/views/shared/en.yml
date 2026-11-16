@@ -1,6 +1,9 @@
 ---
 en:
   shared:
+    expand_all_toggle:
+      expand_all: Expand all groups
+      collapse_all: Collapse all groups
     confirm_modal:
       accept: Confirm
       body_html: "<p>You will not be able to undo this decision</p>"

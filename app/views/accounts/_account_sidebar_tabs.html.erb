@@ -28,7 +28,12 @@
     <% end %>
 
     <% tabs.with_panel(tab_id: "asset") do %>
-      <div class="space-y-2">
+      <div class="space-y-2"
+           data-controller="disclosure-group"
+           data-disclosure-group-storage-key-value="sure.accountGroups.open"
+           data-disclosure-group-expand-label-value="<%= t("shared.expand_all_toggle.expand_all") %>"
+           data-disclosure-group-collapse-label-value="<%= t("shared.expand_all_toggle.collapse_all") %>">
+        <div class="flex items-center gap-1">
         <%= render DS::Link.new(
           text: t("accounts.sidebar.new_asset"),
           variant: "ghost",
@@ -36,8 +41,10 @@
           icon: "plus",
           frame: :modal,
           full_width: true,
-          class: "justify-start"
+          class: "justify-start min-w-0 flex-1"
         ) %>
+          <%= render "shared/expand_all_toggle" %>
+        </div>
 
         <div>
           <% family.balance_sheet.assets.account_groups.each do |group| %>
@@ -48,7 +55,12 @@
     <% end %>
 
     <% tabs.with_panel(tab_id: "liability") do %>
-      <div class="space-y-2">
+      <div class="space-y-2"
+           data-controller="disclosure-group"
+           data-disclosure-group-storage-key-value="sure.accountGroups.open"
+           data-disclosure-group-expand-label-value="<%= t("shared.expand_all_toggle.expand_all") %>"
+           data-disclosure-group-collapse-label-value="<%= t("shared.expand_all_toggle.collapse_all") %>">
+        <div class="flex items-center gap-1">
         <%= render DS::Link.new(
             text: t("accounts.sidebar.new_debt"),
             variant: "ghost",
@@ -56,8 +68,10 @@
             icon: "plus",
             frame: :modal,
             full_width: true,
-            class: "justify-start"
+            class: "justify-start min-w-0 flex-1"
           ) %>
+          <%= render "shared/expand_all_toggle" %>
+        </div>
 
         <div>
           <% family.balance_sheet.liabilities.account_groups.each do |group| %>
@@ -68,7 +82,12 @@
     <% end %>
 
     <% tabs.with_panel(tab_id: "all") do %>
-      <div class="space-y-2">
+      <div class="space-y-2"
+           data-controller="disclosure-group"
+           data-disclosure-group-storage-key-value="sure.accountGroups.open"
+           data-disclosure-group-expand-label-value="<%= t("shared.expand_all_toggle.expand_all") %>"
+           data-disclosure-group-collapse-label-value="<%= t("shared.expand_all_toggle.collapse_all") %>">
+        <div class="flex items-center gap-1">
         <%= render DS::Link.new(
             text: t("accounts.sidebar.new_account"),
             variant: "ghost",
@@ -76,8 +95,10 @@
             href: new_account_path(step: "method_select"),
             icon: "plus",
             frame: :modal,
-            class: "justify-start"
+            class: "justify-start min-w-0 flex-1"
           ) %>
+          <%= render "shared/expand_all_toggle" %>
+        </div>
 
         <div>
           <% family.balance_sheet.account_groups.each do |group| %>
