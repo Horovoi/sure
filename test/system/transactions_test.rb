@@ -327,6 +327,7 @@ class TransactionsTest < ApplicationSystemTestCase
     generated.transaction.flag_potential_duplicate!(posted_entry: real, reason: "subscription_charge", posted_amount: real.amount)
 
     visit transactions_url(per_page: @page_size)
+    record_notifications
 
     within "#" + dom_id(generated) do
       assert_selector "[data-testid='subscription-match-badge']", text: I18n.t("transactions.subscription_match_badge.label")
@@ -336,8 +337,8 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_text I18n.t("transactions.subscription_match.potential_duplicate_title")
     click_button I18n.t("transactions.show.merge_duplicate")
 
-    assert_text I18n.t("transactions.merge_duplicate.success")
     assert_no_selector "#" + dom_id(generated)
+    assert_notification I18n.t("transactions.merge_duplicate.success")
     assert_equal recurring.id, real.reload.transaction.recurring_transaction_id
 
     within "#" + dom_id(real) do
@@ -349,7 +350,8 @@ class TransactionsTest < ApplicationSystemTestCase
       click_button I18n.t("transactions.replaced_subscription_charge.restore")
     end
 
-    assert_text I18n.t("transactions.restore_subscription_charge.success")
+    # The notice arrives with the page after the restore, so the charge is back by then
+    assert_notification I18n.t("transactions.restore_subscription_charge.success")
     restored = account.entries.find_by!(source: "subscription", name: "Streaming club")
     assert_selector "#" + dom_id(restored)
     assert_nil real.reload.transaction.recurring_transaction_id
@@ -364,6 +366,25 @@ class TransactionsTest < ApplicationSystemTestCase
   end
 
   private
+    # A flash notice removes itself about 3s after it shows, which a busy
+    # machine can miss between two checks. Turbo keeps the window across the
+    # redirect, so an observer records every notice the tray receives.
+    def record_notifications
+      page.execute_script(<<~JS)
+        window.receivedNotifications = [];
+        new MutationObserver(() => {
+          document.querySelectorAll("#notification-tray p").forEach((p) => {
+            if (!window.receivedNotifications.includes(p.textContent)) window.receivedNotifications.push(p.textContent);
+          });
+        }).observe(document.documentElement, { childList: true, subtree: true });
+      JS
+    end
+
+    def assert_notification(text)
+      assert page.document.synchronize { evaluate_script("window.receivedNotifications").include?(text) || raise(Capybara::ExpectationNotMet) }
+    rescue Capybara::ExpectationNotMet
+      flunk "expected the notification #{text.inspect}, got #{evaluate_script("window.receivedNotifications").inspect}"
+    end
 
     def create_transaction(name, date, amount, category: nil, merchant: nil, tags: [], account: nil)
       account ||= accounts(:depository)
