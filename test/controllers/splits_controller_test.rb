@@ -99,6 +99,23 @@ class SplitsControllerTest < ActionDispatch::IntegrationTest
     assert_not @entry.excluded?
   end
 
+  test "saving goes back to the page the editor was opened over, never to the editor itself" do
+    first, second = @entry.split!([ { name: "A", amount: 60 }, { name: "B", amount: 40 } ])
+    parts = { "0" => { id: first.id, name: "A", amount: "50" }, "1" => { id: second.id, name: "B", amount: "50" } }
+
+    # Opened at its own URL, from a part
+    patch transaction_split_path(second), params: { split: { parts: parts } }, headers: { "Referer" => edit_transaction_split_url(second) }
+    assert_redirected_to transactions_path
+
+    patch transaction_split_path(@entry), params: { split: { parts: parts } }, headers: { "Referer" => edit_transaction_split_url(@entry) }
+    assert_redirected_to transactions_path
+
+    # Opened from the list, in the drawer
+    list = transactions_url(q: { search: "Supermarket" })
+    patch transaction_split_path(@entry), params: { split: { parts: parts } }, headers: { "Referer" => list }
+    assert_redirected_to list
+  end
+
   test "the drawer of a split and of a part" do
     child = @entry.split!([ { name: "A", amount: 60 }, { name: "B", amount: 40 } ]).first
 

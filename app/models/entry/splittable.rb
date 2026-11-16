@@ -123,9 +123,11 @@ module Entry::Splittable
 
       children = parts.map { |part| create_split_child!(part) }
 
+      # Excluded is enough to keep a provider sync off the parent while it is split
+      # (Entry#protected_from_sync?); user_modified is left as it was, so an unsplit
+      # gives back the entry as the bank sent it
       self.split_writing = true
       update!(excluded: true)
-      mark_user_modified!
       children
     ensure
       self.split_writing = false
@@ -171,6 +173,14 @@ module Entry::Splittable
     ensure
       self.split_writing = false
     end
+  end
+
+  # The decimals a part may have: the currency's, or the transaction's own when it has
+  # more (a converted amount; at most the 4 entries.amount keeps). The split editor
+  # takes the same.
+  def split_precision
+    decimals = amount.abs.to_s("F").split(".").last.to_s.sub(/0+\z/, "").length
+    [ Money::Currency.new(currency).default_precision, decimals ].max.clamp(0, 4)
   end
 
   # The children's total, signed like Entry#amount
@@ -223,9 +233,18 @@ module Entry::Splittable
     def validate_split_parts!(parts)
       split_failure!(:too_few_parts) if parts.size < 2
       split_failure!(:too_many_parts) if parts.size > MAX_PARTS
-      # entries.amount keeps 4 decimals: a finer part would be rounded on save and the
-      # parts would no longer add up
-      split_failure!(:invalid_amount) if parts.any? { |part| part[:amount].nil? || part[:amount].zero? || part[:amount].round(4) != part[:amount] }
+      split_failure!(:invalid_amount) if parts.any? { |part| part[:amount].nil? || part[:amount].zero? }
+      # A part has no more decimals than the currency, or than the transaction itself
+      # when it has more (a converted amount): finer parts would show as 0.00
+      precision = split_precision
+      if parts.any? { |part| part[:amount].round(precision) != part[:amount] }
+        split_failure!(:too_many_decimals, count: precision)
+      end
+      # Every part is at least one minor unit of the currency (0.01 ₴)
+      minimum = BigDecimal(1) / 10**Money::Currency.new(currency).default_precision
+      if parts.any? { |part| part[:amount].abs < minimum }
+        split_failure!(:part_below_minimum, minimum: Money.new(minimum, currency).format)
+      end
 
       total = parts.sum { |part| part[:amount] }
       return if total == amount

@@ -2,6 +2,10 @@
 # app/assets/tailwind/sure-design-system/component-utils.css where a raw
 # palette pair would otherwise repeat here.
 class DS::Buttonish < DesignSystemComponent
+  # The variants without a fill of their own have no disabled colour to switch to, so a
+  # disabled one is dimmed and loses its hover, or it looks clickable and does nothing
+  QUIET_DISABLED = "disabled:opacity-50 disabled:hover:bg-transparent"
+
   VARIANTS = {
     primary: {
       container_classes: "text-inverse bg-inverse hover:bg-inverse-hover disabled:bg-gray-500 theme-dark:disabled:bg-gray-400",
@@ -23,26 +27,26 @@ class DS::Buttonish < DesignSystemComponent
       icon_classes: "text-inverse"
     },
     outline: {
-      container_classes: "text-primary border border-secondary bg-transparent hover:bg-surface-hover",
+      container_classes: "text-primary border border-secondary bg-transparent hover:bg-surface-hover #{QUIET_DISABLED}",
       icon_classes: "text-secondary"
     },
     # A quieter outline for "there is nothing here yet" affordances, which should sit
     # behind the content they sit beside rather than compete with it. Pair with
     # `border-dashed` for the empty-slot cue the split editor uses.
     outline_muted: {
-      container_classes: "text-secondary hover:text-primary border border-secondary hover:border-primary bg-transparent",
+      container_classes: "text-secondary hover:text-primary border border-secondary hover:border-primary bg-transparent #{QUIET_DISABLED}",
       icon_classes: "text-secondary"
     },
     outline_destructive: {
-      container_classes: "text-destructive border border-secondary bg-transparent hover:bg-container-inset-hover",
+      container_classes: "text-destructive border border-secondary bg-transparent hover:bg-container-inset-hover #{QUIET_DISABLED}",
       icon_classes: "text-secondary"
     },
     ghost: {
-      container_classes: "text-primary bg-transparent hover:bg-container-inset-hover",
+      container_classes: "text-primary bg-transparent hover:bg-container-inset-hover #{QUIET_DISABLED}",
       icon_classes: "text-secondary"
     },
     icon: {
-      container_classes: "hover:bg-container-inset-hover",
+      container_classes: "hover:bg-container-inset-hover #{QUIET_DISABLED}",
       icon_classes: "text-secondary"
     },
     icon_inverse: {

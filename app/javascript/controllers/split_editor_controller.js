@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import { formatMoney } from "utils/format_money";
 
 // The split editor (splits/_form): parts that must add up to the transaction's total.
 // Amounts are counted in minor units (cents) so 0.1 + 0.2 is never 0.30000000000000004.
@@ -9,6 +10,7 @@ export default class extends Controller {
     total: Number, // the transaction's amount in minor units, always positive
     precision: Number,
     currency: String,
+    moneyFormat: Object, // Money#format_options of the currency: unit, delimiter, separator, format
     nextIndex: Number,
     balancedText: String,
     leftText: String,
@@ -125,17 +127,9 @@ export default class extends Controller {
     return (minor / 10 ** this.precisionValue).toFixed(this.precisionValue);
   }
 
+  // The same format as the server's money, so "2,633.00 ₴ left to assign" reads like
+  // the error the server gives for the same split
   money(minor) {
-    const amount = minor / 10 ** this.precisionValue;
-    try {
-      return new Intl.NumberFormat(document.documentElement.lang || "en", {
-        style: "currency",
-        currency: this.currencyValue,
-        minimumFractionDigits: this.precisionValue,
-        maximumFractionDigits: this.precisionValue,
-      }).format(amount);
-    } catch {
-      return `${this.format(minor)} ${this.currencyValue}`;
-    }
+    return formatMoney(minor / 10 ** this.precisionValue, this.precisionValue, this.moneyFormatValue);
   }
 }

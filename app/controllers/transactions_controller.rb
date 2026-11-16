@@ -165,6 +165,8 @@ class TransactionsController < ApplicationController
             ),
             # A part of a split is listed inside its split's group
             turbo_stream.replace(dom_id(@entry), partial: "entries/entry", locals: { entry: @entry, in_split_group: @entry.split_child? }),
+            # Exclude and One-time change whether the drawer offers a split
+            turbo_stream.replace(dom_id(@entry, :split_action), partial: "transactions/split_action", locals: { entry: @entry }),
             *flash_notification_stream_items
           ]
         end

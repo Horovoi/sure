@@ -262,22 +262,7 @@
           <% end %>
         <% end %>
 
-        <% if @entry.splittable? %>
-          <div class="flex items-center justify-between gap-4 p-3">
-            <div class="text-sm space-y-1">
-              <h4 class="text-primary"><%= t(".split_title") %></h4>
-              <p class="text-secondary"><%= t(".split_description") %></p>
-            </div>
-
-            <%= render DS::Link.new(
-              text: t(".split_button"),
-              icon: "split",
-              variant: "outline",
-              href: new_transaction_split_path(@entry),
-              frame: :modal
-            ) %>
-          </div>
-        <% end %>
+        <%= render "transactions/split_action", entry: @entry %>
 
         <% unless split_locked %>
         <div class="flex items-center justify-between gap-4 p-3">

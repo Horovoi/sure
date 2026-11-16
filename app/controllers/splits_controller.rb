@@ -74,9 +74,15 @@ class SplitsController < ApplicationController
     def finish(notice)
       @entry.sync_account_later
 
+      # Back to the page the editor was opened over; from the editor's own URL (opened
+      # on its own, not from the drawer) to the transactions list instead of the editor
+      editor_paths = [ @entry.id, params[:transaction_id] ].uniq.flat_map do |id|
+        [ new_transaction_split_path(id), edit_transaction_split_path(id) ]
+      end
+      target = referer_unless(*editor_paths) || transactions_path
       respond_to do |format|
-        format.html { redirect_back_or_to transactions_path, notice: notice }
-        format.turbo_stream { stream_redirect_back_or_to(transactions_path, notice: notice) }
+        format.html { redirect_to target, notice: notice }
+        format.turbo_stream { stream_redirect_to(target, notice: notice) }
       end
     end
 

@@ -20,6 +20,14 @@ class SplitTransactionsTest < ApplicationSystemTestCase
       assert_button "Split", disabled: true
       assert_text "Every part needs an amount other than 0"
 
+      # With two parts neither can be removed, and the buttons look it
+      remove_buttons = all("button[aria-label='Remove part']")
+      assert_equal 2, remove_buttons.size
+      remove_buttons.each do |button|
+        assert button.disabled?
+        assert_equal "0.5", button.native.css_value("opacity")
+      end
+
       find("input[name='split[parts][0][amount]']").fill_in(with: "50")
       assert_text "$30.00 left to assign"
 

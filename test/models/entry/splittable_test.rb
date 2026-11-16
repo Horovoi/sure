@@ -20,7 +20,7 @@ class Entry::SplittableTest < ActiveSupport::TestCase
     @entry.reload
     assert @entry.split_parent?
     assert @entry.excluded?
-    assert @entry.user_modified?
+    assert @entry.protected_from_sync?, "a provider sync leaves the split parent alone"
     assert_equal 2, @entry.child_entries.count
     assert_equal 100, @entry.split_total
 
@@ -147,6 +147,23 @@ class Entry::SplittableTest < ActiveSupport::TestCase
     end
   end
 
+  test "a part finer than the currency, or below its minor unit, is refused" do
+    uah = create_transaction(account: @account, name: "Big buy", amount: 6633, currency: "UAH")
+
+    error = assert_raises(ActiveRecord::RecordInvalid) { uah.split!([ { amount: "6632.999" }, { amount: "0.001" } ]) }
+    assert_match "at most 2 decimals", error.message
+    assert_not uah.reload.split_parent?
+
+    # A converted charge stored with 4 decimals takes parts with 4, but none under 0.01
+    icloud = create_transaction(account: @account, name: "iCloud", amount: BigDecimal("135.7009"))
+    assert_equal 4, icloud.split_precision
+    error = assert_raises(ActiveRecord::RecordInvalid) { icloud.split!([ { amount: "135.7008" }, { amount: "0.0001" } ]) }
+    assert_match "at least", error.message
+
+    icloud.split!([ { amount: "100.7009" }, { amount: "35" } ])
+    assert icloud.reload.split_parent?
+  end
+
   test "unsplit removes the parts and puts the parent back" do
     @entry.split!([ { amount: 70 }, { amount: 30 } ])
     @entry.reload.unsplit!
@@ -156,6 +173,18 @@ class Entry::SplittableTest < ActiveSupport::TestCase
     assert_not @entry.excluded?
     assert @entry.splittable?
     assert_raises(Entry::Splittable::NotSplittable) { @entry.unsplit! }
+  end
+
+  test "split then unsplit gives back the entry as it was, not marked as edited" do
+    @entry.update_columns(user_modified: false)
+
+    @entry.split!([ { amount: 70 }, { amount: 30 } ])
+    @entry.reload.unsplit!
+
+    @entry.reload
+    assert_not @entry.user_modified?
+    assert_not @entry.excluded?
+    assert_not @entry.protected_from_sync?
   end
 
   test "scopes keep balance rows and list rows apart" do

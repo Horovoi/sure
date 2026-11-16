@@ -39,7 +39,9 @@ module EntryableResource
 
     @entry.sync_account_later
 
-    redirect_back_or_to account_path(account), notice: t("entries.destroy.success")
+    # Back to where the user was, unless that was this entry's own page, which is gone
+    redirect_to referer_unless(url_for(action: :show, id: @entry.id, only_path: true)) || account_path(account),
+                notice: t("entries.destroy.success")
   end
 
   private

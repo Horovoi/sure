@@ -277,6 +277,14 @@ en:
       success: Transaction created
     update:
       success: Transaction updated
+    bulk_deletions:
+      create:
+        deleted:
+          one: 1 transaction deleted
+          other: "%{count} transactions deleted"
+        kept:
+          one: "1 kept: %{reasons}"
+          other: "%{count} kept: %{reasons}"
     bulk_updates:
       new:
         cancel: Cancel

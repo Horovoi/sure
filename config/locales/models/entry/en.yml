@@ -16,6 +16,10 @@ en:
               split_too_few_parts: A split needs at least two parts
               split_too_many_parts: A split can have at most 20 parts
               split_invalid_amount: Every part needs an amount other than 0
+              split_too_many_decimals:
+                one: An amount of a part can have at most 1 decimal
+                other: An amount of a part can have at most %{count} decimals
+              split_part_below_minimum: Every part needs at least %{minimum}
               split_sum_mismatch: The parts add up to %{actual}, not to the transaction's
                 %{expected}
               split_child_locked: The amount and date of a part are changed in the split

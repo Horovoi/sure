@@ -766,6 +766,39 @@ end
     assert_not_nil category.reload.last_used_at
   end
 
+  test "excluding a transaction from the drawer takes the Split row away, and including it brings it back" do
+    entry = create_transaction(account: accounts(:depository), name: "Silpo", amount: 120)
+
+    patch transaction_url(entry), params: { entry: { excluded: "1" } }, as: :turbo_stream
+    assert_response :success
+    assert_select "turbo-stream[action=replace][target=?] template", ActionView::RecordIdentifier.dom_id(entry, :split_action) do
+      assert_select "a[href=?]", new_transaction_split_path(entry), count: 0
+    end
+
+    patch transaction_url(entry), params: { entry: { excluded: "0" } }, as: :turbo_stream
+    assert_select "turbo-stream[action=replace][target=?] template", ActionView::RecordIdentifier.dom_id(entry, :split_action) do
+      assert_select "a[href=?]", new_transaction_split_path(entry)
+    end
+  end
+
+  test "deleting a transaction from its own page goes to the account, not to the deleted page" do
+    entry = create_transaction(account: accounts(:depository), name: "Deep link", amount: 1)
+
+    delete transaction_url(entry), headers: { "Referer" => transaction_url(entry) }
+
+    assert_redirected_to account_path(accounts(:depository))
+    assert_equal I18n.t("entries.destroy.success"), flash[:notice]
+    assert_not Entry.exists?(entry.id)
+  end
+
+  test "deleting a transaction from the list goes back to the list" do
+    entry = create_transaction(account: accounts(:depository), name: "From list", amount: 1)
+
+    delete transaction_url(entry), headers: { "Referer" => transactions_url }
+
+    assert_redirected_to transactions_url
+  end
+
   test "update_tags replaces the tag set and answers JSON" do
     entry = entries(:transaction)
     tag = @user.family.tags.first
