@@ -4,16 +4,18 @@
     this partial by its id, so the next insight moves up into the freed slot. %>
 <div id="insights-feed" class="px-4">
   <div class="bg-container-inset rounded-xl p-1 space-y-1">
-    <div class="px-4 py-2 flex items-center justify-between uppercase text-xs font-medium text-secondary">
+    <%# The link is the widgets' one "view all" affordance: ghost sm, the arrow after the text %>
+    <div class="pl-4 pr-0.5 py-0.5 min-h-8 flex items-center justify-between gap-2 text-xs font-medium text-secondary">
       <p><%= t("insights.feed.header") %></p>
 
       <% if total_count > insights.size %>
         <%= render DS::Link.new(
               text: t("insights.feed.view_all", count: total_count),
               href: insights_path,
+              icon: "arrow-right",
+              icon_position: :right,
               variant: "ghost",
-              size: "sm",
-              class: "normal-case"
+              size: "sm"
             ) %>
       <% end %>
     </div>

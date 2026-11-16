@@ -1,6 +1,7 @@
 <% content_for :page_header do %>
-  <div class="space-y-1 mb-6 flex gap-4 justify-between items-center lg:items-start">
-    <div class="space-y-1">
+  <div class="mb-6 flex flex-wrap gap-x-4 gap-y-2 justify-between items-center lg:items-start">
+    <%# The title gives way first (its subtitle wraps), so the actions keep their row %>
+    <div class="min-w-0 flex-1 basis-48 space-y-1">
       <h1 class="text-xl lg:text-3xl font-medium text-primary">
         <%= t("pages.dashboard.welcome", name: Current.user.first_name) %>
       </h1>
@@ -37,13 +38,15 @@
         class: "hidden lg:inline-flex"
       ) %>
 
+      <%# The phone's + shares the md square and corner of the Customize button beside it %>
       <%= render DS::Link.new(
-          variant: "icon-inverse",
-          icon: "plus",
-          href: new_account_path,
-          frame: :modal,
-          class: "rounded-full lg:hidden"
-        ) %>
+        variant: "icon-inverse",
+        icon: "plus",
+        href: new_account_path,
+        frame: :modal,
+        aria: { label: t("pages.dashboard.new") },
+        class: "lg:hidden"
+      ) %>
     </div>
   </div>
 <% end %>
@@ -101,7 +104,7 @@
   <% if @has_accounts %>
     <% @dashboard_sections.each do |section| %>
       <section
-        class="bg-container rounded-xl shadow-border-xs transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+        class="bg-container rounded-xl shadow-border-xs transition-all group focus-ring"
         data-dashboard-sortable-target="section"
         data-section-key="<%= section[:key] %>"
         <%= "autofocus" if @just_shown_section == section[:key] %>
@@ -119,20 +122,23 @@
           keydown->dashboard-sortable#handleKeyDown">
         <div class="px-4 py-2 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="text-secondary hover:text-primary transition-colors p-0.5"
-              data-action="click->dashboard-section#toggle keydown->dashboard-section#handleToggleKeydown"
-              data-dashboard-section-target="button"
-              aria-label="<%= t("pages.dashboard.toggle_section") %>"
-              aria-expanded="<%= !Current.user.dashboard_section_collapsed?(section[:key]) %>">
-              <%= icon("chevron-down", size: "sm", class: "transition-transform", data: { dashboard_section_target: "chevron" }) %>
-            </button>
+            <%# The button is also the chevron the controller turns: a square turns in place %>
+            <%= render DS::Button.new(
+              variant: :icon,
+              size: :sm,
+              icon: "chevron-down",
+              class: "motion-safe:transition-transform",
+              aria: { label: t("pages.dashboard.toggle_section"), expanded: !Current.user.dashboard_section_collapsed?(section[:key]) },
+              data: {
+                action: "click->dashboard-section#toggle keydown->dashboard-section#handleToggleKeydown",
+                dashboard_section_target: "button chevron"
+              }
+            ) %>
             <h2 class="text-base font-medium">
               <%= t(section[:title]) %>
             </h2>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-2">
             <% if @customizing_dashboard %>
               <% hide_label = t("pages.dashboard.customize.hide", title: t(section[:title])) %>
               <%= render DS::Button.new(
@@ -146,18 +152,22 @@
                 title: hide_label
               ) %>
             <% end %>
-            <button
-              type="button"
-              class="cursor-grab active:cursor-grabbing text-secondary hover:text-primary transition-colors p-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
-              data-dashboard-sortable-target="handle"
-              data-action="
-                touchstart->dashboard-sortable#touchStart
-                touchmove->dashboard-sortable#touchMove
-                touchend->dashboard-sortable#touchEnd
-                touchcancel->dashboard-sortable#touchCancel"
-              aria-label="<%= t("pages.dashboard.drag_to_reorder") %>">
-              <%= icon("grip-vertical", size: "sm") %>
-            </button>
+            <%# Shown on hover, on keyboard focus anywhere in the section and on touch
+                screens; always while customizing %>
+            <%= render DS::Button.new(
+              variant: :icon,
+              size: :sm,
+              icon: "grip-vertical",
+              class: class_names(
+                "cursor-grab active:cursor-grabbing",
+                "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100" => !@customizing_dashboard
+              ),
+              aria: { label: t("pages.dashboard.drag_to_reorder") },
+              data: {
+                dashboard_sortable_target: "handle",
+                action: "touchstart->dashboard-sortable#touchStart touchmove->dashboard-sortable#touchMove touchend->dashboard-sortable#touchEnd touchcancel->dashboard-sortable#touchCancel"
+              }
+            ) %>
           </div>
         </div>
         <div class="py-4" data-dashboard-section-target="content">

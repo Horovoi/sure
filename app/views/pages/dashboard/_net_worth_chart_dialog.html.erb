@@ -2,17 +2,13 @@
 
 <% series = balance_sheet.net_worth_series(period: period) %>
 
+<%# The chart takes the height the dialog leaves: the viewport less the header and padding %>
 <%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "net_worth_fullscreen_dialog", disable_frame: true) do |d| %>
-  <%# Build a friendly period label: named period_text %>
-  <% period_text = period.key.present? ? period.label : t(".date_range", start: l(period.start_date, format: "%b %d, %Y"), end: l(period.end_date, format: "%b %d, %Y")) %>
-  <% d.with_header title: t(".title"), meta: period_text, meta_id: "netWorthFullscreenPeriod" do %>
-    <div class="flex items-center">
-      <p class="text-xs sm:text-sm text-secondary"><%= t(".expanded_view") %></p>
-    </div>
-  <% end %>
+  <% period_text = period.key.present? ? period.label : t(".date_range", start: l(period.start_date, format: "%b %-d, %Y"), end: l(period.end_date, format: "%b %-d, %Y")) %>
+  <% d.with_header title: t(".title"), meta: period_text, meta_id: "netWorthFullscreenPeriod" %>
   <% d.with_body do %>
     <div class="pb-4 -mx-2 sm:-mx-1">
-      <div class="w-full max-w-[1400px] h-[70svh] mx-auto">
+      <div class="w-full max-w-[1400px] h-[calc(100svh-8rem)] min-h-64 mx-auto">
         <div
           id="netWorthChartFullscreen"
           class="w-full h-full"
@@ -20,6 +16,7 @@
           data-time-series-chart-data-value="<%= series.to_json %>"
           data-time-series-chart-endpoint-markers-value="true"
           data-time-series-chart-show-y-guides-value="true"
+          data-time-series-chart-money-format-value="<%= Money.new(0, Current.family.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
           data-time-series-chart-stroke-width-value="2.5"
           data-time-series-chart-fullscreen-value="true"></div>
       </div>

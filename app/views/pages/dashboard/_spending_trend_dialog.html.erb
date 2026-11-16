@@ -4,10 +4,9 @@
 <% range = spending_trend_data[:trend].current_period.date_range %>
 
 <%= render DS::Dialog.new(variant: "modal", width: "xl", auto_open: false, id: "spending_trend_fullscreen_dialog", disable_frame: true) do |d| %>
-  <% period_text = t("pages.dashboard.spending_trend.date_range", start_date: l(range.begin, format: :long), end_date: l(range.end, format: :long)) %>
-  <% d.with_header title: t("pages.dashboard.spending_trend.title"), meta: period_text, meta_id: "spendingFullscreenPeriod" do %>
-    <p class="text-xs sm:text-sm text-secondary"><%= t("pages.dashboard.spending_trend.expanded_view") %></p>
-  <% end %>
+  <% period_text = t("pages.dashboard.spending_trend.date_range", start_date: l(range.begin, format: "%B %-d, %Y"), end_date: l(range.end, format: "%B %-d, %Y")) %>
+  <%# The widget below brings its own controls row %>
+  <% d.with_header title: t("pages.dashboard.spending_trend.title"), meta: period_text, meta_id: "spendingFullscreenPeriod" %>
   <% d.with_body do %>
     <div class="pb-4 w-full max-w-[1400px] mx-auto">
       <%= render "pages/dashboard/spending_trend", spending_trend_data: spending_trend_data, fullscreen: true %>

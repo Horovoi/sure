@@ -1,5 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
+import { CHART_TOOLTIP_CONTEXT_CLASSES, CHART_TOOLTIP_VALUE_CLASSES } from "utils/chart_tooltip";
+import { formatMoney, formatMoneyCompact } from "utils/format_money";
 
 // Cumulative spending curve of the dashboard Spending widget: the selected budget
 // period's running total (green, ending today while the period runs) over the previous
@@ -17,6 +19,9 @@ export default class extends Controller {
     // "Day %{day}": the tooltip header. Both periods are compared by day of period,
     // so the two rows' calendar dates differ; the header names the day they share.
     dayLabel: { type: String, default: "Day %{day}" },
+    // Money#format_options of the currency (unit, precision, delimiter, separator,
+    // format), so the amounts read as the server writes them: "2,633.00 ₴"
+    moneyFormat: { type: Object, default: {} },
   };
 
   #resizeObserver = null;
@@ -279,16 +284,27 @@ export default class extends Controller {
 
         this.#tooltip.html(this.#tooltipTemplate(day, currentPoint, previousPoint)).style("opacity", 1);
 
-        // Measured after filling, so it flips left or up instead of running off screen
+        // Measured after filling, so it flips left before it would pass the card's
+        // right edge (or the dialog's in full screen), and up before the window's
+        // bottom
         const box = this.#tooltip.node().getBoundingClientRect();
-        const left =
-          event.clientX + 12 + box.width > window.innerWidth ? event.clientX - box.width - 12 : event.clientX + 12;
+        const card = this.#bounds();
+        const right = Math.min(window.innerWidth, card.right) - 8;
+        const left = event.clientX + 12 + box.width > right ? event.clientX - box.width - 12 : event.clientX + 12;
         const top =
           event.clientY - 10 + box.height > window.innerHeight ? event.clientY - box.height - 10 : event.clientY - 10;
 
-        this.#tooltip.style("left", `${Math.max(0, left)}px`).style("top", `${Math.max(0, top)}px`);
+        this.#tooltip
+          .style("left", `${Math.max(Math.max(0, card.left) + 8, left)}px`)
+          .style("top", `${Math.max(0, top)}px`);
       })
       .on("mouseleave", clear);
+  }
+
+  // The card the chart sits in: its dashboard section, or the dialog panel in full screen
+  #bounds() {
+    const card = this.element.closest("section, [data-DS--dialog-target='content']") || this.element;
+    return card.getBoundingClientRect();
   }
 
   // Day of period on top; each row: period, its calendar date, running total. One grid
@@ -300,13 +316,13 @@ export default class extends Controller {
         <span class="inline-block w-2 h-2 rounded-full self-center" style="background-color: ${color};"></span>
         <span class="text-primary font-medium">${this.#esc(label)}</span>
         <span class="text-secondary">${this.#esc(point.date_formatted)}</span>
-        <span class="text-primary font-medium text-right privacy-sensitive">${this.#esc(this.#formatCurrency(point.value))}</span>
+        <span class="text-primary ${CHART_TOOLTIP_VALUE_CLASSES} text-right whitespace-nowrap privacy-sensitive">${this.#esc(this.#formatCurrency(point.value))}</span>
       `;
     };
 
     return `
-      <div class="space-y-1">
-        <div class="text-xs text-secondary" data-testid="spending-tooltip-day">${this.#esc(this.dayLabelValue.replace("%{day}", day))}</div>
+      <div>
+        <div class="${CHART_TOOLTIP_CONTEXT_CLASSES}" data-testid="spending-tooltip-day">${this.#esc(this.dayLabelValue.replace("%{day}", day))}</div>
         <div class="grid grid-cols-[auto_auto_auto_auto] items-baseline gap-x-2 gap-y-1 tabular-nums">
           ${row(currentPoint, CURRENT_COLOR, this.currentLabelValue)}
           ${row(previousPoint, PREVIOUS_COLOR, this.previousLabelValue)}
@@ -323,7 +339,13 @@ export default class extends Controller {
     );
   }
 
+  get #hasMoneyFormat() {
+    return this.moneyFormatValue?.unit !== undefined;
+  }
+
   #formatCurrency(value) {
+    if (this.#hasMoneyFormat) return formatMoney(value, this.moneyFormatValue.precision ?? 2, this.moneyFormatValue);
+
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",
@@ -336,6 +358,8 @@ export default class extends Controller {
   }
 
   #formatCompact(value) {
+    if (this.#hasMoneyFormat) return formatMoneyCompact(value, this.moneyFormatValue);
+
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",

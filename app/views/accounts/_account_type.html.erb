@@ -1,8 +1,9 @@
-<%# locals: (accountable:) %>
+<%# locals: (accountable:, autofocus: false) %>
 
 <%# Without bank connections the only method is manual entry, so go straight to the form %>
 <%= link_to new_polymorphic_path(accountable, step: (bank_connections_enabled? ? "method_select" : nil), return_to: params[:return_to]),
-            class: "flex items-center gap-4 w-full text-center focus:outline-hidden hover:bg-surface-hover focus:bg-surface-hover fg-primary border border-transparent block px-2 rounded-lg p-2" do %>
+            autofocus: autofocus,
+            class: "flex items-center gap-4 w-full px-3 py-2 rounded-lg text-left text-primary hover:bg-container-hover focus:bg-container-hover focus-visible:outline-hidden" do %>
   <%= render DS::FilledIcon.new(
     icon: accountable.icon,
     hex_color: accountable.color,

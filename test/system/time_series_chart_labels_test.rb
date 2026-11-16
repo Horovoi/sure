@@ -33,7 +33,49 @@ class TimeSeriesChartLabelsTest < ApplicationSystemTestCase
     end
   end
 
+  test "a 32px sparkline draws its line left to right inside its box" do
+    page.execute_script(<<~JS, values_json([ 100, 120, 90, 140, 150 ]))
+      const [json] = arguments;
+      const chart = document.createElement("div");
+      chart.id = "sparklineTestChart";
+      chart.style.width = "32px";
+      chart.style.height = "20px";
+      chart.dataset.timeSeriesChartDataValue = json;
+      chart.dataset.timeSeriesChartUseLabelsValue = "false";
+      chart.dataset.timeSeriesChartUseTooltipValue = "false";
+      chart.dataset.controller = "time-series-chart";
+      document.querySelector("main").prepend(chart);
+    JS
+
+    assert_selector "#sparklineTestChart svg path[fill='none']"
+    # The labelled paddings are wider than this chart: the x scale used to run
+    # backwards, from right to left
+    first_x, last_x = page.evaluate_script(<<~'JS')
+      (() => {
+        const d = document.querySelector("#sparklineTestChart svg path[fill='none']").getAttribute("d");
+        const xs = d.match(/[ML]\s*-?[\d.]+/g).map((p) => parseFloat(p.slice(1)));
+        return [xs[0], xs[xs.length - 1]];
+      })()
+    JS
+    assert first_x < last_x, "the line runs from #{first_x} to #{last_x}"
+    assert first_x >= 0 && last_x <= 24, "the line #{first_x}..#{last_x} leaves the 24px plot"
+    assert_no_selector "#sparklineTestChart .intermediate-tick"
+  end
+
   private
+    def values_json(amounts)
+      start = Date.new(2026, 10, 17)
+      values = amounts.each_with_index.map do |amount, index|
+        {
+          date: (start + index.days).iso8601,
+          date_formatted: (start + index.days).iso8601,
+          value: { amount: amount.to_s, currency: "UAH", formatted: "#{amount} ₴" },
+          trend: { color: "var(--color-success)", value: { amount: "0" }, current: { amount: amount.to_s }, previous: { amount: "0" } }
+        }
+      end
+      { values: values, trend: { color: "var(--color-success)" } }.to_json
+    end
+
 
     def mount_chart(amounts, width:, height:)
       start = Date.new(2026, 10, 17)

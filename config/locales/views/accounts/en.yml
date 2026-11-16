@@ -51,6 +51,14 @@ en:
     sync_all:
       syncing: "Syncing accounts..."
     new:
+      container:
+        back: Back
+        close: Close
+        esc: Esc
+        navigate: Navigate
+        next: Next
+        previous: Previous
+        select: Select
       import_accounts: Import accounts
       method_selector:
         connected_entry: Link account

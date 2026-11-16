@@ -2,21 +2,18 @@
 <%= turbo_frame_tag "investment_summary_section" do %>
 <% if investment_statement.investment_accounts.any? %>
   <div id="investment-summary" class="space-y-4">
-    <div class="flex justify-between gap-4 px-4">
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
-          <h2 class="text-lg font-medium"><%= t(".title") %></h2>
-        </div>
-
-        <p class="text-primary text-3xl font-medium privacy-sensitive">
+    <%# The section header names the widget, so the value leads %>
+    <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-4">
+      <div class="min-w-0 space-y-2">
+        <p class="text-primary text-3xl font-medium tabular-nums whitespace-nowrap privacy-sensitive">
           <%= format_money(investment_statement.portfolio_value_money) %>
         </p>
 
         <% trend = investment_statement.unrealized_gains_trend %>
         <% if trend %>
-          <div class="flex items-center gap-2 text-sm">
+          <div class="flex flex-wrap items-center gap-x-2 text-sm">
             <span class="text-secondary"><%= t(".total_return") %>:</span>
-            <span class="font-medium privacy-sensitive" style="color: <%= trend.color %>">
+            <span class="font-medium tabular-nums whitespace-nowrap privacy-sensitive" style="color: <%= trend.color %>">
               <%= format_money(Money.new(trend.value, Current.family.currency)) %>
               (<%= trend.percent_formatted %>)
             </span>
@@ -24,40 +21,41 @@
         <% end %>
       </div>
 
-      <div class="flex items-center gap-2">
-        <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "investment_summary_section" } do |form| %>
-          <div class="flex flex-wrap items-center gap-2">
-            <% investment_options = Period.as_options + [["Custom", "custom"]] %>
-            <% selected_key = period.key || "custom" %>
-            <%= form.select :investment_period,
-                          investment_options,
-                          { selected: selected_key },
-                          data: { "auto-submit-form-target": "auto" },
-                          class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-xs sm:text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+      <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "investment_summary_section" } do |form| %>
+        <div class="flex flex-wrap items-center gap-2">
+          <% investment_options = Period.as_options + [[t(".custom"), "custom"]] %>
+          <% selected_key = period.key || "custom" %>
+          <%= form.select :investment_period,
+                        investment_options,
+                        { selected: selected_key },
+                        data: { "auto-submit-form-target": "auto" },
+                        aria: { label: t(".period_label") },
+                        class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
 
-            <% if period.key.nil? %>
-              <div class="flex items-center gap-2">
-                <%= form.date_field :investment_start_date,
-                      value: period.start_date,
-                      data: { "auto-submit-form-target": "auto" },
-                      class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
-                <span class="text-secondary text-sm">to</span>
-                <%= form.date_field :investment_end_date,
-                      value: period.end_date,
-                      data: { "auto-submit-form-target": "auto" },
-                      class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
-              </div>
-            <% end %>
-          </div>
-        <% end %>
-      </div>
+          <% if period.key.nil? %>
+            <div class="flex items-center gap-2">
+              <%= form.date_field :investment_start_date,
+                    value: period.start_date,
+                    data: { "auto-submit-form-target": "auto" },
+                    aria: { label: t(".start_date") },
+                    class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
+              <span class="text-secondary text-sm"><%= t(".to") %></span>
+              <%= form.date_field :investment_end_date,
+                    value: period.end_date,
+                    data: { "auto-submit-form-target": "auto" },
+                    aria: { label: t(".end_date") },
+                    class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
     </div>
 
     <% holdings = investment_statement.top_holdings(limit: 5) %>
     <% if holdings.any? %>
       <div class="bg-container-inset rounded-xl p-1 mx-4">
-        <div class="px-4 py-2 flex items-center uppercase text-xs font-medium text-secondary">
-          <div class="flex-1"><%= t(".holding") %></div>
+        <div class="px-4 py-2 flex items-center gap-2 text-xs font-medium text-secondary">
+          <div class="min-w-0 flex-1"><%= t(".holding") %></div>
           <div class="w-20 text-right"><%= t(".weight") %></div>
           <div class="w-28 text-right"><%= t(".value") %></div>
           <div class="w-24 text-right"><%= t(".return") %></div>
@@ -66,7 +64,7 @@
         <div class="shadow-border-xs rounded-lg bg-container font-medium text-sm">
           <% holdings.each_with_index do |holding, idx| %>
             <div class="p-4 flex items-center <%= idx < holdings.size - 1 ? "border-b border-primary" : "" %>">
-              <div class="flex-1 flex items-center gap-3">
+              <div class="min-w-0 flex-1 flex items-center gap-3">
                 <% if holding.security.logo_url.present? %>
                   <img src="<%= holding.security.logo_url %>" alt="<%= holding.ticker %>" class="w-8 h-8 rounded-full">
                 <% else %>
@@ -74,21 +72,21 @@
                     <%= holding.ticker[0..1] %>
                   </div>
                 <% end %>
-                <div>
-                  <p class="font-medium"><%= holding.ticker %></p>
-                  <p class="text-xs text-secondary"><%= truncate(holding.name, length: 20) %></p>
+                <div class="min-w-0">
+                  <p class="font-medium truncate"><%= holding.ticker %></p>
+                  <p class="text-xs text-secondary truncate"><%= holding.name %></p>
                 </div>
               </div>
 
-              <div class="w-20 text-right text-secondary">
+              <div class="w-20 shrink-0 text-right text-secondary tabular-nums">
                 <%= number_to_percentage(holding.weight || 0, precision: 1) %>
               </div>
 
-              <div class="w-28 text-right privacy-sensitive">
+              <div class="w-28 shrink-0 text-right tabular-nums whitespace-nowrap privacy-sensitive">
                 <%= format_money(holding.amount_money) %>
               </div>
 
-              <div class="w-24 text-right">
+              <div class="w-24 shrink-0 text-right tabular-nums">
                 <% if holding.trend %>
                   <span style="color: <%= holding.trend.color %>">
                     <%= holding.trend.percent_formatted %>
@@ -107,36 +105,36 @@
     <% totals = investment_statement.totals(period: period) %>
     <% if totals.trades_count > 0 || totals.contributions.to_f > 0 || totals.withdrawals.to_f > 0 %>
       <div class="bg-container-inset rounded-xl p-1 mx-4">
-        <div class="px-4 py-2 flex items-center uppercase text-xs font-medium text-secondary">
+        <div class="px-4 py-2 text-xs font-medium text-secondary">
           <%= t(".period_activity", period: period.label) %>
         </div>
         <div class="shadow-border-xs rounded-lg bg-container font-medium text-sm">
           <div class="p-4 flex items-center justify-between gap-4">
             <div class="flex items-center gap-2">
-              <div class="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                <%= icon "trending-up", size: "sm", color: "green" %>
+              <div class="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center">
+                <%= icon "trending-up", size: "sm", color: "success" %>
               </div>
               <div>
                 <p class="text-xs text-secondary"><%= t(".contributions") %></p>
-                <p class="font-medium text-green-600 privacy-sensitive"><%= format_money(totals.contributions) %></p>
+                <p class="font-medium text-success tabular-nums whitespace-nowrap privacy-sensitive"><%= format_money(totals.contributions) %></p>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <div class="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center">
-                <%= icon "trending-down", size: "sm", color: "orange" %>
+              <div class="w-8 h-8 rounded-full bg-warning/10 flex items-center justify-center">
+                <%= icon "trending-down", size: "sm", color: "warning" %>
               </div>
               <div>
                 <p class="text-xs text-secondary"><%= t(".withdrawals") %></p>
-                <p class="font-medium text-orange-600 privacy-sensitive"><%= format_money(totals.withdrawals) %></p>
+                <p class="font-medium text-warning tabular-nums whitespace-nowrap privacy-sensitive"><%= format_money(totals.withdrawals) %></p>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <div class="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <%= icon "arrow-left-right", size: "sm", color: "blue" %>
+              <div class="w-8 h-8 rounded-full bg-info/10 flex items-center justify-center">
+                <%= icon "arrow-left-right", size: "sm", color: "info" %>
               </div>
               <div>
                 <p class="text-xs text-secondary"><%= t(".trades") %></p>
-                <p class="font-medium text-primary"><%= totals.trades_count %></p>
+                <p class="font-medium text-primary tabular-nums"><%= totals.trades_count %></p>
               </div>
             </div>
           </div>

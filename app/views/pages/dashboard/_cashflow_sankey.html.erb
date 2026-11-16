@@ -1,23 +1,9 @@
 <%# locals: (sankey_data:, period:, show_subcategories: false) %>
 <%= turbo_frame_tag "cashflow_sankey_section" do %>
 <div id="cashflow-sankey-chart">
-  <div class="flex flex-col gap-3 px-4 mb-4 sm:flex-row sm:items-center sm:justify-between">
-    <div class="flex items-center gap-2">
-      <h2 class="text-lg font-medium inline-flex items-center gap-1.5">
-        <%= t("pages.dashboard.cashflow_sankey.title") %>
-      </h2>
-      <%= render DS::Button.new(
-        variant: :icon,
-        size: :sm,
-        icon: "maximize-2",
-        type: "button",
-        title: t("pages.dashboard.cashflow_sankey.expand"),
-        aria: { label: t("pages.dashboard.cashflow_sankey.expand") },
-        data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "cashflow_sankey_dialog" },
-        class: "hidden sm:inline-flex"
-      ) %>
-    </div>
-
+  <%# The section header names the widget: the controls row holds the period, the
+      subcategory toggle and the expand button %>
+  <div class="flex flex-wrap items-center justify-end gap-2 px-4 mb-4">
     <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "cashflow_sankey_section" } do |form| %>
       <div class="flex flex-wrap items-center gap-2">
         <% cashflow_options = Period.as_options + [ [ t("pages.dashboard.cashflow_sankey.custom"), "custom" ] ] %>
@@ -26,7 +12,8 @@
                   cashflow_options,
                   { selected: selected_key },
                   data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-xs sm:text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+                  aria: { label: t("pages.dashboard.cashflow_sankey.period_label") },
+                  class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
 
         <%# When in custom mode, show start/end date pickers %>
         <% if period.key.nil? %>
@@ -34,19 +21,21 @@
             <%= form.date_field :cashflow_start_date,
                   value: period.start_date,
                   data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+                  aria: { label: t("pages.dashboard.cashflow_sankey.start_date") },
+                  class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
             <span class="text-secondary text-sm"><%= t("pages.dashboard.cashflow_sankey.to") %></span>
             <%= form.date_field :cashflow_end_date,
                   value: period.end_date,
                   data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+                  aria: { label: t("pages.dashboard.cashflow_sankey.end_date") },
+                  class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
           </div>
         <% end %>
 
         <%# The chart draws both modes from one payload, so the toggle needs no request.
             It stays in the form so a period change keeps the mode. %>
-        <div class="flex items-center gap-1 sm:gap-2 pl-0 sm:pl-2">
-          <label for="cashflow_show_subcategories" class="text-xs sm:text-sm text-secondary"><%= t("pages.dashboard.cashflow_sankey.show_subcategories") %></label>
+        <div class="flex items-center gap-2 sm:pl-2">
+          <label for="cashflow_show_subcategories" class="text-sm text-secondary"><%= t("pages.dashboard.cashflow_sankey.show_subcategories") %></label>
           <%= render DS::Toggle.new(
             id: "cashflow_show_subcategories",
             name: "cashflow_show_subcategories",
@@ -58,6 +47,18 @@
           ) %>
         </div>
       </div>
+    <% end %>
+
+    <% if sankey_data[:links].present? %>
+      <%= render DS::Button.new(
+        variant: :icon,
+        icon: "maximize-2",
+        type: "button",
+        title: t("pages.dashboard.cashflow_sankey.expand"),
+        aria: { label: t("pages.dashboard.cashflow_sankey.expand") },
+        data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "cashflow_sankey_dialog" },
+        class: "hidden sm:inline-flex"
+      ) %>
     <% end %>
   </div>
 

@@ -6,6 +6,8 @@ import { hiddenSankeyLabels } from "utils/sankey_labels";
 import { withoutSankeySubcategories } from "utils/sankey_subcategories";
 import { sankeyNodeHasChildren, zoomSankeyData } from "utils/sankey_zoom";
 import { buildCategoryTransactionsUrl, isNavigableCategoryNode } from "utils/transactions_filter_url";
+import { CHART_TOOLTIP_CONTEXT_CLASSES, CHART_TOOLTIP_VALUE_CLASSES } from "utils/chart_tooltip";
+import { formatMoney } from "utils/format_money";
 
 // Connects to data-controller="sankey-chart"
 //
@@ -27,6 +29,9 @@ export default class extends Controller {
     nodeWidth: { type: Number, default: 15 },
     nodePadding: { type: Number, default: 20 },
     currencySymbol: { type: String, default: "$" },
+    // Money#format_options of the family currency (unit, precision, delimiter,
+    // separator, format): amounts read as the server writes them, "2,633.00 ₴"
+    moneyFormat: { type: Object, default: {} },
   };
 
   // Visual constants
@@ -471,7 +476,7 @@ export default class extends Controller {
       .append("tspan")
       .attr("x", x)
       .attr("dy", "1.2em")
-      .attr("class", "font-mono text-secondary privacy-sensitive")
+      .attr("class", "tabular-nums text-secondary privacy-sensitive")
       .style("font-size", "0.65rem")
       .text(this.#formatCurrency(d.value));
   }
@@ -578,7 +583,8 @@ export default class extends Controller {
     this.tooltip = d3
       .select(dialog || document.body)
       .append("div")
-      .attr("class", "bg-gray-700 text-white text-sm p-2 rounded pointer-events-none absolute z-50 top-0")
+      // The surface every chart tooltip shares
+      .attr("class", "chart-tooltip text-primary text-sm font-sans pointer-events-none absolute z-50 top-0")
       .style("opacity", 0)
       .style("pointer-events", "none");
   }
@@ -595,9 +601,9 @@ export default class extends Controller {
     if (!this.tooltip) this.#createTooltip();
 
     const formattedValue = this.#formatCurrency(value);
-    const percentageText = percentage ? `${percentage}%` : "0%";
-    const valueLine = `<span class="privacy-sensitive">${this.#esc(formattedValue)}</span> (${this.#esc(percentageText)})`;
-    const content = title ? `${this.#esc(title)}<br/>${valueLine}` : valueLine;
+    const percentageText = this.#formatPercent(percentage);
+    const valueLine = `<div class="${CHART_TOOLTIP_VALUE_CLASSES}"><span class="privacy-sensitive">${this.#esc(formattedValue)}</span> <span class="text-secondary">(${this.#esc(percentageText)})</span></div>`;
+    const content = title ? `<div class="${CHART_TOOLTIP_CONTEXT_CLASSES}">${this.#esc(title)}</div>${valueLine}` : valueLine;
 
     this.tooltip.html(content);
     this.#updateTooltipPosition(event);
@@ -621,7 +627,18 @@ export default class extends Controller {
     this.tooltip?.transition().duration(100).style("opacity", 0);
   }
 
+  // One decimal, with the currency's decimal separator
+  #formatPercent(percentage) {
+    const number = Number.parseFloat(percentage);
+    const text = (Number.isFinite(number) ? number : 0).toFixed(1);
+    return `${text.replace(".", this.moneyFormatValue?.separator ?? ".")}%`;
+  }
+
   #formatCurrency(value) {
+    if (this.moneyFormatValue?.unit !== undefined) {
+      return formatMoney(Number.parseFloat(value), this.moneyFormatValue.precision ?? 2, this.moneyFormatValue);
+    }
+
     const formatted = Number.parseFloat(value).toLocaleString(undefined, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,

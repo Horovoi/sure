@@ -1,52 +1,62 @@
 <%# locals: (upcoming_subscriptions:, monthly_total:, suggestion_count: 0, due_today_count: 0, this_week_total: nil, **args) %>
 
+<%# The section header names the widget, so the total leads. The links are the
+    widgets' one "view all" affordance: ghost sm, the arrow after the text. %>
 <div id="subscriptions-summary" class="space-y-4">
-  <div class="flex justify-between gap-4 px-4">
-    <div class="space-y-2">
-      <div class="flex items-center gap-2">
-        <h2 class="text-lg font-medium"><%= t(".title") %></h2>
+  <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4">
+    <div class="min-w-0 space-y-2">
+      <div>
+        <p class="text-primary text-3xl font-medium whitespace-nowrap">
+          <span class="tabular-nums privacy-sensitive"><%= format_money(monthly_total) %></span><span class="text-secondary text-sm font-normal"><%= t("subscriptions.index.summary.per_month") %></span>
+        </p>
+        <p class="text-secondary text-sm">
+          <span class="tabular-nums privacy-sensitive"><%= format_money(monthly_total * 12) %></span><%= t("subscriptions.index.summary.per_year") %>
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <span class="text-secondary"><%= t(".active_count", count: Current.family.recurring_transactions.active_subscriptions.count) %></span>
         <% if suggestion_count > 0 %>
-          <%= link_to suggestions_subscriptions_path, class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors" do %>
+          <%= link_to suggestions_subscriptions_path, class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info/10 text-info text-xs font-medium hover:bg-info/20 transition-colors focus-ring" do %>
             <%= icon "zap", size: "xs" %>
             <%= t(".new_suggestions", count: suggestion_count) %>
           <% end %>
         <% end %>
       </div>
-
-      <div>
-        <p class="text-primary text-3xl font-medium">
-          <span class="privacy-sensitive"><%= format_money(monthly_total) %></span><span class="text-secondary text-sm font-normal"><%= t("subscriptions.index.summary.per_month") %></span>
-        </p>
-        <p class="text-secondary text-sm">
-          <span class="privacy-sensitive"><%= format_money(monthly_total * 12) %></span><%= t("subscriptions.index.summary.per_year") %>
-        </p>
-      </div>
-
-      <div class="flex items-center gap-2 text-sm">
-        <span class="text-secondary"><%= t(".active_count", count: Current.family.recurring_transactions.active_subscriptions.count) %></span>
-      </div>
     </div>
 
-    <%= render DS::Link.new(
-      href: subscriptions_path,
-      text: t(".view_all"),
-      icon: "arrow-right",
-      variant: "ghost"
-    ) %>
+    <div class="flex flex-wrap items-center gap-1 self-start">
+      <%= render DS::Link.new(
+        href: calendar_subscriptions_path,
+        text: t(".view_calendar"),
+        icon: "arrow-right",
+        icon_position: :right,
+        variant: "ghost",
+        size: :sm
+      ) %>
+      <%= render DS::Link.new(
+        href: subscriptions_path,
+        text: t(".view_all"),
+        icon: "arrow-right",
+        icon_position: :right,
+        variant: "ghost",
+        size: :sm
+      ) %>
+    </div>
   </div>
 
   <% if upcoming_subscriptions.any? %>
-    <div class="bg-container-inset rounded-xl p-1 mx-4">
-      <div class="px-4 py-2 flex items-center uppercase text-xs font-medium text-secondary">
+    <div class="bg-container-inset rounded-xl p-1 mx-4 space-y-1">
+      <div class="px-4 py-2 text-xs font-medium text-secondary">
         <%= t(".upcoming_7_days") %>
       </div>
 
-      <div class="shadow-border-xs rounded-lg bg-container font-medium text-sm">
+      <div class="p-1 shadow-border-xs rounded-lg bg-container font-medium text-sm">
         <% upcoming_subscriptions.each_with_index do |subscription, idx| %>
-          <%= link_to edit_subscription_path(subscription), class: "p-4 flex items-center justify-between gap-4 hover:bg-surface-hover transition-colors #{idx < upcoming_subscriptions.size - 1 ? 'border-b border-primary' : ''}" do %>
-            <div class="flex items-center gap-3">
+          <%= link_to edit_subscription_path(subscription), class: "p-3 flex items-center justify-between gap-4 rounded-lg hover:bg-container-hover transition-colors focus-ring" do %>
+            <div class="min-w-0 flex items-center gap-3">
               <% if subscription.subscription_logo_url.present? %>
-                <img src="<%= subscription.subscription_logo_url %>" alt="<%= subscription.display_name %>" class="w-8 h-8 rounded-full object-cover" width="32" height="32">
+                <img src="<%= subscription.subscription_logo_url %>" alt="<%= subscription.display_name %>" class="w-8 h-8 shrink-0 rounded-full object-cover" width="32" height="32">
               <% else %>
                 <%= render DS::FilledIcon.new(
                   variant: :text,
@@ -55,19 +65,20 @@
                   rounded: true
                 ) %>
               <% end %>
-              <div>
-                <p class="font-medium text-primary"><%= subscription.display_name %></p>
+              <div class="min-w-0">
+                <p class="font-medium text-primary truncate"><%= subscription.display_name %></p>
                 <p class="text-xs text-secondary">
-                  <%= l(subscription.next_expected_date, format: :short) %>
+                  <%= l(subscription.next_expected_date, format: "%b %-d") %>
                   <span class="ml-1"><%= render DS::Pill.new(label: subscription.billing_cycle_monthly? ? t(".monthly") : t(".yearly"),
                                                              tone: subscription.billing_cycle_monthly? ? :violet : :amber, marker: false) %></span>
                 </p>
               </div>
             </div>
 
-            <div class="text-right">
-              <p class="font-medium text-primary privacy-sensitive"><%= format_money(-subscription.amount_money) %></p>
-            </div>
+            <p class="shrink-0 text-right font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive"><%= format_money(-subscription.amount_money) %></p>
+          <% end %>
+          <% if idx < upcoming_subscriptions.size - 1 %>
+            <%= render "shared/ruler", classes: "mx-3" %>
           <% end %>
         <% end %>
       </div>
@@ -86,13 +97,4 @@
       </div>
     </div>
   <% end %>
-
-  <div class="flex justify-center px-4">
-    <%= render DS::Link.new(
-      href: calendar_subscriptions_path,
-      text: t(".view_calendar"),
-      icon: "calendar",
-      variant: "outline"
-    ) %>
-  </div>
 </div>

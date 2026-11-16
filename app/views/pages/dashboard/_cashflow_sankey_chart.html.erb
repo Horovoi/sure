@@ -5,6 +5,7 @@
   data-sankey-chart-data-value="<%= sankey_data.to_json %>"
   data-sankey-chart-show-subcategories-value="<%= show_subcategories %>"
   data-sankey-chart-currency-symbol-value="<%= sankey_data[:currency_symbol] %>"
+  data-sankey-chart-money-format-value="<%= Money.new(0, Current.family.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
   data-sankey-chart-start-date-value="<%= period.start_date&.iso8601 %>"
   data-sankey-chart-end-date-value="<%= period.end_date&.iso8601 %>"
   data-period-text="<%= period.key.present? ? period.label : period.comparison_label %>"
