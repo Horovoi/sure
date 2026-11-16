@@ -1,13 +1,11 @@
 <%# locals: (transactions:, period_type:, start_date:, end_date:, spending_comparison: nil) %>
 <%# Income and expenses as two ranked bar lists with one shape: the same header,
-    rows and columns. Expenses with a normal to compare with add a tick for normal
-    and a change to each row. The export menu lives in the section header
-    (reports/_transactions_breakdown_actions). %>
+    rows and columns. Over them, one overview: a stacked bar per side on a shared
+    scale, what was left over and, when there is a normal to compare with, how far
+    spending is from it and the key for the ticks on the expense rows. The export
+    menu lives in the section header (reports/_transactions_breakdown_actions). %>
 <% if transactions.any? %>
   <%
-    income_groups = transactions.select { |g| g[:type] == "income" }
-    expense_groups = transactions.select { |g| g[:type] == "expense" }
-
     current_sort_by = params[:sort_by]
     current_sort_direction = params[:sort_direction]
     # Sorting by amount toggles: descending first, then ascending
@@ -16,28 +14,32 @@
     # (report_period_params), not only the dates
     amount_sort_params = report_period_params.merge(sort_by: "amount", sort_direction: next_sort_direction)
 
-    sides = [
-      ([ :income, income_groups ] if income_groups.any?),
-      ([ :expense, expense_groups ] if expense_groups.any?)
-    ].compact
+    columns = %w[income expense].filter_map do |type|
+      groups = transactions.select { |g| g[:type] == type }
+      next if groups.empty?
+
+      breakdown_column(groups,
+                       total: groups.sum { |g| g[:total] },
+                       type: type.to_sym,
+                       start_date: start_date,
+                       end_date: end_date,
+                       comparison: (spending_comparison if type == "expense"))
+    end
   %>
+
+  <%= render "reports/breakdown_overview", columns: columns %>
 
   <%# Side by side when the section is wide (a container query: the side panels
       narrow it at any viewport), stacked otherwise %>
   <div class="@container">
     <div class="grid grid-cols-1 gap-x-10 gap-y-8 @3xl:grid-cols-2">
-      <% sides.each do |type, groups| %>
+      <% columns.each do |column| %>
         <%= render "reports/breakdown_column",
-              column: breakdown_column(groups,
-                                       total: groups.sum { |g| g[:total] },
-                                       type: type,
-                                       start_date: start_date,
-                                       end_date: end_date,
-                                       comparison: (spending_comparison if type == :expense)),
+              column: column,
               amount_sort_params: amount_sort_params,
               current_sort_by: current_sort_by,
               current_sort_direction: current_sort_direction,
-              span_all: sides.one? %>
+              span_all: columns.one? %>
       <% end %>
     </div>
   </div>

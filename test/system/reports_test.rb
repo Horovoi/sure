@@ -50,13 +50,20 @@ class ReportsTest < ApplicationSystemTestCase
     visit reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
 
     assert_no_selector "[data-section-key='spending_vs_normal']"
-    within "[data-testid=breakdown-expense]" do
+    # The sentence and the key for the ticks sit in the overview over both lists
+    within "[data-testid=breakdown-overview]" do
       assert_selector "[data-testid=spending-summary]", text: "more than normal"
       assert_selector "[data-testid=spending-legend]", text: "based on"
+    end
 
+    within "[data-testid=breakdown-expense]" do
       within "[data-category='category-#{dining.id}']" do
         assert_selector "[data-testid=breakdown-delta]", text: "+"
-        find("button[aria-label='#{I18n.t("reports.transactions_breakdown.column.details", category: "Vs normal dining")}']").click
+        # With a mouse the row's chevron shows on hover
+        details = I18n.t("reports.transactions_breakdown.column.details", category: "Vs normal dining")
+        assert_no_selector "button[aria-label='#{details}']"
+        find(:xpath, ".").hover
+        find("button[aria-label='#{details}']").click
       end
       assert_selector "[data-testid=breakdown-details]", text: "1 transaction", visible: true
       find("[data-category='category-#{dining.id}'] button[aria-expanded='true']").click
@@ -73,27 +80,34 @@ class ReportsTest < ApplicationSystemTestCase
   end
 
   test "the rest of a long list opens and closes from one row" do
+    # Spent the same each month for a year, so each is near normal: quiet rows that
+    # may fold. A row far from normal (a coloured change) always stays in sight.
+    start_date = 30.days.ago.to_date
     10.times do |index|
       category = @family.categories.create!(name: "Many #{index}", classification: "expense", color: "#123456")
-      create_transaction(account: @account, currency: @family.currency, category: category, amount: 100 + index, name: "Spend #{index}", date: Date.current)
+      0.upto(12) do |months_back|
+        create_transaction(account: @account, currency: @family.currency, category: category, amount: 100 + index,
+          name: "Spend #{index}", date: months_back.zero? ? Date.current : start_date + 5.days - months_back.months)
+      end
     end
 
     visit_breakdown
 
     within "[data-testid=breakdown-expense]" do
-      # The fixtures add expense rows of their own
       rows = all("#breakdown-expense-list > li", visible: :all).size
-      assert_operator rows, :>=, 10 + ReportsHelper::BREAKDOWN_MIN_TAIL
-      assert_selector "#breakdown-expense-list > li", count: ReportsHelper::BREAKDOWN_TOP_ROWS
+      folded = all("#breakdown-expense-list > li[hidden]", visible: :all)
+      assert_operator folded.size, :>=, ReportsHelper::BREAKDOWN_MIN_TAIL
+      assert folded.none? { |row| row.has_css?(".text-destructive, .text-success", visible: :all, wait: 0) }, "only quiet rows fold"
+      assert_selector "#breakdown-expense-list > li", count: rows - folded.size
       more = find("[data-testid=breakdown-expense-more]")
-      assert_text "#{rows - ReportsHelper::BREAKDOWN_TOP_ROWS} more categories"
+      assert_text "Show #{folded.size} more categories"
 
       more.click
       assert_selector "#breakdown-expense-list > li", count: rows
       assert_selector "[data-testid=breakdown-expense-more][aria-expanded='true']", text: I18n.t("reports.transactions_breakdown.column.fewer")
 
       more.click
-      assert_selector "#breakdown-expense-list > li", count: ReportsHelper::BREAKDOWN_TOP_ROWS
+      assert_selector "#breakdown-expense-list > li", count: rows - folded.size
     end
   end
 
@@ -358,7 +372,7 @@ class ReportsTest < ApplicationSystemTestCase
       rows.each do |row|
         bar = row.find("div[aria-hidden='true']", visible: :all)
         assert_operator bar.native.rect.width, :>=, 120, "#{row.text.squish} has room for its bar"
-        name = row.first(".truncate")
+        name = row.first(".break-words")
         assert_not evaluate_script("arguments[0].scrollWidth > arguments[0].clientWidth", name), "#{name.text} is cut off"
       end
     end

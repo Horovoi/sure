@@ -176,10 +176,6 @@
               </h2>
             </div>
             <div class="flex items-center gap-1">
-              <%# A section's own actions (the breakdown's export menu) sit in its header %>
-              <% if section[:actions_partial] %>
-                <%= render partial: section[:actions_partial], locals: section[:locals] %>
-              <% end %>
               <button
                 type="button"
                 class="cursor-grab active:cursor-grabbing text-secondary hover:text-primary transition-colors p-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
@@ -192,6 +188,11 @@
                 aria-label="<%= t("reports.index.drag_to_reorder") %>">
                 <%= icon("grip-vertical", size: "sm") %>
               </button>
+              <%# A section's own actions (the breakdown's export menu) sit in its header,
+                  last, so they end on the same edge as the section's content %>
+              <% if section[:actions_partial] %>
+                <%= render partial: section[:actions_partial], locals: section[:locals] %>
+              <% end %>
             </div>
           </div>
           <div class="py-4 px-6" data-reports-section-target="content">

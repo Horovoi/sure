@@ -1,0 +1,47 @@
+<%# locals: (columns:) %>
+<%# The overview over both lists: one stacked bar per side on a shared scale, so
+    the gap between them is what was left over, then the headline and the key for
+    the ticks. Each side's categories keep their own colours. %>
+<%
+  income = columns.find { |column| column[:type] == :income }
+  expense = columns.find { |column| column[:type] == :expense }
+  comparison = expense&.dig(:comparison)
+  headline = breakdown_headline(income_total: income&.dig(:total).to_d, expense_total: expense&.dig(:total).to_d, comparison: comparison)
+%>
+
+<div class="mb-6 space-y-3" data-testid="breakdown-overview">
+  <% if income && expense %>
+    <%# The headline below says the same in words, so the strip stays decorative %>
+    <div class="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-xs text-secondary" aria-hidden="true">
+      <% breakdown_strip(columns).each do |side| %>
+        <span><%= t("reports.transactions_breakdown.overview.#{side[:type]}") %></span>
+        <div class="flex h-2.5 overflow-hidden rounded-full bg-surface-inset" data-testid="breakdown-strip-<%= side[:type] %>">
+          <% side[:segments].each do |segment| %>
+            <%# A hairline in the card colour parts neighbouring segments %>
+            <span class="h-full shrink-0 shadow-[inset_-1px_0_0_var(--color-container)] last:shadow-none" style="width: <%= segment[:width] %>%; background-color: <%= segment[:color] %>" title="<%= segment[:name] %>"></span>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% if headline.present? || comparison || expense&.dig(:no_normal) %>
+    <div class="space-y-1">
+      <% if headline.present? %>
+        <p class="text-sm text-primary"><%= headline %></p>
+      <% end %>
+      <% if comparison %>
+        <p class="flex items-start gap-2 text-xs text-secondary" data-testid="spending-legend">
+          <span class="relative mt-px h-3.5 w-3 shrink-0" aria-hidden="true">
+            <span class="absolute inset-y-0 left-1/2 -ml-px w-0.5 rounded-full bg-inverse"></span>
+          </span>
+          <span><%= breakdown_normal_key(comparison) %></span>
+        </p>
+      <% elsif expense&.dig(:no_normal) %>
+        <p class="text-xs text-secondary" data-testid="spending-no-normal">
+          <%= t("reports.transactions_breakdown.vs_normal.no_normal") %>
+        </p>
+      <% end %>
+    </div>
+  <% end %>
+</div>

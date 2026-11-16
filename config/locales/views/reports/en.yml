@@ -142,8 +142,9 @@ en:
           other: "%{count} transactions"
         details: "Details for %{category}"
         more:
-          one: "%{count} more category"
-          other: "%{count} more categories"
+          one: "Show %{count} more category"
+          other: "Show %{count} more categories"
+        more_short: "Show %{count} more"
         fewer: Show fewer
       details:
         average: "average %{amount}"
@@ -152,23 +153,29 @@ en:
         nothing_spent: Nothing spent in this period
         netted_expense: "after %{amount} of refunds"
         netted_income: "after %{amount} paid back"
-      # Expenses against normal: the line under the total, the key under the list
+      # The headline and strip over both lists
+      overview:
+        left_over_html: "%{amount} left over, %{percent} of income."
+        overspent_html: "%{amount} more spent than came in."
+        income: Income
+        expense: Expenses
+      # Expenses against normal: the sentence in the headline, the key under it
       vs_normal:
-        more_so_far_html: "%{amount} more than normal so far (%{percent})"
-        less_so_far_html: "%{amount} less than normal so far (%{percent})"
-        more_period_html: "%{amount} more than normal (%{percent})"
-        less_period_html: "%{amount} less than normal (%{percent})"
-        more_so_far_no_percent_html: "%{amount} more than normal so far"
-        less_so_far_no_percent_html: "%{amount} less than normal so far"
-        more_period_no_percent_html: "%{amount} more than normal"
-        less_period_no_percent_html: "%{amount} less than normal"
-        about_so_far: About normal so far
-        about_period: About normal
-        key_so_far: "Normal for this many days: %{normal}, based on %{range}"
-        key_period: "Normal for a period this long: %{normal}, based on %{range}"
+        more_so_far_html: "Spending is %{amount} more than normal so far (%{percent})."
+        less_so_far_html: "Spending is %{amount} less than normal so far (%{percent})."
+        more_period_html: "Spending was %{amount} more than normal (%{percent})."
+        less_period_html: "Spending was %{amount} less than normal (%{percent})."
+        more_so_far_no_percent_html: "Spending is %{amount} more than normal so far."
+        less_so_far_no_percent_html: "Spending is %{amount} less than normal so far."
+        more_period_no_percent_html: "Spending was %{amount} more than normal."
+        less_period_no_percent_html: "Spending was %{amount} less than normal."
+        about_so_far: Spending is about normal so far.
+        about_period: Spending was about normal.
+        key_so_far_html: "Normal for this many days: %{normal}, based on %{range}. Changes within %{band} of normal or under %{floor} stay grey."
+        key_period_html: "Normal for a period this long: %{normal}, based on %{range}. Changes within %{band} of normal or under %{floor} stay grey."
         delta_more: more than normal
         delta_less: less than normal
-        no_normal: Not enough earlier history to compare with normal spending yet
+        no_normal: Not enough earlier history to compare with normal spending yet.
     net_worth:
       title: Net Worth
       current_net_worth: Current Net Worth

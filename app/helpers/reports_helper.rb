@@ -53,8 +53,12 @@ module ReportsHelper
   # A tail of one row is shown, not folded away behind a button of its own size
   BREAKDOWN_MIN_TAIL = 2
   # The columns every list row, the column labels and the "more" row share:
-  # toggle, category and bar, amount and change, share
-  BREAKDOWN_GRID = "grid-cols-[1.25rem_minmax(0,1fr)_5.5rem_3rem] gap-x-2 @md:grid-cols-[1.25rem_minmax(0,1fr)_6.5rem_3.5rem] @md:gap-x-3".freeze
+  # toggle, category and bar, amount and change, share and change in percent.
+  # The amount column is as narrow as a seven-digit amount allows, so a bar ends
+  # close to its numbers.
+  BREAKDOWN_GRID = "grid-cols-[1.25rem_minmax(0,1fr)_5.5rem_3rem] gap-x-2 @md:grid-cols-[1.25rem_minmax(0,1fr)_6rem_3.5rem] @md:gap-x-3".freeze
+  # A change in percent past this reads as noise (normal was tiny); the amount stays
+  BREAKDOWN_MAX_PERCENT = 999
 
   # How far a category moved against normal, smallest first. upper is the largest
   # ratio (0.5 = 50% more) that still falls in the bucket; nil means no limit. The
@@ -68,6 +72,10 @@ module ReportsHelper
     { key: "more", upper: 1.0, tone: :unfavorable },
     { key: "much_more", upper: nil, tone: :unfavorable }
   ].freeze
+
+  # A change smaller than this part of the normal total stays neutral whatever its
+  # ratio, so +3 on a tiny category does not show as red
+  BREAKDOWN_QUIET_SHARE = 0.01
 
   BREAKDOWN_TONE_CLASSES = {
     favorable: "text-success",
@@ -122,35 +130,58 @@ module ReportsHelper
       row[:subcategories].each { |sub| breakdown_place_on_scale(sub, scale) }
     end
 
-    top = rows.size - BREAKDOWN_TOP_ROWS >= BREAKDOWN_MIN_TAIL ? rows.first(BREAKDOWN_TOP_ROWS) : rows
-    tail = rows.drop(top.size)
+    # The list shows its top rows. Past them, only quiet rows fold away: a category
+    # that moved outside the grey band against normal always stays in sight.
+    folded = rows.drop(BREAKDOWN_TOP_ROWS).select { |row| row[:delta].nil? || row[:delta][:tone] == :neutral }
+    folded = [] if folded.size < BREAKDOWN_MIN_TAIL
+    rows.each { |row| row[:folded] = folded.any? { |tail_row| tail_row.equal?(row) } }
 
     {
       type: type,
       rows: rows,
-      top: top,
-      tail: tail,
-      tail_amount: tail.sum { |row| row[:amount] },
-      tail_share: total.positive? ? (tail.sum { |row| row[:amount] } / total.to_f * 100).round(1) : 0,
-      tail_delta: comparison && tail.any? { |row| row[:change] } ? breakdown_delta(tail.sum { |row| row[:change] || 0 }, tone: :neutral) : nil,
+      tail: folded,
+      tail_amount: folded.sum { |row| row[:amount] },
+      tail_share: total.positive? ? (folded.sum { |row| row[:amount] } / total.to_f * 100).round(1) : 0,
+      tail_delta: comparison && folded.any? { |row| row[:change] } ? breakdown_delta(folded.sum { |row| row[:change] || 0 }, tone: :neutral) : nil,
       total: total,
       comparison: comparison,
       no_normal: no_normal,
-      transactions: groups.sum { |group| group[:count] }
+      transactions: groups.sum { |group| group[:count] },
+      netted: groups.sum { |group| group[:netted].to_d }
     }
   end
 
-  # The one line under a side's total. Expenses with a normal: how far the side is
-  # from normal. Otherwise how many categories and transactions it holds.
+  # The one line under a side's total, the same on both sides: how many categories
+  # and transactions it holds, and what refunds (or income paid back) took off it,
+  # so a total lower than the Summary cards is explained where it shows
   def breakdown_column_summary(column)
-    comparison = column[:comparison]
-    unless comparison
-      return [
-        t("reports.transactions_breakdown.column.categories", count: column[:rows].size),
-        t("reports.transactions_breakdown.column.transactions", count: column[:transactions])
-      ].join(", ")
-    end
+    parts = [
+      t("reports.transactions_breakdown.column.categories", count: column[:rows].count { |row| row[:amount].positive? }),
+      t("reports.transactions_breakdown.column.transactions", count: column[:transactions])
+    ]
+    parts << t("reports.transactions_breakdown.details.netted_#{column[:type]}", amount: breakdown_money(column[:netted])) if column[:netted].positive?
+    parts.join(", ")
+  end
 
+  # The headline over both lists: what was left over (or overspent), then how far
+  # spending is from normal when there is a normal to compare with
+  def breakdown_headline(income_total:, expense_total:, comparison:)
+    parts = []
+    if income_total.positive? && expense_total.positive?
+      net = income_total - expense_total
+      amount = tag.span(breakdown_money(net.abs), class: "font-medium")
+      parts << if net.negative?
+        t("reports.transactions_breakdown.overview.overspent_html", amount: amount)
+      else
+        t("reports.transactions_breakdown.overview.left_over_html", amount: amount, percent: number_to_percentage(net / income_total * 100, precision: 0))
+      end
+    end
+    parts << tag.span(breakdown_vs_normal_summary(comparison), data: { testid: "spending-summary" }) if comparison
+    safe_join(parts, " ")
+  end
+
+  # How far spending is from normal, in one sentence
+  def breakdown_vs_normal_summary(comparison)
     change = comparison.total - comparison.normal_total
     timing = comparison.in_progress? ? "so_far" : "period"
     return t("reports.transactions_breakdown.vs_normal.about_#{timing}") if change.abs < IncomeStatement::SpendingComparison::MIN_CHANGE
@@ -158,7 +189,8 @@ module ReportsHelper
     direction = change.negative? ? "less" : "more"
     ratio = comparison.normal_total.positive? ? change / comparison.normal_total : nil
     tone = SPENDING_RATIO_BUCKETS.find { |bucket| ratio.nil? || bucket[:upper].nil? || ratio <= bucket[:upper] }[:tone]
-    amount = tag.span(breakdown_money(change.abs), class: "font-medium #{BREAKDOWN_TONE_CLASSES.fetch(tone)}")
+    # Near normal the amount keeps the sentence's colour rather than a muted grey
+    amount = tag.span(breakdown_money(change.abs), class: class_names("font-medium", BREAKDOWN_TONE_CLASSES.fetch(tone) => tone != :neutral))
 
     if ratio
       t("reports.transactions_breakdown.vs_normal.#{direction}_#{timing}_html", amount: amount, percent: number_to_percentage(ratio.abs * 100, precision: 0))
@@ -167,13 +199,29 @@ module ReportsHelper
     end
   end
 
-  # The key under an expense list: what the tick marks, and which days normal comes from
+  # The key for the ticks: what they mark, which days normal comes from, and what
+  # a grey change means (near normal, or too small to matter). The date range never breaks across lines.
   def breakdown_normal_key(comparison)
-    t(comparison.in_progress? ? "reports.transactions_breakdown.vs_normal.key_so_far" : "reports.transactions_breakdown.vs_normal.key_period",
+    range = t("reports.index.period_nav.range",
+              start: l(comparison.baseline_period.start_date, format: "%b %-d, %Y"),
+              end: l(comparison.baseline_period.end_date, format: "%b %-d, %Y"))
+    t(comparison.in_progress? ? "reports.transactions_breakdown.vs_normal.key_so_far_html" : "reports.transactions_breakdown.vs_normal.key_period_html",
       normal: breakdown_money(comparison.normal_total),
-      range: t("reports.index.period_nav.range",
-               start: l(comparison.baseline_period.start_date, format: "%b %-d, %Y"),
-               end: l(comparison.baseline_period.end_date, format: "%b %-d, %Y")))
+      range: tag.span(range, class: "whitespace-nowrap"),
+      band: number_to_percentage(SPENDING_RATIO_BUCKETS.find { |bucket| bucket[:key] == "normal" }[:upper] * 100, precision: 0),
+      floor: breakdown_money(breakdown_quiet_floor(comparison)))
+  end
+
+  # One stacked bar per side for the overview strip: a segment per category, in the
+  # list's order, on a scale both sides share (the larger total fills the track)
+  def breakdown_strip(columns)
+    scale = columns.map { |column| column[:total] }.max.to_f
+    columns.map do |column|
+      segments = column[:rows].select { |row| row[:amount].positive? }.map do |row|
+        { name: row[:name], color: row[:color], width: scale.positive? ? (row[:amount] / scale * 100).to_f.round(2) : 0 }
+      end
+      { type: column[:type], segments: segments }
+    end
   end
 
   def breakdown_money(amount, precision: 0)
@@ -254,14 +302,25 @@ module ReportsHelper
     def breakdown_change_delta(comparison, compared)
       return nil unless compared.change && compared.change.abs >= IncomeStatement::SpendingComparison::MIN_CHANGE
 
-      breakdown_delta(compared.change, tone: spending_ratio_bucket(comparison, compared)&.dig(:tone) || :neutral)
+      tone = spending_ratio_bucket(comparison, compared)&.dig(:tone) || :neutral
+      tone = :neutral if compared.change.abs < breakdown_quiet_floor(comparison)
+      breakdown_delta(compared.change, tone: tone, ratio: compared.ratio)
     end
 
-    def breakdown_delta(change, tone:)
+    def breakdown_quiet_floor(comparison)
+      comparison.normal_total.to_d * BREAKDOWN_QUIET_SHARE
+    end
+
+    # A signed change, its tone and (when normal is not zero) the change in percent
+    def breakdown_delta(change, tone:, ratio: nil)
       return nil if change.abs < IncomeStatement::SpendingComparison::MIN_CHANGE
 
+      sign = change.negative? ? "−" : "+"
+      percent = ratio && (ratio.abs * 100).round <= BREAKDOWN_MAX_PERCENT ? "#{sign}#{(ratio.abs * 100).round}%" : nil
       {
-        label: "#{change.negative? ? "−" : "+"}#{breakdown_money(change.abs)}",
+        label: "#{sign}#{breakdown_money(change.abs)}",
+        percent: percent,
+        tone: tone,
         tone_class: BREAKDOWN_TONE_CLASSES.fetch(tone),
         direction: change.negative? ? "less" : "more"
       }
