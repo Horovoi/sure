@@ -72,6 +72,8 @@ en:
         to: "to"
       spending_trend:
         title: "Spending"
+        expand: "Expand"
+        expanded_view: "Expanded view"
         period_format: "%B %Y"
         period_picker_label: "Budget period"
         date_range: "%{start_date} - %{end_date}"

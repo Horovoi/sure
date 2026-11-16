@@ -52,4 +52,39 @@ class InsightsTest < ApplicationSystemTestCase
     end
     assert_not @insight.reload.dismissed?
   end
+
+  test "in dark mode the rules between insights are the subtle border, not light lines" do
+    @user.family.insights.create!(
+      kind: "idle_cash", dedupe_key: "system-2", period_start: Date.current.beginning_of_month, priority: "low",
+      template_key: "idle_cash", facts: { account: "Second pot", balance: "$1,000.00", idle_days: 90 },
+      metadata: {}, generated_at: Time.current
+    )
+    @user.update!(theme: "dark")
+    login_as(@user)
+    assert_selector "html[data-theme='dark']"
+
+    assert_subtle_rule "#insights-feed"
+
+    visit insights_path
+    assert_subtle_rule "#insights-list"
+  end
+
+  private
+    # The rule under the first row: a translucent white (border-subdued), where a
+    # missing divide color fell back to an opaque default. A canvas reads the alpha
+    # whatever color syntax the browser reports.
+    def assert_subtle_rule(list)
+      assert_selector "#{list} [data-testid=insight-row]", count: 2
+      color, alpha = page.evaluate_script(<<~JS)
+        (() => {
+          const row = document.querySelectorAll(#{"#{list} [data-testid=insight-row]".to_json})[0];
+          const color = getComputedStyle(row).borderBottomColor;
+          const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d");
+          ctx.fillStyle = color;
+          ctx.fillRect(0, 0, 1, 1);
+          return [color, ctx.getImageData(0, 0, 1, 1).data[3] / 255];
+        })()
+      JS
+      assert_operator alpha, :<=, 0.1, "expected a subtle rule, got #{color}"
+    end
 end

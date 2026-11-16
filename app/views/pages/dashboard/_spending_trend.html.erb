@@ -1,4 +1,7 @@
-<%# locals: (spending_trend_data:) %>
+<%# locals: (spending_trend_data:, fullscreen: false) %>
+<%# The Spending widget. The fullscreen dialog (spending_trend_dialog) renders it again
+    with fullscreen: true in a frame of its own: each copy's controls reload only its own
+    frame, and spending-sync then moves the other copy to the same period and filter. %>
 <%
   trend = spending_trend_data[:trend]
   filter = spending_trend_data[:filter]
@@ -7,25 +10,44 @@
   delta = Money.new(trend.delta, currency)
   delta_class = delta.negative? ? "text-success" : (delta.zero? ? "text-secondary" : "text-destructive")
   parent_ids = filter.options.filter_map { |option| option.category.parent_id }.to_set
+  frame_id = fullscreen ? "spending_trend_fullscreen_section" : "spending_trend_section"
+  long_range = t("pages.dashboard.spending_trend.date_range", start_date: l(range.begin, format: :long), end_date: l(range.end, format: :long))
 %>
-<%= turbo_frame_tag "spending_trend_section" do %>
-<div id="spending-trend-section" class="px-4 space-y-4">
+<%= turbo_frame_tag frame_id do %>
+<div id="<%= fullscreen ? "spending-trend-fullscreen-section" : "spending-trend-section" %>"
+     class="<%= fullscreen ? "space-y-4" : "px-4 space-y-4" %>"
+     data-controller="spending-sync"
+     data-spending-sync-other-frame-value="<%= fullscreen ? "spending_trend_section" : "spending_trend_fullscreen_section" %>"
+     data-spending-sync-period-label-value="<%= long_range %>">
   <%# Both rows wrap, so on narrow widths the controls drop below the dates instead of
-      overflowing the card %>
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <p class="text-sm text-secondary hidden sm:block">
-      <%= t("pages.dashboard.spending_trend.date_range", start_date: l(range.begin, format: :long), end_date: l(range.end, format: :long)) %>
-    </p>
-    <p class="text-sm text-secondary sm:hidden"><%= spending_trend_data[:compact_range] %></p>
+      overflowing the card. Full screen shows the dates in the dialog header. %>
+  <div class="flex flex-wrap items-center <%= fullscreen ? "justify-end" : "justify-between" %> gap-3">
+    <% unless fullscreen %>
+      <div class="flex items-center gap-2">
+        <p class="text-sm text-secondary hidden sm:block"><%= long_range %></p>
+        <p class="text-sm text-secondary sm:hidden"><%= spending_trend_data[:compact_range] %></p>
+        <%= render DS::Button.new(
+          variant: :icon,
+          size: :sm,
+          icon: "maximize-2",
+          type: "button",
+          title: t("pages.dashboard.spending_trend.expand"),
+          aria: { label: t("pages.dashboard.spending_trend.expand") },
+          data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "spending_trend_fullscreen_dialog" },
+          class: "hidden sm:inline-flex"
+        ) %>
+      </div>
+    <% end %>
 
     <div class="flex flex-wrap items-center gap-2">
-      <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "spending_trend_section" } do |form| %>
+      <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: frame_id } do |form| %>
         <% Array(filter.values).each do |value| %>
           <%= hidden_field_tag "spending_category_ids[]", value, id: nil %>
         <% end %>
         <%= form.select :spending_period,
               spending_trend_data[:period_options],
               { selected: trend.period_start.iso8601 },
+              id: fullscreen ? "spending_period_fullscreen" : "spending_period",
               data: { "auto-submit-form-target": "auto" },
               aria: { label: t("pages.dashboard.spending_trend.period_picker_label") },
               class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-xs sm:text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
@@ -35,7 +57,7 @@
             button_text: filter.values ? t("pages.dashboard.spending_trend.filter_categories", count: filter.selected_count) : t("pages.dashboard.spending_trend.filter_categories_all"),
             search_label: t("pages.dashboard.spending_trend.search_categories"),
             apply_text: t("pages.dashboard.spending_trend.apply"),
-            frame: "spending_trend_section",
+            frame: frame_id,
             hidden_fields: { spending_period: trend.period_start.iso8601 },
             list_controllers: "list-filter category-filter"
           } do %>
@@ -98,7 +120,7 @@
   </div>
 
   <% if trend.any_spending? %>
-    <div class="w-full h-52"
+    <div class="w-full <%= fullscreen ? "h-[60svh] min-h-64" : "h-52" %>"
       data-controller="spending-chart"
       data-spending-chart-data-value="<%= spending_trend_data[:chart_data].to_json %>"
       data-spending-chart-currency-value="<%= currency %>"
@@ -106,7 +128,7 @@
       data-spending-chart-previous-label-value="<%= spending_trend_data[:previous_label] %>">
     </div>
   <% else %>
-    <div class="w-full h-52 flex items-center justify-center">
+    <div class="w-full <%= fullscreen ? "h-[60svh] min-h-64" : "h-52" %> flex items-center justify-center">
       <p class="text-secondary text-sm"><%= t("pages.dashboard.spending_trend.no_data") %></p>
     </div>
   <% end %>

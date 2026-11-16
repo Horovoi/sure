@@ -99,6 +99,17 @@
   }
 }
 
+/* Row rules for divide-y / divide-x lists, matching border-primary. Without this
+   utility `divide-primary` compiles to nothing and the rules take the default
+   border color, a light gray that shows as near-white lines in dark mode. */
+@utility divide-primary {
+  @apply divide-alpha-black-300;
+
+  @variant theme-dark {
+    @apply divide-alpha-white-400;
+  }
+}
+
 /* Row rules for divide-y / divide-x lists, matching border-subdued */
 @utility divide-subdued {
   @apply divide-alpha-black-50;
