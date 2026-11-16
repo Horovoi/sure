@@ -32,6 +32,10 @@ class PrivacyModeCoverageTest < ActionDispatch::IntegrationTest
     end
     create_transaction(account: @account, name: "Salary", amount: -2500, category: income, date: Date.current)
 
+    # A split transaction, for the grouped list rows, the split box in the drawer and the editor
+    @split = create_transaction(account: @account, name: "Supermarket", amount: 100, category: food, date: Date.current)
+    @split.split!([ { name: "Food part", amount: 60, category_id: food.id }, { name: "Household part", amount: 40 } ])
+
     @budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
     @budget.budget_categories.each { |bc| bc.update!(budgeted_spending: 300) }
 
@@ -104,6 +108,11 @@ class PrivacyModeCoverageTest < ActionDispatch::IntegrationTest
         "chat" => chat_path(@chat)
       }
       list["plan"] = plan_path if respond_to?(:plan_path)
+      if respond_to?(:edit_transaction_split_path)
+        list["split drawer"] = transaction_path(@split)
+        list["split part drawer"] = transaction_path(@split.child_entries.first)
+        list["split editor"] = edit_transaction_split_path(@split)
+      end
 
       @family.accounts.each { |account| list["account #{account.name}"] = account_path(account) }
       @family.goals.each { |goal| list["goal #{goal.name}"] = goal_path(goal) }

@@ -26,6 +26,7 @@
               autocomplete: "off",
               value: part.amount && format("%.#{precision}f", part.amount),
               container_class: "w-36 sm:w-32",
+              class: "form-field__input privacy-sensitive",
               data: { split_editor_target: "amount", action: "input->split-editor#recalculate" } %>
 
         <%= render DS::Button.new(
