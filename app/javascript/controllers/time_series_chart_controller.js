@@ -796,7 +796,9 @@ export default class extends Controller {
       // Avoid drawing labels that collide with endpoint labels or x-axis labels.
       // A guide label is axis label text with its baseline at y - 4; the end
       // label is 12px text with its baseline at endLabelY.
-      const nearEnd = Math.abs(y - yEnd) < 16 && (g.key === "min" || g.key === "max");
+      // Only with endpoint markers: their end label shows that value instead
+      const nearEnd =
+        this.endpointMarkersValue && Math.abs(y - yEnd) < 16 && (g.key === "min" || g.key === "max");
       const onEndLabel =
         endLabelY !== null && y - 4 > endLabelY - 12 - 2 && y - 4 - labelSize < endLabelY + 3 + 2;
       const tooCloseToBottom = this._d3ContainerHeight - y < 16; // collides with bottom date label
