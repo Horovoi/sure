@@ -47,6 +47,11 @@ class BudgetsController < ApplicationController
 
   private
 
+    # Budgets live under the Plan page
+    def set_breadcrumbs
+      @breadcrumbs = plan_breadcrumbs([ t("breadcrumbs.budgets"), nil ])
+    end
+
     def budget_create_params
       params.expect(budget: [ :start_date ])
     end

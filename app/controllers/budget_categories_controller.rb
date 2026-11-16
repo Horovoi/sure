@@ -96,6 +96,11 @@ class BudgetCategoriesController < ApplicationController
   end
 
   private
+    # Budgets live under the Plan page
+    def set_breadcrumbs
+      @breadcrumbs = plan_breadcrumbs([ t("breadcrumbs.budgets"), nil ])
+    end
+
     def budget_category_params
       @budget_category_params ||= params.expect(budget_category: [ :budgeted_spending, :rollover_enabled ])
     end

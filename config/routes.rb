@@ -173,6 +173,9 @@ Rails.application.routes.draw do
     get :print, on: :collection
   end
 
+  # The Plan page: this budget period and the goals on one page
+  resource :plan, only: :show
+
   resources :budgets, only: %i[index show edit update], param: :month_year do
     get :picker, on: :collection
 

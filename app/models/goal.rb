@@ -227,6 +227,18 @@ class Goal < ApplicationRecord
       end
     end
 
+    # The goals still being worked on (not completed, not archived), ready to render and
+    # in the goals index order. The Plan page lists these.
+    def active_prepared_for(family)
+      active_display_sort(prepared_for(family, scope: family.goals.not_released))
+    end
+
+    # The accounts a goal may be funded by: the family's active manual accounts of a
+    # fundable type. Bank providers stay hidden in this app.
+    def linkable_accounts_for(family)
+      family.accounts.counted_in_totals.manual.where(accountable_type: FUNDABLE_ACCOUNT_TYPES)
+    end
+
     # Net inflow into every account linked to the family's goals, in family currency, for
     # the current window and the one before it (the index "Contributed" tile). Transfers
     # between linked accounts net to zero. Each currency's sum is converted at today's

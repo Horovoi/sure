@@ -20,9 +20,10 @@ class GoalsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/Goals/i, response.body)
   end
 
-  test "the main nav links to goals" do
+  test "the goals page sits under Plan in the nav and the breadcrumbs" do
     get goals_url
-    assert_select "a[href=?]", goals_path, minimum: 1
+    assert_select "a[href=?][aria-current=page]", plan_path, minimum: 1
+    assert_select "a[href=?]", plan_path, text: I18n.t("breadcrumbs.plan")
   end
 
   test "show renders the goal" do

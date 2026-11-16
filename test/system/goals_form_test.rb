@@ -39,9 +39,12 @@ class GoalsFormTest < ApplicationSystemTestCase
     assert_select I18n.t("goals.form.fields.target_mode")
   end
 
-  test "the Goals nav item opens the goals page" do
+  test "the Plan nav item leads to the goals page" do
     visit root_path
-    click_link I18n.t("layouts.application.nav.goals"), match: :first
+    click_link I18n.t("layouts.application.nav.plan"), match: :first
+    assert_current_path plan_path
+
+    within_testid("plan-goals") { click_link I18n.t("plans.show.goals.all") }
 
     assert_current_path goals_path
     assert_selector "h1", text: I18n.t("goals.index.title")
