@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
 import { barAxisLabels, barValueLabelsFit } from "utils/bar_axis_labels";
+import { appendLevelLine, styleAxisLabels } from "utils/chart_grid";
 
 // Draws a grouped bar chart for monthly income vs expenses
 // Connects to data-controller="reports-trends-bar"
@@ -80,20 +81,11 @@ export default class extends Controller {
       .append("g")
       .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
-    // Grid lines
-    g.append("g")
-      .attr("class", "grid")
-      .call(
-        d3.axisLeft(y).ticks(5).tickSize(-innerWidth).tickFormat("")
-      )
-      .call((sel) => sel.select(".domain").remove())
-      .call((sel) =>
-        sel
-          .selectAll("line")
-          .attr("stroke", "var(--color-border)")
-          .attr("stroke-dasharray", "2,3")
-          .attr("opacity", 0.5)
-      );
+    // Level lines; the zero line (the bars' baseline) is the stronger one
+    const grid = g.append("g").attr("class", "grid");
+    y.ticks(5).forEach((tick) =>
+      appendLevelLine(grid, { x1: 0, x2: innerWidth, y: y(tick), strong: tick === 0 })
+    );
 
     // Y-axis
     g.append("g")
@@ -104,35 +96,22 @@ export default class extends Controller {
           .tickFormat((d) => this._formatNumber(d))
       )
       .call((sel) => sel.select(".domain").remove())
-      .call((sel) =>
-        sel
-          .selectAll("text")
-          .classed("privacy-sensitive", true)
-          .style("fill", "var(--color-text-secondary)")
-          .attr("font-size", "13px")
-      )
+      .call((sel) => styleAxisLabels(sel.selectAll("text"), "privacy-sensitive"))
       .call((sel) => sel.selectAll("line").remove());
 
     // X-axis: whole labels when they fit the bar group, else the month alone, else
     // every n-th month (a year in a narrow column ran into one string)
-    const xAxisFontSize = trends.length > 8 ? "11px" : "13px";
     const shownLabels = barAxisLabels(
       trends.map((d) => d.month),
       x0.step(),
-      { charWidth: trends.length > 8 ? 6 : 7 },
+      { charWidth: 6.5 },
     );
     const labelFor = new Map(trends.map((d, i) => [d.month, shownLabels[i]]));
     g.append("g")
       .attr("transform", `translate(0, ${innerHeight})`)
       .call(d3.axisBottom(x0).tickSize(0).tickFormat((month) => labelFor.get(month)))
       .call((sel) => sel.select(".domain").remove())
-      .call((sel) =>
-        sel
-          .selectAll("text")
-          .style("fill", "var(--color-text-secondary)")
-          .attr("font-size", xAxisFontSize)
-          .attr("dy", "1em")
-      );
+      .call((sel) => styleAxisLabels(sel.selectAll("text")).attr("dy", "1em"));
 
     // Bars
     const monthGroups = g

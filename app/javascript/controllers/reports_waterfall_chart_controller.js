@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
+import { CHART_AXIS_LABEL, appendGuideLine, appendLevelLine } from "utils/chart_grid";
 
 // Draws a vertical waterfall chart for net worth breakdown
 // Assets stack UP (green), liabilities subtract DOWN (red), final bar shows net worth total from 0
@@ -143,29 +144,20 @@ export default class extends Controller {
       .style("z-index", "10")
       .style("white-space", "nowrap");
 
-    // Zero baseline
-    g.append("line")
-      .attr("x1", 0)
-      .attr("x2", innerWidth)
-      .attr("y1", yScale(0))
-      .attr("y2", yScale(0))
-      .attr("stroke", "var(--color-text-secondary)")
-      .attr("stroke-width", 1)
-      .attr("opacity", 0.4);
+    // Level lines under the bars, then the stronger zero baseline
+    const ticks = yScale.ticks(5);
+    const grid = g.append("g").attr("class", "grid");
+    ticks
+      .filter((tick) => tick !== 0)
+      .forEach((tick) => appendLevelLine(grid, { x1: 0, x2: innerWidth, y: yScale(tick) }));
+    appendLevelLine(g, { x1: 0, x2: innerWidth, y: yScale(0), strong: true });
 
     // Dashed separator before total bar
     if (bars.length > 1) {
       const totalIdx = bars.length - 1;
       const separatorX =
         xScale(bars[totalIdx].name) - xScale.step() * xScale.padding() * 0.5;
-      g.append("line")
-        .attr("x1", separatorX)
-        .attr("x2", separatorX)
-        .attr("y1", 0)
-        .attr("y2", innerHeight)
-        .attr("stroke", "var(--color-border)")
-        .attr("stroke-dasharray", "4,4")
-        .attr("stroke-width", 1);
+      appendGuideLine(g, { x1: separatorX, x2: separatorX, y1: 0, y2: innerHeight });
     }
 
     // Draw bars
@@ -268,8 +260,7 @@ export default class extends Controller {
         .attr("x", x)
         .attr("y", innerHeight + 16)
         .attr("text-anchor", shouldRotate ? "end" : "middle")
-        .attr("class", "text-xs")
-        .style("fill", "var(--color-text-secondary)")
+        .attr("class", CHART_AXIS_LABEL)
         .text(bar.name);
 
       if (shouldRotate) {
@@ -280,28 +271,15 @@ export default class extends Controller {
       }
     });
 
-    // Y-axis ticks
-    const ticks = yScale.ticks(5);
+    // Y-axis labels (their level lines are drawn under the bars)
     ticks.forEach((tick) => {
-      const y = yScale(tick);
       g.append("text")
         .attr("x", -8)
-        .attr("y", y)
+        .attr("y", yScale(tick))
         .attr("dy", "0.35em")
         .attr("text-anchor", "end")
-        .attr("class", "text-xs privacy-sensitive")
-        .style("fill", "var(--color-text-secondary)")
+        .attr("class", `${CHART_AXIS_LABEL} privacy-sensitive`)
         .text(`${tick < 0 ? "-" : ""}${currency}${this._formatNumber(Math.abs(tick))}`);
-
-      // Light grid line
-      g.append("line")
-        .attr("x1", 0)
-        .attr("x2", innerWidth)
-        .attr("y1", y)
-        .attr("y2", y)
-        .attr("stroke", "var(--color-border)")
-        .attr("stroke-width", 0.5)
-        .attr("opacity", 0.3);
     });
   }
 

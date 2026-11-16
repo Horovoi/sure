@@ -21,7 +21,7 @@ class TimeSeriesChartLabelsTest < ApplicationSystemTestCase
 
       # The start label comes first, the end label second
       end_label = all("##{CHART_ID} g.endpoint-marker.label text.text-primary", count: 2).last.native.rect
-      guides = all("##{CHART_ID} text.fg-gray", wait: 0)
+      guides = all("##{CHART_ID} text.y-guide-label", wait: 0)
       assert guides.any?, "the chart draws guide labels at #{width}x#{height}"
 
       guides.each do |guide|

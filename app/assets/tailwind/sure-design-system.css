@@ -56,6 +56,12 @@
   --color-tooltip-bg: #fff;
   --color-tooltip-border: var(--color-gray-200);
 
+  /* Chart level lines (y guides, gridlines): the border-primary strength, so
+     they show in dark mode too; the zero or target line one step stronger.
+     Dark values are below. */
+  --color-chart-grid: var(--color-alpha-black-300);
+  --color-chart-grid-strong: var(--color-alpha-black-400);
+
   /* Gray scale */
   --color-gray-25: #FAFAFA;
   --color-gray-50: #F7F7F7;
@@ -315,6 +321,8 @@
     --color-text-secondary: var(--color-gray-300);
     --color-tooltip-bg: var(--color-gray-700);
     --color-tooltip-border: var(--color-gray-600);
+    --color-chart-grid: var(--color-alpha-white-400);
+    --color-chart-grid-strong: var(--color-alpha-white-500);
 
     /* Shadows fall darker than the surface in dark mode too: a white shadow
        read as a glow under menus, popovers and cards. The 1px alpha-white ring
@@ -426,6 +434,38 @@
         0 0 0 1px var(--color-alpha-white-50),
         0 8px 24px rgba(11, 11, 11, 0.12);
     }
+  }
+
+  /*
+    One look for the level lines and axis labels of every D3 chart (the
+    helpers in app/javascript/utils/chart_grid.mjs put these classes on).
+    CSS beats the SVG presentation attributes d3-axis writes, and the colours
+    are theme tokens, so a theme switch needs no redraw for them.
+  */
+  .chart-grid-line,
+  .chart-zero-line {
+    fill: none;
+    stroke: var(--color-chart-grid);
+    stroke-width: 1px;
+    stroke-dasharray: 3 3;
+  }
+
+  .chart-zero-line {
+    stroke: var(--color-chart-grid-strong);
+  }
+
+  /* Short solid marks on an axis, such as the date ticks under a time series */
+  .chart-tick-mark {
+    stroke: var(--color-chart-grid-strong);
+    stroke-width: 1px;
+  }
+
+  .chart-axis-label {
+    fill: var(--color-text-secondary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
 
   /* Forms */

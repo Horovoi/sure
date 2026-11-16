@@ -1,6 +1,14 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
 import { chartYGuides } from "utils/chart_y_guides";
+import {
+  CHART_AXIS_LABEL,
+  CHART_AXIS_LABEL_SIZE,
+  CHART_TICK_MARK,
+  appendGuideLine,
+  appendLevelLine,
+  styleAxisLabels,
+} from "utils/chart_grid";
 
 const parseLocalDate = d3.timeParse("%Y-%m-%d");
 
@@ -166,14 +174,8 @@ export default class extends Controller {
   }
 
   _drawDashedLineEmptyState() {
-    this._d3Svg
-      .append("line")
-      .attr("x1", this._d3InitialContainerWidth / 2)
-      .attr("y1", 0)
-      .attr("x2", this._d3InitialContainerWidth / 2)
-      .attr("y2", this._d3InitialContainerHeight)
-      .attr("stroke", "var(--color-gray-300)")
-      .attr("stroke-dasharray", "4, 4");
+    const x = this._d3InitialContainerWidth / 2;
+    appendGuideLine(this._d3Svg, { x1: x, x2: x, y1: 0, y2: this._d3InitialContainerHeight });
   }
 
   _drawCenteredCircleEmptyState() {
@@ -228,20 +230,15 @@ export default class extends Controller {
     // Only draw if data actually crosses zero
     if (dataMin >= 0 || dataMax <= 0) return;
 
-    const zeroY = this._d3YScale(0);
     const [rangeStart, rangeEnd] = this._d3XScale.range();
-    const isDark = this._isDarkTheme();
 
-    this._d3Group
-      .append("line")
-      .attr("class", "zero-line fg-subdued")
-      .attr("x1", rangeStart)
-      .attr("x2", rangeEnd)
-      .attr("y1", zeroY)
-      .attr("y2", zeroY)
-      .attr("stroke", "currentColor")
-      .attr("stroke-opacity", isDark ? 0.2 : 0.3)
-      .attr("stroke-dasharray", "4,4");
+    appendLevelLine(this._d3Group, {
+      x1: rangeStart,
+      x2: rangeEnd,
+      y: this._d3YScale(0),
+      strong: true,
+      className: "zero-line",
+    });
   }
 
   // Draw split area fills: green above zero, red below zero
@@ -410,11 +407,7 @@ export default class extends Controller {
       .remove();
 
     // Style ticks
-    this._d3Group
-      .selectAll(".tick text")
-      .attr("class", "fg-gray fill-current")
-      .style("font-size", "12px")
-      .style("font-weight", "500")
+    styleAxisLabels(this._d3Group.selectAll(".tick text"))
       .attr("text-anchor", "middle")
       .attr("dx", (_d, i) => {
         // Dynamic horizontal offset to reduce collisions with endpoint labels/markers
@@ -445,9 +438,6 @@ export default class extends Controller {
     const timeScale = this._d3XScale;
     const ticks = timeScale.ticks(tickCount + 2).slice(1, -1);
 
-    const isDark = this._isDarkTheme();
-    const tickOpacity = isDark ? 0.15 : 0.2;
-
     ticks.forEach((date) => {
       const x = this._d3XScale(date);
 
@@ -457,25 +447,20 @@ export default class extends Controller {
       // Tick mark (both modes)
       this._d3Group
         .append("line")
-        .attr("class", "intermediate-tick fg-subdued")
+        .attr("class", `intermediate-tick ${CHART_TICK_MARK}`)
         .attr("x1", x)
         .attr("x2", x)
         .attr("y1", this._d3ContainerHeight)
-        .attr("y2", this._d3ContainerHeight + 4)
-        .attr("stroke", "currentColor")
-        .attr("stroke-opacity", tickOpacity);
+        .attr("y2", this._d3ContainerHeight + 4);
 
       // Label (fullscreen only)
       if (isFullscreen) {
         this._d3Group
           .append("text")
-          .attr("class", "fg-gray fill-current intermediate-label")
+          .attr("class", `${CHART_AXIS_LABEL} intermediate-label`)
           .attr("x", x)
           .attr("y", this._d3ContainerHeight + 14)
           .attr("text-anchor", "middle")
-          // The same size and weight as the start and end dates
-          .style("font-size", "12px")
-          .style("font-weight", "500")
           .text(this._formatIntermediateDate(date));
       }
     });
@@ -783,13 +768,10 @@ export default class extends Controller {
     const dataMin = d3.min(values);
     const dataMax = d3.max(values);
 
-    const isDark = this._isDarkTheme();
-    // One strength for every guide: each label needs a line you can see under it
-    const lineOpacity = isDark ? 0.12 : 0.15;
-
     // When the series crosses zero, the middle guide is the zero line (drawn by
     // _drawZeroLine), so its label reads 0 and sits on a line that is there
-    const guides = chartYGuides(dataMin, dataMax).map((g) => ({ ...g, v: g.value, opacity: lineOpacity }));
+    const guides = chartYGuides(dataMin, dataMax).map((g) => ({ ...g, v: g.value }));
+    const labelSize = CHART_AXIS_LABEL_SIZE;
     const labelledYs = [];
 
     const end = this._normalDataPoints[this._normalDataPoints.length - 1];
@@ -802,30 +784,21 @@ export default class extends Controller {
       const y = this._d3YScale(g.v);
 
       // Avoid drawing labels that collide with endpoint labels or x-axis labels.
-      // A guide label is 11px text with its baseline at y - 4; the end label is
-      // 12px text with its baseline at endLabelY.
+      // A guide label is axis label text with its baseline at y - 4; the end
+      // label is 12px text with its baseline at endLabelY.
       const nearEnd = Math.abs(y - yEnd) < 16 && (g.key === "min" || g.key === "max");
       const onEndLabel =
-        endLabelY !== null && y - 4 > endLabelY - 12 - 2 && y - 4 - 11 < endLabelY + 3 + 2;
+        endLabelY !== null && y - 4 > endLabelY - 12 - 2 && y - 4 - labelSize < endLabelY + 3 + 2;
       const tooCloseToBottom = this._d3ContainerHeight - y < 16; // collides with bottom date label
       // Two guide labels closer than a line of text would overlap
-      const onOtherLabel = labelledYs.some((other) => Math.abs(other - y) < 14);
+      const onOtherLabel = labelledYs.some((other) => Math.abs(other - y) < labelSize + 3);
       const shouldSkipLabel =
         nearEnd || onEndLabel || onOtherLabel || (g.key === "min" && tooCloseToBottom);
 
       // Line (the zero line is already drawn)
       const [rangeStart, rangeEnd] = this._d3XScale.range();
       if (!g.zero) {
-        this._d3Group
-          .append("line")
-          .attr("class", "y-guide fg-subdued")
-          .attr("x1", rangeStart)
-          .attr("x2", rangeEnd)
-          .attr("y1", y)
-          .attr("y2", y)
-          .attr("stroke", "currentColor")
-          .attr("stroke-opacity", g.opacity)
-          .attr("stroke-dasharray", "4,4");
+        appendLevelLine(this._d3Group, { x1: rangeStart, x2: rangeEnd, y, className: "y-guide" });
       }
 
       if (!shouldSkipLabel) {
@@ -836,12 +809,10 @@ export default class extends Controller {
         const labelX = Math.min(this._d3ContainerWidth - 6, endX - 10);
         this._d3Group
           .append("text")
-          .attr("class", "fg-gray fill-current privacy-sensitive")
+          .attr("class", `y-guide-label ${CHART_AXIS_LABEL} privacy-sensitive`)
           .attr("x", Math.max(0, labelX))
           .attr("y", y - 4)
           .attr("text-anchor", "end")
-          .style("font-size", "11px")
-          .style("font-weight", "500")
           .text(this._formatMoneyLike(g.v));
       }
     });
