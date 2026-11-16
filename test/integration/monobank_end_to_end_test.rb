@@ -45,6 +45,11 @@ class MonobankEndToEndTest < ActiveSupport::TestCase
       assert_equal START.to_date, @mono_visa.reload.provider_cutover_date, "cutover: the day after the latest hand-entered entry"
       assert_operator fake.requests.count { |entry| entry["function"] == "statement" && entry["status"] == 500 }, :>=, 1,
                       "the EUR fault was served (and the account recovered)"
+      statements = fake.requests.select { |entry| entry["function"] == "statement" }
+      assert_equal [ 429, true ], statements.first.values_at("status", "fault"), "the first statement request got the bank's 429"
+      again = statements.drop(1).find { |entry| entry["account"] == statements.first["account"] }
+      assert again, "the chain asked that product again"
+      assert_operator again["at"] - statements.first["at"], :>=, INTERVAL, "after the interval"
 
       import = @family.imports.new(type: "TransactionImport", account: @mono_visa)
       assert_not import.valid?, "a statement import into the linked Mono Visa is refused"

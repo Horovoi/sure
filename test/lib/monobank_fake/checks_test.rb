@@ -53,7 +53,7 @@ class MonobankFake::ChecksTest < ActiveSupport::TestCase
     assert_includes names, "hand-entered entries claimed by bank rows: 4"
     assert_includes names, "bank rows before the cutover not imported: 1"
     assert_includes names, "transfer suggested mbf-tr-uah-to-usd -> mbf-tr-usd-in"
-    assert_includes names, "every bank row has one entry (32 rows)"
+    assert_includes names, "every bank row has one entry (33 rows)"
 
     out = StringIO.new
     assert checks.report(out)
@@ -74,7 +74,7 @@ class MonobankFake::ChecksTest < ActiveSupport::TestCase
     bank_entry(eur, "mbf-usd-apple", date: CUTOVER - 120, amount: 9.99, currency: "EUR")
     assert usd
 
-    assert_failed run_checks, "no external id imported twice", "every bank row has one entry (32 rows)"
+    assert_failed run_checks, "no external id imported twice", "every bank row has one entry (33 rows)"
   end
 
   test "a balance or a hand-entered entry changed before the cutover" do
@@ -92,7 +92,7 @@ class MonobankFake::ChecksTest < ActiveSupport::TestCase
 
     checks = run_checks(cutover: nil)
     assert_failed checks, "current balance mbf-eur = 500.00", "mbf-fop is a Depository", "history before the cutover unchanged",
-                  "every bank row has one entry (33 rows)"
+                  "every bank row has one entry (34 rows)"
   end
 
   test "holds: pending count, each hold pending; after settle and cancel" do

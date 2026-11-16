@@ -8,7 +8,7 @@ real bank.
 |---|---|
 | `app.rb` | `MonobankFake::App`, the fake (Rack + Ruby standard library, no Rails) |
 | `config.ru`, `server` | run the fake as a server on 127.0.0.1 |
-| `fixtures/sample.json` | sample client: UAH black card with a credit limit, USD and EUR accounts, FOP, two jars |
+| `fixtures/sample.json` | sample client: UAH black card with a credit limit, USD and EUR accounts, FOP, two jars; purchases, a refund, own transfers, two holds; the first statement request gets a 429, the first EUR one a 500 |
 | `fixture_generator.rb`, `generate_fixture.rb` | build a fixture around a real hand-kept account (staging copy) |
 | `checks.rb`, `drain.rb`, `scenario.rb` | the run and its checks, shared by `e2e.rb` and the integration test |
 | `e2e.rb` | the full run on the staging copy |
@@ -137,8 +137,10 @@ Full run on the staging copy (changes the copy; `bin/staging refresh` resets it)
 BANK_CONNECTIONS_ENABLED=monobank bin/staging run bin/rails runner script/monobank_fake/e2e.rb -- --account "Mono Visa"
 ```
 
-It builds a fixture from Mono Visa (or takes `--fixture`), starts the fake on a free
-127.0.0.1 port with one request per second per function (`MONOBANK_MIN_REQUEST_INTERVAL=1`),
+It syncs Mono Visa first (the copy's balance rows can lag its entries), builds a fixture
+from it (or takes `--fixture`), adds the fixture's exchange rates the copy has none of (and
+removes them at the end), starts the fake on a free 127.0.0.1 port with one request per
+second per function (`MONOBANK_MIN_REQUEST_INTERVAL=1`),
 connects monobank, links Mono Visa, creates accounts for the other products, runs every job
 itself in due order (sleeping until scheduled ones are due), then settles one hold and
 cancels the other, then runs the hourly sync. It prints PASS or FAIL for each check:
@@ -155,6 +157,7 @@ cancels the other, then runs the hourly sync. It prints PASS or FAIL for each ch
 - transfer suggestions for card -> jar, jar -> card, UAH -> USD, FOP -> card
 - categories per MCC group
 - 0 requests before the rate limit allowed them, requests at least the interval apart
+- each fixture fault (the 429, the 500) served as often as it says, then the real answers
 - no sync open longer than 30 minutes, none failed or stale; statement fetching finished
 - the hourly sync with nothing new asks client-info once and no statement
 

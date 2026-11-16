@@ -89,6 +89,7 @@
       { "id": "mbf-new-anc", "days_ago": 0.35, "description": "Аптека АНЦ", "mcc": 5912, "amount": -9870, "_group": "pharmacy", "_category": "Pharmacies" },
       { "id": "mbf-new-p2p-in", "days_ago": 0.33, "description": "Від: Олена Петренко", "mcc": 4829, "amount": 150000, "comment": "За квитки" },
       { "id": "mbf-new-novus", "days_ago": 0.3, "description": "Novus", "mcc": 5411, "amount": -23480, "_group": "groceries", "_category": "Groceries" },
+      { "id": "mbf-new-refund", "days_ago": 0.29, "description": "Повернення: Rozetka", "mcc": 5732, "amount": 129900, "_group": "refund", "_category": "Refund" },
 
       { "id": "mbf-tr-card-to-jar", "days_ago": 0.25, "description": "На банку «Відпустка»", "mcc": 4829, "amount": -100000, "_group": "own_transfer", "_category": null },
       { "id": "mbf-tr-jar-to-card", "days_ago": 0.2, "description": "З банки «Відпустка»", "mcc": 4829, "amount": 50000, "_group": "own_transfer", "_category": null },
@@ -124,6 +125,7 @@
     ]
   },
   "faults": [
+    { "path_prefix": "/personal/statement/", "status": 429, "times": 1, "body": { "errorDescription": "Too many requests" }, "_note": "the very first statement request gets the bank's 429 although it kept the interval: the chain waits and asks again" },
     { "path_prefix": "/personal/statement/mbf-eur", "status": 500, "times": 1, "_note": "first EUR statement fails once: the account backs off, the others continue" }
   ],
   "expected": {
@@ -157,7 +159,7 @@
       "mbf-jar-vacation": "Depository",
       "mbf-jar-reserve": "Depository"
     },
-    "categories": { "groceries": 2, "mobile_plan": 1, "streaming": 1, "eating_out": 1, "taxi": 1, "pharmacy": 1, "own_transfer": 0 },
-    "category_names": { "groceries": "Groceries", "mobile_plan": "Mobile Plan", "streaming": "Streaming", "eating_out": "Eating Out", "taxi": "Taxi", "pharmacy": "Pharmacies" }
+    "categories": { "groceries": 2, "mobile_plan": 1, "streaming": 1, "eating_out": 1, "taxi": 1, "pharmacy": 1, "refund": 1, "own_transfer": 0 },
+    "category_names": { "groceries": "Groceries", "mobile_plan": "Mobile Plan", "streaming": "Streaming", "eating_out": "Eating Out", "taxi": "Taxi", "pharmacy": "Pharmacies", "refund": "Refund" }
   }
 }

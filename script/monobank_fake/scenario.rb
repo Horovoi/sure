@@ -54,7 +54,9 @@ module MonobankFake
       end
       drain.run(item)
 
-      record_phase(:backfill, checks.tap(&:run))
+      result = checks.tap(&:run)
+      add_fault_checks(result)
+      record_phase(:backfill, result)
     end
 
     # Step 5. Returns the Checks.
@@ -139,6 +141,20 @@ module MonobankFake
       def record_phase(name, result)
         @phases[name] = result
         result
+      end
+
+      # Every fault of the fixture with a count was served that many times (each product's
+      # rows arriving after it is check_every_row_imported)
+      def add_fault_checks(result)
+        served = fake.requests.select { |entry| entry["fault"] }
+        Array(fixture["faults"]).each do |fault|
+          next if fault["times"].nil?
+
+          prefix = fault["path_prefix"].to_s
+          count = served.count { |entry| entry["path"].to_s.start_with?(prefix) && entry["status"].to_i == fault["status"].to_i }
+          wanted = fault.fetch("times", 1).to_i
+          result.add("fault #{fault['status']} on #{prefix} served #{wanted}x, then the real answers", count == wanted, "served #{count}x")
+        end
       end
 
       def link_products!

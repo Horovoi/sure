@@ -64,7 +64,7 @@ class MonobankFake::FixtureGeneratorTest < ActiveSupport::TestCase
     new_rows = rows.select { |row| row["id"].start_with?("mbf-new-", "mbf-tr-", "mbf-hold-") }
     hand = @account.entries.where(entryable_type: "Transaction").to_a
 
-    assert_equal 14, new_rows.size
+    assert_equal 15, new_rows.size
     new_rows.each do |row|
       date = Time.at(row["time"]).in_time_zone(ZONE).to_date
       assert_equal Date.new(2026, 11, 15), date, row["id"]
@@ -171,13 +171,21 @@ class MonobankFake::FixtureGeneratorTest < ActiveSupport::TestCase
     fake = MonobankFake::App.new(fixture)
     from = ZONE.local(2026, 11, 12).to_i
 
-    response = Rack::MockRequest.new(fake).get("/personal/statement/mbf-uah-black/#{from}", "HTTP_X_TOKEN" => "e2e-fake-token")
+    request = -> { Rack::MockRequest.new(fake).get("/personal/statement/mbf-uah-black/#{from}", "HTTP_X_TOKEN" => "e2e-fake-token") }
+    first = request.call
+    assert_equal 429, first.status, "the first statement request gets the sample's 429"
+    assert_equal 0, fake.early_requests
+
+    travel 2.seconds
+    response = request.call
     ids = JSON.parse(response.body).map { |row| row["id"] }
 
+    assert_equal 200, response.status
     assert_equal 1.0, fake.rate_limit_seconds
     assert_includes ids, "mbf-skip-not-entered"
+    assert_includes ids, "mbf-new-refund"
     assert_not_includes ids, "mbf-old-before-window"
-    assert_equal 4 + 1 + 14, ids.size
+    assert_equal 4 + 1 + 15, ids.size
   end
 
   test "with no entries at all the cutover is today" do

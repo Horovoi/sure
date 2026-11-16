@@ -41,6 +41,26 @@ class MonobankFake::ScriptsTest < ActiveSupport::TestCase
     assert_match "outbound HTTP to api.monobank.ua is blocked", error.message
   end
 
+  test "e2e adds the fixture's rates only when none is stored, and removes what it added" do
+    ExchangeRate.where(from_currency: %w[EUR UAH], to_currency: %w[EUR UAH]).delete_all
+    ExchangeRate.create!(from_currency: "USD", to_currency: "UAH", date: Date.current - 3, rate: 41.9)
+    ExchangeRate.create!(from_currency: "UAH", to_currency: "USD", date: Date.current - 3, rate: 0.0239)
+    fixture = { "expected" => { "exchange_rates" => [ { "from" => "USD", "to" => "UAH", "rate" => 41.5 },
+                                                       { "from" => "EUR", "to" => "UAH", "rate" => 48.2 } ] } }
+
+    added = nil
+    assert_difference -> { ExchangeRate.count }, 2 do
+      capture_io { added = MonobankFake::E2E.ensure_exchange_rates(fixture, Date.current) }
+    end
+    assert_equal [ %w[EUR UAH], %w[UAH EUR] ], added.map { |rate| [ rate.from_currency, rate.to_currency ] }
+    assert_equal 41.9, ExchangeRate.find_by(from_currency: "USD", to_currency: "UAH").rate.to_f, "a stored rate is kept"
+
+    assert_difference -> { ExchangeRate.count }, -2 do
+      capture_io { MonobankFake::E2E.remove_exchange_rates(added) }
+    end
+    assert ExchangeRate.exists?(from_currency: "USD", to_currency: "UAH")
+  end
+
   test "e2e serves the fake on a free loopback port" do
     fixture = { "tokens" => [ "t" ], "accounts" => [ { "id" => "a", "balance" => 5 } ] }
     fake, server, url = MonobankFake::E2E.start_fake(fixture)

@@ -10,8 +10,9 @@ require_relative "app"
 #   a day later or earlier than it was written down); each must claim its entry
 # - one row before the cutover that was never entered by hand (must be skipped) and one
 #   older than the fetch window (never fetched)
-# - new rows from the cutover to now: purchases for the MCC groups, card <-> jar,
+# - new rows from the cutover to now: purchases for the MCC groups, a refund, card <-> jar,
 #   UAH -> USD and FOP -> card transfers, and two holds
+# - the sample's faults: the first statement request gets a 429, the first EUR one a 500
 # - the other products (USD, EUR, FOP, two jars) from the sample fixture, dated from now
 # - the card's balance and credit limit chosen so the bank's balance equals the
 #   hand-kept balance plus the new rows: the cutover day then shows no drift
@@ -34,7 +35,8 @@ module MonobankFake
       [ "bolt", "Bolt", 4121, -14_200, "taxi", "Taxi" ],
       [ "anc", "Аптека АНЦ", 5912, -9_870, "pharmacy", "Pharmacies" ],
       [ "p2p-in", "Від: Олена Петренко", 4829, 150_000, nil, nil, { "comment" => "За квитки" } ],
-      [ "novus", "Novus", 5411, -23_480, "groceries", "Groceries" ]
+      [ "novus", "Novus", 5411, -23_480, "groceries", "Groceries" ],
+      [ "refund", "Повернення: Rozetka", 5732, 129_900, "refund", "Refund" ]
     ].freeze
     # [key, card description, card amount, other product, other description, counterIban on
     # both rows]. Jar rows carry no counterIban at the bank; they read "З чорної картки" /

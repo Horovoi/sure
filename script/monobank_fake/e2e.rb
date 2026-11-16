@@ -96,17 +96,37 @@ module MonobankFake
       refuse!("monobank is not enabled; run with BANK_CONNECTIONS_ENABLED=monobank")
     end
 
-    # The rates the fixture's cross-currency transfer was priced at, when the copy has none
-    # for today (the matcher needs one within 5%)
+    # The rates the fixture's cross-currency rows were priced at, when the copy has none
+    # stored (the matcher needs one within 5%, and the rate provider is out of reach while
+    # the run blocks outbound HTTP). Returns the rates it added; the run removes them at the
+    # end, so the copy keeps converting with its own rates (or the provider's) afterwards.
     def ensure_exchange_rates(fixture, date)
-      Array(fixture.dig("expected", "exchange_rates")).each do |rate|
-        [ [ rate["from"], rate["to"], rate["rate"].to_d ], [ rate["to"], rate["from"], (1 / rate["rate"].to_d).round(8) ] ].each do |from, to, value|
+      Array(fixture.dig("expected", "exchange_rates")).flat_map do |rate|
+        [ [ rate["from"], rate["to"], rate["rate"].to_d ], [ rate["to"], rate["from"], (1 / rate["rate"].to_d).round(8) ] ].filter_map do |from, to, value|
           next if ExchangeRate.where(from_currency: from, to_currency: to).where("date <= ? AND rate > 0", date).exists?
 
-          ExchangeRate.create!(from_currency: from, to_currency: to, date: date, rate: value)
-          puts "added exchange rate #{from}/#{to} #{value} on #{date}"
+          added = ExchangeRate.create!(from_currency: from, to_currency: to, date: date, rate: value)
+          puts "added exchange rate #{from}/#{to} #{value} on #{date} for the run"
+          added
         end
       end
+    end
+
+    def remove_exchange_rates(rates)
+      return if rates.blank?
+
+      ExchangeRate.where(id: rates.map(&:id)).delete_all
+      puts "removed the #{rates.size} exchange rates added for the run"
+    end
+
+    # The copy's balance rows can lag its entries: production syncs an account when it
+    # changes, and a charge a job booked waited for the next sync. Sync the account first,
+    # so the fixture's bank balance and the snapshot start from the balance the app shows.
+    def bring_up_to_date!(account, drain)
+      Time.use_zone(account.family.resolved_time_zone) { account.sync_later }
+      drain.run
+      account.reload
+      puts "#{account.name} synced before the run: balance #{account.balance}, #{account.balances.count} balance days"
     end
 
     def run(argv)
@@ -117,6 +137,12 @@ module MonobankFake
       ActiveJob::Base.queue_adapter = :test
 
       account = find_account(name: options[:account], family_id: options[:family_id])
+      log = options[:verbose] ? $stdout : nil
+      drain = Drain.new(
+        wait: ->(time) { sleep(0.05) while Time.current < time },
+        max_duration: options[:max_minutes].minutes, raise_errors: false, log: log
+      )
+      bring_up_to_date!(account, drain)
       fixture =
         if options[:fixture]
           App.load_fixture(options[:fixture])
@@ -124,18 +150,13 @@ module MonobankFake
           FixtureGenerator.new(account: account, seed: options[:seed], rate_limit_seconds: INTERVAL).build
         end
       fixture["expected"]["link"]["account_name"] = account.name
-      ensure_exchange_rates(fixture, Date.current)
+      added_rates = ensure_exchange_rates(fixture, Date.current)
 
       fake, server, url = start_fake(fixture)
       ENV["MONOBANK_API_BASE_URL"] = url
       ENV["MONOBANK_MIN_REQUEST_INTERVAL"] = INTERVAL.to_s
       puts "fake monobank on #{url}, #{INTERVAL}s between requests per function; cutover expected #{fixture.dig('expected', 'cutover_date') || 'auto'}"
 
-      log = options[:verbose] ? $stdout : nil
-      drain = Drain.new(
-        wait: ->(time) { sleep(0.05) while Time.current < time },
-        max_duration: options[:max_minutes].minutes, raise_errors: false, log: log
-      )
       scenario = Scenario.new(family: account.family, account: account, fixture: fixture, fake: fake, drain: drain,
                               interval: INTERVAL, log: $stdout)
 
@@ -155,6 +176,7 @@ module MonobankFake
       exit 1
     ensure
       server&.stop(true)
+      remove_exchange_rates(added_rates)
     end
   end
 end

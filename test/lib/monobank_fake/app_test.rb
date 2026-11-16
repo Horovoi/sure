@@ -361,7 +361,7 @@ class MonobankFakeHelperTest < ActiveSupport::TestCase
 
   test "the fake's clock follows travel_to" do
     travel_to Time.zone.parse("2026-11-15 15:00:00 +0200") do
-      fixture = monobank_sample_fixture
+      fixture = monobank_sample_fixture.merge("faults" => []) # the sample's first statement is a 429
       with_monobank_fake(fixture) do |fake|
         assert_equal Time.current.to_i, fake.started_at.to_i
         assert_equal 60.0, fake.rate_limit_seconds, "the fixture's limit when no interval is given"
