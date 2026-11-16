@@ -120,9 +120,12 @@ export default class extends Controller {
 
   // Move focus to the first focusable child unless the dialog already
   // declared one via the autofocus attribute. Native `<dialog>.showModal()`
-  // is supposed to do this but the behavior varies across engines.
+  // is supposed to do this but the behavior varies across engines. An
+  // autofocus inside a nested dialog (a combobox's small-screen list) is not
+  // this dialog's: that dialog is closed, and showModal skips it.
   #focusInitial() {
-    if (this.element.querySelector("[autofocus]")) return;
+    const autofocus = Array.from(this.element.querySelectorAll("[autofocus]"));
+    if (autofocus.some((el) => el.closest("dialog") === this.element)) return;
     this.#focusables()[0]?.focus();
   }
 
