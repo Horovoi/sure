@@ -53,7 +53,10 @@ class ReportsTest < ApplicationSystemTestCase
     # The sentence and the key for the ticks sit in the overview over both lists
     within "[data-testid=breakdown-overview]" do
       assert_selector "[data-testid=spending-summary]", text: "more than normal"
-      assert_selector "[data-testid=spending-legend]", text: "based on"
+      assert_selector "[data-testid=spending-legend]", text: "Normal for"
+      # Which days normal comes from shows on the info button
+      find("[data-testid=spending-legend] button").hover
+      assert_selector "[role=tooltip]", text: "Based on", visible: true
     end
 
     within "[data-testid=breakdown-expense]" do

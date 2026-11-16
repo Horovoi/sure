@@ -62,10 +62,12 @@ class ReportsHelperTest < ActionView::TestCase
     assert_equal "+50%", fees[:delta][:percent]
   end
 
-  test "the headline says what was left over or overspent" do
-    assert_match(/left over, 25% of income\./, breakdown_headline(income_total: 400.to_d, expense_total: 300.to_d, comparison: nil))
-    assert_match(/more spent than came in\./, breakdown_headline(income_total: 300.to_d, expense_total: 400.to_d, comparison: nil))
-    assert_empty breakdown_headline(income_total: 0.to_d, expense_total: 400.to_d, comparison: nil)
+  test "the first figure says what was left over or overspent" do
+    left = breakdown_left_over(income_total: 400.to_d, expense_total: 300.to_d)
+    assert_equal [ "Left over", "25% of income", :neutral ], left.values_at(:label, :note, :tone)
+    over = breakdown_left_over(income_total: 300.to_d, expense_total: 400.to_d)
+    assert_equal [ "Overspent", "More spent than came in", :unfavorable ], over.values_at(:label, :note, :tone)
+    assert_nil breakdown_left_over(income_total: 0.to_d, expense_total: 400.to_d)
   end
 
   private

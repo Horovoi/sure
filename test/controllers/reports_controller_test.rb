@@ -563,11 +563,13 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, built
     # Spending vs normal is part of the breakdown, not a section of its own
     assert_select "section[data-section-key='spending_vs_normal']", count: 0
-    # The sentence and the key for the ticks sit in the overview over both lists
+    # The figure and the key for the ticks sit in the overview over both lists; which
+    # days normal comes from and the grey band are in the key's info tooltip
     assert_select "section[data-section-key='transactions_breakdown'] [data-testid='breakdown-overview']" do
-      assert_select "[data-testid=spending-summary]", text: /Spending was .+ more than normal \(\d+%\)\./
+      assert_select "[data-testid=spending-summary]", text: /Spending vs normal\s+\+.+\s+\d+% more than normal/
       assert_select "[data-testid=spending-summary]", text: /so far/, count: 0
-      assert_select "[data-testid=spending-legend]", text: /Normal for a period this long: .+, based on #{I18n.l(period_start - 200.days, format: "%b %-d, %Y")} – #{I18n.l(period_start - 1.day, format: "%b %-d, %Y")}\. Changes within 15% of normal or under .+ stay grey\./
+      assert_select "[data-testid=spending-legend]", text: /Normal for a period this long: .+/
+      assert_select "[data-testid=spending-legend] [role=tooltip]", text: /Based on #{I18n.l(period_start - 200.days, format: "%b %-d, %Y")} – #{I18n.l(period_start - 1.day, format: "%b %-d, %Y")}\. Changes within 15% of normal or under .+ stay grey\./
     end
     assert_select "section[data-section-key='transactions_breakdown'] [data-testid='breakdown-expense']" do
       assert_select "[data-testid=spending-summary]", count: 0
@@ -614,7 +616,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "[data-testid=breakdown-overview]" do
       assert_select "[data-testid=breakdown-strip-income] span", minimum: 1
       assert_select "[data-testid=breakdown-strip-expense] span", minimum: 1
-      assert_select "p", text: /left over, \d+% of income\./
+      assert_select "[data-testid=breakdown-left-over]", text: /Left over\s+.+\s+\d+% of income/
     end
   end
 
@@ -690,7 +692,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_select "[data-testid=spending-summary]", count: 0
     assert_select "[data-testid=spending-legend]", count: 0
-    assert_select "[data-testid=spending-no-normal]", text: I18n.t("reports.transactions_breakdown.vs_normal.no_normal")
+    assert_select "[data-testid=spending-no-normal] p", text: I18n.t("reports.transactions_breakdown.vs_normal.no_normal")
     assert_select "[data-testid='breakdown-expense']" do
       assert_select "[data-testid=spending-changes]", count: 0
       assert_select "[data-testid=breakdown-delta]", count: 0

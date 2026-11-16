@@ -163,51 +163,61 @@ module ReportsHelper
     parts.join(", ")
   end
 
-  # The headline over both lists: what was left over (or overspent), then how far
-  # spending is from normal when there is a normal to compare with
-  def breakdown_headline(income_total:, expense_total:, comparison:)
-    parts = []
-    if income_total.positive? && expense_total.positive?
-      net = income_total - expense_total
-      amount = tag.span(breakdown_money(net.abs), class: "font-medium")
-      parts << if net.negative?
-        t("reports.transactions_breakdown.overview.overspent_html", amount: amount)
-      else
-        t("reports.transactions_breakdown.overview.left_over_html", amount: amount, percent: number_to_percentage(net / income_total * 100, precision: 0))
-      end
+  # The overview's first figure: what was left over, or overspent, as a share of
+  # income. Nil without both income and expenses.
+  def breakdown_left_over(income_total:, expense_total:)
+    return nil unless income_total.positive? && expense_total.positive?
+
+    net = income_total - expense_total
+    if net.negative?
+      { label: t("reports.transactions_breakdown.overview.overspent"),
+        value: breakdown_money(net.abs),
+        note: t("reports.transactions_breakdown.overview.more_than_came_in"),
+        tone: :unfavorable }
+    else
+      { label: t("reports.transactions_breakdown.overview.left_over"),
+        value: breakdown_money(net),
+        note: t("reports.transactions_breakdown.overview.of_income", percent: number_to_percentage(net / income_total * 100, precision: 0)),
+        tone: :neutral }
     end
-    parts << tag.span(breakdown_vs_normal_summary(comparison), data: { testid: "spending-summary" }) if comparison
-    safe_join(parts, " ")
   end
 
-  # How far spending is from normal, in one sentence
-  def breakdown_vs_normal_summary(comparison)
+  # The overview's second figure: how far spending is from normal. The value is the
+  # signed change, the note says which way in words, the ratio drives any visual.
+  def breakdown_vs_normal(comparison)
     change = comparison.total - comparison.normal_total
     timing = comparison.in_progress? ? "so_far" : "period"
-    return t("reports.transactions_breakdown.vs_normal.about_#{timing}") if change.abs < IncomeStatement::SpendingComparison::MIN_CHANGE
+    ratio = comparison.normal_total.positive? ? (change / comparison.normal_total).to_f : nil
+
+    if change.abs < IncomeStatement::SpendingComparison::MIN_CHANGE
+      return { value: t("reports.transactions_breakdown.vs_normal.about"), note: t("reports.transactions_breakdown.vs_normal.about_#{timing}"),
+               tone: :neutral, change: 0.to_d, ratio: 0.0 }
+    end
 
     direction = change.negative? ? "less" : "more"
-    ratio = comparison.normal_total.positive? ? change / comparison.normal_total : nil
     tone = SPENDING_RATIO_BUCKETS.find { |bucket| ratio.nil? || bucket[:upper].nil? || ratio <= bucket[:upper] }[:tone]
-    # Near normal the amount keeps the sentence's colour rather than a muted grey
-    amount = tag.span(breakdown_money(change.abs), class: class_names("font-medium", BREAKDOWN_TONE_CLASSES.fetch(tone) => tone != :neutral))
-
-    if ratio
-      t("reports.transactions_breakdown.vs_normal.#{direction}_#{timing}_html", amount: amount, percent: number_to_percentage(ratio.abs * 100, precision: 0))
+    note = if ratio
+      t("reports.transactions_breakdown.vs_normal.#{direction}_#{timing}", percent: number_to_percentage(ratio.abs * 100, precision: 0))
     else
-      t("reports.transactions_breakdown.vs_normal.#{direction}_#{timing}_no_percent_html", amount: amount)
+      t("reports.transactions_breakdown.vs_normal.#{direction}_#{timing}_no_percent")
     end
+    { value: "#{change.negative? ? "−" : "+"}#{breakdown_money(change.abs)}", note: note, tone: tone, change: change, ratio: ratio }
   end
 
-  # The key for the ticks: what they mark, which days normal comes from, and what
-  # a grey change means (near normal, or too small to matter). The date range never breaks across lines.
+  # The key for the ticks, short: what they mark and the normal total
   def breakdown_normal_key(comparison)
+    t(comparison.in_progress? ? "reports.transactions_breakdown.vs_normal.key_so_far_html" : "reports.transactions_breakdown.vs_normal.key_period_html",
+      normal: tag.span(breakdown_money(comparison.normal_total), class: "text-primary tabular-nums"))
+  end
+
+  # The rest of the key, for the info tooltip: which days normal comes from and
+  # what a grey change means (near normal, or too small to matter)
+  def breakdown_normal_details(comparison)
     range = t("reports.index.period_nav.range",
               start: l(comparison.baseline_period.start_date, format: "%b %-d, %Y"),
               end: l(comparison.baseline_period.end_date, format: "%b %-d, %Y"))
-    t(comparison.in_progress? ? "reports.transactions_breakdown.vs_normal.key_so_far_html" : "reports.transactions_breakdown.vs_normal.key_period_html",
-      normal: breakdown_money(comparison.normal_total),
-      range: tag.span(range, class: "whitespace-nowrap"),
+    t("reports.transactions_breakdown.vs_normal.key_details",
+      range: range,
       band: number_to_percentage(SPENDING_RATIO_BUCKETS.find { |bucket| bucket[:key] == "normal" }[:upper] * 100, precision: 0),
       floor: breakdown_money(breakdown_quiet_floor(comparison)))
   end
