@@ -98,6 +98,7 @@ class Account::CurrentBalanceManager
     def derived_current_balance
       entry_flows = account.entries
         .where.not(entryable_type: "Valuation")
+        .excluding_split_children
         .where("date > ? AND date <= ?", account.opening_anchor_date, Date.current)
         .sum do |entry|
           ExchangeRate.convert_or_leave_out(

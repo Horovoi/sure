@@ -327,8 +327,10 @@ class RecurringTransaction < ApplicationRecord
   # no transfer legs, investment contributions or one-time spending.
   # A provider's pending hold is not an occurrence yet: it may be released, or settle at
   # another amount
+  # A split transaction is one occurrence, its parent (the bank's line); its parts are not.
   def self.recurring_entries_for(family)
     family.entries
+      .excluding_split_children
       .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id")
       .where(entryable_type: "Transaction")
       .where.not(transactions: { kind: NON_RECURRING_KINDS })

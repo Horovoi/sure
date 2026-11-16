@@ -183,7 +183,8 @@ class CreditCard < ApplicationRecord
     # in another currency (or none): a total of only part of the entries would read
     # as the whole.
     def cycle_totals(window)
-      scoped = account.entries.excluding_pending.where(entryable_type: "Transaction", date: window)
+      # A split transaction counts once, as the bank booked it (its parent)
+      scoped = account.entries.excluding_pending.excluding_split_children.where(entryable_type: "Transaction", date: window)
       summable = scoped.where(currency: account.currency)
       return nil if summable.count != scoped.count
 

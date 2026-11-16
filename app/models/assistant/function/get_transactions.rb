@@ -46,6 +46,10 @@ class Assistant::Function::GetTransactions < Assistant::Function
         - `category`, `merchant`, `tags` and `notes` appear only when set;
           `pending` and `excluded` appear only when true. An absent key means
           none or false.
+        - A split transaction (one bank line the user divided by purpose) is
+          listed as its parts. Each part has `split_of` (the entry_id of the
+          whole transaction) and counts as its own income or expense; the
+          whole transaction is not listed, so never add it to the parts.
         - `account_excluded_from_reports` (only when true): the row's account is
           one the user keeps out of every report. The row is listed, as on the
           transactions page, but dashboards and get_income_statement never
@@ -282,6 +286,7 @@ class Assistant::Function::GetTransactions < Assistant::Function
       row[:is_transfer] = true if row[:classification] == "transfer"
       row[:pending] = true if txn.pending?
       row[:excluded] = true if entry.excluded?
+      row[:split_of] = entry.parent_entry_id if entry.split_child?
       row[:account_excluded_from_reports] = true if entry.account.exclude_from_reports?
       row
     end

@@ -48,6 +48,8 @@ module TransactionsHelper
   # family's manual accounts read once per request rather than once per row
   def entry_reconcilable?(entry)
     return false unless entry.transaction? && Current.family
+    # A part of a split is checked off through its parent, the statement's line
+    return false if entry.split_child?
 
     @reconcilable_account_ids ||= Current.family.accounts.manual.pluck(:id).to_set
     @reconcilable_account_ids.include?(entry.account_id)

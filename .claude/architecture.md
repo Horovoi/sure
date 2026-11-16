@@ -22,6 +22,27 @@ Transaction → belongs to Category
 Investment accounts → have Holdings → track Securities via Trades
 ```
 
+## Split Transactions
+
+`Entry::Splittable` divides one transaction entry (the parent) into child entries
+(`entries.parent_entry_id`) with their own amount, name, category, merchant, tags, notes and
+excluded flag. One rule, which every new query must follow:
+
+- **Bank level reads the parent, never a child**: balances (`Balance::SyncCache`,
+  `CurrentBalanceManager`), credit card cycles, provider claims (`ProviderEntryClaimer`,
+  duplicate checks), `Import::DuplicateMatcher`, subscription reconciliation and recurring
+  detection. Use `Entry.excluding_split_children`.
+- **Money figures read the children, never the parent**: the parent is `excluded` while split,
+  so `IncomeStatement`, budgets, reports and exports leave it out already. Lists use
+  `Entry.excluding_split_parents` (`Transaction::Search`) and show the parent as a group header
+  (`EntriesHelper#render_entry_rows`).
+- Children sum exactly to the parent and share its account, currency and date; only
+  `split!` / `resplit!` / `unsplit!` (`SplitsController`) change their amounts or delete them.
+  Neither a parent nor a child is ever a transfer leg (`Transfer#legs_not_split`). Rules act on
+  children. Pending holds, transfers and generated subscription charges cannot be split.
+- `test/models/entry/split_invariant_test.rb` checks every aggregate against the same parts
+  booked as plain transactions; extend it when you add a figure.
+
 ## API Architecture
 
 **Internal API:**

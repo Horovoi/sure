@@ -148,9 +148,10 @@ class Budget < ApplicationRecord
     end
   end
 
-  # The transactions the budget counts: none from an account excluded from reports (w3-reports)
+  # The transactions the budget counts: none from an account excluded from reports (w3-reports),
+  # none excluded (as IncomeStatement), so a split counts as its parts and never as its parent
   def transactions
-    family.transactions.visible.merge(Account.included_in_reports).in_period(period)
+    family.transactions.visible.merge(Account.included_in_reports).in_period(period).where(entries: { excluded: false })
   end
 
   def name

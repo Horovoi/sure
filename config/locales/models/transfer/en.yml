@@ -26,6 +26,8 @@ en:
               must_have_opposite_amounts: Transfer transactions must have opposite
                 amounts
               must_have_single_currency: Transfer must have a single currency
+              split_leg: A split transaction, or a part of one, cannot be a transfer
+                leg
               outflow_cannot_be_in_multiple_transfers: Outflow transaction cannot
                 be part of multiple transfers
   transfer:

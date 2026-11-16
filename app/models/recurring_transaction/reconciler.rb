@@ -12,7 +12,9 @@
 #   flagged for a one-click merge (reason "subscription_charge").
 #
 # A candidate is a transaction on the same account, not generated, not linked
-# to a recurring row, not a transfer, with an amount of the same sign. Amounts
+# to a recurring row, not a transfer, with an amount of the same sign. A split
+# transaction is a candidate as its parent (the bank's charge), never as one of its
+# parts: replacing a generated charge only deletes it, and the parts keep counting. Amounts
 # are compared in the generated charge's currency (nearest-rate rule).
 #
 # dry_run: true returns the proposed pairs and writes nothing.
@@ -100,6 +102,8 @@ class RecurringTransaction::Reconciler
       family.entries
         .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
         .where(account_id: generated.map(&:account_id).uniq)
+        # The bank's charge of a split transaction is its parent, never one of its parts
+        .excluding_split_children
         .where("entries.source IS DISTINCT FROM 'subscription'")
         .where(transactions: { recurring_transaction_id: nil })
         .where.not(transactions: { kind: Transaction::TRANSFER_KINDS })

@@ -602,7 +602,9 @@ class Import < ApplicationRecord
                                   .where(valuations: { kind: "opening_anchor" })
                                   .select(:id)
 
+      # A part of a split goes with its parent, which is the entry to look at
       account.entries.where("entries.import_id IS DISTINCT FROM ?", id)
+             .where(parent_entry_id: nil)
              .where.not(id: opening_anchor_ids)
              .exists?
     end

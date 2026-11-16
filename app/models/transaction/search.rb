@@ -31,7 +31,9 @@ class Transaction::Search
   def transactions_scope
     @transactions_scope ||= begin
       # This already joins entries + accounts. To avoid expensive double-joins, don't join them again (causes full table scan)
-      query = family.transactions
+      # A split transaction is listed as its parts (the list groups them under the
+      # parent), so every filter and the totals see the parts, never the parent
+      query = family.transactions.merge(Entry.excluding_split_parents)
 
       query = apply_active_accounts_filter(query, active_accounts_only)
       query = apply_category_filter(query, categories)
@@ -206,6 +208,10 @@ class Transaction::Search
       return query unless wanted.one?
 
       attached = EntrySearch.attachment_condition(Transaction.arel_table[:id])
+      # A receipt stays on a split's parent (the list shows its parts), so a part counts as
+      # attached when its parent is
+      parent_txn_id = Arel.sql("(SELECT split_parent.entryable_id FROM entries split_parent WHERE split_parent.id = entries.parent_entry_id)")
+      attached = attached.or(EntrySearch.attachment_condition(parent_txn_id))
       query.where(wanted == [ "with" ] ? attached : attached.not)
     end
 
@@ -216,7 +222,10 @@ class Transaction::Search
       wanted = Array(statuses) & Entry::RECONCILED_STATUS_CYCLE
       return query if wanted.empty?
 
-      query.where(entries: { reconciled_status: wanted, account_id: family.accounts.manual.select(:id) })
+      # A part of a split has the status of its parent, the line the statement shows
+      status_sql = "COALESCE((SELECT split_parent.reconciled_status FROM entries split_parent WHERE split_parent.id = entries.parent_entry_id), entries.reconciled_status)"
+      query.where(entries: { account_id: family.accounts.manual.select(:id) })
+           .where("#{status_sql} IN (?)", wanted)
     end
 
     def apply_status_filter(query, statuses)

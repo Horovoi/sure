@@ -20,6 +20,9 @@ class TransferMatchesController < ApplicationController
     @transfer.sync_account_later
 
     redirect_back_or_to transactions_path, notice: t(".success")
+  rescue ActiveRecord::RecordInvalid => e
+    # e.g. a split transaction or a part of one (Transfer#legs_not_split)
+    redirect_back_or_to transactions_path, alert: e.record.errors.full_messages.to_sentence
   end
 
   # w2-transfers transfer-hints: "Not a transfer" on the list's "Transfer?" hint. Records

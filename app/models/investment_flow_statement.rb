@@ -14,7 +14,7 @@ class InvestmentFlowStatement
       .visible
       .merge(Account.included_in_reports)
       .excluding_pending
-      .where(entries: { date: period.date_range })
+      .where(entries: { date: period.date_range, excluded: false })
       .where(kind: %w[standard investment_contribution])
       .where(investment_activity_label: %w[Contribution Withdrawal])
 

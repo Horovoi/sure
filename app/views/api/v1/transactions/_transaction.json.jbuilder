@@ -12,6 +12,8 @@ json.currency transaction.entry.currency
 json.name transaction.entry.name
 json.notes transaction.entry.notes
 json.classification transaction.entry.classification
+# A part of a split names the entry it was divided from (Entry::Splittable)
+json.parent_entry_id transaction.entry.parent_entry_id
 
 # Account information
 json.account do

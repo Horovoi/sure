@@ -13,3 +13,27 @@ en:
               anchor_on_reconciliation_date: This date holds the account's opening or current
                 balance. Edit that entry, or pick another date.
               duplicate_anchor: This account already has an entry of this kind
+              split_too_few_parts: A split needs at least two parts
+              split_too_many_parts: A split can have at most 20 parts
+              split_invalid_amount: Every part needs an amount other than 0
+              split_sum_mismatch: The parts add up to %{actual}, not to the transaction's
+                %{expected}
+              split_child_locked: The amount and date of a part are changed in the split
+                editor
+              split_parent_locked: This transaction is split. Unsplit it to change its
+                amount, account or excluded setting.
+              split_child_not_deletable: A part of a split is removed in the split editor,
+                or by unsplitting the transaction
+        entry_split_blockers:
+          not_transaction: Only a transaction can be split
+          already_split: This transaction is split already
+          split_child: A part of a split cannot be split again
+          excluded: An excluded transaction cannot be split. Include it first.
+          zero_amount: A transaction of 0 cannot be split
+          transfer: A transfer, a transfer leg or a transfer fee cannot be split
+          kind: Only a regular or one-time transaction can be split
+          pending: A pending transaction cannot be split until the bank posts it
+          generated_charge: A generated subscription charge cannot be split. Split the
+            bank's charge instead.
+          possible_duplicate: Resolve the possible duplicate before splitting
+          not_split: This transaction is not split

@@ -1,5 +1,5 @@
 class Entry < ApplicationRecord
-  include Monetizable, Enrichable
+  include Monetizable, Enrichable, Splittable
 
   # Attributes that only describe an entry. Balance materialization and transfer
   # matching never read them, so an edit limited to them needs no account sync.
@@ -212,9 +212,10 @@ class Entry < ApplicationRecord
     update!(user_modified: true)
   end
 
-  # Whether the reconciliation mark applies: a transaction of a manual account
+  # Whether the reconciliation mark applies: a transaction of a manual account. A part of
+  # a split is checked off through its parent, the line the statement shows.
   def reconcilable?
-    transaction? && account.manual?
+    transaction? && account.manual? && !split_child?
   end
 
   # Moves the reconciliation mark one step along RECONCILED_STATUS_CYCLE. A check
@@ -270,7 +271,7 @@ class Entry < ApplicationRecord
           attrs = bulk_attributes_for(entry, bulk_attributes)
           update_entry_tags = update_tags && entry.transaction?
           # Only transactions of manual accounts take the reconciliation mark; the rest skip it
-          reconcile = reconciled_status.present? && entry.transaction? &&
+          reconcile = reconciled_status.present? && entry.transaction? && !entry.split_child? &&
             manual_account_ids.include?(entry.account_id) && entry.reconciled_status != reconciled_status
           next if attrs.blank? && !update_entry_tags && !reconcile
 
@@ -331,6 +332,8 @@ class Entry < ApplicationRecord
       # own entryable id.
       def bulk_attributes_for(entry, bulk_attributes)
         attrs = bulk_attributes.deep_dup
+        # A part of a split keeps its parent's date (Entry::Splittable)
+        attrs.delete(:date) if entry.split_child?
 
         if entry.transaction? && attrs[:entryable_attributes].present?
           attrs[:entryable_attributes][:id] = entry.entryable_id

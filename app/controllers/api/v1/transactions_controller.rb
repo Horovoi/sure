@@ -8,7 +8,8 @@ class Api::V1::TransactionsController < Api::V1::BaseController
 
   def index
     family = current_resource_owner.family
-    transactions_query = family.transactions.visible
+    # A split transaction is listed as its parts, as on the transactions page
+    transactions_query = family.transactions.visible.merge(Entry.excluding_split_parents)
 
     # Apply filters
     transactions_query = apply_filters(transactions_query)
@@ -146,7 +147,11 @@ end
   end
 
   def destroy
-    @entry.destroy!
+    # e.g. a part of a split, which goes through its split
+    unless @entry.destroy
+      render json: { error: "validation_failed", message: @entry.errors.full_messages.to_sentence }, status: :unprocessable_entity
+      return
+    end
     @entry.sync_account_later
 
     render json: {

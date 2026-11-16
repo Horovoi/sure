@@ -662,7 +662,9 @@ class Account::ProviderImportAdapter
     # 5. Entry type is Transaction (not Trade or Valuation)
     # 6. Optionally same name (if name parameter is provided)
     # 7. Not in the excluded IDs list (if provided)
+    # 8. Not a part of a split: the bank's line is its parent
     query = account.entries
+                   .excluding_split_children
                    .where(entryable_type: "Transaction")
                    .where(date: date)
                    .where(amount: amount)

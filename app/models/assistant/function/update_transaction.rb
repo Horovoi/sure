@@ -114,6 +114,7 @@ class Assistant::Function::UpdateTransaction < Assistant::Function
 
       if params.key?("date") || params.key?("amount") || params.key?("nature")
         return [ nil, tool_error("transfer_locked", "A transfer's date and amount are changed on the transfer, not on one of its legs.") ] if transfer_leg?(transaction)
+        return [ nil, tool_error("split_locked", "A split transaction's amount and date, and those of its parts, are changed in the split editor (or after unsplitting it).") ] if entry.split_child? || entry.split_parent?
       end
 
       if params.key?("date")
