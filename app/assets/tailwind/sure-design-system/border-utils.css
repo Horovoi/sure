@@ -1,4 +1,7 @@
-/* Custom shadow borders used for surfaces / containers  */
+/* Custom shadow borders used for surfaces / containers. Cards use xs (a 5%
+   ring in both themes); overlays (menus, popovers, pickers) use lg or xl,
+   whose ring goes up to 10% in dark mode so an overlay keeps an edge over the
+   card it opens on. */
 @utility shadow-border-xs {
   box-shadow: var(--shadow-xs), 0px 0px 0px 1px var(--color-alpha-black-50);
 
@@ -27,7 +30,7 @@
   box-shadow: var(--shadow-lg), 0px 0px 0px 1px var(--color-alpha-black-50);
 
   @variant theme-dark {
-    box-shadow: var(--shadow-lg), 0px 0px 0px 1px var(--color-alpha-white-50);
+    box-shadow: var(--shadow-lg), 0px 0px 0px 1px var(--color-alpha-white-200);
   }
 }
 
@@ -35,7 +38,7 @@
   box-shadow: var(--shadow-xl), 0px 0px 0px 1px var(--color-alpha-black-50);
 
   @variant theme-dark {
-    box-shadow: var(--shadow-xl), 0px 0px 0px 1px var(--color-alpha-white-50);
+    box-shadow: var(--shadow-xl), 0px 0px 0px 1px var(--color-alpha-white-200);
   }
 }
 

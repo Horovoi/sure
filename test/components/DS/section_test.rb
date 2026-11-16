@@ -4,7 +4,8 @@ class DS::SectionTest < ViewComponent::TestCase
   test "heads a card of rows with the title and count, in an inset shell" do
     render_inline(DS::Section.new(title: "Needs review", count: 2)) { "<p>Netflix</p>".html_safe }
 
-    assert_selector "section.rounded-xl.bg-surface-inset.p-1 .uppercase.text-secondary", text: /Needs review\s*·\s*2/
+    assert_selector "section.rounded-xl.bg-surface-inset.p-1 .text-xs.font-medium.text-secondary", text: /Needs review\s*·\s*2/
+    assert_no_selector ".uppercase"
     assert_selector "h2", text: "Needs review"
     assert_selector "[aria-hidden='true']", text: "·"
     # Straight in the shell, with nothing padding it narrower than other cards.

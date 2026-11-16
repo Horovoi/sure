@@ -70,21 +70,45 @@
     @apply text-sm leading-5 p-0 border-0 ring-0 outline-hidden focus:ring-0 placeholder:text-subdued align-top;
   }
 
-  /* Label, a 4px gap and a 20px line, like .form-field__body */
+  /* Label, a 4px gap and a 20px line, like .form-field__body. The gem's
+     wrappers are static here, so the listbox and the handle are placed
+     against the .form-field box (relative), not the input in its padding */
   .hw-combobox {
-    @apply gap-1 leading-5;
+    @apply gap-1 leading-5 static;
   }
 
   .hw-combobox__main__wrapper {
-    @apply border-0 p-0 focus:border-0 ring-0 focus:ring-0 shadow-none focus:shadow-none focus-within:shadow-none leading-5;
+    @apply static border-0 p-0 focus:border-0 ring-0 focus:ring-0 shadow-none focus:shadow-none focus-within:shadow-none leading-5;
   }
 
+  /* On the input's line: the field's bottom and right padding (py-2, px-3) */
   .hw-combobox__handle {
-    @apply h-5;
+    @apply h-5 top-auto bottom-2 right-3;
   }
 
+  /* The overlay recipe of DS::Menu and the DS pickers: spans the field box
+     exactly (the -1px reach over the field's border), 4px below it, opaque, with the highlight 4px from the panel edge.
+     The panel only draws while it has a visible option, so an open list with
+     no match leaves no empty box. */
   .hw-combobox__listbox {
-    @apply absolute top-[160%] right-0 w-full bg-transparent rounded z-30;
+    @apply absolute -left-px -right-px top-[calc(100%+1px)] mt-1 w-auto z-30 rounded-lg border-0 bg-transparent p-0;
+
+    &:has([role="option"]:not([hidden])) {
+      @apply bg-container p-1;
+      box-shadow: var(--shadow-lg), 0px 0px 0px 1px var(--color-alpha-black-50);
+
+      @variant theme-dark {
+        box-shadow: var(--shadow-lg), 0px 0px 0px 1px var(--color-alpha-white-200);
+      }
+    }
+  }
+
+  .hw-combobox__option {
+    @apply rounded-md p-2 text-sm text-primary;
+  }
+
+  .hw-combobox__option--blank {
+    @apply border-b-0;
   }
 
   .hw-combobox__label {
@@ -103,8 +127,16 @@
     @apply text-primary;
   }
 
+  /* The small-screen dialog's input takes the canonical focus outline, not
+     the forms plugin's blue ring */
   .hw-combobox__dialog__input {
     @apply bg-container text-primary border-primary;
+
+    &:focus {
+      @apply ring-0 border-primary;
+      outline: 2px solid var(--color-focus-ring);
+      outline-offset: 0;
+    }
   }
 
   .hw_combobox__pagination__wrapper {
@@ -115,9 +147,19 @@
     }
   }
 
-  --hw-active-bg-color: var(--color-container-inset-hover);
+  --hw-active-bg-color: var(--color-container-hover);
   --hw-option-bg-color: var(--color-container);
-  --hw-border-color: rgba(0, 0, 0, 0.2);
+  --hw-group-bg-color: var(--color-container);
+  --hw-group-color: var(--color-text-secondary);
+  --hw-focus-color: var(--color-focus-ring);
+  --hw-listbox-height: 16rem;
+  /* border-secondary */
+  --hw-border-color: var(--color-alpha-black-200);
+
+  @variant theme-dark {
+    --hw-border-color: var(--color-alpha-white-300);
+  }
+
   --hw-handle-width: 20px;
   --hw-handle-height: 20px;
   --hw-handle-offset-right: 0px;

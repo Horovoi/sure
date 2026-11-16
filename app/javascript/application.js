@@ -2,6 +2,7 @@
 import "@hotwired/turbo-rails";
 import "utils/turbo_stream_focus";
 import "utils/modal_frame_morph";
+import "utils/date_input_empty";
 import "controllers";
 
 Turbo.StreamActions.redirect = function () {

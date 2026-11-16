@@ -79,11 +79,25 @@ class DS::MenuItem < DesignSystemComponent
       end
     end
 
+    # Keyboard focus on a roving item is the hover fill, not an outline ring, so
+    # the item under the arrow keys reads like the item under the pointer.
+    # DS--menu suppresses the pointer's hover fill while the arrow keys rove
+    # (sure-design-system.css), so only one item is highlighted at a time.
+    # Items in a DS::Popover are in the normal Tab order and keep the ring.
     def container_classes
-      [
-        "flex items-center gap-2 p-2 rounded-md w-full focus-ring",
-        destructive? ? "hover:bg-red-tint-5 theme-dark:hover:bg-red-tint-10" : "hover:bg-container-hover"
-      ].join(" ")
+      class_names(
+        "flex items-center gap-2 p-2 rounded-md w-full",
+        destructive? ? "hover:bg-red-tint-5 theme-dark:hover:bg-red-tint-10" : "hover:bg-container-hover",
+        roving ? focus_fill_classes : "focus-ring"
+      )
+    end
+
+    def focus_fill_classes
+      if destructive?
+        "outline-none focus-visible:bg-red-tint-5 theme-dark:focus-visible:bg-red-tint-10"
+      else
+        "outline-none focus-visible:bg-container-hover"
+      end
     end
 
     def merged_opts

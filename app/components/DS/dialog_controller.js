@@ -34,17 +34,30 @@ export default class extends Controller {
     this.element.addEventListener("cancel", this.handleCancel);
     this.element.addEventListener("turbo:before-morph-attribute", this.keepOpenOnMorph);
     document.addEventListener("turbo:before-cache", this.handleBeforeCache);
+    // A caller that runs showModal() itself, not open(), still gets the same
+    // initial focus: the observer runs right after showModal() returns.
+    this._openObserver = new MutationObserver(this.#onOpenAttribute.bind(this));
+    this._openObserver.observe(this.element, { attributes: true, attributeFilter: ["open"], attributeOldValue: true });
 
     if (this.element.matches(":modal")) return;
     // Back restores a dialog cached open as a plain open one: no backdrop, no
     // focus trap. Put it back as it was rendered, closed and with no close
     // event for listeners to act on, and let auto-open show it as a modal.
     if (this.element.open) this.element.removeAttribute("open");
-    if (this.autoOpenValue) {
-      this._priorFocus = this.#returnFocusTarget();
-      this.element.showModal();
-      this.#focusInitial();
-    }
+    if (this.autoOpenValue) this.open();
+  }
+
+  // The one way to open a DS dialog: as a modal, with focus on the dialog
+  // itself (or its autofocus field) rather than on its first control, so
+  // Safari draws no ring on the close button. Openers call this through the
+  // DS--dialog outlet or `this.application.getControllerForElementAndIdentifier`.
+  open() {
+    if (this.element.open) return;
+
+    this._priorFocus = this.#returnFocusTarget();
+    this._openedHere = true;
+    this.element.showModal();
+    this.#focusInitial();
   }
 
   disconnect() {
@@ -53,6 +66,7 @@ export default class extends Controller {
     this.element.removeEventListener("cancel", this.handleCancel);
     this.element.removeEventListener("turbo:before-morph-attribute", this.keepOpenOnMorph);
     document.removeEventListener("turbo:before-cache", this.handleBeforeCache);
+    this._openObserver?.disconnect();
 
     // Replaced while still open: one drawer linking to the next inside the
     // same frame. The link that did it left with this dialog, so focus would
@@ -126,8 +140,9 @@ export default class extends Controller {
   // combobox's small-screen list) is not this dialog's: that dialog is closed,
   // and showModal skips it.
   #focusInitial() {
+    // A hidden autofocus (the confirm dialog's unused variants) is not one
     const autofocus = Array.from(this.element.querySelectorAll("[autofocus]"));
-    if (autofocus.some((el) => el.closest("dialog") === this.element)) return;
+    if (autofocus.some((el) => el.closest("dialog") === this.element && el.getClientRects().length > 0)) return;
     if (!this.element.hasAttribute("tabindex")) this.element.setAttribute("tabindex", "-1");
     this.element.focus({ preventScroll: true });
   }
@@ -154,7 +169,27 @@ export default class extends Controller {
     }
   }
 
+  // Opened by a direct showModal() call, not open(): move focus the same way.
+  // Only while focus is still where showModal() put it, never away from a
+  // field the user or the opener's code has moved to since.
+  #onOpenAttribute(records) {
+    // A record with an old value is a close; the close event comes later, so
+    // a close and a showModal() in one task would otherwise look like open()
+    if (records.some((record) => record.oldValue !== null)) this._openedHere = false;
+    if (!this.element.open) return;
+    if (this._openedHere || !this.element.matches(":modal")) return;
+    this._openedHere = true;
+
+    // showModal() focuses the first control; anything else was the opener's
+    // own choice and stays
+    const active = document.activeElement;
+    const first = this.#focusables()[0];
+    if (active && active !== this.element && active !== first && this.element.contains(active)) return;
+    this.#focusInitial();
+  }
+
   #onClose() {
+    this._openedHere = false;
     const prior = this._priorFocus;
     this._priorFocus = null;
     if (prior && typeof prior.focus === "function" && document.body.contains(prior)) {

@@ -6,25 +6,32 @@ class DS::Buttonish < DesignSystemComponent
   # disabled one is dimmed and loses its hover, or it looks clickable and does nothing
   QUIET_DISABLED = "disabled:opacity-50 disabled:hover:bg-transparent"
 
+  # Every variant draws a 1px border (transparent on the filled ones), so an
+  # outline button is the same height as a filled one beside it. The border is
+  # set per variant, not in the base: DS::Link's :default text link has none.
+  NO_BORDER = "border border-transparent"
+
   VARIANTS = {
     primary: {
-      container_classes: "text-inverse bg-inverse hover:bg-inverse-hover disabled:bg-gray-500 theme-dark:disabled:bg-gray-400",
+      container_classes: "#{NO_BORDER} text-inverse bg-inverse hover:bg-inverse-hover disabled:bg-gray-500 theme-dark:disabled:bg-gray-400",
       icon_classes: "text-inverse"
     },
     secondary: {
-      container_classes: "text-primary bg-gray-200 theme-dark:bg-gray-700 hover:bg-gray-300 theme-dark:hover:bg-gray-600 disabled:bg-gray-200 theme-dark:disabled:bg-gray-600",
+      container_classes: "#{NO_BORDER} text-primary bg-gray-200 theme-dark:bg-gray-700 hover:bg-gray-300 theme-dark:hover:bg-gray-600 disabled:bg-gray-200 theme-dark:disabled:bg-gray-600",
       icon_classes: "text-primary"
     },
     # A tinted call to action for navigation that leaves the app. Backed by the
     # button-bg-accent utilities in sure-design-system/component-utils.css, so
     # the colour lives with every other button colour rather than in this file.
     accent: {
-      container_classes: "text-link button-bg-accent hover:button-bg-accent-hover disabled:button-bg-disabled",
+      container_classes: "#{NO_BORDER} text-link button-bg-accent hover:button-bg-accent-hover disabled:button-bg-disabled",
       icon_classes: "text-link"
     },
+    # White on the red fill in both themes: text-inverse turned the label
+    # near-black on dark mode's lighter red
     destructive: {
-      container_classes: "text-inverse button-bg-destructive hover:button-bg-destructive-hover disabled:bg-red-200 theme-dark:disabled:bg-red-600",
-      icon_classes: "text-inverse"
+      container_classes: "#{NO_BORDER} text-white button-bg-destructive hover:button-bg-destructive-hover disabled:bg-red-200 theme-dark:disabled:bg-red-600",
+      icon_classes: "text-white"
     },
     outline: {
       container_classes: "text-primary border border-secondary bg-transparent hover:bg-surface-hover #{QUIET_DISABLED}",
@@ -42,23 +49,23 @@ class DS::Buttonish < DesignSystemComponent
       icon_classes: "text-secondary"
     },
     ghost: {
-      container_classes: "text-primary bg-transparent hover:bg-container-inset-hover #{QUIET_DISABLED}",
+      container_classes: "#{NO_BORDER} text-primary bg-transparent hover:bg-container-inset-hover #{QUIET_DISABLED}",
       icon_classes: "text-secondary"
     },
     icon: {
-      container_classes: "hover:bg-container-inset-hover #{QUIET_DISABLED}",
+      container_classes: "#{NO_BORDER} hover:bg-container-inset-hover #{QUIET_DISABLED}",
       icon_classes: "text-secondary"
     },
     icon_inverse: {
-      container_classes: "bg-inverse hover:bg-inverse-hover",
+      container_classes: "#{NO_BORDER} bg-inverse hover:bg-inverse-hover",
       icon_classes: "text-inverse"
     }
   }.freeze
 
-  # Icon-only containers share a height rail with the text buttons of the
-  # same size (sm ≈ 28px, md ≈ 36px, lg ≈ 48px), so a mixed row — icon
-  # trigger next to text buttons, the most common header layout — lines up
-  # instead of mixing 32/44px squares with 36px buttons.
+  # One fixed height per size for text and icon buttons alike (sm 28px,
+  # md 36px, lg 48px), so a mixed row (an icon trigger next to text buttons,
+  # the most common header layout) lines up. A border never adds height: the
+  # box is a fixed height and every variant has the same 1px border.
   #
   # pointer-coarse restores the 44px square on touch devices: the visual
   # rail is a pointer-precision tradeoff, and WCAG 2.5.5's 44x44 target
@@ -66,19 +73,19 @@ class DS::Buttonish < DesignSystemComponent
   # target; fine-pointer users get the aligned row.
   SIZES = {
     sm: {
-      container_classes: "px-2 py-1",
+      container_classes: "h-7 px-2",
       icon_container_classes: "items-center justify-center w-7 h-7 pointer-coarse:w-11 pointer-coarse:h-11",
       radius_classes: "rounded-md",
       text_classes: "text-sm"
     },
     md: {
-      container_classes: "px-3 py-2",
+      container_classes: "h-9 px-3",
       icon_container_classes: "items-center justify-center w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11",
       radius_classes: "rounded-lg",
       text_classes: "text-sm"
     },
     lg: {
-      container_classes: "px-4 py-3",
+      container_classes: "h-12 px-4",
       icon_container_classes: "items-center justify-center w-12 h-12",
       radius_classes: "rounded-xl",
       text_classes: "text-base"
@@ -131,9 +138,9 @@ class DS::Buttonish < DesignSystemComponent
     case variant
     when :primary, :icon_inverse
       :white
-    when :destructive, :outline_destructive
+    when :outline_destructive
       :destructive
-    when :accent, :outline_muted
+    when :destructive, :accent, :outline_muted
       # Inherit the container's own text color so the glyph always matches its
       # label, including on hover, instead of tracking a second colour by hand.
       :current

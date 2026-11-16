@@ -20,7 +20,9 @@
     <% icons.each do |icon_name| %>
       <label class="filterable-item relative" data-filter-name="<%= filter_name(icon_name) %>">
         <%= form.radio_button method, icon_name, class: "sr-only peer", data: radio_data %>
-        <div class="text-secondary w-7 h-7 flex m-0.5 items-center justify-center rounded-full cursor-pointer hover:bg-container-inset-hover peer-checked:bg-container-inset border border-transparent">
+        <%# Keyboard focus on the hidden radio draws the canonical outline on its
+            tile; the chosen tile has a border-primary ring set off from the panel. %>
+        <div class="text-secondary w-7 h-7 flex m-0.5 items-center justify-center rounded-full cursor-pointer hover:bg-container-inset-hover peer-checked:bg-container-inset border border-transparent outline-2 outline-offset-0 outline-transparent peer-focus-visible:outline-focus-ring peer-checked:ring-1 peer-checked:ring-alpha-black-300 theme-dark:peer-checked:ring-alpha-white-400 peer-checked:ring-offset-1 peer-checked:ring-offset-container">
           <%= helpers.icon(icon_name, size: "sm", color: "current") %>
         </div>
       </label>

@@ -76,4 +76,35 @@ class DS::ButtonTest < ViewComponent::TestCase
 
     assert_selector "button[data-turbo-confirm='Sure?']"
   end
+
+  test "text buttons have one fixed height per size, the same as icon buttons" do
+    { sm: "h-7", md: "h-9", lg: "h-12" }.each do |size, height|
+      render_inline(DS::Button.new(text: "Save", size: size))
+
+      classes = page.find("button")[:class].split
+      assert_includes classes, height, "#{size} button"
+      refute(classes.any? { |c| c.start_with?("py-") }, "#{size} button has no vertical padding")
+    end
+  end
+
+  test "every variant has a 1px border, so an outline button is as tall as a filled one" do
+    DS::Button::VARIANTS.each_key do |variant|
+      render_inline(DS::Button.new(text: "Save", variant: variant))
+
+      classes = page.find("button")[:class].split
+      assert_includes classes, "border", "#{variant} has a border"
+    end
+
+    render_inline(DS::Button.new(text: "Save", variant: :primary))
+    assert_includes page.find("button")[:class].split, "border-transparent"
+  end
+
+  test "a destructive button has white text and a matching icon in both themes" do
+    render_inline(DS::Button.new(text: "Delete", variant: :destructive, icon: "trash-2"))
+
+    button = page.find("button")
+    assert_includes button[:class].split, "text-white"
+    refute_includes button[:class].split, "text-inverse"
+    assert_selector "button svg.text-current"
+  end
 end

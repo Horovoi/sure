@@ -9,7 +9,9 @@ class DS::TableTest < ViewComponent::TestCase
   test "renders a header cell per column and a cell per row and column" do
     render_table
 
-    assert_selector "thead th[scope='col'].uppercase.text-secondary.border-b.border-divider", count: 2
+    assert_selector "thead th[scope='col'].text-xs.font-medium.text-secondary.border-b.border-divider", count: 2
+    # Sentence case: no uppercase transform on the column headings
+    assert_no_selector "thead th.uppercase"
     assert_selector "thead th:first-child", text: "Name"
     assert_selector "tbody tr", count: 2
     assert_selector "tbody tr:first-child td:first-child", text: "Rent"

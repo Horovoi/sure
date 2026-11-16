@@ -36,6 +36,20 @@ class DS::TagSelectTest < ViewComponent::TestCase
     assert_selector "button[aria-label=Tags]"
   end
 
+  test "an empty list says there are no tags yet" do
+    render_select(tags: [], selected_ids: [])
+
+    assert_selector "[data-testid=tag-select-empty]", text: I18n.t("ds.tag_select.empty"), visible: :all
+  end
+
+  test "the list is an overlay: opaque panel with a ring, 4px inset, md rows" do
+    render_select(tags: [ tags(:one) ], selected_ids: [])
+
+    assert_selector "[data-tag-select-target=menu].shadow-border-lg.p-1.rounded-lg.bg-container", visible: :all
+    assert_no_selector "[data-tag-select-target=menu].shadow-lg", visible: :all
+    assert_selector "[data-tag-select-target=option].rounded-md.p-2", visible: :all
+  end
+
   private
     def render_select(**options)
       with_request_url "/" do

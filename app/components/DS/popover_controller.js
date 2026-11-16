@@ -6,6 +6,7 @@ import {
   shift,
 } from "@floating-ui/dom";
 import { Controller } from "@hotwired/stimulus";
+import { FULL_WIDTH_QUERY, overlayMiddlewareOptions } from "utils/overlay_boundary";
 
 /**
  * Positioned panel for mixed content (forms, pickers, account menus).
@@ -175,14 +176,17 @@ export default class extends Controller {
   update() {
     if (!this.buttonTarget || !this.contentTarget) return;
 
-    const isSmallScreen = !window.matchMedia("(min-width: 768px)").matches;
+    // Below lg the panel spans the window, like its px-2 lg:px-0 gutter
+    const isSmallScreen = window.matchMedia(FULL_WIDTH_QUERY).matches;
+    const bounds = overlayMiddlewareOptions(this.buttonTarget);
     const useMobileFullwidth = isSmallScreen && this.mobileFullwidthValue;
 
     computePosition(this.buttonTarget, this.contentTarget, {
       placement: useMobileFullwidth ? "bottom" : this.placementValue,
-      // crossAxis: a panel taller than the room above or below its button (the
-      // transactions filter on a phone) is kept inside the window, not cut at the top
-      middleware: [offset(this.offsetValue), flip({ padding: 5 }), shift({ padding: 5, crossAxis: true })],
+      // Below the trigger and aligned to its edge, flipped above or shifted
+      // when that leaves the window or the content column. On a phone the
+      // column starts under the top bar, so a tall panel never covers it.
+      middleware: [offset(this.offsetValue), flip(bounds.flip), shift(bounds.shift)],
       strategy: "fixed",
     }).then(({ x, y }) => {
       if (useMobileFullwidth) {
