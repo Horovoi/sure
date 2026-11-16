@@ -35,7 +35,9 @@ class MonobankItemsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_not_includes response.body, "secret-token-123"
-    item = @family.monobank_items.order(:created_at).last
+    # By id, not created_at: the fixture item is stamped at the real time and the
+    # new one at the traveled-to time, so after noon UTC it would sort first
+    item = @family.monobank_items.where.not(id: @item.id).sole
     assert_equal [ "monobank", "secret-token-123", Date.new(2026, 1, 1) ], [ item.name, item.access_token, item.sync_start_date ]
     assert item.syncs.any?
   end
