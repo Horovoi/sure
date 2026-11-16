@@ -5,6 +5,13 @@ import {
   CHART_TOOLTIP_CONTEXT_CLASSES,
   CHART_TOOLTIP_VALUE_CLASSES,
 } from "utils/chart_tooltip";
+import {
+  CHART_AXIS_LABEL,
+  CHART_LABEL_HALO,
+  CHART_LABEL_PLATE,
+  appendGuideLine,
+  appendLevelLine,
+} from "utils/chart_grid";
 
 // Projection chart for a goal. Renders:
 //   - Saved area + line from goal creation → today (solid)
@@ -97,7 +104,6 @@ export default class extends Controller {
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
     const textPrimary = isDark ? "#ffffff" : "#171717";
     const textSecondary = isDark ? "#cfcfcf" : "#737373";
-    const borderSubdued = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.10)";
     const containerBg = isDark ? "#0a0a0a" : "#ffffff";
 
     // Reserve gutter for y-axis labels when there's room. Mobile (< 320)
@@ -242,43 +248,36 @@ export default class extends Controller {
 
     if (yAxisVisible) {
       yTicks.forEach((tickValue) => {
-        svg
-          .append("line")
-          .attr("x1", margin.left)
-          .attr("x2", margin.left + innerWidth)
-          .attr("y1", y(tickValue))
-          .attr("y2", y(tickValue))
-          .attr("stroke", borderSubdued)
-          .attr("stroke-width", 1);
+        // A level at the target (or a pixel or two from it) is the target
+        // line itself: two lines there merged into one blurred stroke
+        const onTarget = targetY !== null && Math.abs(y(tickValue) - targetY) < 4;
+        if (!onTarget) {
+          appendLevelLine(svg, { x1: margin.left, x2: margin.left + innerWidth, y: y(tickValue), strong: tickValue === 0 });
+        }
         svg
           .append("text")
           .attr("x", margin.left - 6)
           .attr("y", y(tickValue) + 3)
           .attr("text-anchor", "end")
-          .attr("font-size", 12)
-          .attr("fill", textSecondary)
-          .attr("class", "privacy-sensitive")
+          .attr("class", `${CHART_AXIS_LABEL} privacy-sensitive`)
           .text(this._fmtMoneyShort(tickValue, data.currency));
       });
     }
 
+    let targetLabel = null;
     if (targetAmount > 0) {
-      svg
-        .append("line")
-        .attr("x1", margin.left)
-        .attr("x2", margin.left + innerWidth)
-        .attr("y1", y(targetAmount))
-        .attr("y2", y(targetAmount))
-        .attr("stroke", borderSubdued)
-        .attr("stroke-width", 1)
-        .attr("stroke-dasharray", "3 3");
+      // The target is a reference line, not one more level
+      appendLevelLine(svg, { x1: margin.left, x2: margin.left + innerWidth, y: targetY, reference: true, className: "goal-target-line" });
 
       // Always on the right, inside the plot: the y-axis column is too narrow
       // for "Target · ₴20K" (it was clipped to "· ₴20K"). Above the line,
       // or below it when the line runs along the top edge, where the label
-      // would meet the Today marker's label.
+      // would meet the Today marker's label. The projection line can run
+      // through it, so it sits on a card-coloured plate and is raised above
+      // the lines once they are drawn.
       const labelBelow = targetY - margin.top < 18;
-      svg
+      targetLabel = svg.append("g").attr("class", "goal-target-label");
+      const text = targetLabel
         .append("text")
         .attr("x", margin.left + innerWidth - 4)
         .attr("y", labelBelow ? targetY + 14 : targetY - 6)
@@ -287,6 +286,17 @@ export default class extends Controller {
         .attr("fill", textPrimary)
         .attr("class", "privacy-sensitive")
         .text(this.targetLabelTemplateValue.replace("{amount}", data.target_amount_label));
+      const box = text.node().getBBox();
+      if (box.width > 0) {
+        targetLabel
+          .insert("rect", "text")
+          .attr("class", CHART_LABEL_PLATE)
+          .attr("x", box.x - 4)
+          .attr("y", box.y - 1)
+          .attr("width", box.width + 8)
+          .attr("height", box.height + 2)
+          .attr("rx", 3);
+      }
     }
 
     const area = d3
@@ -381,25 +391,13 @@ export default class extends Controller {
             .attr("text-anchor", "end")
             .attr("font-size", 12)
             .attr("fill", textSecondary)
-            .attr("paint-order", "stroke")
-            .attr("stroke", containerBg)
-            .attr("stroke-width", 4)
-            .attr("stroke-linejoin", "round")
-            .attr("class", "privacy-sensitive")
+            .attr("class", `${CHART_LABEL_HALO} privacy-sensitive`)
             .text(labelText);
         }
       }
     }
 
-    svg
-      .append("line")
-      .attr("x1", x(today))
-      .attr("x2", x(today))
-      .attr("y1", margin.top)
-      .attr("y2", margin.top + innerHeight)
-      .attr("stroke", borderSubdued)
-      .attr("stroke-width", 1)
-      .attr("stroke-dasharray", "2 4");
+    appendGuideLine(svg, { x1: x(today), x2: x(today), y1: margin.top, y2: margin.top + innerHeight, reference: true });
 
     svg
       .append("circle")
@@ -416,10 +414,10 @@ export default class extends Controller {
         .attr("x", x(today))
         .attr("y", margin.top - 4)
         .attr("text-anchor", "middle")
-        .attr("font-size", 12)
-        .attr("fill", textSecondary)
+        .attr("class", CHART_AXIS_LABEL)
         .text(this.todayLabelValue);
     }
+    targetLabel?.raise();
 
     // Full 4-digit year so the terminal "Jan 2027" reads as the year, not
     // as "Jan 27" (which scans as January 27th). Slightly wider per tick;
@@ -436,8 +434,7 @@ export default class extends Controller {
       .attr("x", (d) => x(d))
       .attr("y", height - 8)
       .attr("text-anchor", "middle")
-      .attr("font-size", 12)
-      .attr("fill", textSecondary)
+      .attr("class", CHART_AXIS_LABEL)
       .text((d) => tickFmt(d));
     // De-dupe adjacent equal tick labels (e.g. multiple "May '26" on a
     // short window where d3.ticks oversamples).

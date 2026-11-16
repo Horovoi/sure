@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
+import { CHART_AXIS_LABEL, appendLevelLine, styleAxisLabels } from "utils/chart_grid";
 
 // Cumulative spending curve of the dashboard Spending widget: the selected budget
 // period's running total (green, ending today while the period runs) over the previous
@@ -143,21 +144,11 @@ export default class extends Controller {
 
   #drawGridlines(group, y, innerWidth) {
     const ticks = y.ticks(4);
+    const lines = group.append("g");
+    // The zero line is the stronger one, as on every chart
+    ticks.forEach((tick) => appendLevelLine(lines, { x1: 0, x2: innerWidth, y: y(tick), strong: tick === 0 }));
 
-    group
-      .append("g")
-      .selectAll("line")
-      .data(ticks)
-      .join("line")
-      .attr("x1", 0)
-      .attr("x2", innerWidth)
-      .attr("y1", (d) => y(d))
-      .attr("y2", (d) => y(d))
-      .attr("stroke", "var(--color-gray-300)")
-      .attr("stroke-dasharray", "4, 4")
-      .attr("stroke-opacity", 0.6);
-
-    group
+    const labels = group
       .append("g")
       .attr("transform", `translate(${innerWidth},0)`)
       .call(
@@ -169,19 +160,15 @@ export default class extends Controller {
           .tickFormat((d) => this.#formatCompact(d)),
       )
       .call((g) => g.select(".domain").remove())
-      .selectAll("text")
-      .attr("class", "text-secondary fill-current privacy-sensitive")
-      .style("font-size", "12px")
-      .style("font-weight", "500");
+      .selectAll("text");
+    styleAxisLabels(labels, "privacy-sensitive");
   }
 
   // The widest y-axis label, measured with an invisible probe in the label style
   #axisLabelWidth(svg, ticks) {
     const probe = svg
       .append("text")
-      .attr("class", "text-secondary fill-current")
-      .style("font-size", "12px")
-      .style("font-weight", "500")
+      .attr("class", CHART_AXIS_LABEL)
       .style("visibility", "hidden");
     const width = Math.max(
       0,
@@ -197,7 +184,7 @@ export default class extends Controller {
   #drawXAxis(group, x, days, innerHeight, axisLabels) {
     const tickDays = [...new Set([1, Math.round((1 + days) / 2), days])];
 
-    group
+    const labels = group
       .append("g")
       .attr("transform", `translate(0,${innerHeight})`)
       .call(
@@ -209,11 +196,8 @@ export default class extends Controller {
           .tickFormat((day) => axisLabels[day - 1] ?? String(day)),
       )
       .call((g) => g.select(".domain").remove())
-      .selectAll("text")
-      .attr("class", "text-secondary fill-current")
-      .style("font-size", "12px")
-      .style("font-weight", "500")
-      .attr("text-anchor", (d) => (d === 1 ? "start" : d === days ? "end" : "middle"));
+      .selectAll("text");
+    styleAxisLabels(labels).attr("text-anchor", (d) => (d === 1 ? "start" : d === days ? "end" : "middle"));
   }
 
   #installTooltip(group, x, y, current, previous, innerWidth, innerHeight) {
