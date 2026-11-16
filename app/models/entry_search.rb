@@ -55,10 +55,18 @@ class EntrySearch
     def apply_search_filter(scope, search)
       return scope if search.blank?
 
+      # A part of a split transaction also matches by its split's name and notes (the
+      # bank's description), so searching for what the bank booked finds the split,
+      # whose parts the lists show in its place
       query = scope
-      query = query.where("entries.name ILIKE :search OR entries.notes ILIKE :search",
-        search: "%#{ActiveRecord::Base.sanitize_sql_like(search)}%"
-      )
+      query = query.where(<<~SQL.squish, search: "%#{ActiveRecord::Base.sanitize_sql_like(search)}%")
+        entries.name ILIKE :search OR entries.notes ILIKE :search
+        OR (entries.parent_entry_id IS NOT NULL AND EXISTS (
+          SELECT 1 FROM entries split_parents
+          WHERE split_parents.id = entries.parent_entry_id
+            AND (split_parents.name ILIKE :search OR split_parents.notes ILIKE :search)
+        ))
+      SQL
       query
     end
 

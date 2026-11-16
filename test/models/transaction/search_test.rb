@@ -13,6 +13,15 @@ class Transaction::SearchTest < ActiveSupport::TestCase
     @family.accounts.each { |account| account.entries.delete_all }
   end
 
+  test "a name search finds the parts of a split by the split's own name" do
+    split = create_transaction(account: @checking_account, name: "Silpo market", amount: 100)
+    split.split!([ { name: "Food", amount: 60 }, { name: "Household", amount: 40 } ])
+    create_transaction(account: @checking_account, name: "Coffee", amount: 5)
+
+    assert_equal %w[Food Household], Transaction::Search.new(@family, filters: { search: "silpo" }).transactions_scope.map { |t| t.entry.name }.sort
+    assert_equal %w[Household], Transaction::Search.new(@family, filters: { search: "house" }).transactions_scope.map { |t| t.entry.name }
+  end
+
   test "search filters by transaction types using kind enum" do
     # Create different types of transactions using the helper method
     standard_entry = create_transaction(
