@@ -6,6 +6,8 @@
 # the outflows nothing has claimed, so the goal page can ask.
 #
 # Fork rules on top of upstream:
+# - A split transaction counts once, as its parent (Entry::Splittable): the parent is
+#   offered and claimed, never a part.
 # - Transfer kinds (funds_movement, cc_payment, loan_payment) and investment
 #   contributions move money between the family's own accounts. They are not spending,
 #   so they are never offered. Moving savings to the card is not the trip: the spend
@@ -67,11 +69,25 @@ class Goal::WithdrawalDetector
       Entry
         .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
         .where(account_id: accounts.map(&:id))
-        .where(excluded: false)
+        # Money that left the account: the bank's line. A split transaction is its parent
+        # (excluded only because it is split), never one of its parts, so splitting or
+        # unsplitting an outflow never offers the same money twice.
+        .where(parent_entry_id: nil)
+        .where("entries.excluded = false OR #{Entry.split_parent_sql("entries")}")
         .where(date: window_start..today)
         .where(threshold_condition)
         .where("transactions.extra -> 'goal' ->> 'consumed_goal_id' IS NULL")
         .where("transactions.extra -> 'goal' ->> 'pledge_id' IS NULL")
+        # A part claimed before this rule (stamped on the part) claims its split too
+        .where(<<~SQL.squish)
+          NOT EXISTS (
+            SELECT 1 FROM entries claimed_parts
+            JOIN transactions claimed_part_txns ON claimed_part_txns.id = claimed_parts.entryable_id
+              AND claimed_parts.entryable_type = 'Transaction'
+            WHERE claimed_parts.parent_entry_id = entries.id
+              AND claimed_part_txns.extra -> 'goal' ->> 'consumed_goal_id' IS NOT NULL
+          )
+        SQL
         # Transfer is the only writer of a leg's kind, so the kind is enough here
         .where.not(transactions: { kind: NOT_SPENDING_KINDS })
         # A pending charge can still be reversed or replaced by its posted form

@@ -164,6 +164,24 @@ class Entry::SplittableTest < ActiveSupport::TestCase
     assert icloud.reload.split_parent?
   end
 
+  test "a tag change in the split editor reaches the cached tag totals and is kept from rules" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+    tag = @family.tags.create!(name: "Split tag #{SecureRandom.hex(3)}")
+    groceries, household = @entry.split!([ { name: "Groceries", amount: 60 }, { name: "Household", amount: 40 } ])
+    totals = -> { Transaction::Search.new(Family.find(@family.id), filters: { "tags" => [ tag.name ] }).totals }
+    assert_equal 0, totals.call.count
+
+    travel 1.second do
+      @entry.reload.resplit!([
+        { id: groceries.id, name: "Groceries", amount: 60, tag_ids: [ tag.id ] },
+        { id: household.id, name: "Household", amount: 40 }
+      ])
+    end
+
+    assert_equal 1, totals.call.count
+    assert groceries.reload.transaction.locked?(:tag_ids)
+  end
+
   test "unsplit removes the parts and puts the parent back" do
     @entry.split!([ { amount: 70 }, { amount: 30 } ])
     @entry.reload.unsplit!

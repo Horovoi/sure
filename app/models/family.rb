@@ -242,8 +242,10 @@ class Family < ApplicationRecord
 
   # Used for invalidating entry related aggregation queries. Changes on any entry
   # create/update/delete (the count catches deletes, which leave max(updated_at) as is),
-  # account change (status, currency), category change or delete, and family currency.
-  # Sub-second precision so two writes in one second still produce different keys.
+  # account change (status, currency), category change or delete, tag added to or taken
+  # off a transaction (a tag change writes only join rows, which leave the entry as is),
+  # and family currency. Sub-second precision so two writes in one second still produce
+  # different keys.
   def entries_cache_version
     @entries_cache_version ||= begin
       # One round trip: this runs on every report and transactions page
@@ -253,7 +255,9 @@ class Family < ApplicationRecord
           (SELECT COUNT(*) FROM entries e JOIN accounts a ON a.id = e.account_id WHERE a.family_id = :id) AS entries_count,
           (SELECT EXTRACT(EPOCH FROM MAX(updated_at)) FROM accounts WHERE family_id = :id) AS accounts_max,
           (SELECT EXTRACT(EPOCH FROM MAX(updated_at)) FROM categories WHERE family_id = :id) AS categories_max,
-          (SELECT COUNT(*) FROM categories WHERE family_id = :id) AS categories_count
+          (SELECT COUNT(*) FROM categories WHERE family_id = :id) AS categories_count,
+          (SELECT EXTRACT(EPOCH FROM MAX(tg.created_at)) FROM taggings tg JOIN tags t ON t.id = tg.tag_id WHERE t.family_id = :id) AS taggings_max,
+          (SELECT COUNT(*) FROM taggings tg JOIN tags t ON t.id = tg.tag_id WHERE t.family_id = :id) AS taggings_count
       SQL
 
       [
@@ -262,6 +266,8 @@ class Family < ApplicationRecord
         row["accounts_max"]&.to_f,
         row["categories_max"]&.to_f,
         row["categories_count"],
+        row["taggings_max"]&.to_f,
+        row["taggings_count"],
         currency
       ].join(":")
     end

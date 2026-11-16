@@ -192,6 +192,52 @@ class Goal::WithdrawalDetectorTest < ActiveSupport::TestCase
     assert_not_includes found, small.id
   end
 
+  # A split transaction is one outflow: its parent, never its parts
+  test "a split outflow is offered once, as the whole" do
+    entry = outflow(1_200)
+    entry.split!([ { name: "Hotel", amount: 700 }, { name: "Flights", amount: 500 } ])
+
+    assert_equal [ entry.id ], detect(limit: 10).map(&:id)
+  end
+
+  test "an outflow already spent from the goal is not offered again after it is split" do
+    entry = outflow(1_200)
+    @goal.consume!(1_200, transaction: entry.entryable)
+
+    entry.reload.split!([ { name: "Hotel", amount: 700 }, { name: "Flights", amount: 500 } ])
+
+    assert_empty detect(limit: 10)
+    assert_equal 1_200, @goal.reload.consumed_amount.to_d
+  end
+
+  test "spending a part claims its split, so an unsplit does not offer the whole again" do
+    entry = outflow(1_200)
+    entry.split!([ { name: "Hotel", amount: 700 }, { name: "Flights", amount: 500 } ])
+    hotel = entry.reload.child_entries.find_by!(name: "Hotel")
+
+    @goal.consume!(700, transaction: hotel.entryable)
+    assert_equal @goal.id, entry.transaction.reload.extra.dig("goal", "consumed_goal_id")
+
+    entry.reload.unsplit!
+
+    assert_empty detect(limit: 10)
+    assert_equal 700, @goal.reload.consumed_amount.to_d
+  end
+
+  test "a part stamped before claims moved to the split still claims it, and hands the claim over on unsplit" do
+    entry = outflow(1_200)
+    entry.split!([ { name: "Hotel", amount: 700 }, { name: "Flights", amount: 500 } ])
+    hotel = entry.reload.child_entries.find_by!(name: "Hotel")
+    hotel.entryable.update_columns(extra: { "goal" => { "consumed_goal_id" => @goal.id } })
+
+    assert_empty detect(limit: 10)
+
+    entry.reload.unsplit!
+
+    assert_equal @goal.id, entry.transaction.reload.extra.dig("goal", "consumed_goal_id")
+    assert_empty detect(limit: 10)
+  end
+
   private
     def detect(limit: 3)
       detector.unattributed_outflows(limit: limit)

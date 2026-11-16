@@ -41,4 +41,20 @@ class FamilyCacheKeyTest < ActiveSupport::TestCase
       assert_not_equal key_today, @family.build_cache_key("x")
     end
   end
+
+  test "adding or removing a tag on a transaction changes the entries cache version" do
+    transaction = @family.entries.transactions.first.transaction
+    tag = @family.tags.create!(name: "Cache #{SecureRandom.hex(3)}")
+
+    before = version
+    travel 1.second do
+      # A join row only: the transaction and its entry are not saved
+      Tagging.create!(tag: tag, taggable: transaction)
+    end
+    added = version
+    assert_not_equal before, added
+
+    Tagging.where(tag: tag, taggable: transaction).delete_all
+    assert_not_equal added, version
+  end
 end

@@ -305,7 +305,11 @@ module Entry::Splittable
       txn.assign_attributes(part.slice(:category_id, :merchant_id))
       child.save!
       txn.save! if txn.changed?
-      txn.update!(tag_ids: part[:tag_ids]) if part.key?(:tag_ids) && txn.tag_ids.sort != part[:tag_ids].sort
+      if part.key?(:tag_ids) && txn.tag_ids.sort != part[:tag_ids].sort
+        txn.update!(tag_ids: part[:tag_ids])
+        # Kept from rules, as the drawer keeps them; the write also touches the entry
+        txn.lock_attr!(:tag_ids)
+      end
       child.lock_saved_attributes!
       child
     ensure
@@ -313,8 +317,23 @@ module Entry::Splittable
     end
 
     def destroy_split_child!(child)
+      keep_goal_claim_of(child)
       child.split_writing = true
       child.destroy!
+    end
+
+    # A part spent from a goal (stamped before claims moved to the split) hands the claim
+    # to its split when it goes, so the goal page does not offer the outflow again
+    def keep_goal_claim_of(child)
+      goal_id = child.entryable.extra&.dig("goal", "consumed_goal_id")
+      return if goal_id.blank?
+
+      txn = entryable
+      return if txn.extra&.dig("goal", "consumed_goal_id").present?
+
+      extra = (txn.extra || {}).deep_dup
+      extra["goal"] = (extra["goal"] || {}).merge("consumed_goal_id" => goal_id)
+      txn.update!(extra: extra)
     end
 
     # A child's amount, date, account and currency follow the split; its parent never changes

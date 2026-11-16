@@ -472,6 +472,9 @@ class Goal < ApplicationRecord
   # outflow's date (today without one). No rate refuses the spend; never at 1.
   def consume!(amount, account: nil, transaction: nil)
     amount = amount.to_d
+    # A part of a split is claimed through its split, the line the bank sent, so a
+    # later split or unsplit cannot offer the same money again
+    transaction = transaction.entry.parent_entry.entryable if transaction&.entry&.split_child?
     raise ConsumptionRefused.new(:non_positive) unless amount.positive?
     # A reserve is drawn down and refilled: its shortfall already says so
     raise ConsumptionRefused.new(:maintained) if maintained?
