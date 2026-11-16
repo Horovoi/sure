@@ -2,50 +2,7 @@
   <%= render "budgets/budget_header", budget: @budget %>
 
   <div class="space-y-4">
-    <%# Top Section: Donut and Summary side by side %>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <%# Budget Donut %>
-      <div class="h-[300px] bg-container rounded-xl shadow-border-xs p-8">
-        <% if !@budget.initialized? && @source_budget.present? %>
-          <%= render "budgets/copy_previous_prompt", budget: @budget, source_budget: @source_budget %>
-        <% elsif @budget.over_allocated? %>
-          <%= render "budgets/over_allocation_warning", budget: @budget %>
-        <% else %>
-          <%= render "budgets/budget_donut", budget: @budget %>
-        <% end %>
-      </div>
-
-      <%# Actuals Summary %>
-      <% if @budget.initialized? && !@budget.over_allocated? %>
-        <%= render DS::Tabs.new(active_tab: params[:tab].presence || "budgeted") do |tabs| %>
-          <% tabs.with_nav do |nav| %>
-            <% nav.with_btn(id: "budgeted", label: t("budgets.show.tabs.budgeted")) %>
-            <% nav.with_btn(id: "actuals", label: t("budgets.show.tabs.actual")) %>
-          <% end %>
-
-          <% tabs.with_panel(tab_id: "budgeted") do %>
-            <div class="bg-container rounded-xl shadow-border-xs">
-              <%= render "budgets/budgeted_summary", budget: @budget %>
-            </div>
-          <% end %>
-
-          <% tabs.with_panel(tab_id: "actuals") do %>
-            <div class="bg-container rounded-xl shadow-border-xs">
-              <%= render "budgets/actuals_summary", budget: @budget %>
-            </div>
-          <% end %>
-        <% end %>
-      <% else %>
-        <div class="bg-container rounded-xl shadow-border-xs">
-          <%= render "budgets/actuals_summary", budget: @budget %>
-        </div>
-      <% end %>
-    </div>
-
-    <%# w3-reports goals-free-cash: cash on hand, for the current period only %>
-    <% if @budget.shows_available_cash? %>
-      <%= render "budgets/available_cash", budget: @budget %>
-    <% end %>
+    <%= render "budgets/overview", budget: @budget, source_budget: @source_budget %>
 
     <%# Bottom Section: Categories full width. The filter tabs show only for a set-up budget with a row over budget. %>
     <% has_over_budget = budget_has_over_budget?(@budget) %>

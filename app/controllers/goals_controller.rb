@@ -1,6 +1,6 @@
 # Savings goals (w2-goals), with spending and pledges. Ported from upstream without the
-# preview gate, the Plan hub and account sharing: one family, so the linkable accounts
-# are the family's active manual accounts of a fundable type.
+# preview gate and account sharing: one family, so the linkable accounts are the
+# family's active manual accounts of a fundable type. The goals live under the Plan page.
 class GoalsController < ApplicationController
   before_action :set_goal, only: %i[show edit update destroy pause resume complete archive unarchive reopen consume record_consumption]
 
@@ -27,13 +27,13 @@ class GoalsController < ApplicationController
     @kpi = kpi_payload(@active_goals)
     @any_pending_pledge = @active_goals.any? { |goal| goal.open_pledges.any? }
     @show_search = @grid_goals.size > 6
-    @breadcrumbs = [ [ t(".home"), root_path ], [ t(".title"), nil ] ]
+    @breadcrumbs = plan_breadcrumbs([ t(".title"), nil ])
   end
 
   def show
     @open_pledges = @goal.open_pledges.sort_by(&:created_at).reverse
     @unattributed_outflows = withdrawal_detector.unattributed_outflows.to_a
-    @breadcrumbs = [ [ t("goals.index.home"), root_path ], [ t("goals.index.title"), goals_path ], [ @goal.name, nil ] ]
+    @breadcrumbs = plan_breadcrumbs([ t("goals.index.title"), goals_path ], [ @goal.name, nil ])
   end
 
   def new
@@ -173,10 +173,13 @@ class GoalsController < ApplicationController
       params.expect(goal: PERMITTED_ATTRIBUTES)
     end
 
-    # The accounts a goal may be funded by: the family's active manual accounts of a
-    # fundable type. Bank providers stay hidden in this app.
     def linkable_accounts_scope
-      Current.family.accounts.counted_in_totals.manual.where(accountable_type: Goal::FUNDABLE_ACCOUNT_TYPES)
+      Goal.linkable_accounts_for(Current.family)
+    end
+
+    # Goals live under the Plan page
+    def set_breadcrumbs
+      @breadcrumbs = plan_breadcrumbs([ t("goals.index.title"), goals_path ])
     end
 
     def lookup_accounts(ids)

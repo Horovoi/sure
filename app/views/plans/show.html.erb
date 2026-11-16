@@ -1,0 +1,89 @@
+<%# The Plan page: this budget period and the goals. Budgets and goals keep their own
+    pages; each section here links into them. %>
+<div class="@container space-y-8 pb-6 lg:pb-12">
+  <header>
+    <h1 class="text-2xl font-semibold text-primary"><%= t(".title") %></h1>
+    <p class="text-sm text-secondary mt-1"><%= t(".subtitle") %></p>
+  </header>
+
+  <section aria-labelledby="plan_budget_heading" data-testid="plan-budget">
+    <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-3">
+      <div class="min-w-0">
+        <h2 id="plan_budget_heading" class="text-lg font-medium text-primary">
+          <%= t(".budget.heading") %>
+          <% if @budget %>
+            <span class="text-secondary font-normal">· <%= @budget.name %></span>
+          <% end %>
+        </h2>
+      </div>
+
+      <% if @budget %>
+        <%= render DS::Link.new(
+          text: t(".budget.open"),
+          variant: "outline",
+          size: "sm",
+          icon: "chevron-right",
+          icon_position: :right,
+          href: budget_path(@budget)
+        ) %>
+      <% end %>
+    </div>
+
+    <% if @budget %>
+      <%= render "budgets/period", budget: @budget %>
+      <%= render "budgets/overview", budget: @budget, source_budget: @source_budget %>
+    <% else %>
+      <div class="bg-container rounded-xl shadow-border-xs py-10 px-6 text-center">
+        <p class="text-sm text-secondary"><%= t(".budget.unavailable") %></p>
+      </div>
+    <% end %>
+  </section>
+
+  <section aria-labelledby="plan_goals_heading" data-testid="plan-goals">
+    <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-3">
+      <h2 id="plan_goals_heading" class="text-lg font-medium text-primary">
+        <%= t(".goals.heading") %>
+        <% if @goals.any? %>
+          <span class="text-secondary font-normal">· <%= t(".goals.active_count", count: @goals.size) %></span>
+        <% end %>
+      </h2>
+
+      <% if @family_has_goals %>
+        <div class="flex flex-wrap items-center gap-2">
+          <% if @linkable_account_count.positive? %>
+            <%= render DS::Link.new(
+              text: t("goals.index.new_goal"),
+              variant: "outline",
+              size: "sm",
+              icon: "plus",
+              href: new_goal_path,
+              frame: :modal
+            ) %>
+          <% end %>
+          <%= render DS::Link.new(
+            text: t(".goals.all"),
+            variant: "outline",
+            size: "sm",
+            icon: "chevron-right",
+            icon_position: :right,
+            href: goals_path
+          ) %>
+        </div>
+      <% end %>
+    </div>
+
+    <% if !@family_has_goals %>
+      <%= render "goals/empty_state", linkable_account_count: @linkable_account_count, return_to: plan_path %>
+    <% elsif @goals.empty? %>
+      <div class="bg-container rounded-xl shadow-border-xs py-10 px-6 text-center">
+        <p class="text-sm text-secondary"><%= t(".goals.none_active") %></p>
+      </div>
+    <% else %>
+      <div class="grid grid-cols-1 @2xl:grid-cols-2 @5xl:grid-cols-3 gap-3.5">
+        <% @goals.each do |goal| %>
+          <%= render Goals::CardComponent.new(goal: goal, filterable: false) %>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+</div>

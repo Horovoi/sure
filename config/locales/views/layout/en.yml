@@ -4,9 +4,8 @@ en:
     application:
       nav:
         assistant: Assistant
-        budgets: Budgets
-        goals: Goals
         home: Home
+        plan: Plan
         reports: Reports
         subscriptions: Subscriptions
         transactions: Transactions

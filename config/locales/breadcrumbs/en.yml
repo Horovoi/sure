@@ -1,6 +1,8 @@
 ---
 en:
   breadcrumbs:
+    budgets: Budgets
     exports: Exports
     home: Home
     imports: Imports
+    plan: Plan

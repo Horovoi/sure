@@ -35,12 +35,4 @@
   </div>
 </div>
 
-<div class="text-secondary text-xs mb-3">
-  <span><%= t(".period") %></span>
-  <span class="text-primary">
-    <%= budget.start_date.strftime("%b %-d, %Y") %> — <%= budget.end_date.strftime("%b %-d, %Y") %>
-  </span>
-  <% if Current.family.fiscal_month_enabled? %>
-    <span class="ml-2 px-1.5 py-0.5 border border-tertiary rounded-md"><%= t(".fiscal_months") %></span>
-  <% end %>
-</div>
+<%= render "budgets/period", budget: budget %>

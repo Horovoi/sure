@@ -1,0 +1,17 @@
+---
+en:
+  plans:
+    show:
+      title: Plan
+      subtitle: What you spend this period, and what you save toward.
+      budget:
+        heading: Budget
+        open: Open budget
+        unavailable: There is no budget for this period.
+      goals:
+        heading: Goals
+        active_count:
+          one: 1 active
+          other: "%{count} active"
+        all: All goals
+        none_active: No active goals. Completed and archived goals are on the goals page.
