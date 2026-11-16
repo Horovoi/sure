@@ -47,7 +47,7 @@ class FamilyMerchantsController < ApplicationController
     @first_date, @last_date = @search.transactions_scope.pick(Arel.sql("MIN(entries.date)"), Arel.sql("MAX(entries.date)"))
 
     @pagy, @transactions = pagy(
-      @search.transactions_scope.reverse_chronological.includes({ entry: :account }, *Transaction::ROW_ASSOCIATIONS),
+      @search.transactions_scope.reverse_chronological.includes({ entry: [ :account, { parent_entry: :child_entries } ] }, *Transaction::ROW_ASSOCIATIONS),
       limit: safe_per_page(50)
     )
   end

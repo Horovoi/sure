@@ -23,7 +23,7 @@ class TransactionsController < ApplicationController
 
     base_scope = @search.transactions_scope
                        .reverse_chronological
-                       .includes({ entry: :account }, *Transaction::ROW_ASSOCIATIONS)
+                       .includes({ entry: [ :account, { parent_entry: :child_entries } ] }, *Transaction::ROW_ASSOCIATIONS)
 
     @pagy, @transactions = pagy(base_scope, limit: safe_per_page)
     # w2-transfers transfer-hints: rows with a likely transfer counterpart show "Transfer?"
@@ -163,7 +163,8 @@ class TransactionsController < ApplicationController
               partial: "transactions/header",
               locals: { entry: @entry }
             ),
-            turbo_stream.replace(@entry),
+            # A part of a split is listed inside its split's group
+            turbo_stream.replace(dom_id(@entry), partial: "entries/entry", locals: { entry: @entry, in_split_group: @entry.split_child? }),
             *flash_notification_stream_items
           ]
         end

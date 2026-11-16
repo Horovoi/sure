@@ -92,9 +92,7 @@
           <div>
             <div class="space-y-4">
               <%= entries_by_date(@entries) do |entries| %>
-                <% entries.each_with_index do |entry, index| %>
-                  <%= render entry, view_ctx: "account" %>
-                <% end %>
+                <%= render_entry_rows(entries, view_ctx: "account") %>
               <% end %>
             </div>
 

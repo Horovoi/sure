@@ -38,8 +38,6 @@
   </details>
 
   <div class="bg-container shadow-border-xs rounded-lg">
-    <% entries.each do |entry| %>
-      <%= render entry, view_ctx: "account" %>
-    <% end %>
+    <%= helpers.render_entry_rows(entries, view_ctx: "account") %>
   </div>
 <% end %>

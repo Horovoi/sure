@@ -45,7 +45,8 @@ class AccountsController < ApplicationController
     @chart_view = params[:chart_view].presence || "balance"
     @tab = params[:tab].presence
     @q = account_search_params
-    entries = @account.entries.where(excluded: false).search(@q).reverse_chronological
+    # A split shows as its parts, grouped under the parent (which is excluded while split)
+    entries = @account.entries.where(excluded: false).search(@q).reverse_chronological.includes(parent_entry: :child_entries)
 
     @pagy, @entries = pagy(entries, limit: safe_per_page)
 

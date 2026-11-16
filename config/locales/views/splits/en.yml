@@ -1,0 +1,43 @@
+---
+en:
+  splits:
+    new:
+      title: Split transaction
+      submit: Split
+    edit:
+      title: Edit split
+      submit: Save split
+    create:
+      success: Transaction split
+    update:
+      success: Split saved
+    destroy:
+      success: Transaction unsplit
+    form:
+      intro: Divide this transaction by what it was for. The parts must add up to the
+        total; the account balance keeps the whole amount.
+      total: Total
+      part_legend: Part
+      name_label: Name
+      name_placeholder: What this part was for
+      amount_label: Amount
+      fill: Rest here
+      fill_title: Give this part whatever is not assigned yet
+      remove: Remove part
+      category_label: Category
+      uncategorized: Uncategorized
+      more_details: Merchant, tags, notes
+      merchant_label: Merchant
+      no_merchant: No merchant
+      tags_label: Tags
+      notes_label: Notes
+      excluded_label: Exclude this part
+      excluded_hint: Leave it out of budgets and reports, like an excluded transaction
+      add_part: Add part
+      balanced: The parts add up to the total
+      left: "%{amount} left to assign"
+      over: "%{amount} more than the total"
+      min_parts: A split needs at least two parts
+      zero_part: Every part needs an amount other than 0
+      cancel: Cancel
+      saving: Saving...

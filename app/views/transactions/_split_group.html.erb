@@ -1,0 +1,53 @@
+<%# locals: (group:, view_ctx: "global", balance_trend: nil) %>
+<%# A split transaction in a list (EntriesHelper#render_entry_rows): its parent as a
+    header with the whole amount, then the parts the list shows, indented. The parts are
+    what the list's totals count. %>
+<% parent = group.parent %>
+<% count = parent.child_entries.size %>
+
+<div role="group" aria-labelledby="<%= dom_id(parent, :split_group) %>" data-testid="split-group">
+  <div class="flex lg:grid lg:grid-cols-12 items-center gap-3 lg:gap-0 text-sm p-3 lg:p-4">
+    <div class="pr-4 lg:pr-10 flex items-center gap-3 lg:gap-4 col-span-8 min-w-0">
+      <%# Lines up with the rows' checkboxes; the parent itself is not selectable %>
+      <span class="hidden lg:block w-4 shrink-0" aria-hidden="true"></span>
+
+      <div class="hidden lg:flex shrink-0">
+        <%= render DS::FilledIcon.new(icon: "split", variant: :surface, size: "lg", rounded: true) %>
+      </div>
+
+      <div class="min-w-0 space-y-0.5">
+        <div class="flex items-center gap-2 min-w-0">
+          <%= link_to parent.name,
+                entry_path(parent),
+                id: dom_id(parent, :split_group),
+                class: "truncate font-medium text-primary hover:underline",
+                data: { turbo_frame: "drawer", turbo_prefetch: false } %>
+          <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-secondary px-1.5 py-0.5 text-xs font-medium text-secondary">
+            <%= icon "split", size: "xs", color: "current", class: "lg:hidden" %>
+            <%= t("transactions.split_group.label") %>
+          </span>
+        </div>
+        <p class="text-xs text-secondary truncate">
+          <% if view_ctx != "account" %>
+            <%= link_to parent.account.name, account_path(parent.account, tab: "transactions"), data: { turbo_frame: "_top" }, class: "hover:underline" %>
+            ·
+          <% end %>
+          <%= t("transactions.split_group.parts", count: count) %>
+        </p>
+      </div>
+    </div>
+
+    <div class="hidden md:block col-span-2"></div>
+
+    <div class="shrink-0 col-span-4 lg:col-span-2 ml-auto text-right">
+      <p class="text-secondary privacy-sensitive"><%= format_money(-parent.amount_money) %></p>
+    </div>
+  </div>
+
+  <div class="ml-5 lg:ml-12 border-l-2 border-secondary">
+    <%# In the order the split editor shows them, whatever order the list sorts by %>
+    <% group.children.sort_by { |child| [ child.created_at, child.id ] }.each do |child| %>
+      <%= render child, view_ctx: view_ctx, balance_trend: balance_trend, in_split_group: true %>
+    <% end %>
+  </div>
+</div>

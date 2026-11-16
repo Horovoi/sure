@@ -1,0 +1,6 @@
+<%= render "splits/form",
+      entry: @entry,
+      parts: @parts.map { |part| SplitsController::Part.from(part) },
+      title: t(".title"),
+      submit_text: t(".submit"),
+      method: :patch %>

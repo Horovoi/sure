@@ -29,6 +29,40 @@ module EntriesHelper
     end.compact.join.html_safe
   end
 
+  # A split transaction's parts in a list, under their parent (Entry::Splittable)
+  SplitGroup = Struct.new(:parent, :children)
+
+  # The rows of one list section: entries as they are, except that the parts of a split
+  # are gathered under their parent, at the place of the first part. The parent is read
+  # from entry.parent_entry, so preload it.
+  def group_split_entries(entries)
+    groups = {}
+
+    entries.each_with_object([]) do |entry, items|
+      parent = entry.parent_entry_id && entry.parent_entry
+
+      if parent.nil?
+        items << entry
+      elsif (group = groups[parent.id])
+        group.children << entry
+      else
+        group = groups[parent.id] = SplitGroup.new(parent, [ entry ])
+        items << group
+      end
+    end
+  end
+
+  # Renders the rows of one list section, splits as a group (transactions/_split_group)
+  def render_entry_rows(entries, **locals)
+    safe_join(group_split_entries(entries).map do |item|
+      if item.is_a?(SplitGroup)
+        render("transactions/split_group", group: item, **locals)
+      else
+        render(item, **locals)
+      end
+    end)
+  end
+
   def entry_name_detailed(entry)
     [
       entry.date,
