@@ -5,7 +5,7 @@
       title, AT announces it; when it did not (custom headers, body-only
       dialogs), the dangling reference is ignored per WAI-ARIA, and callers can
       pass `aria-label` / `aria-labelledby` through `**opts` (last wins). %>
-  <%= tag.dialog class: "w-full h-full bg-transparent text-primary theme-dark:backdrop:bg-alpha-black-900 backdrop:bg-overlay pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] #{(drawer? || responsive?) ? "lg:p-3" : "lg:p-1"}",
+  <%= tag.dialog class: "w-full h-full bg-transparent text-primary outline-none theme-dark:backdrop:bg-alpha-black-900 backdrop:bg-overlay pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] #{(drawer? || responsive?) ? "lg:p-3" : "lg:p-1"}",
               role: "dialog",
               "aria-modal": "true",
               "aria-labelledby": title_id,

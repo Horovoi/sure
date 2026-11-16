@@ -118,15 +118,18 @@ export default class extends Controller {
     return returnFocusByFrame.get(this._frame) ?? active;
   }
 
-  // Move focus to the first focusable child unless the dialog already
-  // declared one via the autofocus attribute. Native `<dialog>.showModal()`
-  // is supposed to do this but the behavior varies across engines. An
-  // autofocus inside a nested dialog (a combobox's small-screen list) is not
-  // this dialog's: that dialog is closed, and showModal skips it.
+  // Unless the dialog declares a field to start in (autofocus), focus goes to
+  // the dialog itself: screen readers announce it by its label and the first
+  // Tab reaches its first control. showModal() would focus that control, the
+  // close button, and Safari counts that as keyboard focus and rings it as
+  // soon as the dialog opens. An autofocus inside a nested dialog (a
+  // combobox's small-screen list) is not this dialog's: that dialog is closed,
+  // and showModal skips it.
   #focusInitial() {
     const autofocus = Array.from(this.element.querySelectorAll("[autofocus]"));
     if (autofocus.some((el) => el.closest("dialog") === this.element)) return;
-    this.#focusables()[0]?.focus();
+    if (!this.element.hasAttribute("tabindex")) this.element.setAttribute("tabindex", "-1");
+    this.element.focus({ preventScroll: true });
   }
 
   // Tab/Shift+Tab wrap inside the dialog so focus can't leak to the page
@@ -141,7 +144,8 @@ export default class extends Controller {
     }
     const first = focusables[0];
     const last = focusables[focusables.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
+    // From the dialog itself (focused on open) Shift+Tab wraps to the end
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === this.element)) {
       e.preventDefault();
       last.focus();
     } else if (!e.shiftKey && document.activeElement === last) {
