@@ -224,13 +224,17 @@ module ReportsHelper
 
   # One stacked bar per side for the overview strip: a segment per category, in the
   # list's order, on a scale both sides share (the larger total fills the track)
+  # The expense side also gets the normal tick the rows use, at the normal total; when
+  # normal is larger than both totals the scale stretches to fit it.
   def breakdown_strip(columns)
-    scale = columns.map { |column| column[:total] }.max.to_f
+    normal = columns.filter_map { |column| column[:comparison]&.normal_total }.first
+    scale = (columns.map { |column| column[:total] } + [ normal ].compact).max.to_f
     columns.map do |column|
       segments = column[:rows].select { |row| row[:amount].positive? }.map do |row|
         { name: row[:name], color: row[:color], width: scale.positive? ? (row[:amount] / scale * 100).to_f.round(2) : 0 }
       end
-      { type: column[:type], segments: segments }
+      tick = column[:comparison] && scale.positive? ? (column[:comparison].normal_total / scale * 100).to_f.round(2) : nil
+      { type: column[:type], segments: segments, tick: tick }
     end
   end
 

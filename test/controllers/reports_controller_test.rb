@@ -569,6 +569,8 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-testid=spending-summary]", text: /Spending vs normal\s+\+.+\s+\d+% more than normal/
       assert_select "[data-testid=spending-summary]", text: /so far/, count: 0
       assert_select "[data-testid=spending-legend]", text: /Normal for a period this long: .+/
+      # An arrow gives the direction beside the figure
+      assert_select "[data-testid=spending-summary] svg", count: 1
       assert_select "[data-testid=spending-legend] [role=tooltip]", text: /Based on #{I18n.l(period_start - 200.days, format: "%b %-d, %Y")} – #{I18n.l(period_start - 1.day, format: "%b %-d, %Y")}\. Changes within 15% of normal or under .+ stay grey\./
     end
     assert_select "section[data-section-key='transactions_breakdown'] [data-testid='breakdown-expense']" do

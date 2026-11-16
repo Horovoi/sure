@@ -2,8 +2,9 @@
 <%# The overview over both lists. First two figures, each a number with one short
     line: what was left over, and how far spending is from normal. Then one stacked
     bar per side on a shared scale (the gap between them is what was left over),
-    and the key for the ticks on the expense rows. Which days normal comes from and
-    what a grey change means sit in the key's info tooltip. %>
+    and the key for the normal ticks on the Expenses bar and the expense rows.
+    Which days normal comes from and what a grey change means sit in the key's
+    info tooltip. %>
 <%
   income = columns.find { |column| column[:type] == :income }
   expense = columns.find { |column| column[:type] == :expense }
@@ -27,8 +28,15 @@
       <% if vs_normal %>
         <div data-testid="spending-summary">
           <p class="text-sm text-secondary"><%= t("reports.transactions_breakdown.vs_normal.label") %></p>
-          <p class="<%= class_names("mt-1 text-2xl font-medium tabular-nums",
-                                    vs_normal[:tone] == :neutral ? "text-primary" : ReportsHelper::BREAKDOWN_TONE_CLASSES.fetch(vs_normal[:tone])) %>"><%= vs_normal[:value] %></p>
+          <%# An arrow gives the direction even when the change is near normal and the
+              figure keeps the text colour %>
+          <p class="<%= class_names("mt-1 flex items-center gap-1.5 text-2xl font-medium tabular-nums",
+                                    vs_normal[:tone] == :neutral ? "text-primary" : ReportsHelper::BREAKDOWN_TONE_CLASSES.fetch(vs_normal[:tone])) %>">
+            <% if vs_normal[:change].nonzero? %>
+              <%= icon(vs_normal[:change].negative? ? "arrow-down" : "arrow-up", size: "md", color: "current") %>
+            <% end %>
+            <span><%= vs_normal[:value] %></span>
+          </p>
           <p class="mt-1 text-sm text-secondary"><%= vs_normal[:note] %></p>
         </div>
       <% elsif no_normal %>
@@ -45,10 +53,17 @@
     <div class="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3 text-xs text-secondary" aria-hidden="true">
       <% breakdown_strip(columns).each do |side| %>
         <span><%= t("reports.transactions_breakdown.overview.#{side[:type]}") %></span>
-        <div class="flex h-2 overflow-hidden rounded-full bg-surface-inset" data-testid="breakdown-strip-<%= side[:type] %>">
-          <% side[:segments].each do |segment| %>
-            <%# A hairline in the card colour parts neighbouring segments %>
-            <span class="h-full shrink-0 shadow-[inset_-1px_0_0_var(--color-container)] last:shadow-none" style="width: <%= segment[:width] %>%; background-color: <%= segment[:color] %>" title="<%= segment[:name] %>"></span>
+        <div class="relative">
+          <div class="flex h-2 overflow-hidden rounded-full bg-surface-inset" data-testid="breakdown-strip-<%= side[:type] %>">
+            <% side[:segments].each do |segment| %>
+              <%# A hairline in the card colour parts neighbouring segments %>
+              <span class="h-full shrink-0 shadow-[inset_-1px_0_0_var(--color-container)] last:shadow-none" style="width: <%= segment[:width] %>%; background-color: <%= segment[:color] %>" title="<%= segment[:name] %>"></span>
+            <% end %>
+          </div>
+          <%# Normal, with the same tick as the expense rows: where spending ends against it
+              shows less or more than normal at a glance %>
+          <% if side[:tick] %>
+            <span class="absolute -inset-y-1 -ml-px w-0.5 rounded-full bg-inverse ring-1 ring-container" style="left: <%= side[:tick] %>%" data-testid="breakdown-strip-normal-tick"></span>
           <% end %>
         </div>
       <% end %>

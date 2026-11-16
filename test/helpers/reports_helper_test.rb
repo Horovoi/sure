@@ -70,6 +70,21 @@ class ReportsHelperTest < ActionView::TestCase
     assert_nil breakdown_left_over(income_total: 0.to_d, expense_total: 400.to_d)
   end
 
+  test "the strip puts normal on the expense side and stretches to fit it" do
+    comparison = Struct.new(:normal_total).new(300.to_d)
+    columns = [
+      { type: :income, total: 200.to_d, rows: [ { name: "Salary", color: "#111", amount: 200.to_d } ] },
+      { type: :expense, total: 150.to_d, comparison: comparison, rows: [ { name: "Food", color: "#222", amount: 150.to_d } ] }
+    ]
+    income, expense = breakdown_strip(columns)
+
+    assert_nil income[:tick]
+    # Normal (300) is the largest, so it sets the scale
+    assert_equal 100.0, expense[:tick]
+    assert_equal 50.0, expense[:segments].first[:width]
+    assert_in_delta 66.67, income[:segments].first[:width], 0.01
+  end
+
   private
     def group(category, total)
       { category_id: category.id, category_name: category.name, category_color: category.color, category_icon: nil,
