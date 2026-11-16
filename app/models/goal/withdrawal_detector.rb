@@ -73,7 +73,7 @@ class Goal::WithdrawalDetector
         # (excluded only because it is split), never one of its parts, so splitting or
         # unsplitting an outflow never offers the same money twice.
         .where(parent_entry_id: nil)
-        .where("entries.excluded = false OR #{Entry.split_parent_sql("entries")}")
+        .where("entries.excluded = false OR EXISTS (SELECT 1 FROM entries split_children WHERE split_children.parent_entry_id = entries.id)")
         .where(date: window_start..today)
         .where(threshold_condition)
         .where("transactions.extra -> 'goal' ->> 'consumed_goal_id' IS NULL")
