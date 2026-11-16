@@ -12,7 +12,7 @@ en:
       enable_title: Enable AI Chats
       enable_body: The assistant answers questions about your money from your own accounts and transactions. Turn it on to use it.
       enable_button: Enable AI Chats
-      enable_note: You can turn it off at any time in Settings > AI Prompts. Your questions and the data the assistant reads go to Anthropic (Claude) or OpenAI, whichever engine answers.
+      enable_note: You can turn it off at any time in Settings > AI integrations. Your questions and the data the assistant reads go to Anthropic (Claude) or OpenAI, whichever engine answers.
       setup_title: Connect an AI engine
       setup_body: The assistant needs an AI engine to answer. Connect one of these.
       claude_title: Claude

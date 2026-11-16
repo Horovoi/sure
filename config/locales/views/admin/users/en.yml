@@ -15,7 +15,7 @@ en:
           super_admin: "Super Admin"
         role_descriptions:
           member: "Basic user access. Can manage their own accounts, transactions, and settings."
-          admin: "Family administrator. Can access advanced settings like API keys, imports, and AI prompts."
+          admin: "Family administrator. Can access advanced settings like API keys, imports, and AI integrations."
           super_admin: "Instance administrator. Can manage SSO providers, user roles, and impersonate users for support."
       update:
         success: "User role updated successfully."

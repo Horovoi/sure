@@ -7,7 +7,7 @@ en:
   settings:
     ai_prompts:
       show:
-        page_title: AI Prompts
+        page_title: AI integrations
         breadcrumb_home: Home
         claude_label: Claude
         claude_loading: Checking the Claude bridge...
@@ -217,7 +217,7 @@ en:
       accounts_label: Accounts
       auto_matches_label: Transfer matches
       advanced_section_title: Advanced
-      ai_prompts_label: AI Prompts
+      ai_prompts_label: AI integrations
       api_key_label: API Key
       budgeting_label: Budgeting
       llm_usage_label: LLM Usage

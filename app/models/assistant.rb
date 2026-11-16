@@ -159,7 +159,7 @@ class Assistant
 
       if available_providers.empty?
         "No LLM provider configured that supports model '#{requested_model}'. " \
-        "Connect an AI engine in Settings > AI Prompts: Claude through the bridge on this Mac, or an OpenAI API key."
+        "Connect an AI engine in Settings > AI integrations: Claude through the bridge on this Mac, or an OpenAI API key."
       else
         provider_details = available_providers.map do |provider|
           "  - #{provider.provider_name}: #{provider.supported_models_description}"

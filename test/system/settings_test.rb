@@ -21,7 +21,7 @@ class SettingsTest < ApplicationSystemTestCase
     # Add admin settings if user is admin
     if @user.admin?
       @settings_links += [
-        [ "AI Prompts", settings_ai_prompts_path ],
+        [ "AI integrations", settings_ai_prompts_path ],
         [ "LLM Usage", settings_llm_usage_path ],
         [ "API Key", settings_api_key_path ]
       ]
