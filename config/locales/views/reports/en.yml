@@ -154,17 +154,12 @@ en:
       avg: avg
       per_day: "/day"
       more: more
+    # Spending against normal, in the expenses block of the activity breakdown
     spending_vs_normal:
-      title: Spending vs normal
       summary_html: "%{total} spent in this period. Normal for a period this long is %{normal}, based on %{baseline_start} to %{baseline_end}."
       summary_so_far_html: "%{total} spent so far. Normal for this many days is %{normal}, based on %{baseline_start} to %{baseline_end}."
-      no_history_html: "%{total} spent in this period. There is not enough earlier history yet to say what is normal."
-      no_history_short: Not enough earlier history to compare with yet.
-      no_spending: No spending in this period.
       no_changes: Spending matched normal in every category.
-      treemap_title: Where it went
       changes_title: What changed
-      direct: "%{category} (no subcategory)"
       color_mode:
         label: Treemap colors
         normal: Vs normal

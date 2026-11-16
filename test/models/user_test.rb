@@ -284,6 +284,21 @@ class UserTest < ActiveSupport::TestCase
     assert_equal %w[transactions_breakdown], @user.preferences["reports_section_order"]
   end
 
+  test "reports expense color mode defaults to category colors and rejects unknown modes" do
+    @user.update!(preferences: {})
+    assert_equal "category", @user.reports_expense_color_mode
+
+    assert @user.update_reports_preferences({ "reports_expense_color_mode" => "normal" })
+    assert_equal "normal", @user.reload.reports_expense_color_mode
+
+    assert_not @user.update_reports_preferences({ "reports_expense_color_mode" => "rainbow" })
+    assert_equal "normal", @user.reload.reports_expense_color_mode
+
+    # A stored value from elsewhere that is not a mode reads as the default
+    @user.update!(preferences: { "reports_expense_color_mode" => "rainbow" })
+    assert_equal "category", @user.reports_expense_color_mode
+  end
+
   test "handles missing nested keys in preferences for collapsed sections" do
     @user.update!(preferences: { "section_order" => %w[cashflow] })
 

@@ -46,7 +46,7 @@ module ReportsHelper
     trends_data&.length.to_i >= 2
   end
 
-  # --- Spending vs normal (w2-dash spending-vs-normal) ---
+  # --- Spending vs normal (the expenses block of the activity breakdown) ---
 
   # Treemap colours by change against normal, smallest first. upper is the largest
   # ratio (0.5 = 50% more) that still falls in the bucket; nil means no limit.
@@ -59,6 +59,8 @@ module ReportsHelper
     { key: "much_more", upper: nil, color: "var(--color-destructive)" }
   ].freeze
   SPENDING_NO_NORMAL_COLOR = "var(--color-gray-400)".freeze
+  # A breakdown tile whose category has no colour
+  BREAKDOWN_FALLBACK_COLOR = "#94a3b8".freeze
 
   # The bucket of a comparison row, or nil without a normal. Spending where normal is
   # zero is new spending, so it counts as much more.
@@ -72,33 +74,47 @@ module ReportsHelper
     SPENDING_RATIO_BUCKETS.find { |bucket| bucket[:upper].nil? || ratio <= bucket[:upper] }
   end
 
-  # Nodes for the reports-treemap controller: one per parent row with spending, with
-  # the category colour, the colour against normal, the tooltip lines and the
-  # transactions link
-  def spending_treemap_categories(comparison)
-    total = comparison.total
-    comparison.drawable_rows.each_with_index.map do |row, index|
-      labelled = row.subcategories.size > 1
-      {
-        name: row.category.name,
-        color: row.category.color.presence || Category::UNCATEGORIZED_COLOR,
-        normalColor: spending_ratio_bucket(comparison, row)&.dig(:color) || SPENDING_NO_NORMAL_COLOR,
-        amount: row.total.to_f,
-        formattedAmount: spending_money(row.total),
-        percentage: total.positive? ? (row.total / total * 100).to_f.round(1) : 0,
+  # Nodes for the reports-treemap controller from the groups of one breakdown table
+  # (income or expenses). With a comparable spending comparison, each node also gets its
+  # colour and tooltip lines against normal, matched by category, so one treemap can
+  # switch between category colours and the change against normal.
+  def breakdown_treemap_categories(groups, total:, start_date:, end_date:, comparison: nil)
+    currency = Current.family.currency
+    days_in_period = start_date && end_date ? (end_date - start_date).to_i + 1 : 30
+    comparison = nil unless comparison&.comparable?
+    rows_by_key = comparison ? comparison.rows.index_by { |row| IncomeStatement::CategoryNetting.key(row.category) } : {}
+
+    groups.each_with_index.map do |group, index|
+      node = {
+        name: group[:category_name],
+        color: group[:category_color] || BREAKDOWN_FALLBACK_COLOR,
+        percentage: (group[:total] / total.to_f * 100).round(1),
+        amount: group[:total],
+        formattedAmount: Money.new(group[:total], currency).format,
+        count: group[:count],
+        avgFormatted: group[:count] > 1 ? Money.new(group[:total] / group[:count], currency).format : nil,
+        dailyAvgFormatted: days_in_period > 0 ? Money.new(group[:total] / days_in_period, currency).format : nil,
         rank: index + 1,
-        subcategories: row.subcategories.first(3).map do |sub|
+        subcategories: (group[:subcategories] || []).first(3).map do |sub|
           {
-            name: sub.direct && labelled ? t("reports.spending_vs_normal.direct", category: sub.category.name) : sub.category.name,
-            color: sub.category.color.presence || row.category.color.presence || Category::UNCATEGORIZED_COLOR,
-            amount: spending_money(sub.total),
-            percentage: row.total.positive? ? (sub.total / row.total * 100).to_f.round(1) : 0
+            name: sub[:category_name],
+            color: sub[:category_color] || group[:category_color] || BREAKDOWN_FALLBACK_COLOR,
+            amount: Money.new(sub[:total], currency).format,
+            percentage: group[:total] > 0 ? (sub[:total] / group[:total].to_f * 100).round(1) : 0
           }
         end,
-        totalSubcategories: row.subcategories.size,
-        normalLines: spending_normal_lines(comparison, row),
-        href: spending_category_href(comparison, row.category)
+        totalSubcategories: (group[:subcategories] || []).size,
+        href: breakdown_category_href(group, start_date, end_date)
       }
+
+      if comparison
+        # Category#totals_key: an id, or uncategorized / other_investments
+        row = rows_by_key[group[:category_id].to_s]
+        node[:normalColor] = (row && spending_ratio_bucket(comparison, row)&.dig(:color)) || SPENDING_NO_NORMAL_COLOR
+        node[:normalLines] = row ? spending_normal_lines(comparison, row) : [ t("reports.spending_vs_normal.tooltip.no_normal") ]
+      end
+
+      node
     end
   end
 
@@ -137,6 +153,12 @@ module ReportsHelper
         end
       end
       lines
+    end
+
+    def breakdown_category_href(group, start_date, end_date)
+      return nil unless group[:has_transactions] && group[:filter_value].present? && start_date && end_date
+
+      transactions_path(q: { categories: [ group[:filter_value] ], start_date: start_date, end_date: end_date })
     end
 
     # Other Investments has no transactions filter, so it gets no link
