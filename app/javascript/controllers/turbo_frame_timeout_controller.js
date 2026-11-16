@@ -7,30 +7,43 @@ import { Controller } from "@hotwired/stimulus"
 // fetch"). One listener for every frame, here because this module always loads:
 // a fetch failure while the page is being left, or for a frame no longer on the
 // page, is dropped silently. A frame that fails on a live page still reports it.
+//
+// A full navigation (reload, address bar, a non-Turbo link) gives no warning:
+// WebKit cuts the old page's fetches off when the new page commits, before
+// pagehide. So a network failure (TypeError) is reported a moment later, and
+// only if the same page is still there: the timers of a page that was left
+// never run.
 const cancelledFrameFetchErrors = new WeakSet()
+const REPORT_DELAY_MS = 1000
 let leavingPage = false
+let pageVisit = 0
 
-function isCutOff(error, frame) {
-  if (error?.name === "AbortError") return true
-
-  return error instanceof TypeError && (leavingPage || !frame.isConnected)
+function leavePage() {
+  leavingPage = true
+  pageVisit += 1
 }
 
 // pagehide, not beforeunload: a beforeunload listener keeps the page out of the back-forward cache
-window.addEventListener("pagehide", () => { leavingPage = true })
+window.addEventListener("pagehide", leavePage)
 window.addEventListener("pageshow", () => { leavingPage = false })
 // A Turbo visit replaces the page: frames of the old one are cut off with it
-document.addEventListener("turbo:visit", () => { leavingPage = true })
+document.addEventListener("turbo:visit", leavePage)
 document.addEventListener("turbo:load", () => { leavingPage = false })
 
 document.addEventListener("turbo:fetch-request-error", (event) => {
   const frame = event.target
   const { error } = event.detail ?? {}
   if (!(frame instanceof HTMLElement) || frame.localName !== "turbo-frame") return
-  if (!isCutOff(error, frame)) return
+  if (error?.name !== "AbortError" && !(error instanceof TypeError)) return
 
   event.preventDefault()
-  if (error && typeof error === "object") cancelledFrameFetchErrors.add(error)
+  cancelledFrameFetchErrors.add(error)
+  if (error.name === "AbortError" || leavingPage || !frame.isConnected) return
+
+  const visit = pageVisit
+  setTimeout(() => {
+    if (visit === pageVisit && frame.isConnected) console.error(error)
+  }, REPORT_DELAY_MS)
 })
 
 window.addEventListener("unhandledrejection", (event) => {
