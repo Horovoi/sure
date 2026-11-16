@@ -40,6 +40,7 @@ class GoalsController < ApplicationController
     @goal = Current.family.goals.new(color: Goal::COLORS.sample, currency: Current.family.primary_currency_code)
     prepare_form
     @currently_linked_account_ids = []
+    @return_to = sanitize_return_to(params[:return_to])
   end
 
   def create
@@ -55,8 +56,10 @@ class GoalsController < ApplicationController
       @goal.save!
     end
 
-    redirect_after_save(t(".success"))
+    # A goal made from the Plan page goes back there; otherwise to the new goal
+    redirect_after_save(t(".success"), to: sanitize_return_to(params[:return_to]))
   rescue ActiveRecord::RecordInvalid
+    @return_to = sanitize_return_to(params[:return_to])
     prepare_form
     # From the built links: nothing is saved yet, so a query would uncheck every box
     @currently_linked_account_ids = @goal.goal_accounts.map { |link| link.account_id.to_s }
@@ -204,11 +207,12 @@ class GoalsController < ApplicationController
       render :edit, status: :unprocessable_entity
     end
 
-    def redirect_after_save(notice)
+    def redirect_after_save(notice, to: nil)
       flash[:notice] = notice
+      target = to || goal_path(@goal)
       respond_to do |format|
-        format.html { redirect_to goal_path(@goal) }
-        format.turbo_stream { render turbo_stream: turbo_stream.action(:redirect, goal_path(@goal)) }
+        format.html { redirect_to target }
+        format.turbo_stream { render turbo_stream: turbo_stream.action(:redirect, target) }
       end
     end
 

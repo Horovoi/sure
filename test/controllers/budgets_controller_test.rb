@@ -37,7 +37,7 @@ class BudgetsControllerTest < ActionDispatch::IntegrationTest
     get budget_path(@budget)
 
     assert_response :ok
-    assert_no_match(/over-allocated your budget/, response.body)
+    assert_no_match(I18n.t("budgets.over_allocation_warning.message"), response.body)
   end
 
   test "copying the previous budget fills an empty month and opens the categories step" do

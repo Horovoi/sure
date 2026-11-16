@@ -1,12 +1,14 @@
-<%# locals: (budget:, source_budget: nil) %>
+<%# locals: (budget:, source_budget: nil, show_goals_link: true) %>
 
 <%# The budget's donut, its summary and the cash on hand. Shown on the budget page and on
     the Plan page. %>
-<div class="space-y-4">
+<%# The columns follow the width of this block, not the window: with the side panels
+    open the content column can be narrow on a wide screen. %>
+<div class="@container space-y-4">
   <%# Top Section: Donut and Summary side by side %>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="grid grid-cols-1 @2xl:grid-cols-2 gap-4">
     <%# Budget Donut %>
-    <div class="h-[300px] bg-container rounded-xl shadow-border-xs p-8">
+    <div class="min-w-0 h-[300px] bg-container rounded-xl shadow-border-xs p-8">
       <% if !budget.initialized? && source_budget.present? %>
         <%= render "budgets/copy_previous_prompt", budget: budget, source_budget: source_budget %>
       <% elsif budget.over_allocated? %>
@@ -45,6 +47,6 @@
 
   <%# w3-reports goals-free-cash: cash on hand, for the current period only %>
   <% if budget.shows_available_cash? %>
-    <%= render "budgets/available_cash", budget: budget %>
+    <%= render "budgets/available_cash", budget: budget, show_goals_link: show_goals_link %>
   <% end %>
 </div>

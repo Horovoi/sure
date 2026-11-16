@@ -31,7 +31,7 @@
 
     <% if @budget %>
       <%= render "budgets/period", budget: @budget %>
-      <%= render "budgets/overview", budget: @budget, source_budget: @source_budget %>
+      <%= render "budgets/overview", budget: @budget, source_budget: @source_budget, show_goals_link: false %>
     <% else %>
       <div class="bg-container rounded-xl shadow-border-xs py-10 px-6 text-center">
         <p class="text-sm text-secondary"><%= t(".budget.unavailable") %></p>
@@ -56,7 +56,7 @@
               variant: "outline",
               size: "sm",
               icon: "plus",
-              href: new_goal_path,
+              href: new_goal_path(return_to: plan_path),
               frame: :modal
             ) %>
           <% end %>

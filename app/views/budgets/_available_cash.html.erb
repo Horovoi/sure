@@ -1,4 +1,4 @@
-<%# locals: (budget:) %>
+<%# locals: (budget:, show_goals_link: true) %>
 
 <%# w3-reports goals-free-cash. Beside the plan, never inside it: the figures above
     answer "what did I plan to spend", these answer "what do I actually have". Hand-built
@@ -9,12 +9,15 @@
       <h2 class="text-sm font-medium text-primary"><%= t("budgets.available_cash.heading") %></h2>
       <p class="text-xs text-secondary mt-0.5"><%= t("budgets.available_cash.subtitle") %></p>
     </div>
-    <%= render DS::Link.new(
-          text: t("budgets.available_cash.goals_link"),
-          href: goals_path,
-          variant: "outline",
-          size: "sm"
-        ) %>
+    <%# The Plan page has its own goals section below, with the same link %>
+    <% if show_goals_link %>
+      <%= render DS::Link.new(
+            text: t("budgets.available_cash.goals_link"),
+            href: goals_path,
+            variant: "outline",
+            size: "sm"
+          ) %>
+    <% end %>
   </div>
 
   <dl class="space-y-2">

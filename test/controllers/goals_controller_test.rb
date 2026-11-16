@@ -67,6 +67,38 @@ class GoalsControllerTest < ActionDispatch::IntegrationTest
     assert_equal @user.family.primary_currency_code, goal.currency
   end
 
+  test "a goal created from the Plan page goes back to the Plan page" do
+    account = unclaimed_account("Plan Pot")
+
+    get new_goal_url(return_to: plan_path)
+    assert_select "form input[type=hidden][name=return_to][value=?]", plan_path
+
+    post goals_url, params: {
+      return_to: plan_path,
+      goal: { name: "From plan", target_amount: "500", color: "#4da568", account_ids: [ account.id ] }
+    }
+
+    assert_redirected_to plan_path
+  end
+
+  test "create ignores a return_to that leaves the app" do
+    account = unclaimed_account("Outside Pot")
+
+    post goals_url, params: {
+      return_to: "https://evil.example/",
+      goal: { name: "Elsewhere", target_amount: "500", color: "#4da568", account_ids: [ account.id ] }
+    }
+
+    assert_redirected_to goal_path(Goal.order(created_at: :desc).first)
+  end
+
+  test "a rejected creation keeps the page to go back to" do
+    post goals_url, params: { return_to: plan_path, goal: { name: "", target_amount: "500" } }
+
+    assert_response :unprocessable_entity
+    assert_select "form input[type=hidden][name=return_to][value=?]", plan_path
+  end
+
   test "create rejects missing account_ids" do
     assert_no_difference "Goal.count" do
       post goals_url, params: { goal: { name: "Bad goal", target_amount: "1000", color: "#4da568" } }

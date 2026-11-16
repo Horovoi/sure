@@ -57,7 +57,8 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_select "[data-testid=plan-goals]" do
       assert_select "h2", text: I18n.t("goals.empty_state.heading")
-      assert_select "a[href=?]", new_goal_path, text: I18n.t("goals.empty_state.new_goal")
+      # The dialog brings the user back here after the goal is created
+      assert_select "a[href=?]", new_goal_path(return_to: plan_path), text: I18n.t("goals.empty_state.new_goal")
     end
   end
 
@@ -70,6 +71,39 @@ class PlansControllerTest < ActionDispatch::IntegrationTest
     assert_select "[data-testid=plan-budget]" do
       assert_select "a[href=?]", edit_budget_path(budgets(:one)), text: I18n.t("budgets.budget_donut.new_budget")
     end
+  end
+
+  test "the set-up buttons wrap inside the card and the columns follow the content width" do
+    budgets(:one).update!(budgeted_spending: nil)
+    Budget.any_instance.stubs(:most_recent_initialized_budget).returns(budgets(:one))
+
+    get plan_path
+
+    assert_select "[data-testid=copy-previous-prompt] .flex-wrap"
+    assert_select "[data-testid=plan-budget] .grid.md\\:grid-cols-2", count: 0
+    assert_select "[data-testid=plan-budget] .grid", minimum: 1
+  end
+
+  test "the period line uses the family's date format" do
+    @family.update!(date_format: "%d.%m.%Y")
+    budget = budgets(:one)
+
+    get plan_path
+
+    assert_select "[data-testid=plan-budget]", text: /#{Regexp.escape(budget.start_date.strftime("%d.%m.%Y"))}/
+  end
+
+  test "the cash-on-hand panel has no second link to the goals page" do
+    Budget.any_instance.stubs(:shows_available_cash?).returns(true)
+
+    get plan_path
+
+    assert_select "#budget_available_cash"
+    assert_select "#budget_available_cash a[href=?]", goals_path, count: 0
+    assert_select "[data-testid=plan-goals] a[href=?]", goals_path, count: 1
+
+    get budget_path(budgets(:one))
+    assert_select "#budget_available_cash a[href=?]", goals_path
   end
 
   test "shows the fiscal period that holds today" do

@@ -48,6 +48,9 @@ en:
       already_initialized: This budget is already set up
       no_source: There is no earlier budget to copy
       success: Copied the budget of %{source_name}
+    over_allocation_warning:
+      fix: Fix allocations
+      message: You have allocated more than the budget. Change the category amounts so they fit.
     copy_previous_prompt:
       copy_button: Copy %{source_name}
       description: Copy the amounts of %{source_name} or start with an empty budget.

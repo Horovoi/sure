@@ -64,7 +64,7 @@
           <% if rule.effective_date.nil? %>
             <%= t(".all_resources", resources: rule.resource_type.pluralize) %>
           <% else %>
-            <%= t(".resources_since", resources: rule.resource_type.pluralize, date: rule.effective_date.strftime("%b %-d, %Y")) %>
+            <%= t(".resources_since", resources: rule.resource_type.pluralize, date: format_date(rule.effective_date)) %>
           <% end %>
         </span>
       </p>
