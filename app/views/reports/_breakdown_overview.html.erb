@@ -20,8 +20,8 @@
       <% if left_over %>
         <div data-testid="breakdown-left-over">
           <p class="text-sm text-secondary"><%= left_over[:label] %></p>
-          <p class="mt-1 text-2xl font-medium tabular-nums <%= left_over[:tone] == :unfavorable ? "text-destructive" : "text-primary" %>"><%= left_over[:value] %></p>
-          <p class="mt-1 text-sm text-secondary"><%= left_over[:note] %></p>
+          <p class="mt-1 text-2xl font-medium tabular-nums privacy-sensitive <%= left_over[:tone] == :unfavorable ? "text-destructive" : "text-primary" %>"><%= left_over[:value] %></p>
+          <p class="mt-1 text-sm text-secondary"><%= privacy_money_text(left_over[:note]) %></p>
         </div>
       <% end %>
 
@@ -35,9 +35,9 @@
             <% if vs_normal[:change].nonzero? %>
               <%= icon(vs_normal[:change].negative? ? "arrow-down" : "arrow-up", size: "md", color: "current") %>
             <% end %>
-            <span><%= vs_normal[:value] %></span>
+            <span><%= privacy_money_text(vs_normal[:value]) %></span>
           </p>
-          <p class="mt-1 text-sm text-secondary"><%= vs_normal[:note] %></p>
+          <p class="mt-1 text-sm text-secondary"><%= privacy_money_text(vs_normal[:note]) %></p>
         </div>
       <% elsif no_normal %>
         <div data-testid="spending-no-normal">
@@ -75,7 +75,7 @@
       <span class="relative h-3.5 w-3 shrink-0" aria-hidden="true">
         <span class="absolute inset-y-0 left-1/2 -ml-px w-0.5 rounded-full bg-inverse"></span>
       </span>
-      <span><%= breakdown_normal_key(comparison) %></span>
+      <span><%= privacy_money_text(breakdown_normal_key(comparison)) %></span>
       <%= render DS::Tooltip.new(text: breakdown_normal_details(comparison), icon: "info", size: "xs", color: "default") %>
     </div>
   <% end %>

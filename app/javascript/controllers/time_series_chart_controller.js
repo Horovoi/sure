@@ -832,7 +832,7 @@ export default class extends Controller {
         const labelX = Math.min(this._d3ContainerWidth - 6, endX - 10);
         this._d3Group
           .append("text")
-          .attr("class", "fg-gray fill-current")
+          .attr("class", "fg-gray fill-current privacy-sensitive")
           .attr("x", Math.max(0, labelX))
           .attr("y", y - 4)
           .attr("text-anchor", "end")
@@ -916,7 +916,7 @@ export default class extends Controller {
       const anchor = align === "start" ? "start" : "end";
 
       // Group for label + background
-      const g = this._d3Group.append("g").attr("class", "endpoint-marker label");
+      const g = this._d3Group.append("g").attr("class", "endpoint-marker label privacy-sensitive");
 
       const labelText = this._extractFormattedValue(d.value);
       const text = g
@@ -1011,7 +1011,7 @@ export default class extends Controller {
           <div class="flex items-center justify-center h-4 w-4">
             ${this._getTrendIcon(datum)}
           </div>
-          ${this._extractFormattedValue(datum.trend.current)}
+          <span class="privacy-sensitive">${this._extractFormattedValue(datum.trend.current)}</span>
         </div>
 
         ${
@@ -1020,7 +1020,7 @@ export default class extends Controller {
           this._extractNumericValue(datum.trend.value) === 0
             ? `<span class="w-20"></span>`
             : `
-          <span style="color: ${datum.trend.color};">
+          <span class="privacy-sensitive" style="color: ${datum.trend.color};">
             ${this._extractFormattedValue(datum.trend.value)}${
               datum.trend.percent === null
                 ? ""

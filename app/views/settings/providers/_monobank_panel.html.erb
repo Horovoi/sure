@@ -62,7 +62,7 @@
                     <%= t("monobank_items.panel.not_linked") %>
                   <% end %>
                   <% if monobank_account.jar? && monobank_account.goal.present? %>
-                    · <%= t("monobank_items.panel.jar_goal", goal: format_money(Money.new(monobank_account.goal, monobank_account.currency))) %>
+                    · <%= privacy_money_text(t("monobank_items.panel.jar_goal", goal: format_money(Money.new(monobank_account.goal, monobank_account.currency)))) %>
                   <% end %>
                 </span>
               </li>

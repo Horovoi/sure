@@ -203,7 +203,7 @@ export default class extends Controller {
           tooltip
             .style("opacity", 1)
             .html(
-              `<strong>${bar.name}</strong><br>${sign}${currency}${this._formatNumber(bar.value)}`
+              `<strong>${this._escape(bar.name)}</strong><br><span class="privacy-sensitive">${sign}${currency}${this._formatNumber(bar.value)}</span>`
             );
         })
         .on("mousemove", (event) => {
@@ -237,7 +237,7 @@ export default class extends Controller {
         .attr("y", labelY)
         .attr("dy", labelFitsInside ? "0.35em" : 0)
         .attr("text-anchor", "middle")
-        .attr("class", "text-xs font-medium")
+        .attr("class", "text-xs font-medium privacy-sensitive")
         .style("fill", labelFitsInside ? "white" : fillColor)
         .text(labelValue);
 
@@ -289,7 +289,7 @@ export default class extends Controller {
         .attr("y", y)
         .attr("dy", "0.35em")
         .attr("text-anchor", "end")
-        .attr("class", "text-xs")
+        .attr("class", "text-xs privacy-sensitive")
         .style("fill", "var(--color-text-secondary)")
         .text(`${tick < 0 ? "-" : ""}${currency}${this._formatNumber(Math.abs(tick))}`);
 
@@ -303,6 +303,12 @@ export default class extends Controller {
         .attr("stroke-width", 0.5)
         .attr("opacity", 0.3);
     });
+  }
+
+  _escape(text) {
+    const div = document.createElement("div");
+    div.textContent = text ?? "";
+    return div.innerHTML;
   }
 
   _formatNumber(num) {

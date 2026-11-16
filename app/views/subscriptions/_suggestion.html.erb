@@ -36,14 +36,14 @@
       </div>
       <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-secondary mt-0.5">
         <% if suggestion.detected_base_currency.present? && suggestion.detected_base_amount.present? %>
-          <span class="font-medium text-primary">
+          <span class="font-medium text-primary privacy-sensitive">
             <%= Money.new(suggestion.detected_base_amount, suggestion.detected_base_currency).format %> <%= suggestion.detected_base_currency %><%= suggestion.billing_cycle_yearly? ? t("subscriptions.index.summary.per_year") : t("subscriptions.index.summary.per_month") %>
           </span>
-          <span class="text-secondary">
+          <span class="text-secondary privacy-sensitive">
             (<%= format_money(-suggestion.amount_money) %> local)
           </span>
         <% else %>
-          <span class="font-medium text-primary">
+          <span class="font-medium text-primary privacy-sensitive">
             <%= format_money(-suggestion.amount_money) %><%= suggestion.billing_cycle_yearly? ? t("subscriptions.index.summary.per_year") : t("subscriptions.index.summary.per_month") %>
           </span>
         <% end %>

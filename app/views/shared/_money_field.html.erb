@@ -68,8 +68,10 @@
             a pasted statement amount ("1 234,56 ₴") and a calculation
             ("120+35,5"), which money_field_controller turns into a plain
             number before the form is sent. %>
+        <%# privacy-sensitive: privacy mode blurs the amount as it does everywhere
+            else, and the field stays usable (see privacy-mode.css). %>
         <%= form.text_field amount_method,
-          class: class_names("form-field__input", options[:input_class]),
+          class: class_names("form-field__input privacy-sensitive", options[:input_class]),
           inline: true,
           placeholder: options[:placeholder] || "100",
           inputmode: "decimal",

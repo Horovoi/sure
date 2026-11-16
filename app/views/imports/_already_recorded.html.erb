@@ -23,7 +23,7 @@
                         data: { turbo_frame: "drawer", turbo_prefetch: false } do %>
               <p class="text-primary truncate"><%= entry.name %></p>
               <p class="text-xs text-secondary">
-                <%= t("imports.already_recorded.entry_details", amount: format_money(-entry.amount_money), date: l(entry.date, format: :long)) %>
+                <%= privacy_money_text(t("imports.already_recorded.entry_details", amount: format_money(-entry.amount_money), date: l(entry.date, format: :long))) %>
               </p>
             <% end %>
           </div>

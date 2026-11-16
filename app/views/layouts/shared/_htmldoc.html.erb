@@ -5,7 +5,7 @@
 <html
   lang="<%= I18n.locale %>"
   data-theme="<%= theme %>"
-  data-controller="theme viewport"
+  data-controller="theme viewport privacy-mode"
   data-theme-user-preference-value="<%= Current.user&.theme || "system" %>"
   class="h-[var(--app-height,100dvh)] text-primary bg-surface overflow-hidden overscroll-none font-sans <%= @os %>">
   <head>
@@ -14,6 +14,8 @@
   </head>
 
   <body class="h-[var(--app-height,100dvh)] overflow-hidden antialiased flex flex-col">
+    <button hidden data-controller="hotkey" data-hotkey="Shift+H" data-action="privacy-mode#toggle"><%= t("layouts.shared.privacy_toggle.label") %></button>
+
     <% if Rails.env.development? %>
       <button hidden data-controller="hotkey" data-hotkey="t t /" data-action="theme#toggle"></button>
     <% end %>

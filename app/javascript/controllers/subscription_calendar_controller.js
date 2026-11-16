@@ -65,11 +65,11 @@ export default class extends Controller {
             : `<div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white ${sub.billing_cycle === 'monthly' ? 'bg-violet-500' : 'bg-yellow-500'}">${sub.name[0].toUpperCase()}</div>`
           }
           <div class="flex-1 min-w-0">
-            <div class="font-medium text-primary">${sub.name}</div>
+            <div class="font-medium text-primary">${this.escapeHtml(sub.name)}</div>
             ${sub.is_foreign_currency && sub.converted_amount
-              ? `<div class="text-sm text-secondary">${sub.amount}</div>
-                 <div class="text-xs text-subdued">${sub.converted_amount}</div>`
-              : `<div class="text-sm text-secondary">${sub.amount}</div>`
+              ? `<div class="text-sm text-secondary privacy-sensitive">${sub.amount}</div>
+                 <div class="text-xs text-subdued privacy-sensitive">${sub.converted_amount}</div>`
+              : `<div class="text-sm text-secondary privacy-sensitive">${sub.amount}</div>`
             }
           </div>
           <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sub.billing_cycle === 'monthly' ? 'bg-violet-100 text-violet-700' : 'bg-yellow-100 text-yellow-700'}">
@@ -209,11 +209,11 @@ export default class extends Controller {
 
       // Show amount with converted value for foreign currencies (stacked vertically)
       const amountDisplay = sub.is_foreign_currency && sub.converted_amount
-        ? `<div class="text-right shrink-0">
+        ? `<div class="text-right shrink-0 privacy-sensitive">
              <div class="text-primary text-sm font-semibold">${sub.amount}</div>
              <div class="text-subdued text-xs">${sub.converted_amount}</div>
            </div>`
-        : `<span class="text-primary text-sm font-semibold shrink-0">${sub.amount}</span>`
+        : `<span class="text-primary text-sm font-semibold shrink-0 privacy-sensitive">${sub.amount}</span>`
 
       return `
         <div class="p-2 rounded-lg bg-surface-inset">
@@ -240,7 +240,7 @@ export default class extends Controller {
         ${cards}
         <div class="border-t border-secondary pt-2 flex justify-between items-center">
           <span class="text-secondary text-xs">${subscriptions.length} subscription${subscriptions.length > 1 ? 's' : ''}</span>
-          <span class="text-primary text-sm font-semibold">${formattedTotal}</span>
+          <span class="text-primary text-sm font-semibold privacy-sensitive">${formattedTotal}</span>
         </div>
       </div>
     `

@@ -13,7 +13,7 @@
           debt in the page header into two parts that add up to it. %>
       <div data-testid="credit-card-statement-balance">
         <%= summary_card title: t(".statement_balance") do %>
-          <%= summary.balance ? format_money(summary.balance) : t(".unknown") %>
+          <span class="<%= "privacy-sensitive" if summary.balance %>"><%= summary.balance ? format_money(summary.balance) : t(".unknown") %></span>
           <span class="mt-2 block space-y-1 text-sm text-secondary">
             <% if summary.due_date && due_for_last_balance %>
               <span class="block"><%= t(".due_on", date: l(summary.due_date, format: :long)) %></span>
@@ -22,7 +22,7 @@
               </span>
             <% end %>
             <% if summary.remaining&.positive? && summary.balance && summary.remaining.amount < summary.balance.amount %>
-              <span class="block"><%= t(".remaining_due", amount: format_money(summary.remaining)) %></span>
+              <span class="block"><%= privacy_money_text(t(".remaining_due", amount: format_money(summary.remaining))) %></span>
             <% end %>
             <% if summary.status == :paid %>
               <span class="block text-success"><%= t(".status_paid") %></span>
@@ -39,7 +39,7 @@
           statement may not have a bill. %>
       <div data-testid="credit-card-since-last-statement">
         <%= summary_card title: t(".since_last_statement") do %>
-          <%= summary.accrued ? format_money(summary.accrued) : t(".unknown") %>
+          <span class="<%= "privacy-sensitive" if summary.accrued %>"><%= summary.accrued ? format_money(summary.accrued) : t(".unknown") %></span>
           <span class="mt-2 block space-y-1 text-sm text-secondary">
             <% if summary.accrued&.negative? %>
               <span class="block"><%= t(".credit_toward_next") %></span>
@@ -52,11 +52,11 @@
             <% if summary.charges && summary.credits %>
               <span class="flex items-center justify-between gap-4">
                 <span><%= t(".charges") %></span>
-                <span class="font-medium text-primary"><%= format_money(summary.charges) %></span>
+                <span class="font-medium text-primary privacy-sensitive"><%= format_money(summary.charges) %></span>
               </span>
               <span class="flex items-center justify-between gap-4">
                 <span><%= t(".payments_credits") %></span>
-                <span class="font-medium text-primary"><%= format_money(summary.credits.abs) %></span>
+                <span class="font-medium text-primary privacy-sensitive"><%= format_money(summary.credits.abs) %></span>
               </span>
             <% end %>
           </span>
@@ -75,12 +75,12 @@
               <span class="flex items-center justify-between gap-4">
                 <span><%= t(".estimated_interest_label") %></span>
                 <span class="font-medium text-primary">
-                  <%= summary.estimated_interest ? t(".per_month", amount: format_money(summary.estimated_interest)) : t(".unknown") %>
+                  <%= summary.estimated_interest ? privacy_money_text(t(".per_month", amount: format_money(summary.estimated_interest))) : t(".unknown") %>
                 </span>
               </span>
               <span class="flex items-center justify-between gap-4">
                 <span><%= t(".balance_carried_label") %></span>
-                <span class="font-medium text-primary"><%= summary.remaining ? format_money(summary.remaining) : t(".unknown") %></span>
+                <span class="font-medium text-primary <%= "privacy-sensitive" if summary.remaining %>"><%= summary.remaining ? format_money(summary.remaining) : t(".unknown") %></span>
               </span>
             </span>
           <% end %>
@@ -94,9 +94,9 @@
     <div class="mt-2">
       <%= render DS::Alert.new(
         variant: :warning,
-        message: t(".above_minimum",
+        message: privacy_money_text(t(".above_minimum",
                    balance: format_money(summary.balance),
-                   minimum: format_money(card.minimum_payment_money))
+                   minimum: format_money(card.minimum_payment_money)))
       ) %>
     </div>
   <% end %>

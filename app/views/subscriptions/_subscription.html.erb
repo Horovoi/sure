@@ -38,7 +38,7 @@
   </td>
 
   <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
-    <span class="text-sm font-medium text-primary">
+    <span class="text-sm font-medium text-primary privacy-sensitive">
       <%= format_money(-subscription.amount_money) %>
     </span>
     <%# No rate at all: no converted amount is shown, never the amount at 1 %>
@@ -47,7 +47,7 @@
     <% end %>
     <% if converted %>
       <% converted = -converted.abs %>
-      <span class="text-xs text-secondary flex items-center gap-1">
+      <span class="text-xs text-secondary flex items-center gap-1 privacy-sensitive">
         <%= format_money(converted) %>
         <% if subscription.billing_cycle_yearly? %>
           <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-container-inset text-subdued">
@@ -56,7 +56,7 @@
         <% end %>
       </span>
     <% elsif subscription.billing_cycle_yearly? %>
-      <span class="text-xs text-secondary block">
+      <span class="text-xs text-secondary block privacy-sensitive">
         ~<%= format_money(Money.new(subscription.monthly_cost, subscription.currency)) %><%= t("subscriptions.index.summary.per_month") %>
       </span>
     <% end %>

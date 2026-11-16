@@ -13,8 +13,7 @@
                           min: Money::Currency.new(@goal.currency).step,
                           max: (@goal.target_amount.to_d - @goal.consumed_amount.to_d).to_f,
                           required: true,
-                          autofocus: true,
-                          input_class: "privacy-sensitive" %>
+                          autofocus: true %>
         <p class="text-xs text-secondary privacy-sensitive">
           <%= t(".amount_hint", saved: @goal.current_balance_money.format(precision: 0)) %>
         </p>

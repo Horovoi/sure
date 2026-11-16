@@ -50,6 +50,10 @@ module ImportsHelper
     end
   end
 
+  # The import columns that hold money or a holding's size: privacy mode
+  # blurs them in the import previews.
+  PRIVACY_SENSITIVE_FIELDS = %i[amount price qty].freeze
+
   def cell_class(row, field)
     base = "bg-container text-sm focus:ring-gray-900 theme-dark:focus:ring-gray-100 focus:border-solid w-full max-w-full disabled:text-subdued"
 
@@ -57,7 +61,14 @@ module ImportsHelper
 
     border = row.errors.key?(field) ? "border-destructive" : "border-transparent"
 
-    [ base, border ].join(" ")
+    [ base, border, ("privacy-sensitive" if field.to_sym.in?(PRIVACY_SENSITIVE_FIELDS)) ].compact.join(" ")
+  end
+
+  # The CSV headers mapped to a privacy-sensitive field, for the sample table
+  def privacy_sensitive_headers(import)
+    PRIVACY_SENSITIVE_FIELDS.filter_map do |field|
+      import.public_send("#{field}_col_label") if import.respond_to?("#{field}_col_label")
+    end
   end
 
   def cell_is_valid?(row, field)

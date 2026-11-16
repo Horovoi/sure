@@ -98,8 +98,8 @@
       <div class="min-w-0">
         <p class="text-sm text-primary truncate"><%= spending_trend_data[:current_label] %></p>
         <p class="flex flex-wrap items-baseline gap-x-2">
-          <span class="font-medium text-lg tabular-nums text-primary whitespace-nowrap" data-testid="spending-trend-current-total"><%= format_money Money.new(trend.current_total, currency) %></span>
-          <span class="text-sm tabular-nums whitespace-nowrap <%= delta_class %>" data-testid="spending-trend-delta"><%= format_money delta %></span>
+          <span class="font-medium text-lg tabular-nums text-primary whitespace-nowrap privacy-sensitive" data-testid="spending-trend-current-total"><%= format_money Money.new(trend.current_total, currency) %></span>
+          <span class="text-sm tabular-nums whitespace-nowrap privacy-sensitive <%= delta_class %>" data-testid="spending-trend-delta"><%= format_money delta %></span>
         </p>
       </div>
     </div>
@@ -114,7 +114,7 @@
             <span class="text-xs"><%= t("pages.dashboard.spending_trend.previous_through", date: l(trend.comparison_end_date, format: :short)) %></span>
           <% end %>
         </p>
-        <p class="font-medium text-lg tabular-nums text-secondary whitespace-nowrap" data-testid="spending-trend-previous-total"><%= format_money Money.new(trend.previous_total, currency) %></p>
+        <p class="font-medium text-lg tabular-nums text-secondary whitespace-nowrap privacy-sensitive" data-testid="spending-trend-previous-total"><%= format_money Money.new(trend.previous_total, currency) %></p>
       </div>
     </div>
   </div>

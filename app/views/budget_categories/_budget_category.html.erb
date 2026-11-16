@@ -62,7 +62,7 @@
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         <div class="whitespace-nowrap w-full sm:w-auto">
           <span class="text-sm text-secondary"><%= t("reports.budget_performance.spent") %>:</span>
-          <span class="font-medium text-primary">
+          <span class="font-medium text-primary privacy-sensitive">
             <%= format_money(budget_category.actual_spending_money) %>
           </span>
         </div>
@@ -71,7 +71,7 @@
           <div class="whitespace-nowrap w-full sm:w-auto">
             <span class="text-sm text-secondary"><%= t("reports.budget_performance.budgeted") %>:</span>
             <span class="font-medium text-primary">
-              <%= format_money(budget_category.budgeted_spending_money) %>
+              <span class="privacy-sensitive"><%= format_money(budget_category.budgeted_spending_money) %></span>
               <% if budget_category.inherits_parent_budget? %>
                 <span class="text-xs text-subdued">(<%= t("reports.budget_performance.shared") %>)</span>
               <% end %>
@@ -79,14 +79,14 @@
           </div>
           <% if budget_category.rolled_over? %>
             <div class="whitespace-nowrap w-full sm:w-auto text-xs text-secondary" data-testid="budget-category-rolled-over">
-              <%= t("budget_categories.budget_category.rolled_over", amount: format_money(budget_category.display_rolled_over_amount_money)) %>
+              <%= privacy_money_text(t("budget_categories.budget_category.rolled_over", amount: format_money(budget_category.display_rolled_over_amount_money))) %>
             </div>
           <% end %>
           <% if (daily_info = budget_category.suggested_daily_spending).present? %>
             <div class="w-full sm:w-auto text-xs text-subdued">
-              <%= t("reports.budget_performance.suggested_daily",
+              <%= privacy_money_text(t("reports.budget_performance.suggested_daily",
                     amount: daily_info[:amount].format,
-                    days: daily_info[:days_remaining]) %>
+                    days: daily_info[:days_remaining])) %>
             </div>
           <% end %>
         <% end %>
@@ -94,12 +94,12 @@
         <div class="whitespace-nowrap w-full sm:w-auto lg:ml-auto">
           <% if budget_category.available_to_spend >= 0 %>
             <span class="text-sm text-secondary"><%= t("reports.budget_performance.remaining") %>:</span>
-            <span class="font-medium <%= (budget_category.near_limit? ? "text-warning" : "text-success") %>">
+            <span class="font-medium privacy-sensitive <%= (budget_category.near_limit? ? "text-warning" : "text-success") %>">
               <%= format_money(budget_category.available_to_spend_money) %>
             </span>
           <% else %>
             <span class="text-sm text-secondary"><%= t("reports.budget_performance.over_by") %>:</span>
-            <span class="font-medium text-destructive">
+            <span class="font-medium text-destructive privacy-sensitive">
               <%= format_money(budget_category.available_to_spend_money.abs) %>
             </span>
           <% end %>
@@ -126,12 +126,12 @@
         <div class="min-w-0 flex-1">
           <p class="text-sm font-medium text-primary truncate"><%= budget_category.category.name %></p>
           <p class="text-sm text-secondary font-medium">
-            <%= t("budgets.budget_category.monthly_median", amount: budget_category.median_monthly_expense_money.format) %>
+            <%= privacy_money_text(t("budgets.budget_category.monthly_median", amount: budget_category.median_monthly_expense_money.format)) %>
           </p>
         </div>
 
         <div class="ml-auto text-right flex-shrink-0">
-          <p class="text-sm font-medium text-primary whitespace-nowrap"><%= format_money(budget_category.actual_spending_money) %></p>
+          <p class="text-sm font-medium text-primary whitespace-nowrap privacy-sensitive"><%= format_money(budget_category.actual_spending_money) %></p>
         </div>
       </div>
     <% end %>

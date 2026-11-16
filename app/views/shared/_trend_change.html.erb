@@ -4,7 +4,7 @@
   <% if trend.direction.flat? %>
     <%= t(".no_change") %><%= " #{comparison_label}" if defined?(comparison_label) && comparison_label.present? %>
   <% else %>
-    <span class="font-mono">
+    <span class="font-mono privacy-sensitive">
       <%= trend.value.is_a?(Money) ? format_money(trend.value) : trend.value.round(2) %>
     </span>
     <% unless trend.percent.infinite? %>

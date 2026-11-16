@@ -10,7 +10,7 @@
 
   <div id="<%= panel_id %>" class="pb-2" hidden data-testid="breakdown-details">
     <% row[:details].each do |line| %>
-      <p class="pl-9 pr-2 text-xs text-secondary @md:pl-10"><%= line %></p>
+      <p class="pl-9 pr-2 text-xs text-secondary @md:pl-10"><%= privacy_money_text(line) %></p>
     <% end %>
     <% if row[:subcategories].any? %>
       <ul class="mt-1 space-y-0.5">

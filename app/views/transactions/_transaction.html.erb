@@ -161,7 +161,7 @@
       <div class="shrink-0 col-span-4 lg:col-span-2 ml-auto text-right">
         <%= content_tag :p,
             transaction.transfer? && view_ctx == "global" ? "+/- #{format_money(entry.amount_money.abs)}" : format_money(-entry.amount_money),
-            class: ["text-green-600": entry.amount.negative?] %>
+            class: ["privacy-sensitive", "text-green-600": entry.amount.negative?] %>
       </div>
     </div>
   <% end %>

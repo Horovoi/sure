@@ -21,12 +21,12 @@
       <%= icon(icon_name, size: "sm") %>
       <%= t(title_key) %>
     </h3>
-    <p class="text-lg font-medium text-primary tabular-nums whitespace-nowrap" data-testid="breakdown-<%= type %>-total">
+    <p class="text-lg font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive" data-testid="breakdown-<%= type %>-total">
       <%= breakdown_money(column[:total]) %>
     </p>
   </div>
   <p class="mt-0.5 text-sm text-secondary" data-testid="breakdown-<%= type %>-summary">
-    <%= breakdown_column_summary(column) %>
+    <%= privacy_money_text(breakdown_column_summary(column)) %>
   </p>
 
   <%# Column labels; the rows below use the same grid %>
@@ -64,7 +64,7 @@
         <span class="hidden @md:inline"><%= t("reports.transactions_breakdown.column.more", count: column[:tail].size) %></span>
       </span>
       <span class="col-start-2 hidden font-medium group-aria-expanded/tail:inline"><%= t("reports.transactions_breakdown.column.fewer") %></span>
-      <span class="text-right tabular-nums whitespace-nowrap group-aria-expanded/tail:invisible"><%= breakdown_money(column[:tail_amount]) %></span>
+      <span class="text-right tabular-nums whitespace-nowrap privacy-sensitive group-aria-expanded/tail:invisible"><%= breakdown_money(column[:tail_amount]) %></span>
       <span class="text-right tabular-nums group-aria-expanded/tail:invisible"><%= number_to_percentage(column[:tail_share], precision: 1) %></span>
       <% if (delta = column[:tail_delta]) %>
         <span class="col-start-3 text-right text-xs tabular-nums whitespace-nowrap group-aria-expanded/tail:hidden <%= delta[:tone_class] %>">

@@ -14,15 +14,15 @@
   <% end %>
 
   <%= summary_card title: t(".purchase_price") do %>
-    <%= format_money account.vehicle.purchase_price %>
+    <span class="privacy-sensitive"><%= format_money account.vehicle.purchase_price %></span>
   <% end %>
 
   <%= summary_card title: t(".current_price") do %>
-    <%= format_money account.balance_money %>
+    <span class="privacy-sensitive"><%= format_money account.balance_money %></span>
   <% end %>
 
   <%= summary_card title: t(".trend") do %>
-    <div class="flex items-center gap-1" style="color: <%= account.vehicle.trend.color %>">
+    <div class="flex items-center gap-1 privacy-sensitive" style="color: <%= account.vehicle.trend.color %>">
       <p class="text-xl font-medium">
         <%= account.vehicle.trend.value %>
       </p>

@@ -26,7 +26,7 @@
         </div>
         <div class="text-sm">
           <span class="text-secondary"><%= t(".amount_label") %></span>
-          <span class="font-medium <%= @entry.amount.negative? ? "text-green-600" : "text-primary" %>"><%= format_money(@entry.amount_money.abs) %></span>
+          <span class="font-medium privacy-sensitive <%= @entry.amount.negative? ? "text-green-600" : "text-primary" %>"><%= format_money(@entry.amount_money.abs) %></span>
         </div>
       </div>
 
@@ -143,14 +143,14 @@
             <%= icon "alert-triangle", size: "sm", color: "warning", class: "mt-0.5 shrink-0" %>
             <div class="text-sm">
               <p class="font-medium text-primary"><%= t(".price_mismatch_title") %></p>
-              <p class="text-secondary" data-convert-to-trade-target="priceWarningMessage"></p>
+              <p class="text-secondary privacy-sensitive" data-convert-to-trade-target="priceWarningMessage"></p>
             </div>
           </div>
         </div>
 
         <p class="text-xs text-secondary bg-surface-inset p-2 rounded">
           <%= icon "info", size: "xs", class: "inline-block mr-1" %>
-          <%= t(".qty_or_price_hint", amount: format_money(@entry.amount_money.abs)) %>
+          <%= privacy_money_text(t(".qty_or_price_hint", amount: format_money(@entry.amount_money.abs))) %>
         </p>
 
         <div class="space-y-1">

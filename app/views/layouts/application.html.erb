@@ -42,7 +42,10 @@
         <%= image_tag "logomark-color.svg", class: "w-9 h-9 mx-auto" %>
       <% end %>
 
-      <%= render "users/user_menu", user: Current.user, placement: "bottom-end", offset: 12 %>
+      <div class="flex items-center gap-1">
+        <%= render "layouts/shared/privacy_toggle" %>
+        <%= render "users/user_menu", user: Current.user, placement: "bottom-end", offset: 12 %>
+      </div>
     </nav>
 
     <%# DESKTOP - Left navbar %>
@@ -97,7 +100,10 @@
             <%= render "layouts/shared/breadcrumbs", breadcrumbs: @breadcrumbs %>
           <% end %>
         </div>
-        <%= icon("panel-right", as_button: true, aria: { label: t("layouts.application.toggle_right_sidebar") }, data: { action: "app-layout#toggleRightSidebar" }) %>
+        <div class="flex items-center gap-1">
+          <%= render "layouts/shared/privacy_toggle" %>
+          <%= icon("panel-right", as_button: true, aria: { label: t("layouts.application.toggle_right_sidebar") }, data: { action: "app-layout#toggleRightSidebar" }) %>
+        </div>
       </div>
 
       <% if content_for?(:page_header) %>

@@ -22,10 +22,13 @@ class ImportsPdfStatementBalanceCheckViewTest < ActionView::TestCase
     stub_checks(check(:opening, :match, 1000, 1000), check(:closing, :mismatch, 1150, 1100))
 
     html = render_complete
+    text = Nokogiri::HTML5.fragment(html).text.squish
 
-    assert_includes html, I18n.t("imports.pdf_statement_balance_check.difference", amount: "$50.00")
-    assert_includes html, I18n.t("imports.pdf_statement_balance_check.statement_amount", amount: "$1,150.00")
-    assert_includes html, I18n.t("imports.pdf_statement_balance_check.account_amount", amount: "$1,100.00")
+    assert_includes text, I18n.t("imports.pdf_statement_balance_check.difference", amount: "$50.00")
+    assert_includes text, I18n.t("imports.pdf_statement_balance_check.statement_amount", amount: "$1,150.00")
+    assert_includes text, I18n.t("imports.pdf_statement_balance_check.account_amount", amount: "$1,100.00")
+    # Privacy mode blurs the amounts
+    assert_equal [ "$50.00", "$1,150.00", "$1,100.00" ], Nokogiri::HTML5.fragment(html).css("#statement_balance_check_closing .privacy-sensitive").map(&:text)
   end
 
   test "the Complete screen says not available when the data is missing or not synced" do

@@ -56,7 +56,7 @@
           <%= t("budgets.budget_categories.other_category", category: group.name) %>
         </p>
 
-        <p class="ml-auto text-sm font-medium text-primary whitespace-nowrap">
+        <p class="ml-auto text-sm font-medium text-primary whitespace-nowrap privacy-sensitive">
           <%= format_money(Money.new(other_spending, budget.family.currency)) %>
         </p>
       </div>

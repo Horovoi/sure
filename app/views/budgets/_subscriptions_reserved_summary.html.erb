@@ -14,7 +14,7 @@
     <div class="flex items-center gap-1.5 text-xs">
       <span class="inline-block w-2.5 h-2.5 rounded-sm bg-reserved-hatched text-secondary shrink-0" aria-hidden="true"></span>
       <span class="text-secondary"><%= t("budgets.subscription_reservations.reserved") %></span>
-      <span class="ml-auto text-primary font-medium"><%= format_money(reserved) %></span>
+      <span class="ml-auto text-primary font-medium privacy-sensitive"><%= format_money(reserved) %></span>
     </div>
     <% if unconvertible_count.positive? %>
       <p class="mt-1 text-xs text-subdued">

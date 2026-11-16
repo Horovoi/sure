@@ -21,11 +21,11 @@
             <% case check.status %>
             <% when :match %>
               <p class="text-success font-medium"><%= t("imports.pdf_statement_balance_check.match") %></p>
-              <p class="text-xs text-secondary"><%= format_money(check.statement_amount) %></p>
+              <p class="text-xs text-secondary privacy-sensitive"><%= format_money(check.statement_amount) %></p>
             <% when :mismatch %>
-              <p class="text-warning font-medium"><%= t("imports.pdf_statement_balance_check.difference", amount: format_money(check.difference.abs)) %></p>
-              <p class="text-xs text-secondary"><%= t("imports.pdf_statement_balance_check.statement_amount", amount: format_money(check.statement_amount)) %></p>
-              <p class="text-xs text-secondary"><%= t("imports.pdf_statement_balance_check.account_amount", amount: format_money(check.account_amount)) %></p>
+              <p class="text-warning font-medium"><%= privacy_money_text(t("imports.pdf_statement_balance_check.difference", amount: format_money(check.difference.abs))) %></p>
+              <p class="text-xs text-secondary"><%= privacy_money_text(t("imports.pdf_statement_balance_check.statement_amount", amount: format_money(check.statement_amount))) %></p>
+              <p class="text-xs text-secondary"><%= privacy_money_text(t("imports.pdf_statement_balance_check.account_amount", amount: format_money(check.account_amount))) %></p>
             <% when :not_synced %>
               <p class="text-secondary font-medium"><%= t("imports.pdf_statement_balance_check.not_available") %></p>
               <p class="text-xs text-secondary"><%= t("imports.pdf_statement_balance_check.not_synced") %></p>

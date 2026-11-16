@@ -1,4 +1,5 @@
-<%# locals: (headers: [], rows: [], caption: nil) %>
+<%# locals: (headers: [], rows: [], caption: nil, sensitive_headers: []) %>
+<%# sensitive_headers: the columns privacy mode blurs (the mapped amount, price, quantity) %>
 <div class="bg-container-inset rounded-xl overflow-hidden md:mx-auto p-4">
   <% if caption %>
     <div class="flex items-center mb-4">
@@ -33,6 +34,7 @@
                 <%= col_index < row.length - 1 ? "border-r border-r-alpha-black-200" : "" %>
                 <%= !caption && row_index == rows.length - 1 && col_index == 0 ? "rounded-bl-md" : "" %>
                 <%= !caption && row_index == rows.length - 1 && col_index == row.length - 1 ? "rounded-br-md" : "" %>
+                <%= "privacy-sensitive" if sensitive_headers.include?(header) %>
               ">
                 <%= value %>
               </td>

@@ -35,7 +35,7 @@
             </div>
 
             <% if (jar_target = monobank_account.jar_target) %>
-              <p class="text-xs text-secondary"><%= t(".jar_goal_hint", goal: format_money(Money.new(jar_target, monobank_account.currency))) %></p>
+              <p class="text-xs text-secondary"><%= privacy_money_text(t(".jar_goal_hint", goal: format_money(Money.new(jar_target, monobank_account.currency)))) %></p>
             <% end %>
 
             <% if candidates.any? %>

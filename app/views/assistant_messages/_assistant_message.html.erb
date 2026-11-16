@@ -9,7 +9,7 @@
         <%= icon("chevron-down", class: "group-open:transform group-open:rotate-180") %>
       </summary>
 
-      <div class="prose prose--ai-chat"><%= markdown(assistant_message.content) %></div>
+      <div class="prose prose--ai-chat"><%= privacy_money_html(markdown(assistant_message.content)) %></div>
     </details>
   <% else %>
     <% if assistant_message.chat.debug_mode? && assistant_message.tool_calls.any? %>
@@ -20,7 +20,7 @@
       <div class="flex items-start gap-3 mb-6">
         <%= render "chats/ai_avatar" %>
 
-        <div class="prose prose--ai-chat"><%= markdown(assistant_message.content) %></div>
+        <div class="prose prose--ai-chat"><%= privacy_money_html(markdown(assistant_message.content)) %></div>
       </div>
     <% elsif assistant_message.live? %>
       <%= render "chats/thinking_indicator", chat: assistant_message.chat %>

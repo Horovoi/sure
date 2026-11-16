@@ -11,7 +11,7 @@
         <%= t(".cash") %>
       </div>
       <div class="fg-inverse ml-auto">
-        <%= tag.p format_money(cash, precision: 0) %>
+        <%= tag.p format_money(cash, precision: 0), class: "privacy-sensitive" %>
       </div>
     </div>
     <div class="flex">
@@ -19,7 +19,7 @@
         <%= t(".holdings") %>
       </div>
       <div class="fg-inverse ml-auto">
-        <%= tag.p format_money(holdings, precision: 0) %>
+        <%= tag.p format_money(holdings, precision: 0), class: "privacy-sensitive" %>
       </div>
     </div>
 
@@ -30,7 +30,7 @@
         <%= t(".total") %>
       </div>
       <div class="fg-inverse font-bold ml-auto">
-        <%= tag.p format_money(balance, precision: 0) %>
+        <%= tag.p format_money(balance, precision: 0), class: "privacy-sensitive" %>
       </div>
     </div>
   </div>
