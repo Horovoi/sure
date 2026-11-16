@@ -50,7 +50,8 @@ class DsSubmitButtonsTest < ApplicationSystemTestCase
     visit merge_family_merchants_url
 
     # The target picker is a searchable DS::Select listbox, not a native select
-    container = find("label", exact_text: I18n.t("family_merchants.merge.target_label"))
+    # Its label ends in the required "*"
+    container = find("label", text: /\A#{Regexp.escape(I18n.t("family_merchants.merge.target_label"))}\s*\*?\z/)
                   .find(:xpath, "./ancestor::div[contains(concat(' ', @data-controller, ' '), ' select ')][1]")
     container.find("button[aria-haspopup='listbox']").click
     container.find("[role='listbox'] [role='option'][data-value='#{target.id}']", visible: true).click

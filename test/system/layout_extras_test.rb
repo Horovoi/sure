@@ -119,8 +119,9 @@ class LayoutExtrasTest < ApplicationSystemTestCase
     end
 
     # Waits like Capybara does: the groups open or close as toggle events land
+    # Through the test's own assertion, so Minitest counts it (the node's method does not)
     def assert_no_selector_in(scope, css)
-      scope.assert_no_selector(css, visible: :all)
+      within(scope) { assert_no_selector(css, visible: :all) }
     end
 
     def assert_panel_width(id, expected, within: 1)
