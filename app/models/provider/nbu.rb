@@ -7,6 +7,8 @@ class Provider::Nbu < Provider
   InvalidExchangeRateError = Class.new(Error)
 
   BASE_CURRENCY = "UAH".freeze
+  # The longest range one request asks for; a longer one is split
+  MAX_RANGE = 1.year
 
   def initialize
     # No API key required for NBU
@@ -86,26 +88,10 @@ class Provider::Nbu < Provider
 
       foreign_currency = from == BASE_CURRENCY ? to : from
 
-      # One request for the whole range. NBU's range endpoint returns a row for
-      # every calendar day (weekends and holidays included), with the same rate
-      # the single-date endpoint gives for that day.
-      response = client.get(range_url) do |req|
-        req.params["json"] = ""
-        req.params["valcode"] = foreign_currency.downcase
-        req.params["start"] = format_date(start_date)
-        req.params["end"] = format_date(end_date)
-        req.params["sort"] = "exchangedate"
-        req.params["order"] = "asc"
-      end
-
-      rates = JSON.parse(response.body).filter_map do |rate_data|
-        date = Date.strptime(rate_data["exchangedate"], "%d.%m.%Y")
-        # `rate` here is quoted per `units` of the currency (e.g. 10 JPY); `rate_per_unit` is per 1
-        nbu_rate = rate_data["rate_per_unit"].to_d
-
-        next unless (start_date..end_date).cover?(date) && nbu_rate.positive?
-
-        Rate.new(date: date, from: from, to: to, rate: rate_for(from, nbu_rate))
+      # One request per year of the range: an account with more than a year of history
+      # (a bank connection's backfill starts a year and a day back) gets every rate
+      rates = range_chunks(start_date, end_date).flat_map do |chunk_start, chunk_end|
+        fetch_range(from: from, to: to, foreign_currency: foreign_currency, start_date: chunk_start, end_date: chunk_end)
       end
 
       raise InvalidExchangeRateError, "No exchange rates found for #{from}/#{to} between #{start_date} and #{end_date}" if rates.empty?
@@ -115,6 +101,41 @@ class Provider::Nbu < Provider
   end
 
   private
+
+    # NBU's range endpoint returns a row for every calendar day (weekends and holidays
+    # included), with the same rate the single-date endpoint gives for that day
+    def fetch_range(from:, to:, foreign_currency:, start_date:, end_date:)
+      response = client.get(range_url) do |req|
+        req.params["json"] = ""
+        req.params["valcode"] = foreign_currency.downcase
+        req.params["start"] = format_date(start_date)
+        req.params["end"] = format_date(end_date)
+        req.params["sort"] = "exchangedate"
+        req.params["order"] = "asc"
+      end
+
+      JSON.parse(response.body).filter_map do |rate_data|
+        date = Date.strptime(rate_data["exchangedate"], "%d.%m.%Y")
+        # `rate` here is quoted per `units` of the currency (e.g. 10 JPY); `rate_per_unit` is per 1
+        nbu_rate = rate_data["rate_per_unit"].to_d
+
+        next unless (start_date..end_date).cover?(date) && nbu_rate.positive?
+
+        Rate.new(date: date, from: from, to: to, rate: rate_for(from, nbu_rate))
+      end
+    end
+
+    # [start, end] pairs of at most MAX_RANGE each, covering the range
+    def range_chunks(start_date, end_date)
+      chunks = []
+      chunk_start = start_date
+      while chunk_start <= end_date
+        chunk_end = [ chunk_start + MAX_RANGE - 1.day, end_date ].min
+        chunks << [ chunk_start, chunk_end ]
+        chunk_start = chunk_end + 1.day
+      end
+      chunks
+    end
 
     def base_url
       ENV["NBU_URL"] || "https://bank.gov.ua/NBUStatService/v1/statdirectory"
@@ -159,6 +180,5 @@ class Provider::Nbu < Provider
 
     def validate_date_range!(start_date, end_date)
       raise Error, "Start date cannot be after end date" if start_date > end_date
-      raise Error, "Date range too large (max 1 year)" if end_date > start_date + 1.year
     end
 end

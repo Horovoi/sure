@@ -260,16 +260,35 @@ class Provider::NbuTest < ActiveSupport::TestCase
     assert_not response.success?
     assert_instance_of Provider::Nbu::Error, response.error
     assert_match(/Start date cannot be after end date/, response.error.message)
+  end
 
-    response = @provider.fetch_exchange_rates(
-      from: "USD",
-      to: "UAH",
-      start_date: Date.current - 2.years,
-      end_date: Date.current
-    )
-    assert_not response.success?
-    assert_instance_of Provider::Nbu::Error, response.error
-    assert_match(/Date range too large/, response.error.message)
+  test "fetch_exchange_rates asks for a range longer than a year one year at a time" do
+    start_date = Date.parse("2024-11-15")
+    end_date = Date.parse("2026-11-16") # two years and a day: three requests
+
+    requested = []
+    bodies = [
+      nbu_range_body("EUR", { "15.11.2024" => 43.5, "14.11.2025" => 48.0 }),
+      nbu_range_body("EUR", { "15.11.2025" => 48.1, "14.11.2026" => 50.2 }),
+      nbu_range_body("EUR", { "15.11.2026" => 50.3, "16.11.2026" => 50.4 })
+    ]
+    mock_client = Object.new
+    mock_client.define_singleton_method(:get) do |_url, &block|
+      request = Struct.new(:params).new({})
+      block.call(request)
+      requested << request.params.slice("start", "end")
+      Struct.new(:body).new(bodies.shift)
+    end
+    @provider.stubs(:client).returns(mock_client)
+
+    response = @provider.fetch_exchange_rates(from: "EUR", to: "UAH", start_date: start_date, end_date: end_date)
+
+    assert response.success?
+    assert_equal [ { "start" => "20241115", "end" => "20251114" }, { "start" => "20251115", "end" => "20261114" },
+                   { "start" => "20261115", "end" => "20261116" } ], requested
+    assert_equal %w[2024-11-15 2025-11-14 2025-11-15 2026-11-14 2026-11-15 2026-11-16], response.data.map { |rate| rate.date.iso8601 }
+    assert_equal 50.4, response.data.last.rate.to_f
+    assert response.data.all? { |rate| rate.from == "EUR" && rate.to == "UAH" }
   end
 
   # ================================
