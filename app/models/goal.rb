@@ -755,6 +755,8 @@ class Goal < ApplicationRecord
       target_amount_label: Money.new(target_amt, currency).format(precision: 0),
       target_amount_short_label: short_money(target_amt, currency),
       currency_symbol: Money.new(0, currency).currency.symbol,
+      # The server's format for the axis and tooltip ("60K ₴", "17,531 ₴"), as on the dashboard charts
+      money_format: Money.new(0, currency).format_options.slice(:unit, :delimiter, :separator, :format),
       current_amount: current_balance.to_f,
       avg_monthly: pace.to_f,
       required_monthly: monthly_target_amount&.to_f,

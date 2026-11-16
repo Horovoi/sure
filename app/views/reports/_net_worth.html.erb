@@ -61,6 +61,7 @@
         data-controller="net-worth-chart"
         data-net-worth-chart-data-value="<%= breakdown_series.to_json %>"
         data-net-worth-chart-show-y-guides-value="true"
+        data-net-worth-chart-money-format-value="<%= Money.new(0, Current.family.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
         data-net-worth-chart-assets-label-value="<%= t("reports.net_worth.total_assets") %>"
         data-net-worth-chart-liabilities-label-value="<%= t("reports.net_worth.total_liabilities") %>"></div>
     </div>
@@ -72,14 +73,13 @@
       assets_json = net_worth_metrics[:asset_groups].map { |g| { name: g[:name], value: g[:total].amount.to_f } }.to_json
       liabilities_json = net_worth_metrics[:liability_groups].map { |g| { name: g[:name], value: g[:total].amount.to_f } }.to_json
       net_worth_val = net_worth_metrics[:current_net_worth].amount.to_f
-      currency_symbol = Money::Currency.new(Current.family.currency).symbol
     %>
     <div class="relative"
          data-controller="reports-waterfall-chart"
          data-reports-waterfall-chart-assets-value="<%= assets_json %>"
          data-reports-waterfall-chart-liabilities-value="<%= liabilities_json %>"
          data-reports-waterfall-chart-net-worth-value="<%= net_worth_val %>"
-         data-reports-waterfall-chart-currency-value="<%= currency_symbol %>"
+         data-reports-waterfall-chart-money-format-value="<%= Money.new(0, Current.family.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
          data-reports-waterfall-chart-net-worth-label-value="<%= t("reports.net_worth.net_worth_total") %>">
     </div>
   <% else %>

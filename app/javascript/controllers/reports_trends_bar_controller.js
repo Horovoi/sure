@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
 import { barAxisLabels, barValueLabelsFit } from "utils/bar_axis_labels";
 import { appendLevelLine, styleAxisLabels } from "utils/chart_grid";
+import { formatMoneyCompact } from "utils/format_money";
 
 // Draws a grouped bar chart for monthly income vs expenses
 // Connects to data-controller="reports-trends-bar"
@@ -10,6 +11,9 @@ export default class extends Controller {
     trends: { type: Array, default: [] },
     incomeLabel: { type: String, default: "Income" },
     expensesLabel: { type: String, default: "Expenses" },
+    // Money#format_options of the family currency, so axis and bar labels read
+    // "150K ₴" like the dashboard charts
+    moneyFormat: { type: Object, default: {} },
   };
 
   _resizeObserver = null;
@@ -81,9 +85,13 @@ export default class extends Controller {
       .append("g")
       .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
+    // Whole amounts only: a period with no activity has a 0–1 scale, and
+    // "0.2 ₴" steps on it say nothing
+    const yTicks = y.ticks(5).filter(Number.isInteger);
+
     // Level lines; the zero line (the bars' baseline) is the stronger one
     const grid = g.append("g").attr("class", "grid");
-    y.ticks(5).forEach((tick) =>
+    yTicks.forEach((tick) =>
       appendLevelLine(grid, { x1: 0, x2: innerWidth, y: y(tick), strong: tick === 0 })
     );
 
@@ -92,7 +100,7 @@ export default class extends Controller {
       .call(
         d3
           .axisLeft(y)
-          .ticks(5)
+          .tickValues(yTicks)
           .tickFormat((d) => this._formatNumber(d))
       )
       .call((sel) => sel.select(".domain").remove())
@@ -201,8 +209,6 @@ export default class extends Controller {
   }
 
   _formatNumber(num) {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toFixed(0);
+    return formatMoneyCompact(num, this.moneyFormatValue);
   }
 }

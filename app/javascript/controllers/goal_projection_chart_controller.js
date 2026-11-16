@@ -5,6 +5,7 @@ import {
   CHART_TOOLTIP_CONTEXT_CLASSES,
   CHART_TOOLTIP_VALUE_CLASSES,
 } from "utils/chart_tooltip";
+import { formatMoney, formatMoneyCompact } from "utils/format_money";
 import {
   CHART_AXIS_LABEL,
   CHART_LABEL_HALO,
@@ -384,10 +385,12 @@ export default class extends Controller {
           ? data.projection_end_label
           : (data.projection_shortfall_label ? `${data.projection_shortfall_label} short` : "");
         if (labelText) {
+          // A shortfall ends just under the target line: above the dot, its
+          // label would run into the target label, so it goes under the dot
           svg
             .append("text")
             .attr("x", x(target) - 8)
-            .attr("y", y(projectionEnd) - 8)
+            .attr("y", !willHit && collidesWithTargetLabel ? projDotY + 20 : projDotY - 8)
             .attr("text-anchor", "end")
             .attr("font-size", 12)
             .attr("fill", textSecondary)
@@ -609,6 +612,9 @@ export default class extends Controller {
   }
 
   _fmtMoney(amount, currency) {
+    const moneyFormat = this.dataValue?.money_format;
+    if (moneyFormat) return formatMoney(Math.round(amount), 0, moneyFormat);
+
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",
@@ -623,6 +629,9 @@ export default class extends Controller {
   }
 
   _fmtMoneyShort(amount, _currency) {
+    const moneyFormat = this.dataValue?.money_format;
+    if (moneyFormat) return formatMoneyCompact(amount, moneyFormat);
+
     // The server ships `currency_symbol` via projection_payload (resolved
     // through Money.new(0, code).currency.symbol so EUR/GBP/JPY/etc. render
     // with the family-locale-correct glyph). Fall back to "$" if a stale

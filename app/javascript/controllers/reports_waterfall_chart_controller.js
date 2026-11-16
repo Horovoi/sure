@@ -1,6 +1,8 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
 import { CHART_AXIS_LABEL, appendGuideLine, appendLevelLine } from "utils/chart_grid";
+import { CHART_TOOLTIP_CLASSES, CHART_TOOLTIP_CONTEXT_CLASSES, CHART_TOOLTIP_VALUE_CLASSES } from "utils/chart_tooltip";
+import { formatMoney, formatMoneyCompact } from "utils/format_money";
 
 // Draws a vertical waterfall chart for net worth breakdown
 // Assets stack UP (green), liabilities subtract DOWN (red), final bar shows net worth total from 0
@@ -9,7 +11,9 @@ export default class extends Controller {
     assets: { type: Array, default: [] },
     liabilities: { type: Array, default: [] },
     netWorth: { type: Number, default: 0 },
-    currency: { type: String, default: "$" },
+    // Money#format_options of the family currency: labels read "17.9K ₴" like
+    // the dashboard charts, the tooltip the full amount
+    moneyFormat: { type: Object, default: {} },
     netWorthLabel: { type: String, default: "Net Worth" },
   };
 
@@ -46,7 +50,6 @@ export default class extends Controller {
     if (containerWidth < 50) return;
 
     const netWorth = this.netWorthValue;
-    const currency = this.currencyValue;
     const netWorthLabel = this.netWorthLabelValue;
 
     // Build waterfall data: each bar has start/end values
@@ -130,19 +133,8 @@ export default class extends Controller {
     const tooltip = d3
       .select(this.element)
       .append("div")
-      .attr("class", "waterfall-tooltip")
-      .style("position", "absolute")
-      .style("pointer-events", "none")
-      .style("opacity", 0)
-      .style("padding", "6px 10px")
-      .style("border-radius", "6px")
-      .style("font-size", "12px")
-      .style("background", "var(--color-tooltip-bg)")
-      .style("border", "1px solid var(--color-tooltip-border)")
-      .style("box-shadow", "0 2px 8px rgba(0,0,0,0.12)")
-      .style("color", "var(--color-text-primary)")
-      .style("z-index", "10")
-      .style("white-space", "nowrap");
+      .attr("class", `waterfall-tooltip ${CHART_TOOLTIP_CLASSES} whitespace-nowrap`)
+      .style("opacity", 0);
 
     // Level lines under the bars, then the stronger zero baseline
     const ticks = yScale.ticks(5);
@@ -167,6 +159,9 @@ export default class extends Controller {
       const yTop = Math.min(yScale(bar.start), yScale(bar.end));
       const yBottom = Math.max(yScale(bar.start), yScale(bar.end));
       const barHeight = Math.max(yBottom - yTop, 3);
+      // bar.value is a magnitude: liabilities subtract, and the total carries net worth's sign
+      const isSubtraction = bar.type === "liability" || bar.type === "negative_asset";
+      const signedValue = (bar.type === "total" ? netWorth < 0 : isSubtraction) ? -bar.value : bar.value;
 
       let fillColor;
       if (bar.type === "asset" || bar.type === "negative_liability") {
@@ -192,12 +187,10 @@ export default class extends Controller {
         .attr("opacity", fillOpacity)
         .style("cursor", "default")
         .on("mouseover", () => {
-          const isSubtraction = bar.type === "liability" || bar.type === "negative_asset";
-          const sign = isSubtraction ? "-" : "";
           tooltip
             .style("opacity", 1)
             .html(
-              `<strong>${this._escape(bar.name)}</strong><br><span class="privacy-sensitive">${sign}${currency}${this._formatNumber(bar.value)}</span>`
+              `<div class="${CHART_TOOLTIP_CONTEXT_CLASSES}">${this._escape(bar.name)}</div><div class="${CHART_TOOLTIP_VALUE_CLASSES}">${this._escape(this._formatFull(signedValue))}</div>`
             );
         })
         .on("mousemove", (event) => {
@@ -211,13 +204,7 @@ export default class extends Controller {
         });
 
       // Value label
-      const isSubtraction = bar.type === "liability" || bar.type === "negative_asset";
-      const labelValue =
-        bar.type === "total"
-          ? `${netWorth < 0 ? "-" : ""}${currency}${this._formatNumber(bar.value)}`
-          : isSubtraction
-            ? `-${currency}${this._formatNumber(bar.value)}`
-            : `${currency}${this._formatNumber(bar.value)}`;
+      const labelValue = this._formatNumber(signedValue);
 
       const labelFitsInside = barHeight > 24;
       const labelY = labelFitsInside
@@ -272,7 +259,7 @@ export default class extends Controller {
         .attr("dy", "0.35em")
         .attr("text-anchor", "end")
         .attr("class", `${CHART_AXIS_LABEL} privacy-sensitive`)
-        .text(`${tick < 0 ? "-" : ""}${currency}${this._formatNumber(Math.abs(tick))}`);
+        .text(this._formatNumber(tick));
     });
   }
 
@@ -283,8 +270,10 @@ export default class extends Controller {
   }
 
   _formatNumber(num) {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toFixed(0);
+    return formatMoneyCompact(num, this.moneyFormatValue);
+  }
+
+  _formatFull(num) {
+    return formatMoney(num, this.moneyFormatValue.precision ?? 2, this.moneyFormatValue);
   }
 }

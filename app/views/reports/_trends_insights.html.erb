@@ -20,7 +20,8 @@
              data-controller="reports-trends-bar"
              data-reports-trends-bar-trends-value="<%= chart_trends %>"
              data-reports-trends-bar-income-label-value="<%= t("reports.trends.income") %>"
-             data-reports-trends-bar-expenses-label-value="<%= t("reports.trends.expenses") %>">
+             data-reports-trends-bar-expenses-label-value="<%= t("reports.trends.expenses") %>"
+             data-reports-trends-bar-money-format-value="<%= Money.new(0, Current.family.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>">
         </div>
 
         <%# Foldable monthly table %>
