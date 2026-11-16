@@ -211,4 +211,17 @@ class Entry::SplittableTest < ActiveSupport::TestCase
     assert_empty child_txn_ids - with
     assert_empty child_txn_ids & without
   end
+  test "the family export writes the parts in the CSV and the whole split, linked, in the NDJSON" do
+    children = @entry.split!([ { name: "Part A", amount: 70 }, { name: "Part B", amount: 30 } ])
+    exporter = Family::DataExporter.new(@family)
+
+    csv_names = CSV.parse(exporter.send(:generate_transactions_csv), headers: true).map { |row| row["name"] }
+    assert_includes csv_names, "Part A"
+    assert_not_includes csv_names, "Supermarket"
+
+    lines = exporter.send(:generate_ndjson).lines.map { |line| JSON.parse(line) }.select { |line| line["type"] == "Transaction" }
+    by_entry = lines.index_by { |line| line.dig("data", "entry_id") }
+    assert by_entry.dig(@entry.id, "data", "excluded")
+    assert_equal [ @entry.id ], children.map { |child| by_entry.dig(child.id, "data", "parent_entry_id") }.uniq
+  end
 end

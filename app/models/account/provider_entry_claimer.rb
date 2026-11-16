@@ -95,7 +95,7 @@ class Account::ProviderEntryClaimer
         # The bank's line of a split transaction is its parent (excluded only because it
         # is split), never one of its parts
         .where(parent_entry_id: nil)
-        .where("entries.excluded = false OR #{Entry.split_parent_sql}")
+        .where("entries.excluded = false OR EXISTS (SELECT 1 FROM entries split_children WHERE split_children.parent_entry_id = entries.id)")
         .where("entries.external_id IS NULL OR entries.source IN (?)", Entry::MANUAL_SOURCES)
         .where(date: (dates.min - window)..(dates.max + window))
         .where("entries.source IS DISTINCT FROM ?", "subscription")
