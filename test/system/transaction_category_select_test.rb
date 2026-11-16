@@ -161,7 +161,7 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
   end
 
   private
-    # Form and drawer sections start closed; their titles render uppercase (CSS)
+    # Form and drawer sections start closed
     def open_section(title)
       find("summary", text: /\A#{Regexp.escape(title)}\z/i).click
     end

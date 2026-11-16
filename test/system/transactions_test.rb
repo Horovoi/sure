@@ -378,7 +378,7 @@ class TransactionsTest < ApplicationSystemTestCase
     within "#" + dom_id(entry) do
       click_link entry.name, exact: true
     end
-    # Section titles render uppercase (CSS), and the browser reports the rendered text
+    # The settings section starts closed
     find("summary", text: /\A#{Regexp.escape(I18n.t("transactions.show.settings"))}\z/i).click
   end
 

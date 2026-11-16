@@ -86,7 +86,9 @@ class DS::Disclosure < DesignSystemComponent
     when :bare
       "list-none cursor-pointer focus-ring"
     else
-      "px-3 py-2 rounded-xl cursor-pointer flex items-center justify-between bg-surface focus-ring min-h-11"
+      # An inset tray like the segmented tabs, in the fields' corner family: on
+      # the page colour (bg-surface) it read as a black strip inside dialogs
+      "px-3 py-2 rounded-lg cursor-pointer flex items-center justify-between bg-surface-inset hover:bg-surface-inset-hover motion-safe:transition-colors focus-ring min-h-11"
     end
   end
 

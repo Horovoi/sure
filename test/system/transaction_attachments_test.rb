@@ -18,7 +18,7 @@ class TransactionAttachmentsTest < ApplicationSystemTestCase
   test "attach a file in the drawer and open it" do
     visit transactions_url
     click_link @entry.name
-    # The section starts closed while the transaction has no file; titles render uppercase
+    # The section starts closed while the transaction has no file
     find("summary", text: /\A#{Regexp.escape(I18n.t("transaction_attachments.section_title"))}\z/i).click
 
     within "[data-testid='transaction-attachments']" do

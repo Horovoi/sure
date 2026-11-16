@@ -502,7 +502,26 @@
     text-overflow: clip;
   }
 
-  /* DS::TagSelect trigger: selected pills wrap onto more lines instead of clipping. */
+  /* DS::CategorySelect trigger: the selected badge fits the field's 20px line.
+     Important, as the badge's own py-1 is a utility, a later layer than this */
+  .category-select__selection [data-category-badge] {
+    @apply py-0! -my-px!;
+  }
+
+  /* Safari pads the parts of a date input, so its text started a few pixels
+     right of every other field's */
+  input.form-field__input::-webkit-datetime-edit,
+  input.form-field__input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+
+  input.form-field__input::-webkit-datetime-edit-day-field,
+  input.form-field__input::-webkit-datetime-edit-month-field,
+  input.form-field__input::-webkit-datetime-edit-year-field {
+    padding-inline: 0;
+  }
+
+    /* DS::TagSelect trigger: selected pills wrap onto more lines instead of clipping. */
   .form-field__input--multiselect-trigger {
     @apply whitespace-normal overflow-visible;
     text-overflow: clip;

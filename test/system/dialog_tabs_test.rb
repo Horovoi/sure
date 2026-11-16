@@ -70,6 +70,11 @@ class DialogTabsTest < ApplicationSystemTestCase
     click_on I18n.t("transactions.index.new_transaction", default: "New transaction"), match: :first
     assert_selector "dialog[open] .hw-combobox__input"
 
+    # A picked category's badge keeps the field at the others' height
+    find("dialog[open] [data-category-select-target=button]").click
+    find("dialog[open] [role=option]", match: :first).click
+    assert_selector "dialog[open] .category-select__selection [data-category-badge]"
+
     expense = field_heights
     assert_equal 1, expense.uniq.size, expense.inspect
     title_top = dialog_title_top

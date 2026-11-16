@@ -26,9 +26,10 @@
               <%= "disabled" if disabled %>>
 
         <%# The trigger keeps a plain input's height, like every field: the selected
-            badge (container > badge > pill) loses its vertical padding here %>
+            badge (rendered here, or copied from the list on a pick) loses its
+            vertical padding (category-select__selection in sure-design-system.css) %>
         <span data-category-select-target="selectionContainer"
-              class="text-secondary *:*:py-0 *:*:-my-px">
+              class="category-select__selection text-secondary">
           <% selected = selected_category %>
 
           <% if selected %>
