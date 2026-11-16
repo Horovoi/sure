@@ -10,9 +10,9 @@
           <%= icon("chevron-left") %>
         <% end %>
       <% else %>
-        <div class="inline-flex items-center p-2 text-sm font-medium hover:border-secondary">
-          <%= icon("chevron-left") %>
-        </div>
+        <span class="inline-flex items-center p-2 text-sm font-medium text-subdued cursor-default" aria-disabled="true">
+          <%= icon("chevron-left", color: "current") %>
+        </span>
       <% end %>
     </div>
     <div class="rounded-xl p-1 bg-container-inset">
@@ -43,9 +43,9 @@
           <%= icon("chevron-right") %>
         <% end %>
       <% else %>
-        <div class="inline-flex items-center p-2 text-sm font-medium hover:border-secondary">
-          <%= icon("chevron-right") %>
-        </div>
+        <span class="inline-flex items-center p-2 text-sm font-medium text-subdued cursor-default" aria-disabled="true">
+          <%= icon("chevron-right", color: "current") %>
+        </span>
       <% end %>
     </div>
   </div>

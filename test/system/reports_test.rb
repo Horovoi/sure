@@ -75,7 +75,7 @@ class ReportsTest < ApplicationSystemTestCase
   test "the arrows step through periods and Current goes back" do
     visit reports_path(period_type: :monthly)
     current_label = find("[data-testid='report-period-label']").text
-    assert_selector "button[disabled][aria-label='#{I18n.t("reports.index.period_nav.next")}']"
+    assert_selector "span[aria-disabled='true'][aria-label='#{I18n.t("reports.index.period_nav.next")}']"
 
     find("a[aria-keyshortcuts='ArrowLeft']").click
     assert_current_path(/period_offset=-1/)
@@ -91,6 +91,29 @@ class ReportsTest < ApplicationSystemTestCase
     within("[data-testid='report-period-nav']") { click_link I18n.t("reports.index.period_nav.current") }
     assert_no_current_path(/period_offset/)
     assert_selector "[data-testid='report-period-label']", text: current_label, exact_text: true
+  end
+
+  # The label used to be as wide as its text, so September, October and the
+  # Current link that comes and goes pushed the Calendar/Fiscal switch around.
+  test "the period bar keeps its place while stepping through months" do
+    @family.update!(use_fiscal_months: true, fiscal_month_start_day: 17)
+    visit reports_path(period_type: :monthly, fiscal_mode: "true")
+
+    toggle_x = -> { find("[data-testid='report-period-nav'] + div a", text: I18n.t("reports.index.toggles.calendar")).native.rect.x }
+    next_x = -> { find("[data-period-arrow='next']").native.rect.x }
+    start_toggle_x = toggle_x.call
+    start_next_x = next_x.call
+
+    labels = [ find("[data-testid='report-period-label']").text ]
+    4.times do |step|
+      find("a[aria-keyshortcuts='ArrowLeft']").click
+      assert_current_path(/period_offset=-#{step + 1}/)
+      labels << find("[data-testid='report-period-label']").text
+
+      assert_equal start_toggle_x, toggle_x.call, "the Calendar/Fiscal switch moved on #{labels.last}"
+      assert_equal start_next_x, next_x.call, "the next arrow moved on #{labels.last}"
+    end
+    assert_equal 5, labels.uniq.size
   end
 
   test "the left and right arrow keys change the period" do
