@@ -3,30 +3,38 @@ en:
   reports:
     index:
       title: Reports
+      heading_prefix: "Reports:"
       subtitle: Comprehensive insights into your financial health
       export: Export CSV
-      print_report: Print Report
+      print_report: Print report
+      more_options: Report options
       drag_to_reorder: "Drag to reorder section"
       toggle_section: "Toggle section visibility"
       periods:
+        label: Period length
         month: Month
         quarter: Quarter
         year: Year
-        six_months: 6 Months
+        six_months: 6 months
         custom: Custom
       toggles:
-        calendar: Calendar
-        fiscal: Fiscal
+        calendar: Calendar months
+        fiscal: Fiscal months
       date_range:
         from: From
         to: To
       showing_period: "Showing data from %{start} to %{end}"
-      insights_for: "Financial insights for %{start} – %{end}"
       period_nav:
         previous: Previous period
         next: Next period
-        current: Current
+        current: Back to current
         shortcut_hint: "%{action} (%{key})"
+        range: "%{start} – %{end}"
+        fiscal_range:
+          monthly: "%{range} (fiscal month)"
+          quarterly: "%{range} (fiscal quarter)"
+          last_6_months: "%{range} (fiscal half-year)"
+          ytd: "%{range} (fiscal year)"
         label:
           quarterly: "Q%{quarter} %{year}"
           half_year: "H%{half} %{year}"

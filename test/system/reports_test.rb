@@ -108,31 +108,28 @@ class ReportsTest < ApplicationSystemTestCase
   end
 
   # The label used to be as wide as its text, so September, October and the
-  # Current link that comes and goes pushed the Calendar/Fiscal switch around.
-  test "the period bar keeps its place while stepping through months" do
+  # Current link that comes and goes pushed the controls after it around.
+  # Back to current now appears at the end of the line under the label.
+  test "the period header keeps its place while stepping through months" do
     @family.update!(use_fiscal_months: true, fiscal_month_start_day: 17)
     visit reports_path(period_type: :monthly, fiscal_mode: "true")
 
-    toggle_x = -> { find("[data-testid='report-period-nav'] + div a", text: I18n.t("reports.index.toggles.calendar")).native.rect.x }
-    next_x = -> { find("[data-period-arrow='next']").native.rect.x }
-    start_toggle_x = toggle_x.call
-    start_next_x = next_x.call
-
+    start = header_positions
     labels = [ find("[data-testid='report-period-label']").text ]
     4.times do |step|
       find("a[aria-keyshortcuts='ArrowLeft']").click
       assert_current_path(/period_offset=-#{step + 1}/)
       labels << find("[data-testid='report-period-label']").text
+      assert_selector "[data-testid='report-period-current']"
 
-      assert_equal start_toggle_x, toggle_x.call, "the Calendar/Fiscal switch moved on #{labels.last}"
-      assert_equal start_next_x, next_x.call, "the next arrow moved on #{labels.last}"
+      assert_equal start, header_positions, "the header moved on #{labels.last}"
     end
     assert_equal 5, labels.uniq.size
   end
 
   # The label slot used to be only as wide as the widest label of the period
-  # type, so Month, Quarter, 6 Months and Year each put the switch elsewhere.
-  test "the period bar keeps its place across period types" do
+  # type, so Month, Quarter, 6 months and Year each put the controls elsewhere.
+  test "the period header keeps its place across period types" do
     @family.update!(use_fiscal_months: true, fiscal_month_start_day: 17)
     tabs = { "month" => "monthly", "quarter" => "quarterly", "six_months" => "last_6_months", "year" => "ytd" }
 
@@ -141,18 +138,33 @@ class ReportsTest < ApplicationSystemTestCase
         visit reports_path(period_type: :monthly, fiscal_mode: "true")
 
         positions = tabs.map do |key, period_type|
-          click_link I18n.t("reports.index.periods.#{key}")
+          within("[data-testid='report-period-types']") { click_link I18n.t("reports.index.periods.#{key}") }
           assert_current_path(/period_type=#{period_type}/)
           assert_equal width, evaluate_script("window.innerWidth")
-          {
-            toggle: find("[data-testid='report-period-nav'] + div a", text: I18n.t("reports.index.toggles.calendar")).native.rect.x,
-            next: find("[data-period-arrow='next']").native.rect.x
-          }
+          assert_not evaluate_script("document.documentElement.scrollWidth > window.innerWidth"), "the page scrolls sideways at #{width} wide"
+          header_positions
         end
 
-        assert_equal 1, positions.uniq.size, "the period bar moved between period types at #{width} wide: #{positions}"
+        assert_equal 1, positions.uniq.size, "the header moved between period types at #{width} wide: #{positions}"
       end
     end
+  end
+
+  test "the options menu switches between calendar and fiscal months" do
+    @family.update!(use_fiscal_months: true, fiscal_month_start_day: 17)
+    visit reports_path(period_type: :monthly)
+    assert_selector "[data-testid='report-period-range']", text: I18n.t("reports.index.period_nav.fiscal_range.monthly", range: "").strip
+
+    within("[data-testid='report-options']") do
+      find("button[aria-label='#{I18n.t("reports.index.more_options")}']").click
+      assert_selector "[role='menuitemradio'][aria-checked='true']", text: I18n.t("reports.index.toggles.fiscal")
+      assert_selector "[role='menuitem']", text: I18n.t("reports.index.print_report")
+      click_link I18n.t("reports.index.toggles.calendar")
+    end
+
+    assert_current_path(/fiscal_mode=false/)
+    assert_no_selector "[data-testid='report-period-range']", text: "fiscal"
+    assert_selector "[data-testid='report-period-label']", text: I18n.l(Date.current, format: "%B %Y")
   end
 
   # With the accounts and assistant panels open (the default), the main
@@ -285,6 +297,16 @@ class ReportsTest < ApplicationSystemTestCase
       yield
     ensure
       page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+    end
+
+    # Where the next arrow, the period-length control and the first summary
+    # card are: none of them may move when the period changes.
+    def header_positions
+      {
+        next: find("[data-period-arrow='next']").native.rect.x,
+        types: find("[data-testid='report-period-types']").native.rect.then { |rect| [ rect.x, rect.y ] },
+        summary: find("[data-testid='report-summary']").native.rect.y
+      }
     end
 
     def main_width

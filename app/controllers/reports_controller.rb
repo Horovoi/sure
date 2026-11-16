@@ -336,9 +336,9 @@ class ReportsController < ApplicationController
       @end_date += period_offset * length
     end
 
-    # The previous and next arrows, the period label, and the link back to
-    # the current period. The next arrow is off on the current period, and
-    # so is the Current link (the view keeps its slot so nothing moves).
+    # The previous and next arrows, the period label, the exact dates under
+    # it, and the link back to the current period. The next arrow is off on
+    # the current period, and the link is not shown there.
     # label_samples are every label this period type can show; the view
     # stacks them invisibly under the label so its width never changes.
     def build_period_nav
@@ -346,6 +346,7 @@ class ReportsController < ApplicationController
 
       {
         label: period_label(@start_date, @end_date, current: at_current),
+        range: period_range_text,
         label_samples: period_label_samples,
         previous_params: at_earliest_period? ? nil : period_nav_params(period_offset - 1),
         next_params: at_current ? nil : period_nav_params(period_offset + 1),
@@ -408,11 +409,24 @@ class ReportsController < ApplicationController
       end
     end
 
+    # The exact days under the period label: "Oct 17 – Nov 16, 2026". The start
+    # keeps its year only when the period crosses a new year. A fiscal period
+    # says so, because its dates do not follow the calendar.
+    def period_range_text
+      start_format = @start_date.year == @end_date.year ? "%b %-d" : "%b %-d, %Y"
+      range = t("reports.index.period_nav.range",
+        start: I18n.l(@start_date, format: start_format),
+        end: I18n.l(@end_date, format: "%b %-d, %Y"))
+      return range unless use_fiscal_periods? && @period_type != :custom
+
+      t("reports.index.period_nav.fiscal_range.#{@period_type}", range: range)
+    end
+
     # One label per month (the 28th: a two-digit day) covers every month name
     # and quarter or half of the year, plus Year's "to date" form. Month,
-    # Quarter, 6 Months and Year share one set, so the label slot (and the
-    # Calendar/Fiscal switch after it) keeps its width when the type changes.
-    # Custom has its own, longer labels and no switch.
+    # Quarter, 6 months and Year share one set, so the label slot (and the
+    # next arrow after it) keeps its place when the type changes.
+    # Custom has its own, longer labels.
     def period_label_samples
       year = @start_date.year
       days = (1..12).map { |month| Date.new(year, month, 28) }

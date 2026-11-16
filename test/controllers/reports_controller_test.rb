@@ -22,7 +22,12 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   test "index with monthly period" do
     get reports_path(period_type: :monthly)
     assert_response :ok
-    assert_select "h1", text: I18n.t("reports.index.title")
+    # The breadcrumb shows Reports; the heading names the period and says Reports
+    # only to screen readers
+    assert_select "h1" do
+      assert_select ".sr-only", text: I18n.t("reports.index.heading_prefix")
+      assert_select "[data-testid='report-period-label']", text: I18n.l(Date.current, format: "%B %Y")
+    end
   end
 
   test "index with quarterly period" do
@@ -710,8 +715,9 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   # The next arrow used to be a disabled <button> that looked active and
-  # then refused the click; Current used to vanish and shift the row.
-  test "on the current period the next arrow is greyed out and Current keeps an invisible slot" do
+  # then refused the click. Back to current is last on the line under the
+  # label, so leaving it out on the current period moves nothing.
+  test "on the current period the next arrow is greyed out and there is no way back to current" do
     with_old_history
     get reports_path(period_type: :monthly)
     assert_response :ok
@@ -720,7 +726,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "button[aria-label=?]", I18n.t("reports.index.period_nav.next"), count: 0
     assert_select "a[data-hotkey='ArrowRight']", count: 0
     assert_select "a[data-hotkey='ArrowLeft'][href=?]", reports_path(period_type: :monthly, fiscal_mode: "false", period_offset: -1)
-    assert_select "[data-testid='report-period-current'].invisible[aria-hidden='true'][tabindex='-1']", text: I18n.t("reports.index.period_nav.current")
+    assert_select "[data-testid='report-period-current']", count: 0
     # The Current/Last toggle is gone
     assert_select "a[href*='period_mode']", count: 0
   end
@@ -736,7 +742,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
 
       get reports_path(period_type: period_type, fiscal_mode: fiscal_mode, period_offset: -1)
       assert_select "a[data-period-arrow='next']", 1, "#{period_type} fiscal=#{fiscal_mode} offset -1"
-      assert_select "[data-testid='report-period-current']:not(.invisible)", 1
+      assert_select "[data-testid='report-period-current']", 1
     end
 
     get reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10")
@@ -810,6 +816,54 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
         text: I18n.t("reports.index.period_nav.current")
       assert_select "[data-testid='report-period-label']", text: "Q3 2025"
     end
+  end
+
+  test "the exact dates sit under the label and say when they are fiscal" do
+    travel_to Date.new(2026, 11, 16) do
+      @family.update!(use_fiscal_months: true, fiscal_month_start_day: 17)
+
+      get reports_path(period_type: :monthly)
+      assert_select "[data-testid='report-period-label']", text: "October 2026"
+      assert_select "[data-testid='report-period-range']", text: "Oct 17 – Nov 16, 2026 (fiscal month)"
+
+      get reports_path(period_type: :monthly, fiscal_mode: "true", period_offset: -10)
+      assert_select "[data-testid='report-period-range']", text: "Dec 17, 2025 – Jan 16, 2026 (fiscal month)"
+
+      get reports_path(period_type: :quarterly, fiscal_mode: "false", period_offset: -1)
+      assert_select "[data-testid='report-period-range']", text: "Jul 1 – Sep 30, 2026"
+
+      # A custom range shows its date fields there instead
+      get reports_path(period_type: :custom, start_date: "2026-08-01", end_date: "2026-10-15")
+      assert_select "[data-testid='report-period-range']", count: 0
+      assert_select "[data-testid='report-period-nav'] input[type='date'][name='start_date'][value='2026-08-01'][aria-label=?]", I18n.t("reports.index.date_range.from")
+      assert_select "[data-testid='report-period-nav'] input[type='date'][name='end_date'][value='2026-10-15'][aria-label=?]", I18n.t("reports.index.date_range.to")
+    end
+  end
+
+  test "the options menu holds the month kind and print, and print stands alone without fiscal months" do
+    @family.update!(use_fiscal_months: true, fiscal_month_start_day: 17)
+    get reports_path(period_type: :quarterly, fiscal_mode: "true", period_offset: -1)
+
+    assert_select "[data-testid='report-period-types'][role='group'] a[aria-current='true']", text: I18n.t("reports.index.periods.quarter")
+    assert_select "[data-testid='report-options']" do
+      assert_select "button[aria-haspopup='menu'][aria-label=?]", I18n.t("reports.index.more_options")
+      assert_select "a[role='menuitemradio'][aria-checked='false'][href=?]",
+        reports_path(period_type: :quarterly, fiscal_mode: "false", period_offset: -1), text: I18n.t("reports.index.toggles.calendar")
+      assert_select "a[role='menuitemradio'][aria-checked='true'][href=?]",
+        reports_path(period_type: :quarterly, fiscal_mode: "true", period_offset: -1), text: I18n.t("reports.index.toggles.fiscal")
+      assert_select "a[role='menuitem'][target='_blank'][href^=?]", print_reports_path, text: I18n.t("reports.index.print_report")
+    end
+    assert_select "[data-testid='report-print']", count: 0
+
+    # A custom range has no month kind to choose, so Print is the only option left
+    get reports_path(period_type: :custom, start_date: "2026-08-01", end_date: "2026-10-15")
+    assert_select "[data-testid='report-options']", count: 0
+    assert_select "a[data-testid='report-print'][target='_blank'][aria-label=?]", I18n.t("reports.index.print_report")
+
+    @family.update!(use_fiscal_months: false)
+    get reports_path(period_type: :monthly)
+    assert_select "[data-testid='report-options']", count: 0
+    assert_select "a[data-testid='report-print'][href^=?]", print_reports_path
   end
 
   test "the period label names the period" do

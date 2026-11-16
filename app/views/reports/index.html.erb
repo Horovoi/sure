@@ -1,65 +1,16 @@
 <% content_for :page_header do %>
-  <div class="space-y-4 mb-6">
-    <div class="space-y-1">
-      <h1 class="text-xl lg:text-3xl font-medium text-primary">
-        <%= t("reports.index.title") %>
-      </h1>
-      <p class="text-sm lg:text-base text-secondary">
-        <%= t("reports.index.insights_for", start: l(@start_date, format: "%b %-d"), end: l(@end_date, format: "%b %-d, %Y")) %>
-      </p>
-    </div>
-
-    <%# Flash messages %>
-    <% if flash[:alert].present? %>
-      <div class="p-3 rounded-lg bg-destructive-surface text-sm text-destructive">
-        <%= flash[:alert] %>
-      </div>
-    <% end %>
-
-    <%# Period Navigation Tabs %>
-    <div class="space-y-2">
-      <%# Tab Row %>
-      <div class="flex items-center gap-2 overflow-x-auto">
-        <%= render DS::Link.new(
-          text: t("reports.index.periods.month"),
-          variant: @period_type == :monthly ? "secondary" : "ghost",
-          href: reports_path(period_type: :monthly, fiscal_mode: @fiscal_mode),
-          size: :sm
-        ) %>
-        <%= render DS::Link.new(
-          text: t("reports.index.periods.quarter"),
-          variant: @period_type == :quarterly ? "secondary" : "ghost",
-          href: reports_path(period_type: :quarterly, fiscal_mode: @fiscal_mode),
-          size: :sm
-        ) %>
-        <%= render DS::Link.new(
-          text: t("reports.index.periods.six_months"),
-          variant: @period_type == :last_6_months ? "secondary" : "ghost",
-          href: reports_path(period_type: :last_6_months, fiscal_mode: @fiscal_mode),
-          size: :sm
-        ) %>
-        <%= render DS::Link.new(
-          text: t("reports.index.periods.year"),
-          variant: @period_type == :ytd ? "secondary" : "ghost",
-          href: reports_path(period_type: :ytd, fiscal_mode: @fiscal_mode),
-          size: :sm
-        ) %>
-        <%= render DS::Link.new(
-          text: t("reports.index.periods.custom"),
-          variant: @period_type == :custom ? "secondary" : "ghost",
-          href: reports_path(period_type: :custom),
-          size: :sm
-        ) %>
-      </div>
-
-      <%# Filter Bar: Period arrows + Toggles + Date + Print %>
-      <div class="flex flex-wrap items-center gap-3">
-        <%# Period arrows: step back and forth through periods of the selected type.
-            Nothing in this group changes size between periods: the arrows keep
-            their box when off, the label is as wide as its widest sample, and
-            Current keeps its slot (invisible) on the current period. %>
-        <% nav = @period_nav %>
-        <div class="flex items-center gap-1" data-testid="report-period-nav">
+  <%# The period is the page's subject: its name is the headline, stepped by the
+      arrows beside it. The breadcrumb already says Reports, so the h1 says it
+      only to screen readers. Nothing here changes size between periods: the
+      arrows keep their box when off, the label is as wide as its widest
+      sample, and the period-length control sits at the far end of the row. %>
+  <% nav = @period_nav %>
+  <% custom = @period_type == :custom %>
+  <% fiscal_choice = Current.family.fiscal_month_enabled? && !custom %>
+  <div class="@container mb-6">
+    <div class="flex flex-col gap-4 @2xl:flex-row @2xl:items-start @2xl:justify-between">
+      <div class="min-w-0" data-testid="report-period-nav">
+        <div class="flex items-center gap-1 -ml-2">
           <%= render DS::PeriodArrow.new(
             direction: :previous,
             label: t("reports.index.period_nav.previous"),
@@ -68,12 +19,14 @@
             shortcut_hint: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.previous"), key: "←")
           ) %>
 
-          <span class="inline-grid text-sm font-medium text-primary px-1 text-center whitespace-nowrap tabular-nums">
+          <h1 class="<%= class_names("inline-grid font-medium text-primary text-center whitespace-nowrap tabular-nums",
+                                    custom ? "text-lg @lg:text-2xl" : "text-2xl @lg:text-3xl") %>">
+            <span class="sr-only"><%= t("reports.index.heading_prefix") %></span>
             <span class="[grid-area:1/1]" data-testid="report-period-label"><%= nav[:label] %></span>
             <% nav[:label_samples].each do |sample| %>
               <span class="[grid-area:1/1] invisible" aria-hidden="true"><%= sample %></span>
             <% end %>
-          </span>
+          </h1>
 
           <%= render DS::PeriodArrow.new(
             direction: :next,
@@ -82,65 +35,101 @@
             hotkey: "ArrowRight",
             shortcut_hint: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.next"), key: "→")
           ) %>
-
-          <%= render DS::Link.new(
-            text: t("reports.index.period_nav.current"),
-            variant: "ghost",
-            size: :sm,
-            href: reports_path(nav[:current_params]),
-            class: nav[:at_current] ? "invisible" : nil,
-            aria: nav[:at_current] ? { hidden: true } : {},
-            tabindex: nav[:at_current] ? -1 : nil,
-            data: { testid: "report-period-current" }
-          ) %>
         </div>
 
-        <% if @period_type != :custom %>
-          <%# Fiscal Toggle - for all period tabs (except custom) when fiscal enabled %>
-          <% if Current.family.fiscal_month_enabled? %>
-            <div class="inline-flex rounded-md border border-secondary p-0.5 bg-surface-inset">
-              <%= link_to reports_path(period_type: @period_type, fiscal_mode: "false", period_offset: @period_offset.nonzero?),
-                  class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode != 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
-                <%= t("reports.index.toggles.calendar") %>
-              <% end %>
-              <%= link_to reports_path(period_type: @period_type, fiscal_mode: "true", period_offset: @period_offset.nonzero?),
-                  class: "px-2.5 py-0.5 text-sm rounded transition-colors #{@fiscal_mode == 'true' ? 'bg-container shadow-xs font-medium' : 'text-secondary hover:text-primary'}" do %>
-                <%= t("reports.index.toggles.fiscal") %>
-              <% end %>
-            </div>
+        <%# The exact days, or the fields that choose them for a custom range.
+            Back to current comes last and the line never wraps (a long range
+            is cut short instead), so showing it moves nothing else. %>
+        <div class="<%= class_names("flex items-center gap-x-3 gap-y-2 min-h-6 mt-1 text-xs @md:text-sm text-secondary", custom ? "flex-wrap" : "whitespace-nowrap") %>">
+          <% if custom %>
+            <%= form_with url: reports_path, method: :get, data: { controller: "auto-submit-form" }, class: "flex flex-wrap items-center gap-2" do |f| %>
+              <%= f.hidden_field :period_type, value: :custom %>
+              <%= f.date_field :start_date,
+                               value: @start_date.strftime("%Y-%m-%d"),
+                               data: { auto_submit_form_target: "auto" },
+                               autocomplete: "off",
+                               aria: { label: t("reports.index.date_range.from") },
+                               class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
+              <span aria-hidden="true">–</span>
+              <%= f.date_field :end_date,
+                               value: @end_date.strftime("%Y-%m-%d"),
+                               data: { auto_submit_form_target: "auto" },
+                               autocomplete: "off",
+                               aria: { label: t("reports.index.date_range.to") },
+                               class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
+            <% end %>
+          <% else %>
+            <span class="min-w-0 truncate" data-testid="report-period-range"><%= nav[:range] %></span>
           <% end %>
-        <% else %>
-          <%# Custom Date Range Picker %>
-          <%= form_with url: reports_path, method: :get, data: { controller: "auto-submit-form" }, class: "flex flex-wrap items-center gap-2" do |f| %>
-            <%= f.hidden_field :period_type, value: :custom %>
-            <%= f.date_field :start_date,
-                             value: @start_date.strftime("%Y-%m-%d"),
-                             data: { auto_submit_form_target: "auto" },
-                             autocomplete: "off",
-                             class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-surface-inset text-primary w-32" %>
-            <span class="text-secondary">–</span>
-            <%= f.date_field :end_date,
-                             value: @end_date.strftime("%Y-%m-%d"),
-                             data: { auto_submit_form_target: "auto" },
-                             autocomplete: "off",
-                             class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-surface-inset text-primary w-32" %>
+
+          <% unless nav[:at_current] %>
+            <%= link_to t("reports.index.period_nav.current"),
+                        reports_path(nav[:current_params]),
+                        class: "shrink-0 text-primary underline underline-offset-2 hover:no-underline rounded-sm focus-ring",
+                        data: { testid: "report-period-current" } %>
           <% end %>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 min-w-0">
+        <%= render DS::SegmentedControl.new(
+          aria_label: t("reports.index.periods.label"),
+          class: "min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] bg-surface-inset @2xl:flex-none",
+          data: { testid: "report-period-types" }
+        ) do |control| %>
+          <% { monthly: "month", quarterly: "quarter", last_6_months: "six_months", ytd: "year" }.each do |period_type, key| %>
+            <% control.with_segment(t("reports.index.periods.#{key}"),
+                                    href: reports_path(period_type: period_type, fiscal_mode: @fiscal_mode),
+                                    active: @period_type == period_type,
+                                    class: "grow @max-2xl:px-1 @2xl:grow-0") %>
+          <% end %>
+          <% control.with_segment(t("reports.index.periods.custom"),
+                                  href: reports_path(period_type: :custom),
+                                  active: custom,
+                                  class: "grow @max-2xl:px-1 @2xl:grow-0") %>
         <% end %>
 
-        <%# Spacer %>
-        <div class="flex-1"></div>
-
-        <%# Print Report Button %>
-        <%= link_to print_reports_path(report_period_params),
-                    target: "_blank",
-                    rel: "noopener",
-                    aria: { label: t("reports.index.print_report") },
-                    class: "inline-flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium text-secondary hover:text-primary transition-colors" do %>
-          <%= icon("printer", size: "sm") %>
-          <span class="hidden sm:inline"><%= t("reports.index.print_report") %></span>
+        <% if fiscal_choice %>
+          <%= render DS::Menu.new(variant: :button, testid: "report-options") do |menu| %>
+            <% menu.with_button(variant: "icon", icon: "more-horizontal", aria: { label: t("reports.index.more_options") }) %>
+            <% menu.with_item(variant: :link,
+                              text: t("reports.index.toggles.calendar"),
+                              href: reports_path(period_type: @period_type, fiscal_mode: "false", period_offset: @period_offset.nonzero?),
+                              selected: @fiscal_mode != "true") %>
+            <% menu.with_item(variant: :link,
+                              text: t("reports.index.toggles.fiscal"),
+                              href: reports_path(period_type: @period_type, fiscal_mode: "true", period_offset: @period_offset.nonzero?),
+                              selected: @fiscal_mode == "true") %>
+            <% menu.with_item(variant: :divider) %>
+            <% menu.with_item(variant: :link,
+                              text: t("reports.index.print_report"),
+                              icon: "printer",
+                              href: print_reports_path(report_period_params),
+                              target: "_blank",
+                              rel: "noopener") %>
+          <% end %>
+        <% else %>
+          <%# With no months to choose, Print is the only option: one icon, not a menu of one. %>
+          <%= render DS::Tooltip.new(text: t("reports.index.print_report")) do |tooltip| %>
+            <% tooltip.with_trigger do %>
+              <%= render DS::Link.new(variant: "icon",
+                                      icon: "printer",
+                                      href: print_reports_path(report_period_params),
+                                      target: "_blank",
+                                      rel: "noopener",
+                                      aria: { label: t("reports.index.print_report") },
+                                      data: { testid: "report-print" }) %>
+            <% end %>
+          <% end %>
         <% end %>
       </div>
     </div>
+
+    <% if flash[:alert].present? %>
+      <div class="mt-4 p-3 rounded-lg bg-destructive-surface text-sm text-destructive" role="alert">
+        <%= flash[:alert] %>
+      </div>
+    <% end %>
   </div>
 <% end %>
 
