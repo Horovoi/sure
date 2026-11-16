@@ -718,17 +718,14 @@ class Goal < ApplicationRecord
   # Presentation
   # ---------------------------------------------------------------------------
 
-  def to_donut_segments_json
-    filled = progress_amount
-    rem = remaining_amount.to_d
-
-    return [ { color: "var(--budget-unused-fill)", amount: 1, id: "unused" } ] if filled.zero? && rem.zero?
-
-    segments = []
-    # A real colour, not a CSS variable: the donut runs it through d3.color
-    segments << { color: color.presence || COLORS.first, amount: filled, id: "saved" } if filled.positive?
-    segments << { color: "var(--budget-unused-fill)", amount: rem, id: "unused" } if rem.positive?
-    segments
+  # One colour rule for the progress ring, on the goal card and the goal page:
+  # green when the goal is where it should be, amber when it needs money, grey
+  # otherwise (no date, paused, archived)
+  def progress_tone
+    case status
+    when :reached, :on_track, :funded then :success
+    else needs_attention? ? :warning : :neutral
+    end
   end
 
   # Data for the projection chart: the 90-day saved line, the target line and the pace
@@ -781,6 +778,21 @@ class Goal < ApplicationRecord
   # { account_id => palette colour } for the linked accounts, stable within a goal so the
   # index card stack and the show page breakdown agree. Sorted by id so it does not
   # shuffle when the accounts load in another order.
+  # Deterministic color pick from the palette so the same string maps to the
+  # same color across processes (Ruby's String#hash is randomized per boot).
+  def self.color_for_name(name)
+    return COLORS.first if name.blank?
+    COLORS[Digest::MD5.hexdigest(name).to_i(16) % COLORS.size]
+  end
+
+  # The one colour an account wears for this goal: in the form, the account
+  # stack on the card and the funding breakdown. A linked account takes its
+  # slot in the goal's map; any other account (the form lists them all) its
+  # name-hashed pick.
+  def account_color(account)
+    account_color_map[account.id] || self.class.color_for_name(account.name)
+  end
+
   def account_color_map
     @account_color_map ||= begin
       palette = COLORS

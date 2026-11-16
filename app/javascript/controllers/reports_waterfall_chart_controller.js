@@ -186,7 +186,9 @@ export default class extends Controller {
           netWorth >= 0 ? "var(--color-success)" : "var(--color-destructive)";
       }
 
-      const fillOpacity = bar.type === "total" ? 0.7 : 1;
+      // The same 0.8 as the income and expense bars of the trends chart; the
+      // total stays a step lighter so it reads as the sum, not one more group
+      const fillOpacity = bar.type === "total" ? 0.7 : 0.8;
 
       g.append("rect")
         .attr("x", x)

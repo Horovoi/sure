@@ -90,6 +90,26 @@ module ApplicationHelper
     end
   end
 
+  # One way to write a span of days, for Reports, Budgets, Plan and the printed
+  # report: "Oct 17 – Nov 16, 2026". The start keeps its year only when the
+  # span crosses into another year, and a single day is written once.
+  # `family_format: true` writes both days in the family's date format instead
+  # ("17.10.2026 – 16.11.2026"), for the budget period line, which follows it.
+  def format_date_range(start_date, end_date, family_format: false)
+    start_date = start_date.to_date
+    end_date = end_date.to_date
+    if family_format
+      return format_date(end_date) if start_date == end_date
+      return t("application.date_range", start: format_date(start_date), end: format_date(end_date))
+    end
+    return I18n.l(end_date, format: "%b %-d, %Y") if start_date == end_date
+
+    start_format = start_date.year == end_date.year ? "%b %-d" : "%b %-d, %Y"
+    t("application.date_range",
+      start: I18n.l(start_date, format: start_format),
+      end: I18n.l(end_date, format: "%b %-d, %Y"))
+  end
+
   def format_money(number_or_money, options = {})
     return nil unless number_or_money
 

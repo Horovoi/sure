@@ -42,7 +42,7 @@ class BudgetsController < ApplicationController
 
   def picker
     year = (params[:year].presence || Date.current.year).to_i
-    render partial: "budgets/picker", locals: { family: Current.family, year: year }
+    render partial: "budgets/picker", locals: { family: Current.family, year: year, selected: params[:selected].presence }
   end
 
   private

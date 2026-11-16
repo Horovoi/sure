@@ -5,12 +5,24 @@ en:
       next_budget: Next budget
       previous_budget: Previous budget
       today: Today
+    picker:
+      next_year: Next year
+      previous_year: Previous year
+      this_month: "(this month)"
     period:
       fiscal_months: Fiscal months
       period: "Period:"
     budget_nav:
       categories: Categories
       setup: Setup
+    edit:
+      title: Set up your budget
+      description: Enter your monthly earnings and planned spending to set up your budget.
+      budgeted_spending: Budgeted spending
+      expected_income: Expected income
+      autosuggest_title: Suggest income and spending
+      autosuggest_description: Based on your transaction history. Check the amounts before you continue.
+      continue: Continue
     show:
       tabs:
         actual: Actual
@@ -31,7 +43,11 @@ en:
         empty: No categories are over budget
         title: Over budget
     budget_category:
-      monthly_median: "%{amount}/m median"
+      monthly_median: "Median %{amount} a month"
+      status:
+        good: On track
+        over: Over budget
+        warning: Near limit
     no_categories:
       description: You have not created or assigned any expense categories to your transactions yet.
       new_category: New category
@@ -56,6 +72,13 @@ en:
       description: Copy the amounts of %{source_name} or start with an empty budget.
       fresh_button: Start fresh
       title: Set up this budget
+    budgeted_summary:
+      budgeted: Budgeted
+      earned: "%{amount} earned"
+      expected_income: Expected income
+      left: "%{amount} left"
+      over: "%{amount} over"
+      spent: "%{amount} spent"
     actuals_summary:
       expenses: Expenses
       income: Income

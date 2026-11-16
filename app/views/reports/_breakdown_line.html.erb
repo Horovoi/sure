@@ -12,9 +12,11 @@
             data: { category: "category-#{item[:key]}" } do %>
   <% if panel_id %>
     <%# With a mouse the chevron shows on the row's hover or focus, so thirteen of
-        them do not line the list; touch screens always show it %>
+        them do not line the list; touch screens always show it. A 24px box
+        centred on the name line, pulled in by 2px a side so it takes the
+        20px column and line without moving them. %>
     <button type="button"
-            class="group/toggle relative z-10 row-span-2 -m-1 self-start rounded-md p-1 text-subdued transition-opacity hover:text-primary focus-ring pointer-fine:opacity-0 pointer-fine:group-hover/category-row:opacity-100 pointer-fine:focus-visible:opacity-100 pointer-fine:aria-expanded:opacity-100"
+            class="group/toggle relative z-10 row-start-1 -m-0.5 inline-flex h-6 w-6 items-center justify-center self-center rounded-md text-subdued transition-opacity hover:text-primary focus-ring pointer-fine:opacity-0 pointer-fine:group-hover/category-row:opacity-100 pointer-fine:focus-visible:opacity-100 pointer-fine:aria-expanded:opacity-100"
             aria-expanded="false"
             aria-controls="<%= panel_id %>"
             aria-label="<%= t("reports.transactions_breakdown.column.details", category: item[:name]) %>"

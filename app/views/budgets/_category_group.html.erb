@@ -1,7 +1,7 @@
 <%# locals: (budget:, group:, parent_visible:, over_budget_mode: false) %>
 
 <% if parent_visible %>
-  <div class="py-2">
+  <div class="py-1">
     <%= render "budget_categories/budget_category",
           budget_category: group.budget_category,
           show_budget_meta: (over_budget_mode ? group.budget_category.over_budget_with_budget? : true) %>
@@ -10,8 +10,10 @@
 
 <% group.budget_subcategories.each do |budget_subcategory| %>
   <% if parent_visible %>
-    <div class="py-2 w-full flex items-start">
-      <div class="ml-8 pt-4 flex items-center justify-center text-subdued">
+    <%# A phone has no room for the indent arrow: a subcategory steps in by
+        12px instead, one level, not two %>
+    <div class="py-1 w-full flex items-start pl-3 md:pl-0">
+      <div class="hidden md:flex ml-8 pt-4 items-center justify-center text-subdued" aria-hidden="true">
         <%= icon "corner-down-right" %>
       </div>
       <%= render "budget_categories/budget_category",
@@ -19,7 +21,7 @@
             show_budget_meta: (over_budget_mode ? budget_subcategory.over_budget_with_budget? : true) %>
     </div>
   <% else %>
-    <div class="py-2">
+    <div class="py-1">
       <%= render "budget_categories/budget_category",
             budget_category: budget_subcategory,
             show_budget_meta: (over_budget_mode ? budget_subcategory.over_budget_with_budget? : true) %>
@@ -30,12 +32,12 @@
 <%# Parent spending that no subcategory accounts for. It belongs to the parent, so it shows only under the parent row. %>
 <% other_spending = parent_visible ? group.other_spending : 0 %>
 <% if other_spending > 0 %>
-  <div class="py-2 w-full flex items-start" data-testid="budget-other-category">
-    <div class="ml-8 pt-4 flex items-center justify-center text-subdued">
+  <div class="py-1 w-full flex items-start pl-3 md:pl-0" data-testid="budget-other-category">
+    <div class="hidden md:flex ml-8 pt-4 items-center justify-center text-subdued" aria-hidden="true">
       <%= icon "corner-down-right" %>
     </div>
 
-    <div class="flex-1 min-w-0 block px-4 py-2">
+    <div class="flex-1 min-w-0 block px-3 md:px-4 py-2">
       <div class="flex items-center gap-3">
         <div class="h-8 w-8 flex-shrink-0 rounded-full flex justify-center items-center"
              style="background-color: color-mix(in oklab, <%= group.color %> 10%, transparent); color: <%= group.color %>;">

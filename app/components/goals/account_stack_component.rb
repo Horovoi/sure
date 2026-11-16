@@ -1,8 +1,8 @@
 class Goals::AccountStackComponent < ApplicationComponent
-  def initialize(accounts:, max: 3, color_map: nil)
+  def initialize(accounts:, goal: nil, max: 3)
     @accounts = accounts
+    @goal = goal
     @max = max
-    @color_map = color_map || {}
   end
 
   def shown
@@ -13,15 +13,9 @@ class Goals::AccountStackComponent < ApplicationComponent
     (@accounts.size - @max).clamp(0..)
   end
 
-  def initial_for(account)
-    account.name.to_s.strip.first&.upcase || "?"
-  end
-
-  # Color for this account, sourced from the per-goal color map when the
-  # caller provided one (so the stack on the index card matches the funding
-  # widget on the show page). Falls back to the name-hashed palette pick
-  # for backward compatibility with any caller that didn't pass `color_map:`.
+  # Goal#account_color, so the stack on the card matches the form and the
+  # funding breakdown on the show page
   def color_for(account)
-    @color_map[account.id] || Goals::AvatarComponent.color_for(account.name)
+    @goal ? @goal.account_color(account) : Goal.color_for_name(account.name)
   end
 end

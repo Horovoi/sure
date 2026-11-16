@@ -15,7 +15,7 @@
           <%= icon(budget_category.category.lucide_icon, size: "sm", color: "current") %>
         </span>
       <% else %>
-        <span class="text-sm uppercase" style="color: <%= budget_category.category.color %>">
+        <span class="text-sm" style="color: <%= budget_category.category.color %>">
           <%= budget_category.category.name.first.upcase %>
         </span>
       <% end %>

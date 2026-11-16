@@ -1,13 +1,12 @@
+<%# The account avatars, overlapped. Each sits on an opaque container square
+    with a container-colour ring, so the tints never show through each other. %>
 <span class="inline-flex items-center" aria-hidden="true">
   <% shown.each_with_index do |account, i| %>
-    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full text-inverse text-[9px] font-semibold ring-2 ring-container"
-          style="background-color: <%= color_for(account) %>; <%= "margin-left: -6px;" if i > 0 %>"
-          title="<%= account.name %>">
-      <%= initial_for(account) %>
+    <span class="inline-flex rounded-md bg-container ring-2 ring-container <%= "-ml-1.5" if i > 0 %>" title="<%= account.name %>">
+      <%= render Goals::AvatarComponent.new(name: account.name, color: color_for(account), size: "xs") %>
     </span>
   <% end %>
   <% if extra_count > 0 %>
-    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-inset text-secondary text-[9px] font-semibold ring-2 ring-container"
-          style="margin-left: -6px;">+<%= extra_count %></span>
+    <span class="-ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-md bg-surface-inset text-secondary text-[9px] font-semibold ring-2 ring-container">+<%= extra_count %></span>
   <% end %>
 </span>

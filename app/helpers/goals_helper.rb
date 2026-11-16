@@ -31,6 +31,26 @@ module GoalsHelper
     other_goal_rows(account, pooled, current_goal).any? { |row| row[:allocated_amount].nil? }
   end
 
+  # The goal dialogs' header (DS::Dialog's own classes plus sticky): it stays
+  # at the top of the dialog while the long form scrolls under it. The
+  # negative margin and the padding cover the dialog's top padding, so no
+  # field shows above the title.
+  def goal_dialog_header_classes
+    "px-4 flex flex-col gap-2 sticky -top-4 z-10 -mt-4 pt-4 pb-3 bg-container"
+  end
+
+  # What kind of account this is, under its name in the goal form and the
+  # funding breakdown: the subtype ("Savings", "HSA") when it has one, else the
+  # account type ("Credit card"), never blank
+  def goal_account_kind_label(account)
+    if account.subtype.present?
+      t("goals.form.subtypes.#{account.subtype}", default: account.subtype.to_s.titleize)
+    else
+      type = account.accountable_type.to_s
+      t("accounts.types.#{type.underscore}", default: type.titleize)
+    end
+  end
+
   # An account in another currency than the goal names its currency
   def goal_account_label(account, goal)
     account.currency == goal.currency ? account.name : "#{account.name} · #{account.currency}"

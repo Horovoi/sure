@@ -19,9 +19,11 @@
       </div>
     <% end %>
 
-    <%# Per-account detail. avatar / name+type / % / last-30d + last-90d %>
-    <div class="bg-container-inset rounded-xl p-1">
-      <div class="rounded-lg bg-container">
+    <%# Per-account detail. avatar / name+type / % / last-30d + last-90d.
+        Several rows sit in an inset frame; one row is a single inset tile,
+        not a frame around a card in the card. %>
+    <div class="<%= rows.size > 1 ? "bg-container-inset rounded-xl p-1" : "" %>" data-testid="goal-funding-rows">
+      <div class="<%= rows.size > 1 ? "rounded-lg bg-container shadow-border-xs" : "rounded-lg bg-container-inset" %>">
         <% rows.each_with_index do |row, idx| %>
           <% account = row[:account] %>
           <% color = color_for(account) %>

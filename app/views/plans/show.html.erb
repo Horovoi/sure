@@ -2,12 +2,12 @@
     pages; each section here links into them. %>
 <div class="@container space-y-8 pb-6 lg:pb-12">
   <header>
-    <h1 class="text-2xl font-semibold text-primary"><%= t(".title") %></h1>
+    <h1 class="text-2xl font-medium text-primary"><%= t(".title") %></h1>
     <p class="text-sm text-secondary mt-1"><%= t(".subtitle") %></p>
   </header>
 
   <section aria-labelledby="plan_budget_heading" data-testid="plan-budget">
-    <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-3">
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-3">
       <div class="min-w-0">
         <h2 id="plan_budget_heading" class="text-lg font-medium text-primary">
           <%= t(".budget.heading") %>
@@ -21,7 +21,6 @@
         <%= render DS::Link.new(
           text: t(".budget.open"),
           variant: "outline",
-          size: "sm",
           icon: "chevron-right",
           icon_position: :right,
           href: budget_path(@budget)
@@ -40,7 +39,7 @@
   </section>
 
   <section aria-labelledby="plan_goals_heading" data-testid="plan-goals">
-    <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-3">
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-3">
       <h2 id="plan_goals_heading" class="text-lg font-medium text-primary">
         <%= t(".goals.heading") %>
         <% if @goals.any? %>
@@ -54,8 +53,7 @@
             <%= render DS::Link.new(
               text: t("goals.index.new_goal"),
               variant: "outline",
-              size: "sm",
-              icon: "plus",
+                  icon: "plus",
               href: new_goal_path(return_to: plan_path),
               frame: :modal
             ) %>
@@ -63,8 +61,7 @@
           <%= render DS::Link.new(
             text: t(".goals.all"),
             variant: "outline",
-            size: "sm",
-            icon: "chevron-right",
+              icon: "chevron-right",
             icon_position: :right,
             href: goals_path
           ) %>

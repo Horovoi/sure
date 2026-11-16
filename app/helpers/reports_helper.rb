@@ -213,9 +213,7 @@ module ReportsHelper
   # The rest of the key, for the info tooltip: which days normal comes from and
   # what a grey change means (near normal, or too small to matter)
   def breakdown_normal_details(comparison)
-    range = t("reports.index.period_nav.range",
-              start: l(comparison.baseline_period.start_date, format: "%b %-d, %Y"),
-              end: l(comparison.baseline_period.end_date, format: "%b %-d, %Y"))
+    range = format_date_range(comparison.baseline_period.start_date, comparison.baseline_period.end_date)
     t("reports.transactions_breakdown.vs_normal.key_details",
       range: range,
       band: number_to_percentage(SPENDING_RATIO_BUCKETS.find { |bucket| bucket[:key] == "normal" }[:upper] * 100, precision: 0),

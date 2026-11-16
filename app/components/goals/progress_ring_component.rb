@@ -1,4 +1,11 @@
+# The goal page's ring: DS::ProgressRing at 180px with the saved share and its
+# label in the middle. The card's 64px ring is the same primitive, with the same
+# colour rule (Goal#progress_tone) and the same track.
 class Goals::ProgressRingComponent < ApplicationComponent
+  # The unfilled remainder: --color-progress-track (gray-200 light, gray-700
+  # dark), with the same values inline until the token is in the build
+  TRACK = "var(--color-progress-track, light-dark(var(--color-gray-200), var(--color-gray-700)))".freeze
+
   def initialize(goal:, size: 180)
     @goal = goal
     @size = size
@@ -40,12 +47,11 @@ class Goals::ProgressRingComponent < ApplicationComponent
     goal.remaining_amount_money.format
   end
 
-  def percent_text_class
-    case goal.status
-    # `funded` is a reserve sitting at its floor — the same "nothing to do
-    # here" as a one-off that reached its target, and it should read as such.
-    when :reached, :funded then "text-success"
-    else "text-primary"
-    end
+  def tone
+    goal.progress_tone
+  end
+
+  def stroke_width
+    [ (size / 18.0).round, 6 ].max
   end
 end

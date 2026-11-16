@@ -49,4 +49,16 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_equal "£0.00", totals_by_currency(collection: entries, money_method: :amount_money)
     assert_equal "£0.00", totals_by_currency(collection: entries, money_method: :amount_money, negate: true)
   end
+
+  test "#format_date_range writes one span of days with an en dash" do
+    assert_equal "Oct 17 – Nov 16, 2026", format_date_range(Date.new(2026, 10, 17), Date.new(2026, 11, 16))
+    assert_equal "Dec 17, 2025 – Jan 16, 2026", format_date_range(Date.new(2025, 12, 17), Date.new(2026, 1, 16))
+    assert_equal "Nov 3, 2026", format_date_range(Date.new(2026, 11, 3), Date.new(2026, 11, 3))
+  end
+
+  test "#format_date_range can follow the family's date format" do
+    Current.stubs(:family).returns(families(:dylan_family).tap { |f| f.date_format = "%d.%m.%Y" })
+
+    assert_equal "01.11.2026 – 30.11.2026", format_date_range(Date.new(2026, 11, 1), Date.new(2026, 11, 30), family_format: true)
+  end
 end

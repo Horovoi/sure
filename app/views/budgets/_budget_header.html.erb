@@ -15,14 +15,15 @@
     ) %>
   </div>
 
-  <%= render DS::Popover.new(variant: "button") do |popover| %>
-    <% popover.with_button class: "flex items-center gap-1 hover:bg-surface-hover cursor-pointer rounded-md p-2"  do %>
-      <span class="text-primary font-medium text-base md:text-lg"><%= budget.name %></span>
-      <%= icon("chevron-down") %>
+  <%# A md control: the trigger stands at the 36px height of the arrows beside it %>
+  <%= render DS::Popover.new(variant: "button", placement: "bottom-start", offset: 4, testid: "budget-month-picker") do |popover| %>
+    <% popover.with_button class: "flex h-9 items-center gap-1 rounded-lg px-2 cursor-pointer hover:bg-surface-hover focus-ring" do %>
+      <span class="text-primary font-medium text-base md:text-lg whitespace-nowrap"><%= budget.name %></span>
+      <%= icon("chevron-down", size: "sm") %>
     <% end %>
 
     <% popover.with_custom_content do %>
-      <%= render "budgets/picker", family: Current.family, year: budget.start_date.year %>
+      <%= render "budgets/picker", family: Current.family, year: budget.start_date.year, selected: budget.to_param %>
     <% end %>
   <% end %>
 

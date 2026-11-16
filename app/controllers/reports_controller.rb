@@ -400,9 +400,7 @@ class ReportsController < ApplicationController
       when :ytd
         current ? t("reports.index.period_nav.label.year_to_date", year: year) : year.to_s
       else
-        t("reports.index.period_nav.label.custom",
-          start: I18n.l(start_date, format: "%b %-d, %Y"),
-          end: I18n.l(end_date, format: "%b %-d, %Y"))
+        helpers.format_date_range(start_date, end_date)
       end
     end
 
@@ -410,10 +408,7 @@ class ReportsController < ApplicationController
     # keeps its year only when the period crosses a new year. A fiscal period
     # says so, because its dates do not follow the calendar.
     def period_range_text
-      start_format = @start_date.year == @end_date.year ? "%b %-d" : "%b %-d, %Y"
-      range = t("reports.index.period_nav.range",
-        start: I18n.l(@start_date, format: start_format),
-        end: I18n.l(@end_date, format: "%b %-d, %Y"))
+      range = helpers.format_date_range(@start_date, @end_date)
       return range unless use_fiscal_periods? && @period_type != :custom
 
       t("reports.index.period_nav.fiscal_range.#{@period_type}", range: range)

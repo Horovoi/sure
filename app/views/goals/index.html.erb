@@ -4,7 +4,7 @@
     column and crushed the cards. %>
 <div class="@container space-y-8 pb-6 lg:pb-12">
   <header>
-    <h1 class="text-2xl font-semibold text-primary"><%= t(".title") %></h1>
+    <h1 class="text-2xl font-medium text-primary"><%= t(".title") %></h1>
     <p class="text-sm text-secondary mt-1"><%= t(".subtitle") %></p>
   </header>
 
@@ -12,81 +12,62 @@
     <%= render "empty_state", linkable_account_count: @linkable_account_count %>
   <% else %>
     <%# KPI strip. Contributed last 30d (with prior-30d comparison) / Needs / On track %>
-    <section class="grid grid-cols-1 @3xl:grid-cols-3 gap-3">
-      <div class="bg-container rounded-xl shadow-border-xs px-5 py-5">
-        <p class="text-[11px] font-medium text-secondary"><%= t(".kpi.contributed_label") %></p>
-        <p class="text-3xl font-medium text-primary tabular-nums mt-2 privacy-sensitive">
-          <%= @kpi[:velocity_30d_sign] %><%= @kpi[:velocity_30d_money].format %>
-        </p>
-        <% if @kpi[:velocity_direction] == :flat %>
-          <p class="text-xs text-secondary mt-1 tabular-nums">
-            <% if @kpi[:velocity_prior_30d_money].zero? && @kpi[:velocity_30d_money].zero? %>
-              <%= t(".kpi.velocity_delta_zero_base") %>
-            <% else %>
-              <%= t(".kpi.velocity_delta_flat") %>
-            <% end %>
-          </p>
-        <% elsif @kpi[:velocity_zero_base] %>
-          <p class="text-xs text-success mt-1 tabular-nums"><%= t(".kpi.velocity_delta_zero_base") %></p>
-        <% elsif @kpi[:velocity_delta_percent].nil? %>
-          <p class="text-xs <%= @kpi[:velocity_direction] == :up ? "text-success" : "text-destructive" %> mt-1">
-            <%= t(".kpi.velocity_delta_#{@kpi[:velocity_direction]}_no_percent") %>
-          </p>
-        <% else %>
-          <p class="text-xs <%= @kpi[:velocity_direction] == :up ? "text-success" : "text-destructive" %> mt-1 tabular-nums">
-            <%= t(".kpi.velocity_delta_#{@kpi[:velocity_direction]}", percent: @kpi[:velocity_delta_percent].abs) %>
-          </p>
-        <% end %>
-      </div>
+    <%
+      contributed_sub = if @kpi[:velocity_direction] == :flat
+        if @kpi[:velocity_prior_30d_money].zero? && @kpi[:velocity_30d_money].zero?
+          t(".kpi.velocity_delta_zero_base")
+        else
+          t(".kpi.velocity_delta_flat")
+        end
+      elsif @kpi[:velocity_zero_base]
+        t(".kpi.velocity_delta_zero_base")
+      elsif @kpi[:velocity_delta_percent].nil?
+        t(".kpi.velocity_delta_#{@kpi[:velocity_direction]}_no_percent")
+      else
+        t(".kpi.velocity_delta_#{@kpi[:velocity_direction]}", percent: @kpi[:velocity_delta_percent].abs)
+      end
+      contributed_tone = if @kpi[:velocity_direction] == :flat
+        "text-secondary"
+      elsif @kpi[:velocity_zero_base] || @kpi[:velocity_direction] == :up
+        "text-success"
+      else
+        "text-destructive"
+      end
 
-      <div class="bg-container rounded-xl shadow-border-xs px-5 py-5">
-        <p class="text-[11px] font-medium text-secondary"><%= t(".kpi.needs_this_month_label") %></p>
-        <p class="text-3xl font-medium text-primary tabular-nums mt-2 privacy-sensitive"><%= @kpi[:needs_this_month_money].format %></p>
-        <p class="text-xs text-secondary mt-1">
-          <% if @kpi[:behind_count].zero? %>
-            <%= t(".kpi.needs_this_month_zero_sub") %>
-          <% else %>
-            <%= t(".kpi.needs_this_month_sub", count: @kpi[:behind_count]) %>
-          <% end %>
-        </p>
-      </div>
-
-      <div class="bg-container rounded-xl shadow-border-xs px-5 py-5">
-        <p class="text-[11px] font-medium text-secondary"><%= t(".kpi.on_track_label") %></p>
-        <% if @kpi[:tracked_total].zero? && @kpi[:reached_count].positive? %>
-          <%# All active goals already hit their target — fraction would
-              read "0 of 0" or paper over success. Swap to a celebratory
-              empty state instead. %>
-          <p class="text-3xl font-medium text-primary mt-2">
-            <%= t(".kpi.on_track_all_caught_up") %>
-          </p>
-          <p class="text-xs text-secondary mt-1">
-            <%= t(".kpi.on_track_sub_parts.reached", count: @kpi[:reached_count]) %>
-          </p>
-        <% else %>
-          <p class="text-3xl font-medium text-primary tabular-nums mt-2">
-            <%= t(".kpi.on_track_value", on_track: @kpi[:on_track_count], total: @kpi[:tracked_total]) %>
-          </p>
-          <p class="text-xs text-secondary mt-1">
-            <%
-              # Reached goals are intentionally absent from the subline when
-              # the fraction is calculable. They no longer count toward pace
-              # tracking, and surfacing "N reached" next to "X of Y" muddied
-              # the message (the fraction is a needle, "N reached" is a
-              # trophy. different signals).
-              parts = []
-              parts << t(".kpi.on_track_sub_parts.behind", count: @kpi[:behind_count]) if @kpi[:behind_count].positive?
-              parts << t(".kpi.on_track_sub_parts.no_date", count: @kpi[:no_date_count]) if @kpi[:no_date_count].positive?
-              parts << t(".kpi.on_track_sub_parts.paused", count: @kpi[:paused_count]) if @kpi[:paused_count].positive?
-            %>
-            <% if parts.any? %>
-              <%= parts.join(" · ") %>
-            <% else %>
-              <%= t(".kpi.on_track_sub_all_good") %>
-            <% end %>
-          </p>
-        <% end %>
-      </div>
+      on_track_sub = if @kpi[:tracked_total].zero? && @kpi[:reached_count].positive?
+        t(".kpi.on_track_sub_parts.reached", count: @kpi[:reached_count])
+      else
+        # Reached goals are intentionally absent from the subline when the
+        # fraction is calculable. They no longer count toward pace tracking,
+        # and "N reached" next to "X of Y" muddied the message.
+        parts = []
+        parts << t(".kpi.on_track_sub_parts.behind", count: @kpi[:behind_count]) if @kpi[:behind_count].positive?
+        parts << t(".kpi.on_track_sub_parts.no_date", count: @kpi[:no_date_count]) if @kpi[:no_date_count].positive?
+        parts << t(".kpi.on_track_sub_parts.paused", count: @kpi[:paused_count]) if @kpi[:paused_count].positive?
+        parts.any? ? parts.join(" · ") : t(".kpi.on_track_sub_all_good")
+      end
+      # All active goals already hit their target: "0 of 0" would paper over success
+      on_track_value = if @kpi[:tracked_total].zero? && @kpi[:reached_count].positive?
+        t(".kpi.on_track_all_caught_up")
+      else
+        t(".kpi.on_track_value", on_track: @kpi[:on_track_count], total: @kpi[:tracked_total])
+      end
+    %>
+    <section class="grid grid-cols-1 @3xl:grid-cols-3 gap-4">
+      <%= render "reports/kpi_tile",
+            label: t(".kpi.contributed_label"),
+            value: "#{@kpi[:velocity_30d_sign]}#{@kpi[:velocity_30d_money].format}",
+            sub: tag.span(contributed_sub, class: "tabular-nums"),
+            sub_class: contributed_tone %>
+      <%= render "reports/kpi_tile",
+            label: t(".kpi.needs_this_month_label"),
+            value: @kpi[:needs_this_month_money].format,
+            sub: @kpi[:behind_count].zero? ? t(".kpi.needs_this_month_zero_sub") : t(".kpi.needs_this_month_sub", count: @kpi[:behind_count]) %>
+      <%= render "reports/kpi_tile",
+            label: t(".kpi.on_track_label"),
+            value: on_track_value,
+            sensitive: false,
+            sub: on_track_sub %>
     </section>
 
     <% if @any_pending_pledge %>
@@ -99,17 +80,6 @@
              data-goals-filter-empty-filter-value="<%= t(".search.empty_with_filter") %>"
              data-goals-filter-empty-both-value="<%= t(".search.empty_with_both", query: "__QUERY__") %>"
              data-goals-filter-empty-default-value="<%= t(".search.empty") %>">
-      <% if @linkable_account_count > 0 %>
-        <div class="flex items-center justify-end mb-4">
-          <%= render DS::Link.new(
-            text: t(".new_goal"),
-            variant: "primary",
-            href: new_goal_path,
-            icon: "plus",
-            frame: :modal
-          ) %>
-        </div>
-      <% end %>
 
       <% if @show_search %>
         <div class="flex flex-wrap items-center gap-2.5 mb-4">
@@ -141,12 +111,27 @@
         </div>
       <% end %>
 
-      <% if @grid_goals.any? %>
-        <div class="flex items-center gap-1.5 mb-4 text-[11px] font-medium text-secondary">
+      <%# The heading row carries New goal, as the goals section on Plan does %>
+      <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
+        <h2 class="flex items-center gap-1.5 text-xs font-medium text-secondary">
           <span><%= t(".ongoing_section.heading") %></span>
-          <span class="text-subdued" aria-hidden="true">·</span>
-          <span class="tabular-nums" data-goals-filter-target="count"><%= @grid_goals.size %></span>
-        </div>
+          <% if @grid_goals.any? %>
+            <span class="text-subdued" aria-hidden="true">·</span>
+            <span class="tabular-nums" data-goals-filter-target="count"><%= @grid_goals.size %></span>
+          <% end %>
+        </h2>
+        <% if @linkable_account_count > 0 %>
+          <%= render DS::Link.new(
+            text: t(".new_goal"),
+            variant: "outline",
+            href: new_goal_path,
+            icon: "plus",
+            frame: :modal
+          ) %>
+        <% end %>
+      </div>
+
+      <% if @grid_goals.any? %>
         <div class="grid grid-cols-1 @2xl:grid-cols-2 @5xl:grid-cols-3 gap-3.5" data-goals-filter-target="grid">
           <% @grid_goals.each do |goal| %>
             <%= render Goals::CardComponent.new(goal: goal) %>
@@ -180,7 +165,7 @@
       <section>
         <%= render DS::Disclosure.new(variant: :inline) do |disclosure| %>
           <% disclosure.with_summary_content do %>
-            <span class="inline-flex items-center gap-1.5 mb-4 text-[11px] font-medium text-secondary">
+            <span class="inline-flex items-center gap-1.5 mb-4 text-xs font-medium text-secondary">
               <span class="text-subdued"><%= disclosure_chevron %></span>
               <span><%= t(".archived_section.heading") %></span>
               <span class="text-subdued" aria-hidden="true">·</span>
