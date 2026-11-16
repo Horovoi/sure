@@ -63,7 +63,7 @@
           <%= render DS::PeriodArrow.new(
             direction: :previous,
             label: t("reports.index.period_nav.previous"),
-            href: reports_path(nav[:previous_params]),
+            href: nav[:previous_params] && reports_path(nav[:previous_params]),
             hotkey: "ArrowLeft",
             shortcut_hint: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.previous"), key: "←")
           ) %>

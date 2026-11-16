@@ -9,6 +9,11 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     @family = @user.family
   end
 
+  # A transaction years back, so every period type has earlier history to step into
+  def with_old_history
+    create_transaction(account: accounts(:depository), date: 3.years.ago.to_date, amount: 10, name: "Old history")
+  end
+
   test "index renders successfully" do
     get reports_path
     assert_response :ok
@@ -691,6 +696,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a custom range steps by its own length" do
+    with_old_history
     assert_report_period [ Date.new(2026, 2, 19), Date.new(2026, 2, 28) ],
       period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10", period_offset: -1
     assert_report_period [ Date.new(2026, 2, 9), Date.new(2026, 2, 18) ],
@@ -706,6 +712,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   # The next arrow used to be a disabled <button> that looked active and
   # then refused the click; Current used to vanish and shift the row.
   test "on the current period the next arrow is greyed out and Current keeps an invisible slot" do
+    with_old_history
     get reports_path(period_type: :monthly)
     assert_response :ok
 
@@ -720,6 +727,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
 
   test "every period type and mode greys out the next arrow on its current period" do
     @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+    with_old_history
 
     %i[monthly quarterly last_6_months ytd].product(%w[true false]).each do |period_type, fiscal_mode|
       get reports_path(period_type: period_type, fiscal_mode: fiscal_mode)
@@ -732,6 +740,32 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     end
 
     get reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10")
+    assert_select "span[aria-disabled='true'][data-period-arrow='next']", 1
+  end
+
+  test "the back arrow greys out on the period that holds the first transaction" do
+    Entry.where(account_id: @family.accounts.select(:id)).destroy_all
+    first = Date.current.beginning_of_month - 2.months + 4.days
+    create_transaction(account: accounts(:depository), date: first, amount: 10, name: "First ever")
+
+    get reports_path(period_type: :monthly, fiscal_mode: "false", period_offset: -2)
+    assert_select "span[aria-disabled='true'][data-period-arrow='previous']", 1
+    assert_select "a[data-hotkey='ArrowLeft']", count: 0
+    assert_select "a[data-period-arrow='next']", 1
+
+    get reports_path(period_type: :monthly, fiscal_mode: "false", period_offset: -1)
+    assert_select "a[data-period-arrow='previous'][href=?]", reports_path(period_type: :monthly, fiscal_mode: "false", period_offset: -2)
+
+    # Valuations and opening balances do not count as the first activity
+    accounts(:depository).entries.create!(date: 3.years.ago.to_date, amount: 100, currency: "USD", name: "Old valuation", entryable: Valuation.new)
+    get reports_path(period_type: :monthly, fiscal_mode: "false", period_offset: -2)
+    assert_select "span[aria-disabled='true'][data-period-arrow='previous']", 1
+  end
+
+  test "with no transactions at all the back arrow is greyed out" do
+    Entry.where(account_id: @family.accounts.select(:id)).destroy_all
+    get reports_path(period_type: :monthly)
+    assert_select "span[aria-disabled='true'][data-period-arrow='previous']", 1
     assert_select "span[aria-disabled='true'][data-period-arrow='next']", 1
   end
 
@@ -764,6 +798,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a past period links forward and back to the current period" do
+    with_old_history
     travel_to Date.new(2026, 3, 20) do
       @family.update!(use_fiscal_months: false)
       get reports_path(period_type: :quarterly, period_offset: -2)
@@ -793,6 +828,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "period arrows carry their keyboard shortcuts" do
+    with_old_history
     get reports_path(period_type: :monthly, period_offset: -2)
     assert_response :ok
 

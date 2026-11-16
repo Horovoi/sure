@@ -347,11 +347,19 @@ class ReportsController < ApplicationController
       {
         label: period_label(@start_date, @end_date, current: at_current),
         label_samples: period_label_samples,
-        previous_params: period_nav_params(period_offset - 1),
+        previous_params: at_earliest_period? ? nil : period_nav_params(period_offset - 1),
         next_params: at_current ? nil : period_nav_params(period_offset + 1),
         current_params: period_nav_params(0),
         at_current: at_current
       }
+    end
+
+    # The shown period already holds the family's first transaction or trade (or there is
+    # none yet), so an earlier period would be empty: the back arrow greys out here, the
+    # same way the next arrow does on the current period.
+    def at_earliest_period?
+      first_activity = Current.family.earliest_activity_date
+      first_activity.nil? || @start_date <= first_activity
     end
 
     def period_nav_params(offset)
