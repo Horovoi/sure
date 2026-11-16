@@ -92,6 +92,16 @@ class MonobankItemsControllerTest < ActionDispatch::IntegrationTest
     assert_select "select[name='setup[#{@usd.id}][choice]'] option[value='link:#{@visa.id}']", count: 0
   end
 
+  test "setup says that a jar's target becomes a goal" do
+    create_monobank_product(account_id: "jar-2", kind: "jar", title: "Ноутбук", goal: 4_000_000)
+
+    get setup_accounts_monobank_item_url(@item)
+
+    assert_response :success
+    assert_select "fieldset", text: /Ноутбук.*becomes a goal funded by this account/m
+    assert_select "fieldset", text: /Відпустка.*becomes a goal/m, count: 0
+  end
+
   test "complete setup links Mono Visa, creates the rest and remembers a skip" do
     post complete_account_setup_monobank_item_url(@item), params: { setup: {
       @card.id => { choice: "link:#{@visa.id}", cutover_date: "2026-11-14" },

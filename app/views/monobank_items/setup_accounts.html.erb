@@ -34,6 +34,10 @@
                              class: "form-field__input" %>
             </div>
 
+            <% if (jar_target = monobank_account.jar_target) %>
+              <p class="text-xs text-secondary"><%= t(".jar_goal_hint", goal: format_money(Money.new(jar_target, monobank_account.currency))) %></p>
+            <% end %>
+
             <% if candidates.any? %>
               <div class="form-field">
                 <%= label_tag "#{field}[cutover_date]", t(".cutover_label"), class: "form-field__label", for: "setup_#{monobank_account.id}_cutover" %>

@@ -22,7 +22,7 @@ en:
       steps_title: "To connect monobank:"
       step_1_html: Open %{link}, sign in with the QR code in the monobank app and copy your personal token.
       step_2: Paste the token below and connect.
-      step_3: Set up accounts to link each card, currency account, FOP account and jar to a Sure account.
+      step_3: Set up accounts to link each card, currency account, FOP account and jar to a Sure account. A jar with a target also becomes a goal.
       rate_limit_notice: monobank answers one request per minute. The first import of a year of history takes about an hour per product; new transactions arrive every hour.
       disconnect: Disconnect
       disconnect_title: Disconnect %{name}?
@@ -61,6 +61,7 @@ en:
       cutover_label: Take over from
       cutover_text: Leave it empty to start the day after the chosen account's latest entry (for %{account}, %{date}); earlier history stays as you entered it.
       cutover_hint: Leave it empty to start the day after the chosen account's latest entry; earlier history stays as you entered it. Pick another day here if you want.
+      jar_goal_hint: "Its target of %{goal} becomes a goal funded by this account."
       cancel: Cancel
       submit: Save
     complete_account_setup:
