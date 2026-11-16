@@ -256,7 +256,8 @@ module Entry::Splittable
         notes: part[:notes],
         excluded: part.fetch(:excluded, false),
         user_modified: true,
-        entryable: txn
+        entryable: txn,
+        created_at: next_split_child_time
       )
       child.split_writing = true
       child.save!
@@ -267,6 +268,15 @@ module Entry::Splittable
       child
     ensure
       child&.split_writing = false
+    end
+
+    # Parts are listed by created_at, in the order the editor gave them. Each new part gets
+    # a time after the latest part, so that order holds even when the clock does not move
+    # between two inserts (a frozen test clock, or a coarse system clock).
+    def next_split_child_time
+      now = Time.current
+      latest = Entry.where(parent_entry_id: id).maximum(:created_at)
+      latest && latest >= now ? latest + Rational(1, 1_000_000) : now
     end
 
     def update_split_child!(child, part)

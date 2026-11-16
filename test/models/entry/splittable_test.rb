@@ -131,6 +131,22 @@ class Entry::SplittableTest < ActiveSupport::TestCase
     assert_equal @food, children.last.transaction.category
   end
 
+  test "parts keep the editor's order even when the clock does not move" do
+    travel_to Time.zone.parse("2026-11-16 12:00:00 UTC") do
+      first, second, third = @entry.split!([ { name: "C", amount: 10 }, { name: "A", amount: 60 }, { name: "B", amount: 30 } ])
+      assert_equal %w[C A B], @entry.reload.child_entries.map(&:name)
+
+      @entry.resplit!([
+        { id: third.id, name: "B", amount: 30 },
+        { id: first.id, name: "C", amount: 10 },
+        { name: "D", amount: 5 },
+        { id: second.id, name: "A", amount: 55 }
+      ])
+      # Kept parts stay where they were, a new part comes after them
+      assert_equal %w[C A B D], @entry.reload.child_entries.map(&:name)
+    end
+  end
+
   test "unsplit removes the parts and puts the parent back" do
     @entry.split!([ { amount: 70 }, { amount: 30 } ])
     @entry.reload.unsplit!
