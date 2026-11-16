@@ -1,0 +1,8 @@
+<%# The blur for SVG content in privacy mode (chart labels drawn by D3). WebKit (Safari)
+    ignores CSS blur() on SVG elements but applies an SVG filter reference, on <text> and
+    <tspan> alike, so privacy-mode.css points SVG amounts here. %>
+<svg width="0" height="0" class="absolute" aria-hidden="true" focusable="false">
+  <filter id="privacy-blur" x="-20%" y="-60%" width="140%" height="220%">
+    <feGaussianBlur stdDeviation="4" />
+  </filter>
+</svg>

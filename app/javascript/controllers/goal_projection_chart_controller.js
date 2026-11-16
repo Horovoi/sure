@@ -257,6 +257,7 @@ export default class extends Controller {
           .attr("text-anchor", "end")
           .attr("font-size", 12)
           .attr("fill", textSecondary)
+          .attr("class", "privacy-sensitive")
           .text(this._fmtMoneyShort(tickValue, data.currency));
       });
     }
@@ -284,6 +285,7 @@ export default class extends Controller {
         .attr("text-anchor", "end")
         .attr("font-size", 12)
         .attr("fill", textPrimary)
+        .attr("class", "privacy-sensitive")
         .text(this.targetLabelTemplateValue.replace("{amount}", data.target_amount_label));
     }
 
@@ -383,6 +385,7 @@ export default class extends Controller {
             .attr("stroke", containerBg)
             .attr("stroke-width", 4)
             .attr("stroke-linejoin", "round")
+            .attr("class", "privacy-sensitive")
             .text(labelText);
         }
       }

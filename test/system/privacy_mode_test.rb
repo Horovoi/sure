@@ -39,6 +39,19 @@ class PrivacyModeTest < ApplicationSystemTestCase
     assert_not privacy_mode?
   end
 
+  # WebKit (Safari) ignores CSS blur() on SVG, so chart labels drawn by D3 use the
+  # SVG filter every engine applies, on <text> and <tspan> alike
+  test "chart amounts drawn as SVG use the SVG blur filter" do
+    visit root_path
+    page.execute_script("localStorage.setItem('privacyMode', 'true')")
+    visit root_path
+    assert_selector "svg .privacy-sensitive", visible: :all, minimum: 1
+    assert_selector "filter#privacy-blur feGaussianBlur", visible: :all
+
+    filters = evaluate_script("[...document.querySelectorAll('svg .privacy-sensitive')].map((el) => getComputedStyle(el).filter)")
+    assert filters.all? { |filter| filter.include?("#privacy-blur") }, filters.uniq.inspect
+  end
+
   test "a blurred money field stays usable" do
     page.execute_script("localStorage.setItem('privacyMode', 'true')")
     visit new_transaction_path

@@ -23,6 +23,14 @@ html.privacy-mode .privacy-sensitive {
   -webkit-user-select: none;
 }
 
+/* SVG amounts (chart labels drawn by D3): WebKit ignores CSS blur() on SVG
+   elements, so they use the SVG filter in layouts/shared/_privacy_blur_filter,
+   which every engine applies to <text> and <tspan> */
+html.privacy-mode svg .privacy-sensitive,
+html.privacy-mode svg.privacy-sensitive {
+  filter: url(#privacy-blur);
+}
+
 html.privacy-mode .privacy-sensitive:not(.privacy-sensitive-interactive) {
   pointer-events: none;
 }
