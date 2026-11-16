@@ -48,7 +48,7 @@
   </div>
 
   <% unless disabled %>
-    <div class="absolute z-50 p-1.5 w-full min-w-32 rounded-lg shadow-lg shadow-border-xs bg-container mt-1.5 transition duration-150 ease-out -translate-y-1 opacity-0 hidden"
+    <div class="absolute z-50 p-1 w-full min-w-32 rounded-lg shadow-border-lg bg-container mt-1 transition duration-150 ease-out -translate-y-1 opacity-0 hidden"
          data-tag-select-target="menu">
       <div class="flex items-center bg-container border border-secondary rounded-lg mb-1 focus-ring-within transition-shadow">
         <%= render DS::SearchInput.new(
@@ -62,24 +62,31 @@
             ) %>
       </div>
 
-      <div class="flex flex-col gap-1 max-h-64 overflow-auto"
+      <div class="group/list flex flex-col max-h-64 overflow-auto"
            id="<%= menu_id %>"
            role="listbox"
            aria-multiselectable="true"
            tabindex="-1">
+        <%# Shown while no tag row and no create row is visible: before the
+            family has any tags and nothing is typed yet %>
+        <p class="p-2 text-sm text-secondary group-has-[[role=option]:not(.hidden)]/list:hidden group-has-[[data-tag-select-target=createForm].flex]/list:hidden"
+           data-testid="tag-select-empty">
+          <%= helpers.t("ds.tag_select.empty") %>
+        </p>
+
         <% tags.each do |tag| %>
           <% selected = selected_ids.include?(tag.id.to_s) %>
           <%= render partial: "DS/tag_select/option", locals: { tag: tag, selected: selected, view_helpers: helpers } %>
         <% end %>
 
         <button type="button"
-                class="hidden text-primary text-sm cursor-pointer items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-container-inset-hover"
+                class="hidden text-primary text-sm cursor-pointer items-center gap-2 p-2 rounded-md hover:bg-container-hover"
                 data-tag-select-target="createForm"
                 data-action="click->tag-select#createTag">
           <%= helpers.icon("plus") %>
           <span><%= helpers.t("ds.tag_select.create_html", name: tag.span(data: { tag_select_create_name: true })) %></span>
         </button>
-        <p class="hidden px-3 py-1 text-xs text-destructive"
+        <p class="hidden px-2 py-1 text-xs text-destructive"
            data-tag-select-target="createError"
            aria-live="assertive"
            aria-atomic="true"></p>

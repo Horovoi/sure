@@ -4,9 +4,12 @@
 #
 # Two variants:
 #
-# - `:standalone` (default) — top-of-list filter inputs (Preferences
-#   currency search, Settings/Bank Sync provider filter). Bordered
-#   bg-container surface, icon-on-left, full token-backed focus ring.
+# - `:standalone` (default) — top-of-list and toolbar filter inputs
+#   (Preferences currency search, Settings/Bank Sync provider filter, the
+#   transactions search). An md control: 36px and rounded-lg like the md
+#   buttons beside it. Bordered bg-container surface, icon-on-left; the
+#   canonical focus outline sits on the wrapper (.focus-ring-within), so it
+#   follows the field's corners.
 #
 # - `:embedded` — search-inside-a-panel (DS::Select internal search,
 #   splits category filter, any future DS::Popover that hosts a filter).
@@ -35,7 +38,11 @@ class DS::SearchInput < DesignSystemComponent
   end
 
   def container_classes
-    class_names("relative", extra_classes)
+    class_names(
+      "relative",
+      ("rounded-lg focus-ring-within" if variant == :standalone),
+      extra_classes
+    )
   end
 
   def input_classes
@@ -50,14 +57,14 @@ class DS::SearchInput < DesignSystemComponent
       # the browser default so it doesn't compete with the panel's
       # state.
       "bg-container text-primary text-base sm:text-sm placeholder:text-secondary font-normal " \
-        "h-10 pl-10 w-full border-none rounded-lg " \
+        "h-9 pl-10 w-full border-none rounded-lg " \
         "focus:outline-hidden focus:ring-0"
     else
-      # Canonical `.focus-ring` (#2136) — one shared keyboard-focus
-      # indicator across every DS primitive. Replaces the earlier neutral
-      # `outline-gray-900 / theme-dark:outline-white` pair.
-      "block w-full border border-secondary rounded-md py-2.5 pl-10 pr-3 bg-container text-base sm:text-sm " \
-        "focus-ring"
+      # The wrapper draws the canonical outline (.focus-ring-within); the
+      # input drops the forms plugin's ring and focus border so there is one
+      # indicator.
+      "block w-full h-9 border border-secondary rounded-lg py-0 pl-10 pr-3 bg-container text-primary text-base sm:text-sm " \
+        "placeholder:text-subdued focus:outline-none focus:ring-0 focus:border-secondary"
     end
   end
 

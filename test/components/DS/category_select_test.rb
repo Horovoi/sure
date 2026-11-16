@@ -85,6 +85,16 @@ class DS::CategorySelectTest < ViewComponent::TestCase
     assert_no_selector "[data-category-select-target=menu]", visible: :all
   end
 
+  test "the recent group heading is in sentence case and the list is an overlay" do
+    render_select(categories: [ @salary, @bonus ], recent_categories: [ @bonus ])
+
+    assert_selector "[data-category-select-target=recentSection] p.text-xs.font-medium.text-secondary", visible: :all
+    assert_no_selector ".uppercase, .tracking-wide", visible: :all
+    assert_selector "[data-category-select-target=menu].shadow-border-lg.p-1.rounded-lg", visible: :all
+    assert_no_selector "[data-category-select-target=menu].shadow-lg", visible: :all
+    assert_selector "[data-category-select-target=option].rounded-md.p-2", visible: :all
+  end
+
   private
     def render_select(**options)
       with_request_url "/" do

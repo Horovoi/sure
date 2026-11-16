@@ -50,7 +50,7 @@
          <%= "disabled" if disabled %>>
 
   <% unless disabled %>
-    <div class="absolute z-50 p-1.5 w-full min-w-48 rounded-lg shadow-lg bg-container mt-1.5 hidden"
+    <div class="absolute z-50 p-1 w-full min-w-48 rounded-lg shadow-border-lg bg-container mt-1 hidden"
          data-category-select-target="menu"
          data-action="keydown.esc->category-select#escape">
 
@@ -63,18 +63,18 @@
         }
       ) %>
 
-      <div class="flex flex-col gap-1 max-h-64 overflow-auto mt-1"
+      <div class="flex flex-col max-h-64 overflow-auto mt-1"
            id="<%= menu_id %>"
            role="listbox"
            data-category-select-target="list">
 
         <% if recent_categories.any? %>
           <%# Hidden by the controller while a search is typed: the canonical rows are the results then. %>
-          <div class="flex flex-col gap-1"
+          <div class="flex flex-col"
                role="group"
                aria-label="<%= helpers.t("ds.category_select.recent") %>"
                data-category-select-target="recentSection">
-            <p class="px-3 pt-1 text-xs font-medium text-secondary uppercase tracking-wide" aria-hidden="true">
+            <p class="px-2 pt-1 pb-1 text-xs font-medium text-secondary" aria-hidden="true">
               <%= helpers.t("ds.category_select.recent") %>
             </p>
             <% recent_categories.each do |category| %>
@@ -98,7 +98,7 @@
                   data-category-name="<%= Category.uncategorized_name %>"
                   data-category-display-label="<%= Category.uncategorized_name %>"
                   data-action="click->category-select#selectCategory"
-                  class="flex items-center gap-2 w-full px-3 py-1.5 text-sm rounded-lg hover:bg-container-inset-hover <%= "bg-container-inset" if selected_id.blank? %>">
+                  class="flex items-center gap-2 w-full p-2 text-sm rounded-md hover:bg-container-hover <%= "bg-container-inset" if selected_id.blank? %>">
             <span class="check-icon w-4 <%= "invisible" unless selected_id.blank? %>">
               <%= helpers.icon("check") %>
             </span>
@@ -152,18 +152,18 @@
           <span class="hidden" data-category-select-target="createLabel"></span>
         <% end %>
 
-        <p class="hidden px-3 py-1 text-xs text-destructive"
+        <p class="hidden px-2 py-1 text-xs text-destructive"
            role="alert"
            data-category-select-target="createError"></p>
 
-        <p class="hidden px-3 py-1 text-xs text-secondary"
+        <p class="hidden px-2 py-2 text-sm text-secondary"
            data-category-select-target="emptyMessage"><%= helpers.t("ds.category_select.no_matching_categories") %></p>
       </div>
 
       <% if creatable %>
         <%# Shown in place of the list after "Add as a subcategory…": pick a top-level parent. %>
         <%# Only top-level categories can be parents (categories are at most two levels deep). %>
-        <div class="hidden flex-col gap-1 mt-1"
+        <div class="hidden flex-col mt-1"
              data-category-select-target="parentPicker"
              role="group"
              aria-labelledby="<%= parent_label_id %>">
@@ -176,11 +176,11 @@
                   data: { action: "click->category-select#hideParentPicker" }
                 ) %>
             <p id="<%= parent_label_id %>"
-               class="px-3 py-1 text-xs text-secondary"
+               class="px-2 py-1 text-xs text-secondary"
                data-category-select-target="parentPickerLabel"></p>
           </div>
 
-          <div class="flex flex-col gap-1 max-h-64 overflow-auto"
+          <div class="flex flex-col max-h-64 overflow-auto"
                data-category-select-target="parentRows">
             <% parent_options.each do |parent| %>
               <%= render DS::ActionRow.new(

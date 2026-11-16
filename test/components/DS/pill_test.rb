@@ -1,11 +1,12 @@
 require "test_helper"
 
 class DS::PillTest < ViewComponent::TestCase
-  test "marker mode (default) renders uppercase sub-12px chrome with rounded-md" do
+  test "marker mode (default) renders sentence-case sub-12px chrome with rounded-md" do
     render_inline(DS::Pill.new(label: "Beta", tone: :violet))
 
     pill = page.find("span", text: "Beta")
-    assert_includes pill[:class], "uppercase"
+    refute_includes pill[:class], "uppercase"
+    refute_includes pill[:class], "tracking-"
     # Marker keeps sub-12px text via arbitrary value (intentional — see component docs).
     assert_match(/text-\[1[01]px\]/, pill[:class])
     # Marker uses rounded-md (chip shape).

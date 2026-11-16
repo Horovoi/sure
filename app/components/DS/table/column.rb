@@ -34,7 +34,7 @@ class DS::Table::Column < DesignSystemComponent
   # rows use the subdued rule between them.
   def call
     tag.th header, scope: "col", class: class_names(
-      "px-4 py-3 border-b border-divider text-xs uppercase font-medium text-secondary",
+      "px-4 py-3 border-b border-divider text-xs font-medium text-secondary",
       alignment_classes,
       # z-10 so a privacy-blurred amount, which paints in a layer of its own,
       # doesn't show through the header as it scrolls under it.

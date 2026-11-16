@@ -58,6 +58,7 @@ en:
     tag_select:
       create_error: Couldn't create that tag. Please try again.
       create_html: Create "%{name}"
+      empty: No tags yet, type a name to create one
       label: Tags
       none: "(none)"
       save_error: Couldn't save the tags. Please try again.

@@ -1,10 +1,10 @@
 require "test_helper"
 
 class DS::SearchInputTest < ViewComponent::TestCase
-  test "standalone renders a bordered search field with the canonical focus ring" do
+  test "standalone renders an md search field with the canonical focus ring on its wrapper" do
     render_inline(DS::SearchInput.new(name: "q", placeholder: "Search currencies", value: "UAH"))
 
-    assert_selector "div.relative > input[type='search'][name='q'][value='UAH'][autocomplete='off'].focus-ring.border"
+    assert_selector "div.relative.rounded-lg.focus-ring-within > input[type='search'][name='q'][value='UAH'][autocomplete='off'].h-9.rounded-lg.border"
     # The placeholder doubles as the accessible name.
     assert_selector "input[aria-label='Search currencies'][placeholder='Search currencies']"
     assert_selector "div.pointer-events-none svg"

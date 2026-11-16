@@ -252,10 +252,6 @@
   --color-orange-tint-5: --alpha(var(--color-orange-500) / 5%);
   --color-orange-tint-10: --alpha(var(--color-orange-500) / 10%);
 
-  /* Border radius overrides */
-  --border-radius-md: 8px;
-  --border-radius-lg: 10px;
-
   --shadow-xs: 0px 1px 2px 0px --alpha(var(--color-black) / 6%);
   --shadow-sm: 0px 1px 6px 0px --alpha(var(--color-black) / 6%);
   --shadow-md: 0px 4px 8px -2px --alpha(var(--color-black) / 6%);
@@ -275,6 +271,13 @@
   } 
 }
 
+/* The unfilled part of a progress ring or bar (stroke-progress-track,
+   bg-progress-track). Static, so the variable is in the page even when only
+   an SVG attribute or a script reads it. Dark value in @layer base below. */
+@theme static {
+  --color-progress-track: var(--color-gray-200);
+}
+
 /* Specific override for strong tags in prose under dark mode */
 .prose:where([data-theme=dark], [data-theme=dark] *) strong {
   color: theme('colors.white') !important;
@@ -292,6 +295,14 @@
   color: theme(colors.white) !important;
 }
 
+/* DS--menu while the arrow keys rove (data-menu-roving, set by the menu
+   controller): the item under a resting pointer loses its hover fill, so the
+   focused item is the only one highlighted. Outside the layers on purpose, to
+   win over the items' hover:bg-* utilities. */
+[data-menu-roving] [role^="menuitem"]:hover:not(:focus-visible) {
+  background-color: transparent;
+}
+
 @layer base {
   [data-theme="dark"] { 
     --color-success: var(--color-green-500);
@@ -305,11 +316,14 @@
     --color-destructive-subtle: var(--color-red-800);
     --color-toggle-track: var(--color-gray-700);
     --color-nav-indicator: var(--color-white);
+    --color-progress-track: var(--color-gray-700);
 
     --color-surface: var(--color-black);
     --color-surface-hover: var(--color-gray-800);
     --color-surface-inset: var(--color-gray-800);
-    --color-surface-inset-hover: var(--color-gray-800);
+    /* One step up from surface-inset, as in light mode: equal to it, an inset
+       tray (DS::Disclosure) showed no hover */
+    --color-surface-inset-hover: var(--color-gray-700);
     --color-container: var(--color-gray-900);
     --color-container-hover: var(--color-gray-800);
     --color-container-inset: var(--color-gray-800);
@@ -351,11 +365,23 @@
     bar and the mobile bottom nav with env(safe-area-inset-*).
   */
 
-  /* Every <button> gets the canonical keyboard-focus outline (the same
-     recipe as .focus-ring below). The transparent resting outline keeps a
-     transition on the button from fading in through currentColor. */
+  /* Every focusable element gets the canonical keyboard-focus outline (the
+     same recipe as .focus-ring below): buttons, links, summaries, selects,
+     tab stops and checkboxes and radios. The transparent resting outline
+     keeps a transition from fading in through currentColor. A wrapper that
+     focuses a bare input inside it uses .focus-ring-within instead; a text
+     field in .form-field keeps its own halo. */
   button {
     @apply cursor-pointer;
+  }
+
+  button,
+  a,
+  summary,
+  select,
+  [tabindex]:not([tabindex='-1']),
+  input[type='checkbox'],
+  input[type='radio'] {
     outline: 2px solid transparent;
     outline-offset: 0;
 
@@ -364,8 +390,65 @@
     }
   }
 
+  /* The forms plugin rings a focused field in blue. :root lifts these over
+     its selectors, still inside the base layer, so utilities win over both. */
+  :root :is(input:not([type='checkbox'], [type='radio']), textarea, select):focus {
+    --tw-ring-color: var(--color-focus-ring);
+    border-color: var(--color-focus-ring);
+  }
+
+  /* Checkboxes and radios: no plugin ring on every focus (a click showed it
+     too), only the outline above on keyboard focus */
+  :root input:is([type='checkbox'], [type='radio']):focus {
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    outline-offset: 0;
+  }
+
+  :root input:is([type='checkbox'], [type='radio']):focus-visible {
+    outline-color: var(--color-focus-ring);
+  }
+
+  /* No spin buttons on number fields: amounts are typed, and the arrows
+     crowded the field's text */
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* An empty date field (WebKit draws its mm/dd/yyyy placeholder as text)
+     reads like any other placeholder. date_input_empty.js keeps data-empty
+     on every date input. */
+  input[type='date'][data-empty]::-webkit-datetime-edit-text,
+  input[type='date'][data-empty]::-webkit-datetime-edit-day-field,
+  input[type='date'][data-empty]::-webkit-datetime-edit-month-field,
+  input[type='date'][data-empty]::-webkit-datetime-edit-year-field {
+    /* text-subdued; a theme variant cannot follow a pseudo-element */
+    color: var(--color-gray-400);
+  }
+
+  [data-theme='dark'] input[type='date'][data-empty]::-webkit-datetime-edit-text,
+  [data-theme='dark'] input[type='date'][data-empty]::-webkit-datetime-edit-day-field,
+  [data-theme='dark'] input[type='date'][data-empty]::-webkit-datetime-edit-month-field,
+  [data-theme='dark'] input[type='date'][data-empty]::-webkit-datetime-edit-year-field {
+    color: var(--color-gray-500);
+  }
+
   hr {
     @apply text-gray-200;
+  }
+
+  /* d3 sets font-family="sans-serif" on chart axes and labels: chart text
+     takes the app's font instead. A presentation attribute loses to any rule. */
+  svg[font-family],
+  svg [font-family] {
+    font-family: inherit;
   }
 
   /* We control the sizing through DialogComponent, so reset this value */
@@ -385,13 +468,28 @@
     @apply list-none;
   }
 
+  /* Radios in the checkbox colours: border-primary on bg-container, filled
+     with the inverse colour when checked (the plugin fills with currentColor),
+     its dot in the opposite colour. Focus is the outline above. */
   input[type='radio'] {
-    @apply border-gray-300 text-indigo-600 focus:ring-indigo-600;
-    /* Default light mode */
+    color: var(--color-gray-800);
+
+    /* :not(:checked), so the plugin's checked fill and border still apply */
+    &:not(:checked) {
+      border-color: var(--color-alpha-black-300);
+      background-color: var(--color-container);
+    }
 
     @variant theme-dark {
-      /* Dark mode radio button base and checked styles */
-      @apply border-gray-600 bg-gray-700 checked:bg-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800;
+      color: var(--color-white);
+
+      &:not(:checked) {
+        border-color: var(--color-alpha-white-400);
+      }
+
+      &:checked {
+        background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23171717' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e");
+      }
     }
   }
 }
@@ -423,17 +521,14 @@
     hence the component class). Dark mode swaps the ring to alpha-white.
   */
   .chart-tooltip {
+    @apply rounded-lg;
     background: var(--color-container);
-    border-radius: 10px;
     padding: 10px 12px;
-    box-shadow:
-      0 0 0 1px var(--color-alpha-black-50),
-      0 8px 24px rgba(11, 11, 11, 0.12);
+    /* The overlay recipe (shadow-border-lg) */
+    box-shadow: var(--shadow-lg), 0px 0px 0px 1px var(--color-alpha-black-50);
 
     @variant theme-dark {
-      box-shadow:
-        0 0 0 1px var(--color-alpha-white-50),
-        0 8px 24px rgba(11, 11, 11, 0.12);
+      box-shadow: var(--shadow-lg), 0px 0px 0px 1px var(--color-alpha-white-200);
     }
   }
 
@@ -497,7 +592,7 @@
 
   /* Forms */
   .form-field {
-    @apply flex flex-col gap-1 relative px-3 py-2 rounded-md border bg-container border-secondary shadow-xs w-full;
+    @apply flex flex-col gap-1 relative px-3 py-2 rounded-lg border bg-container border-secondary shadow-xs w-full;
     @apply focus-within:border-secondary focus-within:shadow-none focus-within:ring-4 focus-within:ring-alpha-black-200;
     /* Only the focus ring and border animate: with transition-all a field whose
        size or padding changed (a form swapped in a dialog) slid into place */
@@ -604,6 +699,40 @@
     background-position: right -0.15rem center;
     background-repeat: no-repeat;
     background-size: 1.25rem 1.25rem;
+
+    /* A field that cannot open shows no chevron */
+    &:disabled {
+      background-image: none;
+    }
+  }
+
+  /*
+    A toolbar select without a floating label (the dashboard period selects,
+    the per-page select, filter rows): an md control, 36px like the md
+    buttons and DS::SearchInput beside it. Chevron as on .form-field selects.
+  */
+  .control-select {
+    @apply h-9 rounded-lg border border-secondary bg-container text-sm text-primary pl-3 pr-8 py-0 shadow-none w-auto;
+    @apply appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25rem 1.25rem;
+    outline: 2px solid transparent;
+    outline-offset: 0;
+
+    &:focus {
+      @apply ring-0 border-secondary;
+    }
+
+    &:focus-visible {
+      outline-color: var(--color-focus-ring);
+    }
+
+    &:disabled {
+      @apply cursor-not-allowed text-subdued;
+      background-image: none;
+    }
   }
 
   .form-field__radio {
@@ -622,29 +751,44 @@
     }
   }
 
+  /*
+    The standard checkbox. Light: border-primary on the container, checked
+    filled with bg-inverse and an inverse (white) tick, the plugin's default.
+    Dark: the same border on the dark container, checked filled white with a
+    dark tick. The fill is the plugin's currentColor, so `color` sets it.
+    Focus is the base layer's outline.
+  */
   .checkbox--light {
     &[type='checkbox'] {
-      @apply border-alpha-black-200 checked:bg-gray-900 checked:ring-gray-900 focus:ring-gray-900 focus-visible:ring-gray-900 checked:hover:bg-gray-300 hover:bg-gray-300;
+      @apply text-gray-800 cursor-pointer;
+    }
+
+    /* This layer is above the plugin's, so the checked fill is restated */
+    &[type='checkbox']:not(:checked, :indeterminate) {
+      @apply bg-container hover:bg-container-hover;
+      border-color: var(--color-alpha-black-300);
+    }
+
+    &[type='checkbox']:is(:checked, :indeterminate) {
+      background-color: currentColor;
+      border-color: transparent;
     }
 
     &[type='checkbox']:disabled {
-      @apply cursor-not-allowed opacity-80 bg-gray-50 border-gray-200 checked:bg-gray-400 checked:ring-gray-400;
+      @apply cursor-not-allowed opacity-50;
     }
 
     @variant theme-dark {
       &[type='checkbox'] {
-        @apply ring-gray-900 checked:text-white;
-        background-color: var(--color-gray-100);
+        @apply text-white;
       }
-  
-      &[type='checkbox']:disabled {
-        @apply cursor-not-allowed opacity-80;
-        background-color: var(--color-gray-600);
+
+      &[type='checkbox']:not(:checked, :indeterminate) {
+        border-color: var(--color-alpha-white-400);
       }
-  
+
       &[type='checkbox']:checked {
-        background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23808080' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
-        background-color: var(--color-gray-100);
+        background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23171717' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
       }
     }
   }

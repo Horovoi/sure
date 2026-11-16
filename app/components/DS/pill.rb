@@ -21,9 +21,9 @@ class DS::Pill < DesignSystemComponent
 
   # Generic inline pill primitive. Two modes:
   #
-  # - `marker: true` (default) — the original shape from #1829: uppercase
-  #   10/11px text, tracking-wide. Reads as a stage marker (Beta, Canary,
-  #   NEW, PRO, EXPERIMENTAL, …).
+  # - `marker: true` (default) — the original shape from #1829: 10/11px
+  #   text in sentence case like every label in the fork. Reads as a stage
+  #   marker (Beta, Canary, New, Pro, Experimental, …).
   #
   # - `marker: false` — normal case, snaps to the DS text scale
   #   (`text-xs` / `text-sm`). Reads as a status / category badge.
@@ -85,7 +85,7 @@ class DS::Pill < DesignSystemComponent
 
   def palette
     # Light-mode `text` is mixed 30% with black on top of the 700 stop so
-    # the 10–11px uppercase label still reads against the very pale 50
+    # the 10–11px marker label still reads against the very pale 50
     # background. Without the mix the perceptual contrast feels low even
     # though the raw ratio passes WCAG.
     {
@@ -174,15 +174,15 @@ class DS::Pill < DesignSystemComponent
     base << "font-mono" if mono
 
     if marker
-      # Marker mode (Beta / Canary / NEW): rounded-md (slight chip
-      # shape), uppercase, sub-12px text, wider tracking.
+      # Marker mode (Beta / Canary / New): rounded-md (slight chip
+      # shape), sub-12px text, sentence case (no uppercase or tracking).
       # text-[10/11px] stays as arbitrary values — the pill is
       # intentionally sub-12px (Sure's smallest scale token is text-xs
-      # / 12px) so it reads as a marker, not a label. Padding / gap /
-      # tracking snap to Tailwind's scale to satisfy the design-system
-      # "no arbitrary values" rule.
-      base << "rounded-md uppercase"
-      base << (size == :md ? "px-2 py-1 text-[11px] tracking-wide gap-1" : "px-1.5 py-0.5 text-[10px] tracking-wider gap-1")
+      # / 12px) so it reads as a marker, not a label. Padding and gap
+      # snap to Tailwind's scale to satisfy the design-system "no
+      # arbitrary values" rule.
+      base << "rounded-md"
+      base << (size == :md ? "px-2 py-1 text-[11px] gap-1" : "px-1.5 py-0.5 text-[10px] gap-1")
     else
       # Badge mode (Pending / Active / Past due / category tag):
       # rounded-full pill shape (matches the existing convention used
