@@ -1,12 +1,14 @@
 <%# locals: (form:) %>
-<div data-controller="list-filter">
-  <div class="relative">
-    <input type="search" autocomplete="off" placeholder="<%= t(".placeholder") %>" data-list-filter-target="input" data-action="input->list-filter#filter" class="block w-full bg-container border border-secondary rounded-md py-2 pl-10 pr-3 focus:ring-gray-500 sm:text-sm">
-    <%= icon("search", class: "absolute inset-y-0 left-2 top-1/2 transform -translate-y-1/2") %>
-  </div>
-  <div class="my-2" id="list" data-list-filter-target="list">
+<%# Rows like the tag and category tabs: the checkbox, then the merchant as a pill
+    with its logo or lettermark %>
+<div data-controller="list-filter" class="space-y-2">
+  <%= render DS::SearchInput.new(
+        placeholder: t(".placeholder"),
+        data: { list_filter_target: "input", action: "input->list-filter#filter" }
+      ) %>
+  <div class="flex flex-col" id="list" data-list-filter-target="list">
     <% ([ Merchant.no_merchant ] + Current.family.assigned_merchants.alphabetically.includes(logo_attachment: :blob).to_a).each do |merchant| %>
-      <div class="filterable-item flex items-center gap-2 p-2" data-filter-name="<%= merchant.name %>">
+      <div class="filterable-item flex items-center gap-2 h-8 px-2 rounded-md hover:bg-container-hover" data-filter-name="<%= merchant.name %>">
         <%= form.check_box :merchants,
                            {
                              multiple: true,
@@ -15,13 +17,14 @@
                            },
                            merchant.filter_value,
                            nil %>
-        <%= form.label :merchants, value: merchant.filter_value, class: "text-sm text-primary flex items-center gap-2" do %>
-          <div class="hidden lg:flex">
+        <%= form.label :merchants, value: merchant.filter_value, class: "flex-1 min-w-0 h-full flex items-center gap-2 text-sm text-primary cursor-pointer" do %>
+          <span class="inline-flex items-center gap-1.5 min-w-0 max-w-full rounded-full border border-secondary bg-container-inset pl-0.5 pr-2 py-0.5 text-sm font-medium">
             <% if merchant.new_record? %>
               <%= render DS::FilledIcon.new(icon: "circle-dashed", size: "sm", rounded: true) %>
             <% elsif merchant.logo_url.present? %>
               <%= image_tag Setting.transform_brand_fetch_url(merchant.logo_url),
-                  class: "w-6 h-6 rounded-full border border-secondary",
+                  class: "size-5 shrink-0 rounded-full",
+                  alt: "",
                   loading: "lazy" %>
             <% else %>
               <%= render DS::FilledIcon.new(
@@ -32,8 +35,8 @@
                 rounded: true
               ) %>
             <% end %>
-          </div>
-          <%= merchant.name %>
+            <span class="truncate"><%= merchant.name %></span>
+          </span>
         <% end %>
       </div>
     <% end %>

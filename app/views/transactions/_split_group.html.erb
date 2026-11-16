@@ -5,13 +5,14 @@
 <% parent = group.parent %>
 <% count = parent.child_entries.size %>
 
-<div role="group" aria-labelledby="<%= dom_id(parent, :split_group) %>" data-testid="split-group">
-  <div class="flex lg:grid lg:grid-cols-12 items-center gap-3 lg:gap-0 text-sm p-3 lg:p-4">
-    <div class="pr-4 lg:pr-10 flex items-center gap-3 lg:gap-4 col-span-8 min-w-0">
+<div role="group" aria-labelledby="<%= dom_id(parent, :split_group) %>" data-testid="split-group" class="@container">
+  <%# The columns of transactions/_transaction %>
+  <div class="grid grid-cols-[minmax(0,1fr)_auto] @xl:grid-cols-[minmax(0,1fr)_2rem_minmax(7rem,auto)] @3xl:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_minmax(7rem,auto)] gap-x-2 items-center text-sm p-3 lg:p-4">
+    <div class="@xl:pr-4 flex items-center gap-3 lg:gap-4 min-w-0">
       <%# Lines up with the rows' checkboxes; the parent itself is not selectable %>
       <span class="hidden lg:block w-4 shrink-0" aria-hidden="true"></span>
 
-      <div class="hidden lg:flex shrink-0">
+      <div class="hidden @xl:flex shrink-0">
         <%= render DS::FilledIcon.new(icon: "split", variant: :surface, size: "lg", rounded: true) %>
       </div>
 
@@ -23,7 +24,7 @@
                 class: "truncate font-medium text-primary hover:underline",
                 data: { turbo_frame: "drawer", turbo_prefetch: false } %>
           <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-secondary px-1.5 py-0.5 text-xs font-medium text-secondary">
-            <%= icon "split", size: "xs", color: "current", class: "lg:hidden" %>
+            <%= icon "split", size: "xs", color: "current", class: "@xl:hidden" %>
             <%= t("transactions.split_group.label") %>
           </span>
         </div>
@@ -37,10 +38,10 @@
       </div>
     </div>
 
-    <div class="hidden md:block col-span-2"></div>
+    <div class="hidden @xl:block"></div>
 
-    <div class="shrink-0 col-span-4 lg:col-span-2 ml-auto text-right">
-      <p class="text-secondary privacy-sensitive whitespace-nowrap"><%= format_money(-parent.amount_money) %></p>
+    <div class="justify-self-end text-right">
+      <p class="text-secondary privacy-sensitive whitespace-nowrap tabular-nums"><%= format_money(-parent.amount_money) %></p>
     </div>
   </div>
 

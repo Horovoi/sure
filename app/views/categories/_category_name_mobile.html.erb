@@ -1,4 +1,4 @@
-<span id="category_name_mobile_<%= transaction.id %>" class="text-secondary lg:hidden">
+<span id="category_name_mobile_<%= transaction.id %>" class="text-secondary @xl:hidden">
   <% if transaction.category_editable? %>
     <%= transaction.category&.name || Category.uncategorized.name %>
   <% else %>

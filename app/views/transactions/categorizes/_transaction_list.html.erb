@@ -1,6 +1,9 @@
 <%# locals: (entries:, categories:) %>
-<div id="categorize_transaction_list" class="bg-container-inset rounded-xl p-1 space-y-1">
-  <div class="grid grid-cols-[1rem_minmax(0,1fr)_6.5rem_6.5rem_9rem] gap-3 px-4 py-2 text-xs font-medium text-secondary uppercase tracking-wide">
+<%# A container query sets the columns, as the list sits in a side-by-side layout: wide,
+    one line per row under a header; narrow, each row stacks (categorizes/_entry_row)
+    and the header, which has nothing to line up with, is hidden %>
+<div id="categorize_transaction_list" class="@container bg-container-inset rounded-xl p-1 space-y-1">
+  <div class="hidden @xl:grid grid-cols-[1rem_minmax(0,1fr)_6.5rem_6.5rem_9rem] gap-3 px-4 py-2 text-xs font-medium text-secondary">
     <div></div>
     <p><%= t("transactions.categorizes.show.col_transaction") %></p>
     <p><%= t("transactions.categorizes.show.col_date") %></p>
@@ -9,7 +12,7 @@
   </div>
 
   <div class="shadow-border-xs rounded-lg overflow-hidden">
-    <div class="max-h-[32rem] overflow-y-auto divide-y divide-alpha-black-200 theme-dark:divide-alpha-white-200 text-sm">
+    <div class="max-h-[32rem] overflow-y-auto divide-y divide-alpha-black-200 theme-dark:divide-alpha-white-200 text-sm" tabindex="-1">
       <% if entries.empty? %>
         <p class="px-4 py-3 bg-container text-secondary"><%= t("transactions.categorizes.show.no_matches") %></p>
       <% else %>

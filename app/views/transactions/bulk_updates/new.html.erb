@@ -5,8 +5,14 @@
     <%= styled_form_with url: transactions_bulk_update_path, scope: "bulk_update", class: "h-full flex flex-col justify-between gap-4", data: { turbo_frame: "_top" } do |form| %>
       <div class="space-y-4">
         <%= render DS::Disclosure.new(title: t(".overview"), open: true) do %>
-          <%= form.date_field :date, label: t(".date_label"), max: Date.current %>
-          <%= form.text_field :name, label: t(".name_label"), placeholder: t(".name_placeholder"), autocomplete: "off" %>
+          <div class="space-y-2">
+            <%# A date input takes no placeholder, so the blank-keeps-it note is helper text %>
+            <div class="space-y-1">
+              <%= form.date_field :date, label: t(".date_label"), max: Date.current, aria: { describedby: "bulk_update_date_hint" } %>
+              <p id="bulk_update_date_hint" class="text-xs text-secondary px-1"><%= t(".date_hint") %></p>
+            </div>
+            <%= form.text_field :name, label: t(".name_label"), placeholder: t(".name_placeholder"), autocomplete: "off" %>
+          </div>
         <% end %>
 
         <%= render DS::Disclosure.new(title: t(".transactions_section"), open: true) do %>

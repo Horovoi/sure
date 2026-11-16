@@ -2,10 +2,10 @@
 
 <% groups = Category::Group.for(categories) -%>
 <div class="rounded-xl bg-container-inset space-y-1 p-1">
-  <div class="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-secondary uppercase">
+  <div class="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-secondary">
     <p><%= title %></p>
-    <span class="text-subdued">&middot;</span>
-    <p><%= categories.count %></p>
+    <span class="text-subdued" aria-hidden="true">&middot;</span>
+    <p class="tabular-nums"><%= categories.count %></p>
   </div>
 
   <div class="shadow-border-xs rounded-lg bg-container">

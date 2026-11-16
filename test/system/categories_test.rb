@@ -9,7 +9,7 @@ class CategoriesTest < ApplicationSystemTestCase
     visit categories_url
     click_link I18n.t("categories.new.new_category")
     fill_in "Name", with: "My Shiny New Category"
-    click_button "Create Category"
+    click_button "Create category"
 
     # The create redirects back to the list. Visiting it again here raced the request
     # and could leave before the category was saved.
@@ -20,7 +20,7 @@ class CategoriesTest < ApplicationSystemTestCase
     visit categories_url
     click_link I18n.t("categories.new.new_category")
     fill_in "Name", with: categories(:food_and_drink).name
-    click_button "Create Category"
+    click_button "Create category"
 
     assert_text "Name has already been taken"
   end
@@ -47,7 +47,7 @@ class CategoriesTest < ApplicationSystemTestCase
     search.fill_in with: "piggy"
     find("label[data-filter-name^='piggy-bank ']").click
 
-    click_button "Create Category"
+    click_button "Create category"
     assert_text "Pocket money"
 
     assert_equal "piggy-bank", @user.family.categories.find_by!(name: "Pocket money").lucide_icon

@@ -1,8 +1,13 @@
-<header class="flex items-center justify-between">
+<header class="flex flex-wrap justify-between items-center gap-x-4 gap-y-2">
   <h1 class="text-primary text-xl font-medium"><%= t(".categories") %></h1>
 
   <div class="flex items-center gap-2">
+    <%# Merging sits in this menu on a phone, where the header has room for one button %>
     <%= render DS::Menu.new do |menu| %>
+      <% if @categories.size > 1 %>
+        <% menu.with_item(variant: "link", text: t(".merge"), href: merge_categories_path, icon: "combine", frame: :modal) %>
+        <% menu.with_item(variant: "divider") %>
+      <% end %>
       <% menu.with_item(
           variant: "button",
           text: t(".delete_all"),
@@ -18,7 +23,8 @@
         variant: "outline",
         icon: "combine",
         href: merge_categories_path,
-        frame: :modal
+        frame: :modal,
+        class: "hidden sm:inline-flex"
       ) %>
     <% end %>
 
@@ -44,10 +50,9 @@
       <% end %>
     </div>
   <% else %>
-    <div class="flex justify-center items-center py-20">
-      <div class="text-center flex flex-col items-center max-w-[500px]">
-        <p class="text-sm text-secondary mb-4"><%= t(".empty") %></p>
-        <div class="flex items-center gap-2">
+    <%= render DS::EmptyState.new(icon: "shapes", title: t(".empty")) do |empty| %>
+      <% empty.with_action do %>
+        <div class="flex flex-wrap justify-center items-center gap-2">
           <%= render DS::Button.new(
             text: t(".bootstrap"),
             href: bootstrap_categories_path,
@@ -61,7 +66,7 @@
             frame: :modal
           ) %>
         </div>
-      </div>
-    </div>
+      <% end %>
+    <% end %>
   <% end %>
 </div>

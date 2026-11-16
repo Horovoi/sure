@@ -97,16 +97,20 @@
       </div>
 
       <% if @transactions.any? %>
-        <div class="grid-cols-12 bg-container-inset rounded-xl px-5 py-3 text-xs uppercase font-medium text-secondary items-center mb-4 grid">
-          <div class="pl-0.5 col-span-8 flex items-center gap-4">
-            <%= check_box_tag "selection_entry",
-                  class: "checkbox checkbox--light hidden lg:block",
-                  aria: { label: t(".select_page") },
-                  data: { action: "bulk-select#togglePageSelection" } %>
-            <p><%= t(".col_transaction") %></p>
+        <%# The columns of transactions/_transaction, as on the transactions page %>
+        <div class="@container px-1 mb-4">
+          <div class="grid grid-cols-[minmax(0,1fr)_auto] @xl:grid-cols-[minmax(0,1fr)_2rem_minmax(7rem,auto)] @3xl:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_minmax(7rem,auto)] gap-x-2 bg-container-inset rounded-xl px-4 lg:px-5 py-3 text-xs font-medium text-secondary items-center -mx-1">
+            <div class="pl-0.5 @xl:pr-4 flex items-center gap-4 min-w-0">
+              <%= check_box_tag "selection_entry",
+                    class: "checkbox checkbox--light hidden lg:block",
+                    aria: { label: t(".select_page") },
+                    data: { action: "bulk-select#togglePageSelection" } %>
+              <p><%= t(".col_transaction") %></p>
+            </div>
+            <%# Holds the 2rem icon column too, where the label does not fit %>
+            <p class="hidden @xl:block min-w-0"><span class="hidden @3xl:inline"><%= t(".col_category") %></span></p>
+            <p class="justify-self-end"><%= t(".col_amount") %></p>
           </div>
-          <p class="col-span-2 md:block hidden"><%= t(".col_category") %></p>
-          <p class="col-span-2 col-start-11 md:col-start-auto justify-self-end md:block"><%= t(".col_amount") %></p>
         </div>
 
         <div class="space-y-6">

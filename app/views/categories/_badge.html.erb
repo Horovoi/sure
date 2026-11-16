@@ -1,17 +1,18 @@
 <%# locals: (category:) %>
 <% category ||= Category.uncategorized %>
 
-<%# min-w-0 and the inner truncate let the badge ellipsize in a narrow column
-    instead of running over the amount next to it %>
-<div class="min-w-0 max-w-full">
-  <span data-category-badge class="flex items-center gap-1 max-w-full text-sm font-medium rounded-full px-1.5 py-1 border truncate focus-visible:outline-none focus-visible:ring-0"
+<%# Natural width up to its container's: the flex wrapper and the badge's min-w-0 let the
+    name ellipsize in a narrow column instead of running over the amount beside it %>
+<div class="flex min-w-0 max-w-full">
+  <span data-category-badge class="flex items-center gap-1 min-w-0 max-w-full text-sm font-medium rounded-full px-1.5 py-1 border"
+        title="<%= category.name %>"
         style="
           background-color: color-mix(in oklab, <%= category.color %> 10%, transparent);
           border-color: color-mix(in oklab, <%= category.color %> 10%, transparent);
           color: <%= category.color %>;">
     <% if category.lucide_icon.present? %>
-      <%= icon category.lucide_icon, size: "sm", color: "current" %>
+      <%= icon category.lucide_icon, size: "sm", color: "current", class: "shrink-0" %>
     <% end %>
-    <span class="truncate" title="<%= category.name %>"><%= category.name %></span>
+    <span class="truncate min-w-0"><%= category.name %></span>
   </span>
 </div>

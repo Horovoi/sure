@@ -3,13 +3,14 @@
     (balance updates, trades, synced accounts) are skipped by Entry.bulk_update!. %>
 <%= render DS::Menu.new(variant: :button, placement: "top-end") do |menu| %>
   <% menu.with_button(
-      class: "p-1.5 group/reconcile hover:bg-inverse flex items-center justify-center rounded-md",
+      variant: "icon",
+      size: "sm",
+      icon: "circle-check",
+      type: "button",
       title: t("transactions.reconcile.bulk.menu"),
       aria: { label: t("transactions.reconcile.bulk.menu") },
       data: { testid: "reconcile-bulk-menu" }
-    ) do %>
-    <%= icon "circle-check", class: "group-hover/reconcile:text-inverse" %>
-  <% end %>
+    ) %>
 
   <% Entry::RECONCILED_STATUS_CYCLE.each do |status| %>
     <% menu.with_item(

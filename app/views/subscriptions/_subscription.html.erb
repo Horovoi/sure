@@ -1,6 +1,8 @@
+<%# A table row from 48rem of the card's width (subscriptions/_results_frame); below it a
+    card: the name and amount, then the cycle, next date and status, with the actions %>
 <tr id="<%= dom_id(subscription) %>"
-    class="border-b border-subdued hover:bg-surface-hover">
-  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
+    class="group/row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 @3xl:table-row @3xl:p-0 border-b border-subdued last:border-b-0 hover:bg-container-hover">
+  <td class="col-span-3 min-w-0 @3xl:table-cell @3xl:py-3 @3xl:px-4 <%= "opacity-60" unless subscription.active? %>">
     <div class="flex items-center gap-3">
       <%# Logo with fallback for broken images %>
       <div class="relative w-8 h-8 flex-shrink-0">
@@ -28,8 +30,8 @@
       </div>
 
       <%# Name and merchant %>
-      <div>
-        <span class="text-sm text-primary font-medium block"><%= subscription.display_name %></span>
+      <div class="min-w-0">
+        <span class="text-sm text-primary font-medium block truncate"><%= subscription.display_name %></span>
         <% if subscription.category.present? %>
           <span class="text-xs text-secondary"><%= subscription.category.name %></span>
         <% end %>
@@ -37,8 +39,8 @@
     </div>
   </td>
 
-  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
-    <span class="text-sm font-medium text-primary privacy-sensitive">
+  <td class="col-start-4 row-start-1 text-right @3xl:text-left whitespace-nowrap @3xl:table-cell @3xl:py-3 @3xl:px-4 <%= "opacity-60" unless subscription.active? %>">
+    <span class="text-sm font-medium text-primary privacy-sensitive tabular-nums">
       <%= format_money(-subscription.amount_money) %>
     </span>
     <%# No rate at all: no converted amount is shown, never the amount at 1 %>
@@ -47,40 +49,40 @@
     <% end %>
     <% if converted %>
       <% converted = -converted.abs %>
-      <span class="text-xs text-secondary flex items-center gap-1 privacy-sensitive">
+      <span class="text-xs text-secondary flex items-center justify-end @3xl:justify-start gap-1 privacy-sensitive tabular-nums">
         <%= format_money(converted) %>
         <% if subscription.billing_cycle_yearly? %>
-          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-container-inset text-subdued">
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium bg-container-inset text-subdued">
             <%= format_money(converted / 12) %><%= t("subscriptions.index.summary.per_month") %>
           </span>
         <% end %>
       </span>
     <% elsif subscription.billing_cycle_yearly? %>
-      <span class="text-xs text-secondary block privacy-sensitive">
+      <span class="text-xs text-secondary block privacy-sensitive tabular-nums">
         ~<%= format_money(Money.new(subscription.monthly_cost, subscription.currency)) %><%= t("subscriptions.index.summary.per_month") %>
       </span>
     <% end %>
   </td>
 
-  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
+  <td class="col-start-1 row-start-2 @3xl:table-cell @3xl:py-3 @3xl:px-4 <%= "opacity-60" unless subscription.active? %>">
     <%# DS::Pill, not raw palette classes: those stayed light in dark mode %>
     <%= render DS::Pill.new(label: t("subscriptions.billing_cycle.#{subscription.billing_cycle}"),
                             tone: subscription.billing_cycle_monthly? ? :violet : :amber, marker: false) %>
   </td>
 
-  <td class="py-3 px-4 text-sm <%= "opacity-60" unless subscription.active? %>">
+  <td class="col-start-2 row-start-2 text-sm @3xl:whitespace-nowrap @3xl:table-cell @3xl:py-3 @3xl:px-4 <%= "opacity-60" unless subscription.active? %>">
     <% if subscription.overdue? %>
-      <span class="text-destructive font-medium"><%= l(subscription.next_expected_date, format: :short) %></span>
-      <span class="ml-1"><%= render DS::Pill.new(label: t("subscriptions.index.table.overdue"), tone: :error, marker: false) %></span>
+      <span class="text-destructive font-medium whitespace-nowrap"><%= l(subscription.next_expected_date, format: :short) %></span>
+      <span class="inline-block @3xl:ml-1"><%= render DS::Pill.new(label: t("subscriptions.index.table.overdue"), tone: :error, marker: false) %></span>
     <% elsif subscription.due_today? %>
-      <span class="text-primary font-medium"><%= l(subscription.next_expected_date, format: :short) %></span>
-      <span class="ml-1"><%= render DS::Pill.new(label: t("subscriptions.index.table.due_today"), tone: :info, marker: false) %></span>
+      <span class="text-primary font-medium whitespace-nowrap"><%= l(subscription.next_expected_date, format: :short) %></span>
+      <span class="inline-block @3xl:ml-1"><%= render DS::Pill.new(label: t("subscriptions.index.table.due_today"), tone: :info, marker: false) %></span>
     <% else %>
-      <span class="text-secondary"><%= l(subscription.next_expected_date, format: :short) %></span>
+      <span class="text-secondary whitespace-nowrap"><%= l(subscription.next_expected_date, format: :short) %></span>
     <% end %>
   </td>
 
-  <td class="py-3 px-4 <%= "opacity-60" unless subscription.active? %>">
+  <td class="col-start-3 row-start-2 @3xl:table-cell @3xl:py-3 @3xl:px-4 <%= "opacity-60" unless subscription.active? %>">
     <% if subscription.active? %>
       <%= render DS::Pill.new(label: t("subscriptions.status.active"), tone: :success, marker: false) %>
     <% else %>
@@ -88,26 +90,29 @@
     <% end %>
   </td>
 
-  <td class="py-3 px-4 text-right">
-    <div class="flex items-center justify-end gap-2">
+  <td class="col-start-4 row-start-2 justify-self-end text-right @3xl:table-cell @3xl:py-3 @3xl:px-4 @3xl:sticky @3xl:right-0 bg-container group-hover/row:bg-container-hover">
+    <div class="flex items-center justify-end gap-1">
       <% if subscription.actionable? %>
         <% if subscription.default_account.present? %>
+          <%# The icon button recipe (DS::Button icon sm), with the colour that says what it does %>
           <%= button_to record_transaction_subscription_path(subscription),
               method: :post,
               title: t(".record_now"),
-              class: "p-1.5 rounded hover:bg-surface-hover text-success" do %>
+              aria: { label: t(".record_now") },
+              class: "inline-flex items-center justify-center size-7 pointer-coarse:size-11 rounded-md hover:bg-container-inset-hover text-success focus-ring" do %>
             <%= icon "check-circle", size: "sm", color: "current" %>
           <% end %>
         <% else %>
           <%= link_to edit_subscription_path(subscription),
               title: t(".link_account_to_record"),
+              aria: { label: t(".link_account_to_record") },
               data: { turbo_frame: "_top" },
-              class: "p-1.5 rounded hover:bg-surface-hover text-warning" do %>
+              class: "inline-flex items-center justify-center size-7 pointer-coarse:size-11 rounded-md hover:bg-container-inset-hover text-warning focus-ring" do %>
             <%= icon "link", size: "sm", color: "current" %>
           <% end %>
         <% end %>
       <% else %>
-        <span class="w-7 h-7"></span>
+        <span class="hidden @3xl:inline-block size-7" aria-hidden="true"></span>
       <% end %>
 
       <%= render DS::Menu.new do |menu| %>

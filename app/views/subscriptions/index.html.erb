@@ -1,6 +1,6 @@
 <% kind = @other_recurring ? SubscriptionsController::OTHER_RECURRING_KIND : nil %>
 <div class="space-y-4 flex flex-col">
-  <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+  <header class="flex flex-wrap justify-between items-center gap-x-4 gap-y-2">
     <div>
       <h1 class="text-primary text-xl font-medium"><%= t(".title") %></h1>
       <p class="text-secondary text-sm mt-1">
@@ -29,14 +29,14 @@
 
   <%# Suggestion banner - only show when there are pending suggestions %>
   <% if @suggestion_count > 0 %>
-    <div class="bg-blue-50 theme-dark:bg-blue-950 border border-blue-200 theme-dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div class="bg-info/10 border border-info/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <%= icon "zap", size: "md", class: "text-blue-600 theme-dark:text-blue-400" %>
+        <%= icon "zap", size: "md", color: "info" %>
         <div>
-          <p class="text-blue-900 theme-dark:text-blue-100 font-medium">
+          <p class="text-primary font-medium">
             <%= t("subscriptions.detect.found", count: @suggestion_count) %>
           </p>
-          <p class="text-blue-700 theme-dark:text-blue-300 text-sm"><%= t(".suggestion_banner") %></p>
+          <p class="text-secondary text-sm"><%= t(".suggestion_banner") %></p>
         </div>
       </div>
       <%= render DS::Link.new(
@@ -54,23 +54,23 @@
       <%= hidden_field_tag :kind, kind if kind %>
       <%= hidden_field_tag :status, params[:status] if params[:status].present? %>
       <%= hidden_field_tag :billing_cycle, params[:billing_cycle] if params[:billing_cycle].present? && !@other_recurring %>
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2">
         <%# Subscriptions or the manual recurring rows that are not subscriptions %>
-        <div class="flex items-center gap-1 bg-surface-inset rounded-lg p-1" data-testid="subscriptions-kind-filter">
+        <div class="segmented-control" data-testid="subscriptions-kind-filter">
           <%= link_to t(".filter.subscriptions"),
               subscriptions_path(status: params[:status], billing_cycle: params[:billing_cycle]),
               data: { turbo_action: "advance" },
               aria: { current: (@other_recurring ? nil : "page") },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                @other_recurring ? "text-secondary hover:text-primary" : "bg-container shadow-border-xs text-primary font-medium"
+                "segmented-control__segment focus-ring",
+                @other_recurring ? nil : "segmented-control__segment--active"
               ) %>
           <%= link_to subscriptions_path(kind: SubscriptionsController::OTHER_RECURRING_KIND, status: params[:status]),
               data: { turbo_action: "advance" },
               aria: { current: (@other_recurring ? "page" : nil) },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                @other_recurring ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+                "segmented-control__segment focus-ring gap-1",
+                @other_recurring ? "segmented-control__segment--active" : nil
               ) do %>
             <%= t(".filter.other_recurring") %>
             <span class="text-subdued">(<%= @other_recurring_count %>)</span>
@@ -78,53 +78,53 @@
         </div>
 
         <%# Status filter %>
-        <div class="flex items-center gap-1 bg-surface-inset rounded-lg p-1">
+        <div class="segmented-control">
           <%= link_to t(".filter.all"),
               subscriptions_path(kind: kind, status: nil, billing_cycle: params[:billing_cycle]),
               data: { turbo_action: "advance" },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                params[:status].blank? ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+                "segmented-control__segment focus-ring",
+                params[:status].blank? ? "segmented-control__segment--active" : nil
               ) %>
           <%= link_to t(".filter.active"),
               subscriptions_path(kind: kind, status: "active", billing_cycle: params[:billing_cycle]),
               data: { turbo_action: "advance" },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                params[:status] == "active" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+                "segmented-control__segment focus-ring",
+                params[:status] == "active" ? "segmented-control__segment--active" : nil
               ) %>
           <%= link_to t(".filter.inactive"),
               subscriptions_path(kind: kind, status: "inactive", billing_cycle: params[:billing_cycle]),
               data: { turbo_action: "advance" },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                params[:status] == "inactive" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+                "segmented-control__segment focus-ring",
+                params[:status] == "inactive" ? "segmented-control__segment--active" : nil
               ) %>
         </div>
 
         <%# Billing cycle filter (subscriptions only) %>
         <% unless @other_recurring %>
-        <div class="flex items-center gap-1 bg-surface-inset rounded-lg p-1">
+        <div class="segmented-control">
           <%= link_to t(".filter.all"),
               subscriptions_path(status: params[:status], billing_cycle: nil),
               data: { turbo_action: "advance" },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                params[:billing_cycle].blank? ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+                "segmented-control__segment focus-ring",
+                params[:billing_cycle].blank? ? "segmented-control__segment--active" : nil
               ) %>
           <%= link_to t(".filter.monthly"),
               subscriptions_path(status: params[:status], billing_cycle: "monthly"),
               data: { turbo_action: "advance" },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                params[:billing_cycle] == "monthly" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+                "segmented-control__segment focus-ring",
+                params[:billing_cycle] == "monthly" ? "segmented-control__segment--active" : nil
               ) %>
           <%= link_to t(".filter.yearly"),
               subscriptions_path(status: params[:status], billing_cycle: "yearly"),
               data: { turbo_action: "advance" },
               class: class_names(
-                "px-3 py-1.5 text-sm rounded-md transition-colors",
-                params[:billing_cycle] == "yearly" ? "bg-container shadow-border-xs text-primary font-medium" : "text-secondary hover:text-primary"
+                "segmented-control__segment focus-ring",
+                params[:billing_cycle] == "yearly" ? "segmented-control__segment--active" : nil
               ) %>
         </div>
         <% end %>
@@ -134,7 +134,8 @@
           <%= f.search_field :search,
               value: params[:search],
               placeholder: @other_recurring ? t(".search_other_placeholder") : t(".search_placeholder"),
-              class: "w-full px-3 py-1.5 text-sm bg-surface-inset rounded-lg border border-secondary focus:border-primary focus:ring-1 focus:ring-primary",
+              aria: { label: @other_recurring ? t(".search_other_placeholder") : t(".search_placeholder") },
+              class: "w-full h-9 px-3 py-0 text-sm bg-container text-primary placeholder:text-secondary rounded-lg border border-secondary focus:border-secondary focus:ring-0 focus-ring",
               data: {
                 auto_submit_form_target: "auto",
                 autosubmit_trigger_event: "input",

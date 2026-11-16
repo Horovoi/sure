@@ -11,15 +11,15 @@
                             checkbox_toggle_target: "selectionEntry"
                           } %>
 
-      <p class="uppercase space-x-1.5">
+      <p class="space-x-1.5">
         <%= tag.span I18n.l(date, format: :long) %>
-        <span>·</span>
-        <%= tag.span entries.size %>
+        <span class="text-subdued" aria-hidden="true">·</span>
+        <%= tag.span entries.size, class: "tabular-nums" %>
       </p>
     </div>
 
     <% if totals %>
-      <div id="entry-group-<%= date %>-totals" class="privacy-sensitive">
+      <div id="entry-group-<%= date %>-totals" class="privacy-sensitive whitespace-nowrap tabular-nums">
         <%= totals_by_currency(collection: entries, money_method: :amount_money, negate: true) %>
       </div>
     <% end %>

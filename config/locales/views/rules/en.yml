@@ -1,15 +1,15 @@
 ---
 en:
   rules:
-    no_action: No Action
+    no_action: No action
     no_condition: No condition
     rule:
       action_with_value: "%{action} to %{value}"
       all_resources: All past and future %{resources}
       delete: Delete
       edit: Edit
-      for: FOR
-      if: IF
+      for: For
+      if: If
       more_actions:
         one: and %{count} more action
         other: and %{count} more actions
@@ -20,12 +20,13 @@ en:
       resources_since: "%{resources} on or after %{date}"
       stop_processing: Stop
       stop_processing_hint: Rules further down don't change transactions matched by this rule.
-      then: THEN
+      then: Then
     index:
       page_title: Rules
+      all_rules: all rules
       delete_all_rules: Delete all rules
       new_rule: New rule
-      ai_cost_warning: AI-enabled rule actions will cost money.  Be sure to filter as narrowly as possible to avoid unnecessary costs.
+      ai_cost_warning: AI-enabled rule actions will cost money. Be sure to filter as narrowly as possible to avoid unnecessary costs.
       rules_heading: Rules
       order_hint: Rules run from top to bottom. Once a rule sets a field on a transaction, rules further down don't change that field. Tags are added by every matching rule. Drag rules to change the order.
       reorder_rule: "Rule %{name}. Press Enter or Space to grab it, then use the arrow keys to move it."
@@ -35,9 +36,9 @@ en:
     form:
       rule_name_label: Rule name (optional)
       rule_name_placeholder: Enter a name for this rule
-      if: IF
-      then: THEN
-      for: FOR
+      if: If
+      then: Then
+      for: For
       add_condition: Add condition
       add_condition_group: Add condition group
       add_action: Add action
@@ -52,7 +53,7 @@ en:
       rules_above_notice:
         one: The active rule above it runs first, so the result is the same as in the full run.
         other: The %{count} active rules above it run first, so the result is the same as in the full run.
-      ai_cost_title: AI Cost Estimation
+      ai_cost_title: AI cost estimate
       ai_cost_with_estimate_html:
         one: 'This will use AI to categorize %{count} transaction. Estimated cost: <span class="font-semibold">~$%{cost}</span>'
         other: 'This will use AI to categorize %{count} transactions. Estimated cost: <span class="font-semibold">~$%{cost}</span>'
@@ -100,12 +101,12 @@ en:
         less_than: Less than
         less_than_or_equal_to: Less than or equal to
     apply_all:
-      button: Apply All
-      confirm_title: Apply All Rules
+      button: Apply all
+      confirm_title: Apply all rules
       confirm_message: You are about to apply %{count} rules affecting %{transactions} unique transactions. Please confirm if you wish to proceed.
-      confirm_button: Confirm and Apply All
+      confirm_button: Confirm and apply all
       success: All rules have been queued for execution
-      ai_cost_title: AI Cost Estimation
+      ai_cost_title: AI cost estimate
       ai_cost_message: This will use AI to categorize up to %{transactions} transactions.
       estimated_cost: "Estimated cost: ~$%{cost}"
       cost_unavailable_model: Cost estimation unavailable for model "%{model}".
@@ -113,14 +114,14 @@ en:
       cost_warning: You may incur costs, please check with the model provider for the most up-to-date prices.
       view_usage: View usage history
     recent_runs:
-      title: Recent Runs
+      title: Recent runs
       description: View the execution history of your rules including success/failure status and transaction counts.
-      unnamed_rule: Unnamed Rule
+      unnamed_rule: Unnamed rule
       columns:
         date_time: Date/Time
         execution_type: Type
         status: Status
-        rule_name: Rule Name
+        rule_name: Rule name
         transactions_counts:
           queued: Queued
           processed: Processed

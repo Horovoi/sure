@@ -1,12 +1,12 @@
 <%# locals: (form:) %>
-<div data-controller="list-filter">
-  <div class="relative">
-    <input type="search" autocomplete="off" placeholder="Filter accounts" data-list-filter-target="input" data-action="input->list-filter#filter" class="block w-full border border-secondary rounded-md py-2 pl-10 pr-3 bg-container focus:ring-gray-500 sm:text-sm">
-    <%= icon("search", class: "absolute inset-y-0 left-2 top-1/2 transform -translate-y-1/2") %>
-  </div>
-  <div class="my-2" id="list" data-list-filter-target="list">
+<div data-controller="list-filter" class="space-y-2">
+  <%= render DS::SearchInput.new(
+        placeholder: t(".placeholder"),
+        data: { list_filter_target: "input", action: "input->list-filter#filter" }
+      ) %>
+  <div class="flex flex-col" id="list" data-list-filter-target="list">
     <% Current.family.accounts.visible.alphabetically.each do |account| %>
-      <div class="filterable-item flex items-center gap-2 p-2" data-filter-name="<%= account.name %>">
+      <div class="filterable-item flex items-center gap-2 h-8 px-2 rounded-md hover:bg-container-hover" data-filter-name="<%= account.name %>">
         <%= form.check_box :accounts,
                            {
                              multiple: true,
@@ -15,7 +15,9 @@
                            },
                            account.name,
                            nil %>
-        <%= form.label :accounts, account.name, value: account.name, class: "text-sm text-primary" %>
+        <%= form.label :accounts, value: account.name, class: "flex-1 min-w-0 h-full flex items-center gap-2 text-sm text-primary cursor-pointer" do %>
+          <span class="truncate"><%= account.name %></span>
+        <% end %>
       </div>
     <% end %>
   </div>

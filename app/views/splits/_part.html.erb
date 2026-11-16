@@ -17,6 +17,8 @@
             autocomplete: "off",
             container_class: "flex-1 min-w-0" %>
 
+      <%# The actions sit on the field's input line (self-end mb-1): "Rest here" an inline
+          ghost action, remove the row's sm icon button %>
       <div class="flex gap-2 items-stretch">
         <%= pf.number_field :amount,
               label: t("splits.form.amount_label"),
@@ -26,28 +28,28 @@
               autocomplete: "off",
               value: part.amount && format("%.#{precision}f", part.amount),
               container_class: "w-36 sm:w-32",
-              class: "form-field__input privacy-sensitive",
+              class: "form-field__input privacy-sensitive tabular-nums",
               data: { split_editor_target: "amount", action: "input->split-editor#recalculate" } %>
 
         <%= render DS::Button.new(
               text: t("splits.form.fill"),
-              variant: "outline",
+              variant: "ghost",
               size: "sm",
               type: "button",
               icon: "corner-down-left",
               title: t("splits.form.fill_title"),
-              class: "self-center",
+              class: "self-end mb-1",
               data: { action: "split-editor#fill", split_editor_fill: true }
             ) %>
 
         <%= render DS::Button.new(
-              variant: "ghost",
+              variant: "icon",
               size: "sm",
               type: "button",
               icon: "x",
               title: t("splits.form.remove"),
-              "aria-label": t("splits.form.remove"),
-              class: "self-center",
+              aria: { label: t("splits.form.remove") },
+              class: "self-end mb-1 ml-auto sm:ml-0",
               data: { action: "split-editor#remove", split_editor_remove: true }
             ) %>
       </div>
@@ -64,7 +66,7 @@
         ) %>
 
     <details class="group" <%= "open" if details_open %>>
-      <summary class="cursor-pointer select-none text-sm text-secondary hover:text-primary rounded-md inline-flex items-center gap-1 py-1 focus-visible:outline-2 focus-visible:outline-offset-2">
+      <summary class="cursor-pointer select-none text-sm text-secondary hover:text-primary rounded-md inline-flex items-center gap-1 py-1 pr-1 focus-ring">
         <%= icon "chevron-right", size: "sm", class: "group-open:rotate-90 transition-transform" %>
         <%= t("splits.form.more_details") %>
       </summary>

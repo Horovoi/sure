@@ -2,11 +2,12 @@
 
 <div id="<%= dom_id(transaction, "category_menu_#{variant}") %>" class="min-w-0 max-w-full">
   <% if transaction.category_editable? %>
-    <%= render "categories/menu", transaction: transaction %>
+    <%= render "categories/menu", transaction: transaction, variant: variant %>
   <% else %>
     <% category = read_only_category(transaction) %>
     <% set_on_outflow = transaction.category_set_on_transfer_outflow? %>
-    <div class="hidden lg:flex items-center gap-1 min-w-0">
+    <%# The pill from 48rem of the row's width (a desktop column), else the icon %>
+    <div class="<%= variant == "desktop" ? "hidden @3xl:flex" : "hidden" %> items-center gap-1 min-w-0">
       <div class="min-w-0 <%= "opacity-60 cursor-not-allowed" if set_on_outflow %>">
         <%= render "categories/badge", category: category %>
       </div>
@@ -14,7 +15,7 @@
         <%= render DS::Tooltip.new(text: t("transactions.transaction_category.set_on_outflow")) %>
       <% end %>
     </div>
-    <div class="flex lg:hidden">
+    <div class="<%= variant == "desktop" ? "flex @3xl:hidden" : "flex" %>">
       <%= render "categories/badge_mobile", category: category %>
     </div>
   <% end %>

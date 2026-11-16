@@ -1,4 +1,4 @@
-<header class="flex items-center justify-between">
+<header class="flex flex-wrap justify-between items-center gap-x-4 gap-y-2">
   <h1 class="text-primary text-xl font-medium"><%= t(".page_title") %></h1>
   <div class="flex items-center gap-2">
     <% if @rules.any? %>
@@ -9,11 +9,11 @@
           href: destroy_all_rules_path,
           icon: "trash-2",
           method: :delete,
-          confirm: CustomConfirm.for_resource_deletion("all rules", high_severity: true)) %>
+          confirm: CustomConfirm.for_resource_deletion(t(".all_rules"), high_severity: true)) %>
       <% end %>
       <%= render DS::Link.new(
         text: t("rules.apply_all.button"),
-        variant: "secondary",
+        variant: "outline",
         href: confirm_all_rules_path,
         icon: "play",
         frame: :modal
@@ -29,19 +29,18 @@
   </div>
 </header>
 <% if self_hosted? %>
-  <div class="flex items-center gap-2 mb-2 py-4">
-    <%= icon("circle-alert", size: "sm") %>
-    <p class="text-sm text-secondary"><%= t(".ai_cost_warning") %></p>
+  <div class="py-4">
+    <%= render DS::Alert.new(message: t(".ai_cost_warning"), variant: :warning) %>
   </div>
 <% end %>
 <div class="bg-container rounded-xl shadow-border-xs p-4">
   <% if @rules.any? %>
     <div class="bg-container-inset rounded-xl">
-      <div class="flex justify-between px-4 py-2 text-xs uppercase">
+      <div class="flex justify-between px-4 py-2 text-xs">
         <div class="flex items-center gap-1.5 font-medium text-secondary">
           <p><%= t(".rules_heading") %></p>
-          <span class="text-subdued">&middot;</span>
-          <p><%= @rules.size %></p>
+          <span class="text-subdued" aria-hidden="true">&middot;</span>
+          <p class="tabular-nums"><%= @rules.size %></p>
         </div>
       </div>
       <p class="px-4 pb-2 text-sm text-secondary"><%= t(".order_hint") %></p>
@@ -54,7 +53,7 @@
              role="list"
              aria-label="<%= t(".rules_heading") %>">
           <% @rules.each do |rule| %>
-            <div class="flex items-center border-t border-divider first:border-t-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            <div class="flex items-center gap-1 pl-1 border-t border-divider first:border-t-0 first:rounded-t-lg last:rounded-b-lg focus-ring"
                  data-rules-sortable-target="section"
                  data-section-key="<%= rule.id %>"
                  draggable="true"
@@ -63,14 +62,19 @@
                  aria-grabbed="false"
                  aria-label="<%= t(".reorder_rule", name: rule.name.presence || rule.primary_condition_title) %>"
                  data-action="dragstart->rules-sortable#dragStart dragend->rules-sortable#dragEnd keydown->rules-sortable#handleKeyDown">
-              <button type="button"
-                      class="ml-2 shrink-0 p-1 text-secondary hover:text-primary cursor-grab active:cursor-grabbing"
-                      data-rules-sortable-target="handle"
-                      data-action="touchstart->rules-sortable#touchStart touchmove->rules-sortable#touchMove touchend->rules-sortable#touchEnd touchcancel->rules-sortable#touchCancel"
-                      aria-label="<%= t(".drag_to_reorder") %>"
-                      title="<%= t(".drag_to_reorder") %>">
-                <%= icon("grip-vertical", size: "sm") %>
-              </button>
+              <%= render DS::Button.new(
+                    variant: "icon",
+                    size: "sm",
+                    icon: "grip-vertical",
+                    type: "button",
+                    class: "shrink-0 cursor-grab active:cursor-grabbing",
+                    title: t(".drag_to_reorder"),
+                    aria: { label: t(".drag_to_reorder") },
+                    data: {
+                      rules_sortable_target: "handle",
+                      action: "touchstart->rules-sortable#touchStart touchmove->rules-sortable#touchMove touchend->rules-sortable#touchEnd touchcancel->rules-sortable#touchCancel"
+                    }
+                  ) %>
               <div class="grow min-w-0">
                 <%= render "rule", rule: rule %>
               </div>
@@ -80,25 +84,21 @@
       </div>
     </div>
   <% else %>
-    <div class="flex justify-center items-center py-20">
-      <div class="text-center flex flex-col items-center max-w-[500px]">
-        <p class="text-sm text-primary font-medium mb-1"><%= t(".no_rules_title") %></p>
-        <p class="text-sm text-secondary mb-4"><%= t(".no_rules_description") %></p>
-        <div class="flex items-center gap-2">
-          <%= render DS::Link.new(
-            text: t(".new_rule"),
-            variant: "primary",
-            href: new_rule_path(resource_type: "transaction"),
-            icon: "plus",
-            frame: :modal
-          ) %>
-        </div>
-      </div>
-    </div>
+    <%= render DS::EmptyState.new(icon: "git-branch", title: t(".no_rules_title"), description: t(".no_rules_description")) do |empty| %>
+      <% empty.with_action do %>
+        <%= render DS::Link.new(
+          text: t(".new_rule"),
+          variant: "primary",
+          href: new_rule_path(resource_type: "transaction"),
+          icon: "plus",
+          frame: :modal
+        ) %>
+      <% end %>
+    <% end %>
   <% end %>
 </div>
 
-<!-- Recent Runs Section -->
+<%# Recent runs %>
 <% if @recent_runs.any? %>
   <div class="mt-6 bg-container rounded-xl shadow-border-xs p-4">
     <div class="mb-4">
@@ -108,21 +108,21 @@
 
     <div class="overflow-x-auto">
       <table class="w-full">
-        <thead class="bg-surface border-b border-primary">
+        <thead class="border-b border-divider">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+            <th class="px-4 py-3 text-left text-xs font-medium text-secondary">
               <%= t("rules.recent_runs.columns.date_time") %>
             </th>
-            <th class="px-4 py-3 text-center text-xs font-medium text-secondary uppercase tracking-wider">
+            <th class="px-4 py-3 text-center text-xs font-medium text-secondary">
               <%= t("rules.recent_runs.columns.execution_type") %>
             </th>
-            <th class="px-4 py-3 text-center text-xs font-medium text-secondary uppercase tracking-wider">
+            <th class="px-4 py-3 text-center text-xs font-medium text-secondary">
               <%= t("rules.recent_runs.columns.status") %>
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+            <th class="px-4 py-3 text-left text-xs font-medium text-secondary">
               <%= t("rules.recent_runs.columns.rule_name") %>
             </th>
-            <th class="px-4 py-3 text-center text-xs font-medium text-secondary uppercase tracking-wider">
+            <th class="px-4 py-3 text-center text-xs font-medium text-secondary">
               <div class="flex flex-col leading-tight">
                 <div><%= t("rules.recent_runs.columns.transactions_counts.queued") %></div>
                 <div><%= t("rules.recent_runs.columns.transactions_counts.processed") %></div>
@@ -132,35 +132,21 @@
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-subdued">
           <% @recent_runs.each do |run| %>
-            <tr class="<%= "bg-red-50 theme-dark:bg-red-950/30" if run.failed? %>">
+            <tr class="<%= "bg-destructive/5" if run.failed? %>">
               <td class="px-4 py-3 text-sm text-primary whitespace-nowrap">
-                <%= run.executed_at.strftime("%b %d, %Y %I:%M %p") %>
+                <%= l(run.executed_at, format: :rule_run) %>
               </td>
               <td class="px-4 py-3 text-sm text-primary text-center">
-                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium <%= run.execution_type == "manual" ? "bg-blue-50 text-blue-700 theme-dark:bg-blue-950/30 theme-dark:text-blue-400" : "bg-purple-50 text-purple-700 theme-dark:bg-purple-950/30 theme-dark:text-purple-400" %>">
-                  <%= t("rules.recent_runs.execution_types.#{run.execution_type}") %>
-                </span>
+                <%= render DS::Pill.new(label: t("rules.recent_runs.execution_types.#{run.execution_type}"), tone: run.execution_type == "manual" ? :info : :violet, marker: false) %>
               </td>
               <td class="px-4 py-3 text-sm text-center">
                 <div class="flex items-center justify-center gap-2">
-                  <% if run.pending? %>
-                    <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-50 text-yellow-700 theme-dark:bg-yellow-950/30 theme-dark:text-yellow-400">
-                      <%= t("rules.recent_runs.statuses.#{run.status}") %>
-                    </span>
-                  <% elsif run.success? %>
-                    <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-50 text-green-700 theme-dark:bg-green-950/30 theme-dark:text-green-400">
-                      <%= t("rules.recent_runs.statuses.#{run.status}") %>
-                    </span>
-                  <% else %>
-                    <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 theme-dark:bg-red-950/30 theme-dark:text-red-400">
-                      <%= t("rules.recent_runs.statuses.#{run.status}") %>
-                    </span>
-                  <% end %>
+                  <%= render DS::Pill.new(label: t("rules.recent_runs.statuses.#{run.status}"), tone: run.pending? ? :warning : (run.success? ? :success : :error), marker: false) %>
                   <% if run.failed? && run.error_message.present? %>
                     <div data-controller="tooltip" data-tooltip-content-value="<%= run.error_message %>">
-                      <%= icon("info", size: "sm", class: "text-red-500") %>
+                      <%= icon("info", size: "sm", color: "destructive") %>
                     </div>
                   <% end %>
                 </div>

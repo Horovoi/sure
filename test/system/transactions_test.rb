@@ -33,7 +33,7 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_selector "h1", text: "Transactions"
 
     within "form#transactions-search" do
-      fill_in "Search transactions ...", with: @transaction.name
+      fill_in "Search transactions", with: @transaction.name
       find("#q_search").send_keys(:tab) # Trigger blur to submit form
     end
 
@@ -428,7 +428,7 @@ class TransactionsTest < ApplicationSystemTestCase
 
     def search_for(text)
       within "form#transactions-search" do
-        fill_in "Search transactions ...", with: text
+        fill_in "Search transactions", with: text
         find("#q_search").send_keys(:tab) # Trigger blur to submit form
       end
     end

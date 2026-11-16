@@ -18,7 +18,7 @@ en:
       fees_hint: Optional. Each fee is in its account's currency and is booked as an expense in Fees.
       from: From
       income: Income
-      select_account: Select account
+      select_account: Select an account
       source_fee: Sending fee
       submit: Create transfer
       tags: Tags

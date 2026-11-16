@@ -26,7 +26,7 @@ en:
       edit: Edit
       first_transaction: First transaction
       last_transaction: Last transaction
-      no_transactions: No transactions match these filters.
+      no_transactions: No transactions match these filters
       search_placeholder: Search this merchant's transactions
       select_page: Select all transactions on this page
       summary: Summary
