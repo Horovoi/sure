@@ -74,6 +74,7 @@ en:
         title: "Spending"
         expand: "Expand"
         expanded_view: "Expanded view"
+        tooltip_day: "Day %{day}"
         period_format: "%B %Y"
         period_picker_label: "Budget period"
         date_range: "%{start_date} - %{end_date}"

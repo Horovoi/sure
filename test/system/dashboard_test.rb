@@ -178,6 +178,26 @@ class DashboardTest < ApplicationSystemTestCase
     assert_selector "section[data-section-key='net_worth_chart']"
   end
 
+  # Both periods are compared by day of period, so the two rows carry different calendar
+  # dates; the header names the day they share and each row starts with its period.
+  test "the spending tooltip names the day of period above both periods" do
+    visit root_path
+    current_label = nil
+    within "#spending-trend-section" do
+      chart = find("[data-controller='spending-chart']")
+      current_label = chart["data-spending-chart-current-label-value"]
+      chart.find("svg path[data-series='current']").hover
+    end
+
+    tooltip = find(".chart-tooltip", visible: true)
+    # Low on the screen it opens above the cursor, so all of it stays in view
+    rect = page.evaluate_script("(() => { const r = document.querySelector('.chart-tooltip').getBoundingClientRect(); return [r.top, r.bottom, window.innerHeight]; })()")
+    assert rect[0] >= 0 && rect[1] <= rect[2], "tooltip runs off screen: #{rect.inspect}"
+    assert_match(/\ADay \d+\z/, tooltip.find("[data-testid='spending-tooltip-day']").text)
+    # Each row reads period, date, amount
+    assert_match(/\ADay \d+\s+#{Regexp.escape(current_label)}\s/, tooltip.text)
+  end
+
   test "the spending category filter changes the curve" do
     travel = @family.categories.create!(name: "Curve Travel", color: "#2244aa")
     create_transaction(account: @account, currency: @family.currency, category: travel, amount: 700_000, date: @start_date)

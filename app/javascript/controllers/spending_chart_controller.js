@@ -14,6 +14,9 @@ export default class extends Controller {
     currency: { type: String, default: "USD" },
     currentLabel: { type: String, default: "" },
     previousLabel: { type: String, default: "" },
+    // "Day %{day}": the tooltip header. Both periods are compared by day of period,
+    // so the two rows' calendar dates differ; the header names the day they share.
+    dayLabel: { type: String, default: "Day %{day}" },
   };
 
   #resizeObserver = null;
@@ -274,38 +277,40 @@ export default class extends Controller {
             .attr("pointer-events", "none");
         }
 
-        const estimatedWidth = 240;
-        const left =
-          event.clientX + 12 + estimatedWidth > window.innerWidth
-            ? event.clientX - estimatedWidth - 12
-            : event.clientX + 12;
+        this.#tooltip.html(this.#tooltipTemplate(day, currentPoint, previousPoint)).style("opacity", 1);
 
-        this.#tooltip
-          .html(this.#tooltipTemplate(currentPoint, previousPoint))
-          .style("opacity", 1)
-          .style("left", `${Math.max(0, left)}px`)
-          .style("top", `${event.clientY - 10}px`);
+        // Measured after filling, so it flips left or up instead of running off screen
+        const box = this.#tooltip.node().getBoundingClientRect();
+        const left =
+          event.clientX + 12 + box.width > window.innerWidth ? event.clientX - box.width - 12 : event.clientX + 12;
+        const top =
+          event.clientY - 10 + box.height > window.innerHeight ? event.clientY - box.height - 10 : event.clientY - 10;
+
+        this.#tooltip.style("left", `${Math.max(0, left)}px`).style("top", `${Math.max(0, top)}px`);
       })
       .on("mouseleave", clear);
   }
 
-  #tooltipTemplate(currentPoint, previousPoint) {
+  // Day of period on top; each row: period, its calendar date, running total. One grid
+  // for both rows, so the columns line up.
+  #tooltipTemplate(day, currentPoint, previousPoint) {
     const row = (point, color, label) => {
       if (!point) return "";
       return `
-        <div class="flex items-center gap-1.5 text-primary font-medium tabular-nums">
-          <span class="inline-block w-2 h-2 rounded-full" style="background-color: ${color};"></span>
-          <span>${this.#esc(point.date_formatted)}</span>
-          <span class="text-secondary font-normal">${this.#esc(label)}</span>
-          <span>${this.#esc(this.#formatCurrency(point.value))}</span>
-        </div>
+        <span class="inline-block w-2 h-2 rounded-full self-center" style="background-color: ${color};"></span>
+        <span class="text-primary font-medium">${this.#esc(label)}</span>
+        <span class="text-secondary">${this.#esc(point.date_formatted)}</span>
+        <span class="text-primary font-medium text-right">${this.#esc(this.#formatCurrency(point.value))}</span>
       `;
     };
 
     return `
       <div class="space-y-1">
-        ${row(currentPoint, CURRENT_COLOR, this.currentLabelValue)}
-        ${row(previousPoint, PREVIOUS_COLOR, this.previousLabelValue)}
+        <div class="text-xs text-secondary" data-testid="spending-tooltip-day">${this.#esc(this.dayLabelValue.replace("%{day}", day))}</div>
+        <div class="grid grid-cols-[auto_auto_auto_auto] items-baseline gap-x-2 gap-y-1 tabular-nums">
+          ${row(currentPoint, CURRENT_COLOR, this.currentLabelValue)}
+          ${row(previousPoint, PREVIOUS_COLOR, this.previousLabelValue)}
+        </div>
       </div>
     `;
   }
