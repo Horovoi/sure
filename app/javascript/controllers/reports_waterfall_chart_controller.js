@@ -152,12 +152,12 @@ export default class extends Controller {
       .forEach((tick) => appendLevelLine(grid, { x1: 0, x2: innerWidth, y: yScale(tick) }));
     appendLevelLine(g, { x1: 0, x2: innerWidth, y: yScale(0), strong: true });
 
-    // Dashed separator before total bar
+    // Separator before the total bar
     if (bars.length > 1) {
       const totalIdx = bars.length - 1;
       const separatorX =
         xScale(bars[totalIdx].name) - xScale.step() * xScale.padding() * 0.5;
-      appendGuideLine(g, { x1: separatorX, x2: separatorX, y1: 0, y2: innerHeight });
+      appendGuideLine(g, { x1: separatorX, x2: separatorX, y1: 0, y2: innerHeight, reference: true });
     }
 
     // Draw bars
@@ -233,21 +233,12 @@ export default class extends Controller {
         .style("fill", labelFitsInside ? "white" : fillColor)
         .text(labelValue);
 
-      // Connector lines (dashed horizontal from bar end to next bar start)
+      // Step connector from this bar's end to the next bar's start: a
+      // reference line, so it does not read as a level when it runs near one
       if (i < bars.length - 2) {
         // skip last component and don't connect to total
         const nextBar = bars[i + 1];
-        const connectorY = yScale(bar.end);
-        const nextX = xScale(nextBar.name);
-        g.append("line")
-          .attr("x1", x + barWidth)
-          .attr("x2", nextX)
-          .attr("y1", connectorY)
-          .attr("y2", connectorY)
-          .attr("stroke", "var(--color-text-secondary)")
-          .attr("stroke-dasharray", "3,3")
-          .attr("stroke-width", 1)
-          .attr("opacity", 0.5);
+        appendLevelLine(g, { x1: x + barWidth, x2: xScale(nextBar.name), y: yScale(bar.end), reference: true });
       }
     });
 

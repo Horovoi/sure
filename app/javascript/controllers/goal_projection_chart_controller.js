@@ -5,7 +5,13 @@ import {
   CHART_TOOLTIP_CONTEXT_CLASSES,
   CHART_TOOLTIP_VALUE_CLASSES,
 } from "utils/chart_tooltip";
-import { CHART_AXIS_LABEL, appendGuideLine, appendLevelLine } from "utils/chart_grid";
+import {
+  CHART_AXIS_LABEL,
+  CHART_LABEL_HALO,
+  CHART_LABEL_PLATE,
+  appendGuideLine,
+  appendLevelLine,
+} from "utils/chart_grid";
 
 // Projection chart for a goal. Renders:
 //   - Saved area + line from goal creation → today (solid)
@@ -242,7 +248,12 @@ export default class extends Controller {
 
     if (yAxisVisible) {
       yTicks.forEach((tickValue) => {
-        appendLevelLine(svg, { x1: margin.left, x2: margin.left + innerWidth, y: y(tickValue), strong: tickValue === 0 });
+        // A level at the target (or a pixel or two from it) is the target
+        // line itself: two lines there merged into one blurred stroke
+        const onTarget = targetY !== null && Math.abs(y(tickValue) - targetY) < 4;
+        if (!onTarget) {
+          appendLevelLine(svg, { x1: margin.left, x2: margin.left + innerWidth, y: y(tickValue), strong: tickValue === 0 });
+        }
         svg
           .append("text")
           .attr("x", margin.left - 6)
@@ -253,16 +264,20 @@ export default class extends Controller {
       });
     }
 
+    let targetLabel = null;
     if (targetAmount > 0) {
-      // The target is the chart's reference line, as strong as a zero line
-      appendLevelLine(svg, { x1: margin.left, x2: margin.left + innerWidth, y: targetY, strong: true, className: "goal-target-line" });
+      // The target is a reference line, not one more level
+      appendLevelLine(svg, { x1: margin.left, x2: margin.left + innerWidth, y: targetY, reference: true, className: "goal-target-line" });
 
       // Always on the right, inside the plot: the y-axis column is too narrow
       // for "Target · ₴20K" (it was clipped to "· ₴20K"). Above the line,
       // or below it when the line runs along the top edge, where the label
-      // would meet the Today marker's label.
+      // would meet the Today marker's label. The projection line can run
+      // through it, so it sits on a card-coloured plate and is raised above
+      // the lines once they are drawn.
       const labelBelow = targetY - margin.top < 18;
-      svg
+      targetLabel = svg.append("g").attr("class", "goal-target-label");
+      const text = targetLabel
         .append("text")
         .attr("x", margin.left + innerWidth - 4)
         .attr("y", labelBelow ? targetY + 14 : targetY - 6)
@@ -271,6 +286,17 @@ export default class extends Controller {
         .attr("fill", textPrimary)
         .attr("class", "privacy-sensitive")
         .text(this.targetLabelTemplateValue.replace("{amount}", data.target_amount_label));
+      const box = text.node().getBBox();
+      if (box.width > 0) {
+        targetLabel
+          .insert("rect", "text")
+          .attr("class", CHART_LABEL_PLATE)
+          .attr("x", box.x - 4)
+          .attr("y", box.y - 1)
+          .attr("width", box.width + 8)
+          .attr("height", box.height + 2)
+          .attr("rx", 3);
+      }
     }
 
     const area = d3
@@ -365,17 +391,13 @@ export default class extends Controller {
             .attr("text-anchor", "end")
             .attr("font-size", 12)
             .attr("fill", textSecondary)
-            .attr("paint-order", "stroke")
-            .attr("stroke", containerBg)
-            .attr("stroke-width", 4)
-            .attr("stroke-linejoin", "round")
-            .attr("class", "privacy-sensitive")
+            .attr("class", `${CHART_LABEL_HALO} privacy-sensitive`)
             .text(labelText);
         }
       }
     }
 
-    appendGuideLine(svg, { x1: x(today), x2: x(today), y1: margin.top, y2: margin.top + innerHeight });
+    appendGuideLine(svg, { x1: x(today), x2: x(today), y1: margin.top, y2: margin.top + innerHeight, reference: true });
 
     svg
       .append("circle")
@@ -395,6 +417,7 @@ export default class extends Controller {
         .attr("class", CHART_AXIS_LABEL)
         .text(this.todayLabelValue);
     }
+    targetLabel?.raise();
 
     // Full 4-digit year so the terminal "Jan 2027" reads as the year, not
     // as "Jan 27" (which scans as January 27th). Slightly wider per tick;

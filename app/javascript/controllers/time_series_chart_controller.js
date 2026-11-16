@@ -221,7 +221,7 @@ export default class extends Controller {
     }
   }
 
-  // Draw a subtle dashed horizontal line at y=0 when data crosses zero
+  // Draw the solid zero line when the data crosses zero
   _drawZeroLine() {
     const values = this._normalDataPoints.map(this._getDatumValue);
     const dataMin = d3.min(values);

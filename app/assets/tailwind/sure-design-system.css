@@ -56,10 +56,11 @@
   --color-tooltip-bg: #fff;
   --color-tooltip-border: var(--color-gray-200);
 
-  /* Chart level lines (y guides, gridlines): the border-primary strength, so
-     they show in dark mode too; the zero or target line one step stronger.
-     Dark values are below. */
-  --color-chart-grid: var(--color-alpha-black-300);
+  /* Chart level lines (y guides, gridlines), and one step stronger the zero
+     line and the reference lines (a goal target, today). Light stays at the
+     strength of a hairline border; dark is a step up, so the dashes show on
+     a dark card. Dark values are below. */
+  --color-chart-grid: var(--color-alpha-black-200);
   --color-chart-grid-strong: var(--color-alpha-black-400);
 
   /* Gray scale */
@@ -443,15 +444,41 @@
     are theme tokens, so a theme switch needs no redraw for them.
   */
   .chart-grid-line,
-  .chart-zero-line {
+  .chart-zero-line,
+  .chart-reference-line {
     fill: none;
     stroke: var(--color-chart-grid);
     stroke-width: 1px;
     stroke-dasharray: 3 3;
   }
 
+  /* The zero line (a bar chart's baseline too) is solid, so it reads as the
+     anchor at once and not as one more level */
   .chart-zero-line {
     stroke: var(--color-chart-grid-strong);
+    stroke-dasharray: none;
+  }
+
+  /* A reference that is not a level: a goal target, the today marker, the
+     waterfall's step connectors and total separator. Longer dashes in the
+     strong colour, so it never reads as a gridline. */
+  .chart-reference-line {
+    stroke: var(--color-chart-grid-strong);
+    stroke-dasharray: 6 4;
+  }
+
+  /* Text drawn over lines: a card-coloured outline (halo) or a card-coloured
+     rectangle behind it (plate, for text with spaces a line could show
+     through) keeps it readable where a line runs through it */
+  .chart-label-halo {
+    paint-order: stroke fill;
+    stroke: var(--color-container);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+
+  .chart-label-plate {
+    fill: var(--color-container);
   }
 
   /* Short solid marks on an axis, such as the date ticks under a time series */

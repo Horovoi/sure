@@ -1,12 +1,16 @@
 // The level lines and axis labels of every D3 chart share one look: the strokes,
-// dashes and type are the .chart-grid-line, .chart-zero-line, .chart-tick-mark and
-// .chart-axis-label classes in sure-design-system.css, coloured by theme tokens.
-// Charts put these classes on and do not set strokes, opacities or font sizes.
+// dashes and type are the .chart-grid-line, .chart-zero-line,
+// .chart-reference-line, .chart-tick-mark and .chart-axis-label classes in
+// sure-design-system.css, coloured by theme tokens. Charts put these classes on
+// and do not set strokes, opacities or font sizes.
 
 export const CHART_GRID_LINE = "chart-grid-line";
 export const CHART_ZERO_LINE = "chart-zero-line";
+export const CHART_REFERENCE_LINE = "chart-reference-line";
 export const CHART_TICK_MARK = "chart-tick-mark";
 export const CHART_AXIS_LABEL = "chart-axis-label";
+export const CHART_LABEL_HALO = "chart-label-halo";
+export const CHART_LABEL_PLATE = "chart-label-plate";
 
 // The axis label font size in px, for layout math (label collisions, gutters).
 // Keep it the same as .chart-axis-label.
@@ -21,11 +25,15 @@ export function crispCoordinate(value) {
 
 // Appends a straight guide to `parent` (a d3 selection): horizontal when y1 and
 // y2 are equal (a level line), vertical when x1 and x2 are (a marker such as
-// today). `strong` draws the zero or target line. Extra classes go in `className`.
-export function appendGuideLine(parent, { x1, x2, y1, y2, strong = false, className = "" }) {
+// today). A plain guide is a dashed level line; `strong` draws the solid zero
+// line (a bar chart's baseline too); `reference` draws a reference that is not a
+// level, such as a goal target or the today marker. Extra classes go in
+// `className`.
+export function appendGuideLine(parent, { x1, x2, y1, y2, strong = false, reference = false, className = "" }) {
   const horizontal = y1 === y2;
   const vertical = x1 === x2;
-  const classes = [strong ? CHART_ZERO_LINE : CHART_GRID_LINE, className].filter(Boolean).join(" ");
+  const kind = reference ? CHART_REFERENCE_LINE : strong ? CHART_ZERO_LINE : CHART_GRID_LINE;
+  const classes = [kind, className].filter(Boolean).join(" ");
 
   return parent
     .append("line")
@@ -37,8 +45,8 @@ export function appendGuideLine(parent, { x1, x2, y1, y2, strong = false, classN
 }
 
 // A level line across [x1, x2] at height y
-export function appendLevelLine(parent, { x1, x2, y, strong = false, className = "" }) {
-  return appendGuideLine(parent, { x1, x2, y1: y, y2: y, strong, className });
+export function appendLevelLine(parent, { x1, x2, y, strong = false, reference = false, className = "" }) {
+  return appendGuideLine(parent, { x1, x2, y1: y, y2: y, strong, reference, className });
 }
 
 // Gives the text of a d3-axis selection (or any text selection) the axis label

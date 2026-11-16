@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   CHART_GRID_LINE,
+  CHART_REFERENCE_LINE,
   CHART_ZERO_LINE,
   appendGuideLine,
   appendLevelLine,
@@ -56,4 +57,15 @@ test("a vertical guide is crisp on x and keeps its length", () => {
   appendGuideLine(parent, { x1: 120.7, x2: 120.7, y1: 28, y2: 212 });
 
   assert.deepEqual(parent.appended[0].attrs, { class: CHART_GRID_LINE, x1: 120.5, x2: 120.5, y1: 28, y2: 212 });
+});
+
+test("a reference line has its own class, whatever its strength", () => {
+  const parent = fakeParent();
+  appendLevelLine(parent, { x1: 0, x2: 300, y: 60, reference: true, className: "goal-target-line" });
+  appendGuideLine(parent, { x1: 40, x2: 40, y1: 0, y2: 200, reference: true, strong: true });
+
+  assert.equal(parent.appended[0].attrs.class, `${CHART_REFERENCE_LINE} goal-target-line`);
+  assert.equal(parent.appended[0].attrs.y1, 60.5);
+  assert.equal(parent.appended[1].attrs.class, CHART_REFERENCE_LINE);
+  assert.equal(parent.appended[1].attrs.x1, 40.5);
 });
