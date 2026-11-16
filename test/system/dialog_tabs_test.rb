@@ -63,6 +63,24 @@ class DialogTabsTest < ApplicationSystemTestCase
     assert_equal 1, sizes.compact.uniq.size, sizes.inspect
   end
 
+  # Every field of both forms is one height, a category picked or not, and the dialog
+  # hangs from the top, so the title and tabs do not move when the form changes
+  test "fields share one height and the title stays put across a switch" do
+    visit transactions_path
+    click_on I18n.t("transactions.index.new_transaction", default: "New transaction"), match: :first
+    assert_selector "dialog[open] .hw-combobox__input"
+
+    expense = field_heights
+    assert_equal 1, expense.uniq.size, expense.inspect
+    title_top = dialog_title_top
+
+    within("dialog[open]") { click_on "Transfer" }
+    assert_selector "dialog[open] [name='transfer[amount]']", visible: :all
+    transfer = field_heights
+    assert_equal [ expense.first ], transfer.uniq, transfer.inspect
+    assert_equal title_top, dialog_title_top
+  end
+
   # The tabs morph the form: the amount input the money field guards can be swapped
   # under it, and its checks must follow the new input
   test "after a tab switch the amount field still refuses a second decimal separator" do
@@ -87,4 +105,18 @@ class DialogTabsTest < ApplicationSystemTestCase
     find("dialog[open]").send_keys(:tab)
     assert evaluate_script("document.querySelector('#modal dialog[open]').contains(document.activeElement)")
   end
+
+  private
+    # Heights of the visible single-line fields (notes and the details section aside)
+    def field_heights
+      evaluate_script(<<~JS)
+        [...document.querySelectorAll("#modal dialog[open] .form-field")]
+          .filter((f) => f.offsetParent !== null && !f.querySelector("textarea"))
+          .map((f) => Math.round(f.getBoundingClientRect().height))
+      JS
+    end
+
+    def dialog_title_top
+      evaluate_script("Math.round(document.querySelector('#modal dialog[open] h2').getBoundingClientRect().top)")
+    end
 end

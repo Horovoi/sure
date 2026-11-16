@@ -70,8 +70,17 @@
     @apply text-sm leading-5 p-0 border-0 ring-0 outline-hidden focus:ring-0 placeholder:text-subdued;
   }
 
+  /* Label, a 4px gap and a 20px line, like .form-field__body */
+  .hw-combobox {
+    @apply gap-1 leading-5;
+  }
+
   .hw-combobox__main__wrapper {
-    @apply border-0 p-0 focus:border-0 ring-0 focus:ring-0 shadow-none focus:shadow-none focus-within:shadow-none;
+    @apply border-0 p-0 focus:border-0 ring-0 focus:ring-0 shadow-none focus:shadow-none focus-within:shadow-none leading-5;
+  }
+
+  .hw-combobox__handle {
+    @apply h-5;
   }
 
   .hw-combobox__listbox {

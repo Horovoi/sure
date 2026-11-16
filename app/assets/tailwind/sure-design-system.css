@@ -464,8 +464,11 @@
     @apply flex items-center justify-between gap-2;
   }
 
+  /* One 20px line for every control, so each field is the same height: a
+     wrapper around a control (the money field's currency select) otherwise
+     took the body's 24px line */
   .form-field__body {
-    @apply flex flex-col gap-1;
+    @apply flex flex-col gap-1 leading-5;
   }
 
   .form-field__actions {

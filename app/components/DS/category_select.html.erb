@@ -17,7 +17,7 @@
 
       <button type="button"
               id="<%= trigger_id %>"
-              class="form-field__input min-h-7 flex items-center gap-2 pr-8"
+              class="form-field__input min-h-5 flex items-center gap-2 pr-8"
               data-category-select-target="button"
               data-action="click->category-select#toggle"
               aria-haspopup="listbox"
@@ -25,8 +25,10 @@
               aria-controls="<%= menu_id %>"
               <%= "disabled" if disabled %>>
 
+        <%# The trigger keeps a plain input's height, like every field: the selected
+            badge (container > badge > pill) loses its vertical padding here %>
         <span data-category-select-target="selectionContainer"
-              class="text-secondary">
+              class="text-secondary *:*:py-0 *:*:-my-px">
           <% selected = selected_category %>
 
           <% if selected %>

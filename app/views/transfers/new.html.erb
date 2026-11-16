@@ -1,4 +1,6 @@
-<%= render DS::Dialog.new do |dialog| %>
+<%# Anchored to the top: the Expense / Income / Transfer tabs swap this dialog's
+    content for a form of another height, and the title and tabs stay put %>
+<%= render DS::Dialog.new(align: :top) do |dialog| %>
   <% dialog.with_header(title: t(".title")) %>
   <% dialog.with_body do %>
     <%= render "form", transfer: @transfer %>

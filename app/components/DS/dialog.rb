@@ -70,7 +70,15 @@ class DS::Dialog < DesignSystemComponent
   # `disable_click_outside: true` keeps the dialog open when the backdrop is
   # clicked (for forms that would lose typed input). There is no per-user
   # preference: the default is always false.
-  def initialize(variant: "modal", auto_open: true, reload_on_close: false, width: "md", frame: nil, disable_frame: false, content_class: nil, disable_click_outside: false, responsive: false, scrollable: true, heading_level: 2, **opts)
+  #
+  # `align: :top` (modal only) hangs the dialog from a fixed point near the top
+  # instead of centering it, for a dialog whose content is swapped for content
+  # of another height (the new-transaction tabs): centered, its title and tabs
+  # moved on every switch.
+  ALIGNS = %i[center top].freeze
+
+  def initialize(variant: "modal", auto_open: true, reload_on_close: false, width: "md", frame: nil, disable_frame: false, content_class: nil, disable_click_outside: false, responsive: false, scrollable: true, heading_level: 2, align: :center, **opts)
+    raise ArgumentError, "align must be one of #{ALIGNS.inspect}, got: #{align.inspect}" unless ALIGNS.include?(align.to_sym)
     unless heading_level.is_a?(Integer) && VALID_HEADING_LEVELS.cover?(heading_level)
       raise ArgumentError, "heading_level must be an Integer between 1 and 6, got: #{heading_level.inspect}"
     end
@@ -86,6 +94,7 @@ class DS::Dialog < DesignSystemComponent
     @responsive = responsive
     @scrollable = scrollable
     @heading_level = heading_level
+    @align = align.to_sym
     @title_id = "dialog-title-#{SecureRandom.hex(4)}"
     @opts = opts
   end
@@ -110,6 +119,8 @@ class DS::Dialog < DesignSystemComponent
       "items-start justify-center lg:items-end lg:justify-end"
     elsif responsive?
       "items-center justify-center lg:items-end lg:justify-end"
+    elsif @align == :top
+      "items-start justify-center pt-[8svh] lg:pt-[12svh]"
     else
       "items-center justify-center"
     end
