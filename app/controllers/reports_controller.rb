@@ -339,15 +339,12 @@ class ReportsController < ApplicationController
     # The previous and next arrows, the period label, the exact dates under
     # it, and the link back to the current period. The next arrow is off on
     # the current period, and the link is not shown there.
-    # label_samples are every label this period type can show; the view
-    # stacks them invisibly under the label so its width never changes.
     def build_period_nav
       at_current = period_offset.zero?
 
       {
         label: period_label(@start_date, @end_date, current: at_current),
         range: period_range_text,
-        label_samples: period_label_samples,
         previous_params: at_earliest_period? ? nil : period_nav_params(period_offset - 1),
         next_params: at_current ? nil : period_nav_params(period_offset + 1),
         current_params: period_nav_params(0),
@@ -420,21 +417,6 @@ class ReportsController < ApplicationController
       return range unless use_fiscal_periods? && @period_type != :custom
 
       t("reports.index.period_nav.fiscal_range.#{@period_type}", range: range)
-    end
-
-    # One label per month (the 28th: a two-digit day) covers every month name
-    # and quarter or half of the year, plus Year's "to date" form. Month,
-    # Quarter, 6 months and Year share one set, so the label slot (and the
-    # next arrow after it) keeps its place when the type changes.
-    # Custom has its own, longer labels.
-    def period_label_samples
-      year = @start_date.year
-      days = (1..12).map { |month| Date.new(year, month, 28) }
-      types = @period_type == :custom ? [ :custom ] : PERIOD_STEP_MONTHS.keys
-
-      samples = types.flat_map { |type| days.map { |day| period_label(day, day, period_type: type) } }
-      samples << period_label(@start_date, @end_date, current: true, period_type: :ytd) unless @period_type == :custom
-      samples.uniq
     end
 
     def beginning_of_half_year(date)

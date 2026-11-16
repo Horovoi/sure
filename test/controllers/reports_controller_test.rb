@@ -775,32 +775,15 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "span[aria-disabled='true'][data-period-arrow='next']", 1
   end
 
-  # Every label Month, Quarter, 6 Months and Year can show sits invisibly in
-  # the label's grid cell, so the cell is as wide as the widest one and the
-  # row never moves, neither between periods nor between period types.
-  test "the period label reserves the width of its widest label" do
-    travel_to Date.new(2026, 3, 20) do
-      @family.update!(use_fiscal_months: false)
-
-      # 12 months, 4 quarters, 2 halves, the year and the year to date
-      samples = "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true']"
-      sample_texts = %i[monthly quarterly last_6_months ytd].map do |period_type|
-        get reports_path(period_type: period_type)
-        assert_select "#{samples}.invisible", 20, period_type.to_s
-        css_select(samples).map(&:text)
-      end
-      assert_equal 1, sample_texts.uniq.size, "every period type reserves the same labels"
-      assert_includes sample_texts.first, "September 2026"
-      assert_includes sample_texts.first, "Q4 2026"
-      assert_includes sample_texts.first, "2026 to date"
-
-      get reports_path(period_type: :ytd, period_offset: -1)
-      assert_select "[data-testid='report-period-label']", text: "2025"
-      assert_select "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true']", text: "2025 to date"
-
-      get reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10")
-      assert_select "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true']", text: "Sep 28, 2026 – Sep 28, 2026"
-    end
+  # Both arrows come before the label, so a longer or shorter label never
+  # moves them and the label needs no reserved width.
+  test "the period arrows sit together before the period label" do
+    with_old_history
+    get reports_path(period_type: :monthly, period_offset: -1)
+    nav = css_select("[data-testid='report-period-nav']").first
+    order = nav.css("[data-period-arrow], [data-testid='report-period-label']").map { |n| n["data-period-arrow"] || "label" }
+    assert_equal %w[previous next label], order
+    assert_select "[data-testid='report-period-nav'] .invisible", count: 0
   end
 
   test "a past period links forward and back to the current period" do

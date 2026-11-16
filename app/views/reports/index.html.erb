@@ -1,16 +1,15 @@
 <% content_for :page_header do %>
-  <%# The period is the page's subject: its name is the headline, stepped by the
-      arrows beside it. The breadcrumb already says Reports, so the h1 says it
-      only to screen readers. Nothing here changes size between periods: the
-      arrows keep their box when off, the label is as wide as its widest
-      sample, and the period-length control sits at the far end of the row. %>
+  <%# The period is the page's subject: its name is the headline. The two
+      arrows sit together before it, as in a calendar, so they never move and
+      the label takes its natural width. The breadcrumb already says Reports,
+      so the h1 says it only to screen readers. %>
   <% nav = @period_nav %>
   <% custom = @period_type == :custom %>
   <% fiscal_choice = Current.family.fiscal_month_enabled? && !custom %>
   <div class="@container mb-6">
     <div class="flex flex-col gap-4 @2xl:flex-row @2xl:items-start @2xl:justify-between">
-      <div class="min-w-0" data-testid="report-period-nav">
-        <div class="flex items-center gap-1 -ml-2">
+      <div class="min-w-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2" data-testid="report-period-nav">
+        <div class="flex items-center -ml-2">
           <%= render DS::PeriodArrow.new(
             direction: :previous,
             label: t("reports.index.period_nav.previous"),
@@ -18,16 +17,6 @@
             hotkey: "ArrowLeft",
             shortcut_hint: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.previous"), key: "←")
           ) %>
-
-          <h1 class="<%= class_names("inline-grid font-medium text-primary text-center whitespace-nowrap tabular-nums",
-                                    custom ? "text-lg @lg:text-2xl" : "text-2xl @lg:text-3xl") %>">
-            <span class="sr-only"><%= t("reports.index.heading_prefix") %></span>
-            <span class="[grid-area:1/1]" data-testid="report-period-label"><%= nav[:label] %></span>
-            <% nav[:label_samples].each do |sample| %>
-              <span class="[grid-area:1/1] invisible" aria-hidden="true"><%= sample %></span>
-            <% end %>
-          </h1>
-
           <%= render DS::PeriodArrow.new(
             direction: :next,
             label: t("reports.index.period_nav.next"),
@@ -37,26 +26,32 @@
           ) %>
         </div>
 
+        <h1 class="<%= class_names("min-w-0 truncate font-medium text-primary tabular-nums",
+                                  custom ? "text-lg @lg:text-2xl" : "text-2xl @lg:text-3xl") %>">
+          <span class="sr-only"><%= t("reports.index.heading_prefix") %></span>
+          <span data-testid="report-period-label"><%= nav[:label] %></span>
+        </h1>
+
         <%# The exact days, or the fields that choose them for a custom range.
             Back to current comes last and the line never wraps (a long range
             is cut short instead), so showing it moves nothing else. %>
-        <div class="<%= class_names("flex items-center gap-x-3 gap-y-2 min-h-6 mt-1 text-xs @md:text-sm text-secondary", custom ? "flex-wrap" : "whitespace-nowrap") %>">
+        <div class="<%= class_names("flex items-center gap-x-3 gap-y-2 min-h-6 mt-1 text-xs @md:text-sm text-secondary", custom ? "col-span-2 mt-2 @md:col-span-1 @md:col-start-2" : "col-start-2 whitespace-nowrap") %>">
           <% if custom %>
-            <%= form_with url: reports_path, method: :get, data: { controller: "auto-submit-form" }, class: "flex flex-wrap items-center gap-2" do |f| %>
+            <%= form_with url: reports_path, method: :get, data: { controller: "auto-submit-form" }, class: "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 w-full max-w-sm" do |f| %>
               <%= f.hidden_field :period_type, value: :custom %>
               <%= f.date_field :start_date,
                                value: @start_date.strftime("%Y-%m-%d"),
                                data: { auto_submit_form_target: "auto" },
                                autocomplete: "off",
                                aria: { label: t("reports.index.date_range.from") },
-                               class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
+                               class: "w-full min-w-0 px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
               <span aria-hidden="true">–</span>
               <%= f.date_field :end_date,
                                value: @end_date.strftime("%Y-%m-%d"),
                                data: { auto_submit_form_target: "auto" },
                                autocomplete: "off",
                                aria: { label: t("reports.index.date_range.to") },
-                               class: "px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
+                               class: "w-full min-w-0 px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
             <% end %>
           <% else %>
             <span class="min-w-0 truncate" data-testid="report-period-range"><%= nav[:range] %></span>
