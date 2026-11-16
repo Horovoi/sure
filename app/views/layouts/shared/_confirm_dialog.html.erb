@@ -6,24 +6,33 @@
       <div class="space-y-2">
         <div class="flex items-center justify-between gap-2">
           <h3 id="confirm-dialog-title" class="font-medium text-primary" data-confirm-dialog-target="title"><%= t(".title") %></h3>
-          <%= icon("x", as_button: true, type: "submit", value: "cancel", aria_label: t("ds.dialog.close")) %>
+          <%# The DS close button: it closes without a value, so the action is not confirmed %>
+          <%= dialog.close_button %>
         </div>
 
         <p class="text-sm text-secondary" data-confirm-dialog-target="subtitle"><%= t(".body") %></p>
       </div>
 
-      <div>
-        <% ["primary", "outline-destructive", "destructive"].each do |variant| %>
-          <%= render DS::Button.new(
-          text: t(".confirm"),
-          variant: variant,
+      <%# Cancel takes the focus on open, so Enter never runs a destructive action %>
+      <div class="grid grid-cols-2 gap-2">
+        <%= render DS::Button.new(
+          text: t(".cancel"),
+          variant: "outline",
           type: :submit,
           autofocus: true,
           full_width: true,
-          value: "confirm",
-          data: { variant: variant, confirm_dialog_target: "confirmButton" },
-          hidden: true,
+          value: "cancel"
         ) %>
+        <% ["primary", "outline-destructive", "destructive"].each do |variant| %>
+          <%= render DS::Button.new(
+            text: t(".confirm"),
+            variant: variant,
+            type: :submit,
+            full_width: true,
+            value: "confirm",
+            data: { variant: variant, confirm_dialog_target: "confirmButton" },
+            hidden: true,
+          ) %>
         <% end %>
       </div>
     </form>

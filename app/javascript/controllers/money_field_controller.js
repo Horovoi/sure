@@ -30,46 +30,46 @@ export default class extends Controller {
 
   requestSequence = 0;
 
-  connect() {
+  // The handlers are bound once, here, before Stimulus connects any target:
+  // amountTargetConnected runs before connect(), and the listeners it adds
+  // must be the same functions that later removeEventListener calls take
+  // off. Bound in connect(), that first target got the unbound prototype
+  // methods, which ran with the input as `this` and threw on every keystroke.
+  initialize() {
     // The amount field's displayed value can use a comma decimal, but the
-    // server only accepts a dot (see #canonicalizeForSubmit below), so every
+    // server only accepts a dot (see canonicalizeForSubmit below), so every
     // form containing this field needs its data intercepted at submit time.
-    this.form = this.element.closest("form");
     this.canonicalizeForSubmit = this.canonicalizeForSubmit.bind(this);
-    this.form?.addEventListener("formdata", this.canonicalizeForSubmit);
 
     // The field is a plain text input (not type="number"), so nothing else
     // stops a second decimal separator from being typed — and an amount
     // evaluateAmountExpression rejects (more than one comma/dot) is left
-    // untouched by both #normalizeAmount and #canonicalizeForSubmit below,
-    // so it would otherwise reach the server exactly as typed and get
-    // silently mismangled by Rails' decimal typecast. Blocking the keystroke
-    // that would create a second separator keeps that state unreachable by
-    // typing in the first place.
+    // untouched by both normalizeAmount and canonicalizeForSubmit, so it
+    // would otherwise reach the server exactly as typed and get silently
+    // mismangled by Rails' decimal typecast. Blocking the keystroke that
+    // would create a second separator keeps that state unreachable.
     this.guardSeparator = this.guardSeparator.bind(this);
 
-    // The field being a text input means the browser applies no numeric
-    // constraint at all (unlike the old type="number" field, which refused
-    // to even hold a typeMismatch value): without this, an unparseable
-    // amount like "100-" or "5/0" is left in the field untouched (by design,
-    // see #normalizeAmount below) and would be submitted to the server
-    // verbatim, where Rails' lenient decimal typecast (String#to_d) parses
-    // only the leading valid portion instead of raising — silently turning
-    // "100-" into 100. Tracking validity live on every keystroke (rather
-    // than only on blur/submit) means the browser's native constraint
-    // validation — which runs before "submit"/"formdata" even fire — is
-    // already up to date by the time a submit is attempted, including via
-    // Enter in the field, which unlike a submit-button click doesn't blur
-    // it first.
+    // A text input gets no numeric constraint from the browser: without this,
+    // an unparseable amount like "100-" or "5/0" would be submitted verbatim,
+    // and Rails' lenient String#to_d would save 100. Validity is tracked on
+    // every keystroke, so native constraint validation (which runs before
+    // "submit"/"formdata") is up to date even for Enter in the field.
     this.updateValidity = this.updateValidity.bind(this);
-    // The listeners go on through amountTargetConnected below
+  }
+
+  connect() {
+    this.form = this.element.closest("form");
+    this.form?.addEventListener("formdata", this.canonicalizeForSubmit);
+    // The listeners go on through amountTargetConnected; listening again is
+    // harmless, #listenTo takes the same functions off first
     if (this.hasAmountTarget) this.#listenTo(this.amountTarget);
   }
 
   // A morph (the new-transaction dialog's tabs) can swap the amount input under a
   // controller that stays connected: the listeners follow the target, not connect()
   amountTargetConnected(input) {
-    if (this.guardSeparator) this.#listenTo(input);
+    this.#listenTo(input);
   }
 
   amountTargetDisconnected(input) {

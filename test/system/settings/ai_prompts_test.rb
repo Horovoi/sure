@@ -10,7 +10,7 @@ class Settings::AiPromptsTest < ApplicationSystemTestCase
   test "user can disable ai assistant" do
     visit settings_ai_prompts_path
 
-    click_button "Disable AI Assistant"
+    click_button "Disable AI assistant"
 
     sleep 5
 

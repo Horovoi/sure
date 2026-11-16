@@ -1,7 +1,9 @@
 <%# The button of a disclosure-group controller: expands every group, or collapses them
-    all when every one is open. Its label, aria-expanded and icon follow the groups. %>
+    all when every one is open. Its label, aria-expanded and icon follow the groups.
+    The sidebar and the balance sheet share it. It is drawn as a DS::Button icon at md
+    (36px, 44px on touch screens): DS::Button takes one icon, and this one swaps two. %>
 <button type="button"
-        class="shrink-0 inline-flex items-center justify-center rounded-lg p-2 text-secondary hover:text-primary hover:bg-surface-hover focus-ring"
+        class="shrink-0 inline-flex items-center justify-center w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-lg text-secondary hover:text-primary hover:bg-container-inset-hover focus-ring"
         aria-expanded="false"
         aria-label="<%= t("shared.expand_all_toggle.expand_all") %>"
         title="<%= t("shared.expand_all_toggle.expand_all") %>"

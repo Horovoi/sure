@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import openDialog from "utils/open_dialog";
 
 export default class extends Controller {
   static targets = ["dialog", "checkbox", "selectedCount"];
@@ -14,7 +15,7 @@ export default class extends Controller {
 
   open() {
     this.updateSelectedCount();
-    this.dialogTarget.showModal();
+    openDialog(this.dialogTarget, this.application);
   }
 
   selectAll() {

@@ -1,13 +1,18 @@
 <%# locals: (account:, return_to: nil) %>
+<%# The row names one account: with no subtype, the singular type ("Credit card"),
+    not the group's plural %>
+<% subtype_label = account.subtype.present? ? account.long_subtype_label : t("accounts.types.#{account.accountable_type.underscore}", default: account.long_subtype_label) %>
+<%# The row actions appear on hover and on keyboard focus anywhere in the row %>
+<% row_action_classes = "group-hover/account:inline-flex group-focus-within/account:inline-flex hidden w-7 h-7 shrink-0 items-center justify-center rounded-md text-secondary hover:text-primary hover:bg-container-inset-hover focus-ring" %>
 
 <%= turbo_frame_tag dom_id(account) do %>
-  <div class="p-4 flex items-center justify-between gap-3 group/account hover:bg-surface-hover">
-    <div class="flex items-center gap-3">
+  <div class="p-4 flex items-center justify-between gap-3 group/account hover:bg-container-hover">
+    <div class="flex items-center gap-3 min-w-0">
       <%= render "accounts/logo", account: account, size: "md" %>
 
-      <div>
+      <div class="min-w-0">
         <% if account.pending_deletion? %>
-          <p class="text-sm font-medium text-primary">
+          <p class="text-sm font-medium text-primary truncate">
             <span>
               <%= account.name %>
             </span>
@@ -16,54 +21,56 @@
             </span>
           </p>
         <% else %>
-          <div class="flex items-center gap-1.5">
-            <%= link_to account.name, account, class: [(account.active? ? "text-primary" : "text-subdued"), "text-sm font-medium hover:underline"], data: { turbo_frame: "_top" } %>
+          <div class="flex items-center gap-1.5 min-w-0">
+            <%= link_to account.name, account, class: [(account.active? ? "text-primary" : "text-subdued"), "text-sm font-medium hover:underline truncate rounded-sm focus-ring"], data: { turbo_frame: "_top" } %>
             <%= render "accounts/excluded_from_reports_indicator", account: account %>
             <% if account.institution_name.present? %>
-              <span class="text-secondary">• <%= account.institution_name %></span>
+              <span class="text-secondary truncate">• <%= account.institution_name %></span>
             <% end %>
             <%# w2-transfers default-account %>
             <% if Current.user&.default_account_id == account.id %>
-              <span class="inline-flex items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary" title="<%= t(".default_tooltip") %>">
+              <span class="shrink-0 inline-flex items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary" title="<%= t(".default_tooltip") %>">
                 <%= t(".default_label") %>
               </span>
             <% end %>
           </div>
-          <% if account.long_subtype_label %>
-            <p class="text-sm text-secondary truncate"><%= account.long_subtype_label %></p>
+          <% if subtype_label %>
+            <p class="text-sm text-secondary truncate"><%= subtype_label %></p>
           <% end %>
         <% end %>
       </div>
 
       <% unless account.pending_deletion? %>
-        <%= link_to edit_account_path(account, return_to: return_to), data: { turbo_frame: :modal }, class: "group-hover/account:flex hidden hover:opacity-80 items-center justify-center" do %>
-          <%= icon("pencil-line", size: "sm") %>
+        <%= link_to edit_account_path(account, return_to: return_to), data: { turbo_frame: :modal }, class: row_action_classes, title: t(".edit"), aria: { label: t(".edit") } do %>
+          <%= icon("pencil-line", size: "sm", color: "current") %>
         <% end %>
 
         <% if !account.linked? && provider_link_available?(account) %>
           <%= link_to select_provider_account_path(account),
                       data: { turbo_frame: :modal },
-                      class: "group-hover/account:flex hidden hover:opacity-80 items-center justify-center gap-1",
-                      title: t("accounts.account.link_provider") do %>
-            <%= icon("link", size: "sm") %>
+                      class: row_action_classes,
+                      title: t("accounts.account.link_provider"),
+                      aria: { label: t("accounts.account.link_provider") } do %>
+            <%= icon("link", size: "sm", color: "current") %>
           <% end %>
         <% elsif account.linked? %>
           <%= link_to confirm_unlink_account_path(account),
                       data: { turbo_frame: :modal },
-                      class: "group-hover/account:flex hidden hover:opacity-80 items-center justify-center gap-1",
-                      title: t("accounts.account.unlink_provider") do %>
-            <%= icon("unlink", size: "sm") %>
+                      class: row_action_classes,
+                      title: t("accounts.account.unlink_provider"),
+                      aria: { label: t("accounts.account.unlink_provider") } do %>
+            <%= icon("unlink", size: "sm", color: "current") %>
           <% end %>
         <% end %>
       <% end %>
     </div>
-    <div class="flex items-center gap-8">
+    <div class="flex items-center gap-4 sm:gap-8 shrink-0">
       <% if account.draft? %>
         <!-- Balance hidden for draft accounts -->
       <% elsif account.syncing? %>
         <div class="w-16 h-6 bg-loader rounded-full animate-pulse"></div>
       <% else %>
-        <p class="text-sm font-medium privacy-sensitive <%= account.active? ? "text-primary" : "text-subdued" %>">
+        <p class="text-sm font-medium tabular-nums whitespace-nowrap privacy-sensitive <%= account.active? ? "text-primary" : "text-subdued" %>">
           <%= format_money account.balance_money %>
         </p>
       <% end %>

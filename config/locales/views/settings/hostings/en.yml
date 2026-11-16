@@ -16,51 +16,51 @@ en:
           invite_only: Invite-only
       show:
         general: General Settings
-        financial_data_providers: Financial Data Providers
+        financial_data_providers: Financial data providers
         sync_settings: Sync Settings
-        scheduled_jobs: Scheduled Jobs
-        invites: Invite Codes
-        title: Self-Hosting
-        danger_zone: Danger Zone
+        scheduled_jobs: Scheduled jobs
+        invites: Invite codes
+        title: Self-hosting
+        danger_zone: Danger zone
         clear_cache: Clear data cache
         clear_cache_warning: Clearing the data cache will remove all exchange rates, security prices, account balances, and other data. This will not delete accounts, transactions, categories, or other user-owned data.
         confirm_clear_cache:
           title: Clear data cache?
           body: Are you sure you want to clear the data cache? This will remove all exchange rates, security prices, account balances, and other data. This action cannot be undone.
       provider_selection:
-        title: Provider Selection
+        title: Provider selection
         description: Choose which service to use for fetching exchange rates and security prices. Yahoo Finance is free and doesn't require an API key. Twelve Data requires a free API key but may offer more data coverage.
-        exchange_rate_provider_label: Exchange Rate Provider
-        securities_provider_label: Securities (Stock Prices) Provider
+        exchange_rate_provider_label: Exchange rate provider
+        securities_provider_label: Securities (stock prices) provider
         env_configured_message: Provider selection is disabled because environment variables (EXCHANGE_RATE_PROVIDER or SECURITIES_PROVIDER) are set. To enable selection here, remove these environment variables from your configuration.
         providers:
           twelve_data: Twelve Data
           yahoo_finance: Yahoo Finance
           nbu: National Bank of Ukraine (UAH)
       brand_fetch_settings:
-        description: Enter the Client ID provided by Brand Fetch
+        description: Enter the client ID provided by Brand Fetch
         label: Client ID
-        placeholder: Enter your Client ID here
+        placeholder: Enter your client ID here
         title: Brand Fetch Settings
         high_res_label: Enable high-resolution logos
         high_res_description: When enabled, logos will be retrieved at 120x120 resolution instead of 40x40. This provides sharper images on high-DPI displays.
         cache_icons_label: Cache subscription icons
         cache_icons_description: Download all subscription service icons from Brand Fetch and store them locally.
-        cache_icons_button: Cache All Icons
+        cache_icons_button: Cache all icons
       openai_settings:
         description: Enter the access token and optionally configure a custom OpenAI-compatible provider
         env_configured_message: Successfully configured through environment variables.
-        access_token_label: Access Token
+        access_token_label: Access token
         access_token_placeholder: Enter your access token here
-        uri_base_label: API Base URL (Optional)
+        uri_base_label: API base URL (optional)
         uri_base_placeholder: "https://api.openai.com/v1 (default)"
-        model_label: Model (Optional)
+        model_label: Model (optional)
         model_placeholder: "gpt-4.1 (default)"
-        json_mode_label: JSON Mode
+        json_mode_label: JSON mode
         json_mode_auto: Auto (recommended)
         json_mode_strict: Strict (best for thinking models)
         json_mode_none: None (best for standard models)
-        json_mode_json_object: JSON Object
+        json_mode_json_object: JSON object
         json_mode_help: "Strict mode works best with thinking models (qwen-thinking, deepseek-reasoner). None mode works best with standard models (llama, mistral, gpt-oss)."
         title: OpenAI
       yahoo_finance_settings:
@@ -74,7 +74,7 @@ en:
         api_calls_used: "%{used} / %{limit} API daily calls used (%{percentage})"
         description: Enter the API key provided by Twelve Data
         env_configured_message: Successfully configured through the TWELVE_DATA_API_KEY environment variable.
-        label: API Key
+        label: API key
         placeholder: Enter your API key here
         plan: "%{plan} plan"
         title: Twelve Data
@@ -143,7 +143,7 @@ en:
             generate_subscription_transactions: Subscription transactions
             sync_all_accounts: Daily sync of all accounts
       mcp_settings:
-        title: MCP Server
+        title: MCP server
         enabled_label: Allow MCP clients
         enabled_description: Lets Claude Code read and change your data through the MCP endpoint at /mcp with the MCP_API_TOKEN. The in-app chat is not affected.
         token_label: "MCP_API_TOKEN:"

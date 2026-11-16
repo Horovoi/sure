@@ -20,7 +20,7 @@ class PeriodTest < ActiveSupport::TestCase
 
   test "can create custom period" do
     period = Period.new(start_date: Date.current - 15.days, end_date: Date.current)
-    assert_equal "Custom Period", period.label
+    assert_equal "Custom period", period.label
   end
 
   test "from_key returns period for valid key" do
@@ -37,18 +37,18 @@ class PeriodTest < ActiveSupport::TestCase
 
   test "label returns correct label for known period" do
     period = Period.from_key("last_30_days")
-    assert_equal "Last 30 Days", period.label
+    assert_equal "Last 30 days", period.label
   end
 
-  test "label returns Custom Period for unknown period" do
+  test "label returns Custom period for unknown period" do
     period = Period.new(start_date: Date.current - 15.days, end_date: Date.current)
-    assert_equal "Custom Period", period.label
+    assert_equal "Custom period", period.label
   end
 
   test "all_time period can be created" do
     period = Period.from_key("all_time")
     assert_equal "all_time", period.key
-    assert_equal "All Time", period.label
+    assert_equal "All time", period.label
     assert_equal "All", period.label_short
   end
 

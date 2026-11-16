@@ -1,5 +1,45 @@
 import { Controller } from "@hotwired/stimulus"
 
+// A frame's fetch that the page cut off is not an error: a lazy frame still
+// loading when the user moves on. Turbo logs the failed fetch and rethrows it
+// from the frame's load, which no code awaits, so the browser also reports an
+// unhandled rejection (WebKit's "TypeError: Load failed", Chrome's "Failed to
+// fetch"). One listener for every frame, here because this module always loads:
+// a fetch failure while the page is being left, or for a frame no longer on the
+// page, is dropped silently. A frame that fails on a live page still reports it.
+const cancelledFrameFetchErrors = new WeakSet()
+let leavingPage = false
+
+function isCutOff(error, frame) {
+  if (error?.name === "AbortError") return true
+
+  return error instanceof TypeError && (leavingPage || !frame.isConnected)
+}
+
+// pagehide, not beforeunload: a beforeunload listener keeps the page out of the back-forward cache
+window.addEventListener("pagehide", () => { leavingPage = true })
+window.addEventListener("pageshow", () => { leavingPage = false })
+// A Turbo visit replaces the page: frames of the old one are cut off with it
+document.addEventListener("turbo:visit", () => { leavingPage = true })
+document.addEventListener("turbo:load", () => { leavingPage = false })
+
+document.addEventListener("turbo:fetch-request-error", (event) => {
+  const frame = event.target
+  const { error } = event.detail ?? {}
+  if (!(frame instanceof HTMLElement) || frame.localName !== "turbo-frame") return
+  if (!isCutOff(error, frame)) return
+
+  event.preventDefault()
+  if (error && typeof error === "object") cancelledFrameFetchErrors.add(error)
+})
+
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason
+  if (reason && typeof reason === "object" && cancelledFrameFetchErrors.has(reason)) {
+    event.preventDefault()
+  }
+})
+
 // Connects to data-controller="turbo-frame-timeout"
 // Shows "Timeout" when a frame's request takes too long. The timer starts when
 // the frame actually sends its request, so lazy frames below the fold do not

@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import openDialog from "utils/open_dialog";
 
 // The window width below which only one side panel fits beside the main column. The
 // layout CSS (max-xl:group-data-[left-panel=open]/layout:w-0) uses the same
@@ -14,6 +15,7 @@ export default class extends Controller {
     "leftToggle",
     "rightToggle",
     "mobileToggle",
+    "chatFrame",
   ];
   static values = { userId: String };
   static classes = [
@@ -34,12 +36,13 @@ export default class extends Controller {
     this.onePanelQuery?.removeEventListener("change", this.syncHandler);
   }
 
-  // The accounts drawer on a phone is a modal <dialog>: focus moves into it, the page
-  // behind it is inert and Escape closes it (the dialog's own "close" event)
+  // The accounts drawer on a phone is a modal <dialog>: focus moves to the dialog itself
+  // (tabindex=-1, so Safari rings no close button on open), the page behind it is inert
+  // and Escape closes it (the dialog's own "close" event)
   openMobileSidebar() {
     if (!this.hasMobileSidebarTarget || this.mobileSidebarTarget.open) return;
 
-    this.mobileSidebarTarget.showModal();
+    openDialog(this.mobileSidebarTarget, this.application);
     this.#setExpanded(this.mobileToggleTargets, true);
   }
 
@@ -58,14 +61,22 @@ export default class extends Controller {
     this.#setPanel(this.leftSidebarTarget, "show_sidebar", open);
 
     // No room for both: the assistant panel steps aside
-    if (open && this.#onePanelOnly() && this.#hasExpandedClass(this.rightSidebarTarget)) {
+    if (
+      open &&
+      this.#onePanelOnly() &&
+      this.hasRightSidebarTarget &&
+      this.#hasExpandedClass(this.rightSidebarTarget)
+    ) {
       this.#setPanel(this.rightSidebarTarget, "show_ai_sidebar", false);
     }
 
     this.#sync();
   }
 
+  // The chats page has no assistant panel
   toggleRightSidebar() {
+    if (!this.hasRightSidebarTarget) return;
+
     const open = !this.#rightShown();
 
     if (open && this.#onePanelOnly() && this.#leftShown()) {
@@ -97,6 +108,8 @@ export default class extends Controller {
   }
 
   #rightShown() {
+    if (!this.hasRightSidebarTarget) return false;
+
     return this.#hasExpandedClass(this.rightSidebarTarget) && !(this.#onePanelOnly() && this.#leftShown());
   }
 
@@ -107,16 +120,31 @@ export default class extends Controller {
   // The state the CSS and screen readers see: data-left-panel for the one-panel rule,
   // aria-expanded on the toggles, and inert on a hidden panel so Tab skips its contents
   #sync() {
-    if (!this.hasLeftSidebarTarget || !this.hasRightSidebarTarget) return;
+    if (!this.hasLeftSidebarTarget) return;
 
     const leftShown = this.#leftShown();
     const rightShown = this.#rightShown();
 
     this.element.dataset.leftPanel = leftShown ? "open" : "closed";
     this.leftSidebarTarget.inert = !leftShown;
-    this.rightSidebarTarget.inert = !rightShown;
+    if (this.hasRightSidebarTarget) this.rightSidebarTarget.inert = !rightShown;
     this.#setExpanded(this.leftToggleTargets, leftShown);
     this.#setExpanded(this.rightToggleTargets, rightShown);
+    if (rightShown) this.#loadChatFrame();
+  }
+
+  // A panel rendered closed has no chat yet: its frame keeps the address in
+  // data-deferred-src. Later in the same click a link may load a chat of its own
+  // into the frame ("Dig in with AI"), so the default one waits for that click.
+  #loadChatFrame() {
+    if (!this.hasChatFrameTarget) return;
+
+    const frame = this.chatFrameTarget;
+    setTimeout(() => {
+      if (!frame.isConnected || frame.hasAttribute("src") || !frame.dataset.deferredSrc) return;
+
+      frame.src = frame.dataset.deferredSrc;
+    }, 0);
   }
 
   #setExpanded(buttons, expanded) {

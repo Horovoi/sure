@@ -1,6 +1,6 @@
 <%= tag.div id: id, data: { bulk_select_target: "group" }, class: "bg-container-inset rounded-xl p-1 w-full" do %>
   <details class="group">
-    <summary>
+    <summary class="cursor-pointer rounded-lg focus-ring">
       <div class="py-2 px-4 flex items-center justify-between font-medium text-xs text-secondary">
         <div class="flex pl-0.5 items-center gap-4">
           <%= check_box_tag "#{date}_entries_selection",
@@ -11,7 +11,7 @@
                             checkbox_toggle_target: "selectionEntry"
                           } %>
 
-          <p class="uppercase space-x-1.5">
+          <p class="space-x-1.5">
             <%= tag.span I18n.l(date, format: :long) %>
             <span>&middot;</span>
             <%= tag.span entries.size %>
@@ -20,7 +20,7 @@
 
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
-            <span class="font-medium privacy-sensitive"><%= end_balance_money.format %></span>
+            <span class="font-medium tabular-nums whitespace-nowrap privacy-sensitive"><%= end_balance_money.format %></span>
             <%= render DS::Tooltip.new(text: t("UI.account.activity_date.balance_tooltip"), placement: "left", size: "sm", as: :span) %>
           </div>
           <%= helpers.icon "chevron-down", class: "group-open:rotate-180" %>
@@ -32,7 +32,7 @@
       <% if balance %>
         <%= render UI::Account::BalanceReconciliation.new(balance: balance, account: account) %>
       <% else %>
-        <p class="text-sm text-secondary">No balance data available for this date</p>
+        <p class="text-sm text-secondary"><%= t("UI.account.activity_date.no_balance") %></p>
       <% end %>
     </div>
   </details>

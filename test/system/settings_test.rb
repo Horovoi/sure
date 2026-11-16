@@ -8,7 +8,7 @@ class SettingsTest < ApplicationSystemTestCase
     @settings_links = [
       [ "Accounts", accounts_path ],
       [ "Preferences", settings_preferences_path ],
-      [ "Profile Info", settings_profile_path ],
+      [ "Profile info", settings_profile_path ],
       [ "Security", settings_security_path ],
       [ "Categories", categories_path ],
       [ "Tags", tags_path ],
@@ -22,8 +22,8 @@ class SettingsTest < ApplicationSystemTestCase
     if @user.admin?
       @settings_links += [
         [ "AI integrations", settings_ai_prompts_path ],
-        [ "LLM Usage", settings_llm_usage_path ],
-        [ "API Key", settings_api_key_path ]
+        [ "LLM usage", settings_llm_usage_path ],
+        [ "API key", settings_api_key_path ]
       ]
     end
   end
@@ -51,10 +51,10 @@ class SettingsTest < ApplicationSystemTestCase
     Provider::Registry.stubs(:get_provider).with(:twelve_data).returns(nil)
     Provider::Registry.stubs(:get_provider).with(:yahoo_finance).returns(nil)
     open_settings_from_sidebar
-    assert_selector "li", text: "Self-Hosting"
-    click_link "Self-Hosting"
+    assert_selector "li", text: "Self-hosting"
+    click_link "Self-hosting"
     assert_current_path settings_hosting_path
-    assert_selector "h1", text: "Self-Hosting"
+    assert_selector "h1", text: "Self-hosting"
     find("select#setting_onboarding_state").select("Invite-only")
     within("select#setting_onboarding_state") do
       assert_selector "option[selected]", text: "Invite-only"

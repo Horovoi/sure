@@ -36,10 +36,12 @@
 
     <div class="flex items-center gap-1 ml-auto">
       <% if Rails.env.development? || self_hosted? %>
+        <%# md, the size of the menu trigger beside it %>
         <%= icon(
             "refresh-cw",
             as_button: true,
-            size: "sm",
+            aria: { label: t("accounts.show.header.sync") },
+            title: t("accounts.show.header.sync"),
             href: sync_path_for(account),
             disabled: account.syncing?,
             frame: :_top

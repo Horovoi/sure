@@ -51,22 +51,21 @@
         <% request.query_parameters.slice("tab", "chart_view", "period", "start_date", "end_date", "per_page").compact_blank.each do |key, value| %>
           <%= hidden_field_tag key, value %>
         <% end %>
-        <div class="flex gap-1.5 md:gap-2 mb-3 md:mb-4">
-          <div class="grow">
-            <div class="flex items-center px-3 py-1.5 md:py-2 gap-2 border border-secondary rounded-lg focus-within:ring-secondary focus-within:border-secondary">
-              <%= helpers.icon("search") %>
-
-              <%= form.search_field :search,
-                            placeholder: t("accounts.show.activity.search.placeholder"),
-                            value: search,
-                            class: "form-field__input placeholder:text-sm placeholder:text-secondary",
-                            "data-auto-submit-form-target": "auto",
-                            "data-autosubmit-trigger-event": "input",
-                            "data-autosubmit-min-length": "2",
-                            "data-autosubmit-debounce-add-timeout": "100",
-                            "data-autosubmit-debounce-clear-timeout": "0" %>
-            </div>
-          </div>
+        <div class="flex items-center gap-2 mb-3 md:mb-4">
+          <%= render DS::SearchInput.new(
+                name: "q[search]",
+                id: "q_search",
+                value: search,
+                placeholder: t("accounts.show.activity.search.placeholder"),
+                class: "grow min-w-0",
+                data: {
+                  auto_submit_form_target: "auto",
+                  autosubmit_trigger_event: "input",
+                  autosubmit_min_length: "2",
+                  autosubmit_debounce_add_timeout: "100",
+                  autosubmit_debounce_clear_timeout: "0"
+                }
+              ) %>
 
           <%= render DS::Popover.new(variant: "button", no_padding: true) do |popover| %>
             <% popover.with_button(
@@ -85,16 +84,17 @@
             <% end %>
           <% end %>
 
-          <%= button_tag type: "button",
+          <%= render DS::Button.new(
+                variant: "outline",
+                icon: "list-todo",
                 id: "toggle-checkboxes-button",
+                class: "lg:hidden shrink-0",
                 aria: { label: t("transactions.searches.form.toggle_selection_checkboxes") },
-                class: "lg:hidden font-medium whitespace-nowrap inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-primary border border-secondary hover:bg-surface-hover",
                 data: {
                   action: "click->checkbox-toggle#toggle",
                   checkbox_toggle_target: "toggleButton"
-                } do %>
-            <%= helpers.icon("list-todo") %>
-          <% end %>
+                }
+              ) %>
         </div>
       <% end %>
     </div>
@@ -121,7 +121,7 @@
             <%= render "entries/selection_bar" %>
           </div>
 
-          <div class="grid bg-container-inset rounded-xl grid-cols-12 items-center uppercase text-xs font-medium text-secondary px-5 py-3 mb-4">
+          <div class="grid bg-container-inset rounded-xl grid-cols-12 items-center text-xs font-medium text-secondary px-5 py-3 mb-4">
             <div class="pl-0.5 col-span-8 flex items-center gap-4">
               <%= check_box_tag "selection_entry",
                                 class: "checkbox checkbox--light hidden lg:block",

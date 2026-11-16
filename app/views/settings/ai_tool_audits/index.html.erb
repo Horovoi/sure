@@ -2,24 +2,28 @@
 
 <% record_paths = ai_tool_audit_record_paths(@audits) %>
 
-<%= settings_section title: t(".page_title"), subtitle: t(".subtitle") do %>
-  <%= form_with url: settings_ai_tool_audits_path, method: :get, class: "flex flex-wrap items-end gap-4", id: "ai-tool-audit-filters" do |form| %>
-    <div class="w-full md:w-auto">
-      <%= form.label :tool, t(".tool_filter"), class: "block text-sm font-medium text-primary mb-1" %>
-      <%= form.select :tool,
-            options_for_select(@tool_names, @tool),
-            { include_blank: t(".all_tools") },
-            class: "rounded-lg border border-secondary px-3 py-2 text-sm bg-container-inset text-primary w-full" %>
+<%# The page title names the page: the section carries only its description %>
+<%= settings_section title: nil, subtitle: t(".subtitle") do %>
+  <%# One filter row: labelled fields, then one outline button, aligned to the bottom %>
+  <%= form_with url: settings_ai_tool_audits_path, method: :get, class: "flex flex-wrap items-end gap-2", id: "ai-tool-audit-filters" do |form| %>
+    <div class="form-field w-full sm:w-64">
+      <div class="form-field__body">
+        <%= form.label :tool, t(".tool_filter"), class: "form-field__label" %>
+        <%= form.select :tool,
+              options_for_select(@tool_names, @tool),
+              { include_blank: t(".all_tools") },
+              class: "form-field__input" %>
+      </div>
     </div>
-    <label class="flex items-center gap-2 text-sm text-primary">
+    <label class="flex items-center gap-2 h-9 text-sm text-primary">
       <%= form.check_box :writes, { checked: @writes_only, class: "checkbox checkbox--light" }, "1", nil %>
       <%= t(".writes_only") %>
     </label>
-    <%= render DS::Button.new(variant: :secondary, size: :md, type: :submit, text: t(".filter")) %>
+    <%= render DS::Button.new(variant: :outline, size: :md, type: :submit, text: t(".filter")) %>
   <% end %>
 
   <% if @audits.any? %>
-    <ul class="divide-y divide-alpha-black-100 border border-secondary rounded-lg" id="ai-tool-audits">
+    <ul class="divide-y divide-subdued border border-secondary rounded-lg" id="ai-tool-audits">
       <% @audits.each do |audit| %>
         <% status = audit.display_status %>
         <li class="p-3 space-y-2" id="<%= dom_id(audit) %>">
@@ -27,7 +31,7 @@
             <span class="text-secondary whitespace-nowrap font-mono"><%= audit.created_at.strftime("%Y-%m-%d %H:%M:%S") %></span>
             <span class="font-medium text-primary font-mono"><%= audit.tool_name %></span>
             <% if audit.write? %>
-              <span class="text-xs rounded-md px-1.5 py-0.5 bg-surface-inset text-secondary"><%= t(".scope_tags.#{audit.scope_tag}") %></span>
+              <%= render DS::Pill.new(label: t(".scope_tags.#{audit.scope_tag}"), tone: :neutral, marker: false) %>
             <% end %>
             <span class="font-medium <%= ai_tool_audit_status_classes(status) %>"><%= t(".statuses.#{status}") %></span>
             <% if audit.duration_ms %>
@@ -62,7 +66,7 @@
           <% end %>
 
           <details class="text-xs">
-            <summary class="cursor-pointer text-secondary"><%= t(".details") %></summary>
+            <summary class="w-fit cursor-pointer rounded-sm text-secondary hover:text-primary focus-ring"><%= t(".details") %></summary>
             <div class="mt-2 grid gap-2 md:grid-cols-2">
               <div>
                 <p class="text-secondary mb-1">
@@ -85,7 +89,7 @@
 
     <%= render "shared/pagination", pagy: @pagy %>
   <% else %>
-    <p class="text-sm text-secondary py-6 text-center"><%= t(".empty") %></p>
+    <%= render DS::EmptyState.new(icon: "scroll-text", title: t(".empty"), class: "py-8") %>
   <% end %>
 
   <p class="text-xs text-secondary"><%= t(".revert_hint") %></p>

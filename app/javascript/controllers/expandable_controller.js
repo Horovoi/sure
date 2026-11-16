@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import openDialog from "utils/open_dialog";
 
 // Connects to data-controller="expandable"
 //
@@ -7,7 +8,8 @@ import { Controller } from "@hotwired/stimulus";
 // actions; this thin wrapper bridges the two.
 //
 // Native <dialog> remembers the previously focused element across showModal() and
-// close(), so focus returns to the expand button on its own.
+// close(), so focus returns to the expand button on its own. openDialog focuses the
+// dialog itself, so Safari rings no close button on open.
 export default class extends Controller {
   static targets = ["dialog"];
 
@@ -18,8 +20,6 @@ export default class extends Controller {
       ? this.dialogTarget
       : this.element.querySelector("dialog");
 
-    if (!dialog || dialog.open || typeof dialog.showModal !== "function") return;
-
-    dialog.showModal();
+    openDialog(dialog, this.application);
   }
 }

@@ -1,5 +1,6 @@
-<%= content_for :page_title, "Guides" %>
+<%= content_for :page_title, t(".title") %>
 
-<div class="bg-container rounded-xl shadow-border-xs p-4 prose prose-sm max-w-none">
+<%# The guide's own h1 is no larger than the page title above it %>
+<div class="bg-container rounded-xl shadow-border-xs p-4 prose prose-sm max-w-none prose-h1:text-xl prose-h1:font-medium prose-h1:text-primary">
   <%= @guide_content.html_safe %>
 </div>

@@ -9,30 +9,19 @@ class Period
   validates :key, presence: true, if: -> { start_date.nil? || end_date.nil? }
   validate :must_be_valid_date_range
 
+  # The labels are in config/locales/models/period/en.yml, under each key
   PERIODS = {
     "last_day" => {
-      date_range: -> { [ 1.day.ago.to_date, Date.current ] },
-      label_short: "1D",
-      label: "Last Day",
-      comparison_label: "vs. yesterday"
+      date_range: -> { [ 1.day.ago.to_date, Date.current ] }
     },
     "current_week" => {
-      date_range: -> { [ Date.current.beginning_of_week, Date.current ] },
-      label_short: "WTD",
-      label: "Current Week",
-      comparison_label: "vs. start of week"
+      date_range: -> { [ Date.current.beginning_of_week, Date.current ] }
     },
     "last_7_days" => {
-      date_range: -> { [ 7.days.ago.to_date, Date.current ] },
-      label_short: "7D",
-      label: "Last 7 Days",
-      comparison_label: "vs. last week"
+      date_range: -> { [ 7.days.ago.to_date, Date.current ] }
     },
     "current_month" => {
-      date_range: -> { [ Date.current.beginning_of_month, Date.current ] },
-      label_short: "MTD",
-      label: "Current Month",
-      comparison_label: "vs. start of month"
+      date_range: -> { [ Date.current.beginning_of_month, Date.current ] }
     },
     # Shown only when fiscal months are enabled for the family
     "fiscal_current_month" => {
@@ -44,40 +33,22 @@ class Period
           Date.current.beginning_of_month
         end
         [ start, Date.current ]
-      },
-      label_short: "FMTD",
-      label: "Fiscal MTD",
-      comparison_label: "vs. start of fiscal month"
+      }
     },
     "last_30_days" => {
-      date_range: -> { [ 30.days.ago.to_date, Date.current ] },
-      label_short: "30D",
-      label: "Last 30 Days",
-      comparison_label: "vs. last month"
+      date_range: -> { [ 30.days.ago.to_date, Date.current ] }
     },
     "last_90_days" => {
-      date_range: -> { [ 90.days.ago.to_date, Date.current ] },
-      label_short: "90D",
-      label: "Last 90 Days",
-      comparison_label: "vs. last quarter"
+      date_range: -> { [ 90.days.ago.to_date, Date.current ] }
     },
     "current_year" => {
-      date_range: -> { [ Date.current.beginning_of_year, Date.current ] },
-      label_short: "YTD",
-      label: "Current Year",
-      comparison_label: "vs. start of year"
+      date_range: -> { [ Date.current.beginning_of_year, Date.current ] }
     },
     "last_365_days" => {
-      date_range: -> { [ 365.days.ago.to_date, Date.current ] },
-      label_short: "365D",
-      label: "Last 365 Days",
-      comparison_label: "vs. 1 year ago"
+      date_range: -> { [ 365.days.ago.to_date, Date.current ] }
     },
     "last_5_years" => {
-      date_range: -> { [ 5.years.ago.to_date, Date.current ] },
-      label_short: "5Y",
-      label: "Last 5 Years",
-      comparison_label: "vs. 5 years ago"
+      date_range: -> { [ 5.years.ago.to_date, Date.current ] }
     },
     "all_time" => {
       date_range: -> {
@@ -92,10 +63,7 @@ class Period
         start_date = earliest_activity_date ? earliest_activity_date - 1.month : family&.oldest_entry_date
         start_date = 5.years.ago.to_date unless start_date && start_date < Date.current
         [ start_date, Date.current ]
-      },
-      label_short: "All",
-      label: "All Time",
-      comparison_label: "since beginning"
+      }
     }
   }
 
@@ -134,7 +102,7 @@ class Period
     end
   end
 
-  def initialize(start_date: nil, end_date: nil, key: nil, date_format: "%b %d, %Y")
+  def initialize(start_date: nil, end_date: nil, key: nil, date_format: "%b %-d, %Y")
     @key = key
     @start_date = start_date
     @end_date = end_date
@@ -172,27 +140,17 @@ class Period
   end
 
   def label
-    if key_metadata
-      key_metadata.fetch(:label)
-    else
-      "Custom Period"
-    end
+    key_metadata ? I18n.t("period.#{key}.label") : I18n.t("period.custom.label")
   end
 
   def label_short
-    if key_metadata
-      key_metadata.fetch(:label_short)
-    else
-      "Custom"
-    end
+    key_metadata ? I18n.t("period.#{key}.label_short") : I18n.t("period.custom.label_short")
   end
 
   def comparison_label
-    if key_metadata
-      key_metadata.fetch(:comparison_label)
-    else
-      "#{start_date.strftime(@date_format)} to #{end_date.strftime(@date_format)}"
-    end
+    return I18n.t("period.#{key}.comparison_label") if key_metadata
+
+    I18n.t("period.custom.comparison_label", start: I18n.l(start_date, format: @date_format), end: I18n.l(end_date, format: @date_format))
   end
 
   private

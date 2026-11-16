@@ -13,7 +13,7 @@
                   data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
       <%= form.time_field :scheduled_jobs_start_time,
                           value: Setting.scheduled_jobs_start_time,
-                          class: "rounded-lg border border-primary px-3 py-2 text-sm bg-container text-primary",
+                          class: "h-9 rounded-lg border border-secondary px-3 py-0 text-sm bg-container text-primary focus:ring-0 focus:border-secondary focus-ring",
                           data: { auto_submit_form_target: "auto" } %>
     <% end %>
   </div>
@@ -29,9 +29,9 @@
                   method: :patch,
                   data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
       <%= form.select :scheduled_jobs_timezone,
-                      ActiveSupport::TimeZone.all.map { |tz| [tz.to_s, tz.name] },
+                      timezone_options(ScheduledJobsManager.timezone, value: :name),
                       { selected: ScheduledJobsManager.timezone },
-                      class: "rounded-lg border border-primary px-3 py-2 text-sm bg-container text-primary",
+                      class: "h-9 rounded-lg border border-secondary px-3 py-0 text-sm bg-container text-primary focus:ring-0 focus:border-secondary focus-ring",
                       data: { auto_submit_form_target: "auto" } %>
     <% end %>
   </div>
@@ -72,7 +72,7 @@
                         data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
             <%= form.time_field "#{job_key}_time",
                                 value: Setting.public_send("#{job_key}_time") || ScheduledJobsManager.effective_time_for(job_key),
-                                class: "rounded-lg border border-primary px-3 py-2 text-sm bg-container text-primary",
+                                class: "h-9 rounded-lg border border-secondary px-3 py-0 text-sm bg-container text-primary focus:ring-0 focus:border-secondary focus-ring",
                                 data: { auto_submit_form_target: "auto" } %>
           <% end %>
         </div>

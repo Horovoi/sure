@@ -11,7 +11,9 @@
    # money_field_controller, which checks the evaluated amount against them.
    amount_min = options[:min] || -99999999999999
    amount_max = options[:max] || 99999999999999
-   label_text = options[:label] || t(".label") %>
+   label_text = options[:label] || t(".label")
+   # The same label as StyledFormBuilder's fields: the * right after the text, no gap
+   label_content = options[:required] ? safe_join([ label_text, tag.span("*", class: "text-destructive ml-0.5") ]) : label_text %>
 
 <div class="form-field group/money-field <%= options[:container_class] %>"
      data-controller="money-field"
@@ -27,12 +29,7 @@
      data-money-field-max-message-value="<%= t(".above_max", max: amount_max) %>">
   <% if options[:label_tooltip] %>
     <div class="form-field__header">
-      <%= form.label amount_method, class: class_names("form-field__label", options[:label_class]) do %>
-        <%= label_text %>
-        <% if options[:required] %>
-          <span class="text-destructive ml-0.5">*</span>
-        <% end %>
-      <% end %>
+      <%= form.label amount_method, label_content, class: class_names("form-field__label", options[:label_class]) %>
       <div class="form-field__actions">
         <div data-controller="tooltip">
           <%= icon "help-circle", size: "sm", color: "default", class: "cursor-help" %>
@@ -46,12 +43,7 @@
 
   <div class="form-field__body">
     <% unless options[:label_tooltip] %>
-      <%= form.label amount_method, class: class_names("form-field__label", options[:label_class]) do %>
-        <%= label_text %>
-        <% if options[:required] %>
-          <span class="text-destructive ml-0.5">*</span>
-        <% end %>
-      <% end %>
+      <%= form.label amount_method, label_content, class: class_names("form-field__label", options[:label_class]) %>
     <% end %>
 
     <div class="flex items-center gap-1">
@@ -129,11 +121,12 @@
         DS::Disclosure is one) from showing it. Bound to mousedown/touchstart
         rather than click so the controller's preventDefault keeps the input
         focused (and the on-screen keyboard up), plus keydown Enter/Space for
-        keyboard use. Positioned absolutely so showing it never shifts the
-        fields below at the moment the user clicks past it. Only the operator
-        buttons take the pointer: a click on the rest of the row reaches what is
-        below it (the form's submit button, for one), which the row covers. %>
-    <div class="hidden group-focus-within/money-field:flex items-center gap-1 absolute left-0 right-0 top-full -mt-px z-10 bg-container border border-t-0 border-secondary rounded-b-md p-1 pointer-events-none">
+        keyboard use. An overlay (the shared panel recipe, 4px below the field) so
+        showing it never shifts the fields below at the moment the user clicks
+        past it, and at the field's right end, so the next field's label on the
+        left stays in view. Only the operator buttons take the pointer: a click
+        between them reaches what is below. %>
+    <div class="hidden group-focus-within/money-field:flex items-center gap-1 absolute right-0 top-full mt-1 z-10 w-fit bg-container rounded-lg shadow-border-lg p-1 pointer-events-none">
       <% [ [ "+", "+", :operator_add ], [ "−", "-", :operator_subtract ], [ "×", "*", :operator_multiply ], [ "÷", "/", :operator_divide ] ].each do |text, operator, label_key| %>
         <%= render DS::Button.new(text: text, variant: :outline, size: :sm, class: "pointer-events-auto",
               data: { action: "mousedown->money-field#insertOperator touchstart->money-field#insertOperator keydown.enter->money-field#insertOperator keydown.space->money-field#insertOperator", "money-field-operator-param": operator },

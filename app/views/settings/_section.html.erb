@@ -18,12 +18,17 @@
   </details>
 <% else %>
   <section class="bg-container shadow-border-xs rounded-xl p-4 space-y-4">
-    <div>
-      <h2 class="text-lg font-medium text-primary"><%= title %></h2>
-      <% if subtitle.present? %>
-        <p class="text-secondary text-sm mt-1"><%= subtitle %></p>
-      <% end %>
-    </div>
+    <%# No title: the page title already names it, and the section starts with its description %>
+    <% if title.present? || subtitle.present? %>
+      <div>
+        <% if title.present? %>
+          <h2 class="text-lg font-medium text-primary"><%= title %></h2>
+        <% end %>
+        <% if subtitle.present? %>
+          <p class="<%= class_names("text-secondary text-sm", "mt-1": title.present?) %>"><%= subtitle %></p>
+        <% end %>
+      </div>
+    <% end %>
     <div class="space-y-4">
       <%= content %>
     </div>

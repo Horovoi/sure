@@ -28,6 +28,41 @@ class ConfirmDialogTest < ApplicationSystemTestCase
     assert_nil page.evaluate_script("document.body.dataset.injected")
   end
 
+  # Enter on open must never run the action, and closing the dialog any other way than
+  # its confirm button is a no, also right after an earlier confirmation said yes
+  test "a confirmation starts on Cancel and only its confirm button says yes" do
+    visit root_path
+    page.execute_script(<<~JS)
+      window.__answers = [];
+      window.__ask = () => window.Turbo.config.forms.confirm(
+        JSON.stringify({ title: "Delete it?", variant: "destructive" })
+      ).then((answer) => window.__answers.push(answer));
+    JS
+
+    page.execute_script("window.__ask()")
+    within "#confirm-dialog" do
+      assert_selector "button[value=confirm][data-variant=destructive]", text: I18n.t("layouts.shared.confirm_dialog.confirm")
+      assert_equal "cancel", page.evaluate_script("document.activeElement.value")
+      click_button I18n.t("layouts.shared.confirm_dialog.confirm")
+    end
+    assert_no_selector "#confirm-dialog[open]"
+
+    page.execute_script("window.__ask()")
+    within("#confirm-dialog") { find("button[aria-label='#{I18n.t("ds.dialog.close")}']").click }
+    assert_no_selector "#confirm-dialog[open]"
+
+    page.execute_script("window.__ask()")
+    assert_selector "#confirm-dialog[open]"
+    page.driver.browser.action.send_keys(:escape).perform
+    assert_no_selector "#confirm-dialog[open]"
+
+    page.execute_script("window.__ask()")
+    within("#confirm-dialog") { click_button I18n.t("layouts.shared.confirm_dialog.cancel") }
+    assert_no_selector "#confirm-dialog[open]"
+
+    assert_equal [ true, false, false, false ], page.evaluate_script("window.__answers")
+  end
+
   test "falls back to the translated defaults when a confirmation sets no body" do
     visit root_path
 

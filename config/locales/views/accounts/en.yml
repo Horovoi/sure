@@ -6,6 +6,7 @@ en:
       default_label: Default
       default_tooltip: New transactions and transfers start in this account
       deletion_in_progress: (deletion in progress...)
+      edit: Edit account
       link_lunchflow: Link with Lunch Flow
       link_provider: Link with provider
       unlink_provider: Unlink from provider
@@ -31,6 +32,8 @@ en:
       no_accounts: No accounts yet
     form:
       balance: Current balance
+      create_submit: Create account
+      update_submit: Update account
       opening_balance_date_label: Start date
       opening_balance_date_hint: The account's history starts on this day, at the balance entered above (for a loan, at its original balance). A transaction dated earlier moves the start back to the day before it.
       name_label: Account name
@@ -84,6 +87,8 @@ en:
       chart:
         balance: Balance
         owed: Amount owed
+      header:
+        sync: Sync account
       menu:
         confirm_accept: Delete "%{name}"
         confirm_title: Delete account?
@@ -115,15 +120,15 @@ en:
       crypto: Crypto
       property: Property
       vehicle: Vehicle
-      other_asset: Other Asset
-      credit_card: Credit Card
+      other_asset: Other asset
+      credit_card: Credit card
       loan: Loan
-      other_liability: Other Liability
+      other_liability: Other liability
     tax_treatments:
       taxable: Taxable
-      tax_deferred: Tax-Deferred
-      tax_exempt: Tax-Exempt
-      tax_advantaged: Tax-Advantaged
+      tax_deferred: Tax-deferred
+      tax_exempt: Tax-exempt
+      tax_advantaged: Tax-advantaged
     tax_treatment_descriptions:
       taxable: Gains taxed when realized
       tax_deferred: Contributions deductible, taxed on withdrawal

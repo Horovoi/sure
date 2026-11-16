@@ -62,13 +62,38 @@ class AppLayoutTest < ApplicationSystemTestCase
 
     assert_selector "dialog#app_mobile_sidebar[open]"
     assert_selector "button[aria-controls=app_mobile_sidebar][aria-expanded=true]"
-    assert page.evaluate_script("document.getElementById('app_mobile_sidebar').contains(document.activeElement)"),
-           "focus did not move into the drawer"
+    # Focus is on the drawer itself, not its close button: Safari rings a button that
+    # takes the focus as a dialog opens
+    assert_equal "app_mobile_sidebar", page.evaluate_script("document.activeElement.id")
 
     page.driver.browser.action.send_keys(:escape).perform
 
     assert_no_selector "dialog#app_mobile_sidebar[open]"
     assert_selector "button[aria-controls=app_mobile_sidebar][aria-expanded=false]"
+  end
+
+  test "a closed assistant panel loads its chat only when opened" do
+    @user.update!(show_ai_sidebar: false)
+    visit reports_path
+
+    frame = "#app_right_panel turbo-frame#sidebar_chat"
+    assert_selector "#{frame}:not([src])", visible: :all
+
+    find("button[aria-controls=app_right_panel]").click
+
+    assert_selector "#{frame}[src]", visible: :all
+    assert_panel_shown RIGHT
+  end
+
+  test "the chats page has no assistant panel beside it" do
+    visit chats_path
+
+    assert_no_selector RIGHT, visible: :all
+    assert_no_selector "button[aria-controls=app_right_panel]"
+
+    # The accounts panel still opens and closes
+    find("button[aria-controls=app_left_panel]").click
+    assert_panel_hidden LEFT
   end
 
   test "the logo link has a name" do

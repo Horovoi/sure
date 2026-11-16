@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import openDialog from "utils/open_dialog";
 
 // The one move-money dialog of the budget categories step (upstream 3d6a8d8b6). Each
 // row's move button opens it with that row as the source. DS::Dialog does the focus
@@ -33,7 +34,7 @@ export default class extends Controller {
       String(params.categoryId),
       String(params.parentId || ""),
     );
-    this.dialogTarget.showModal();
+    openDialog(this.dialogTarget, this.application);
     this.amountTarget.focus();
   }
 

@@ -6,14 +6,15 @@
   <% turn_in_flight = chat&.persisted? && chat.in_flight_turn&.live? %>
 
   <%= form_with model: model,
-                class: "flex lg:flex-col gap-2 bg-container px-2 py-1.5 rounded-full lg:rounded-lg shadow-border-xs",
+                class: "flex lg:flex-col gap-2 bg-container px-2 py-1.5 rounded-lg shadow-border-xs focus-ring-within",
                 data: { chat_target: "form" } do |f| %>
 
     <%# In the future, this will be a dropdown with different AI models %>
     <%= f.hidden_field :ai_model, value: default_ai_model %>
 
-    <%= f.text_area :content, placeholder: "Ask anything ...", value: message_hint, autofocus: message_hint.present?,
-                  class: "w-full border-0 focus:ring-0 text-sm resize-none px-1 bg-transparent",
+    <%= f.text_area :content, placeholder: t("chats.composer.placeholder"), value: message_hint, autofocus: message_hint.present?,
+                  aria: { label: t("chats.composer.label") },
+                  class: "w-full border-0 focus:ring-0 focus:outline-none text-sm resize-none px-1 bg-transparent",
                   data: { chat_target: "input", action: "input->chat#autoResize keydown->chat#handleInputKeyDown" },
                   rows: 1 %>
 
@@ -21,14 +22,14 @@
       <div class="items-center gap-1 hidden lg:flex">
         <%# These are disabled for now, but in the future, will all open specific menus with their own context and search %>
         <% ["plus", "command", "at-sign", "mouse-pointer-click"].each do |icon| %>
-          <%= icon(icon, as_button: true, disabled: true, class: "cursor-not-allowed", title: "Coming soon") %>
+          <%= icon(icon, as_button: true, disabled: true, class: "cursor-not-allowed", title: t("chats.composer.coming_soon")) %>
         <% end %>
       </div>
 
-      <%= icon("arrow-up", as_button: true, type: "submit", disabled: turn_in_flight, data: { chat_target: "submit" }) %>
+      <%= icon("arrow-up", as_button: true, type: "submit", disabled: turn_in_flight, aria: { label: t("chats.composer.send") }, data: { chat_target: "submit" }) %>
     </div>
   <% end %>
 
   <p class="text-xs text-secondary <%= "hidden" unless turn_in_flight %>" data-chat-target="pendingHint"><%= t("messages.chat_form.waiting") %></p>
-  <p class="text-xs text-secondary">AI responses are informational only and are not financial advice.</p>
+  <p class="text-xs text-secondary"><%= t("chats.composer.disclaimer") %></p>
 </div>

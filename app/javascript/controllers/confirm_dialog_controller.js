@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import openDialog from "utils/open_dialog";
 
 // Connects to data-controller="confirm-dialog"
 // See javascript/controllers/application.js for how this is wired up
@@ -20,7 +21,13 @@ export default class extends Controller {
 
     this.#prepareDialog(data);
 
-    this.element.showModal();
+    // close() without a value (the close button, Escape) keeps the last
+    // returnValue: after one confirmed action, dismissing the next
+    // confirmation would have confirmed it too.
+    this.element.returnValue = "";
+    // The Cancel button is the dialog's autofocus control: Enter on open
+    // never runs the action, destructive or not.
+    openDialog(this.element, this.application);
 
     return new Promise((resolve) => {
       this.element.addEventListener(

@@ -62,5 +62,5 @@
     </details>
   </div>
 
-  <%= form.submit %>
+  <%= form.submit account.new_record? ? t("accounts.form.create_submit") : t("accounts.form.update_submit") %>
 <% end %>
