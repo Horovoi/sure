@@ -8,19 +8,24 @@
 <% if @pagy.count > 0 || (@projected_recurring&.any? && @q.blank?) %>
   <div class="grow overflow-y-auto">
     <% if @transactions.any? %>
-      <div class="grid-cols-12 bg-container-inset rounded-xl px-5 py-3 text-xs uppercase font-medium text-secondary items-center mb-4 grid">
-        <div class="pl-0.5 col-span-8 flex items-center gap-4">
-          <%= check_box_tag "selection_entry",
-                            class: "checkbox checkbox--light hidden lg:block",
-                            data: {
-                              action: "bulk-select#togglePageSelection",
-                              checkbox_toggle_target: "selectionEntry"
-                            } %>
-          <p>transaction</p>
-        </div>
+      <%# The columns of transactions/_transaction. The px-1 wrapper is a container as wide as a row (inside its group's p-1), so the header switches columns with the rows; px-4 lg:px-5 is a row's padding plus that p-1 %>
+      <div class="@container px-1 mb-4">
+        <div class="grid grid-cols-[minmax(0,1fr)_auto] @xl:grid-cols-[minmax(0,1fr)_2rem_minmax(7rem,auto)] @3xl:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_minmax(7rem,auto)] gap-x-2 bg-container-inset rounded-xl px-4 lg:px-5 py-3 text-xs font-medium text-secondary items-center -mx-1">
+          <div class="pl-0.5 @xl:pr-4 flex items-center gap-4 min-w-0">
+            <%= check_box_tag "selection_entry",
+                              class: "checkbox checkbox--light hidden lg:block",
+                              aria: { label: t(".select_page") },
+                              data: {
+                                action: "bulk-select#togglePageSelection",
+                                checkbox_toggle_target: "selectionEntry"
+                              } %>
+            <p><%= t(".col_transaction") %></p>
+          </div>
 
-        <p class="col-span-2 md:block hidden">category</p>
-        <p class="col-span-2 col-start-11 md:col-start-auto justify-self-end md:block">amount</p>
+          <%# Holds the 2rem icon column too, where the label does not fit %>
+          <p class="hidden @xl:block min-w-0"><span class="hidden @3xl:inline"><%= t(".col_category") %></span></p>
+          <p class="justify-self-end"><%= t(".col_amount") %></p>
+        </div>
       </div>
     <% end %>
 
@@ -32,16 +37,20 @@
           data-transactions-section-section-key-value="upcoming_recurring"
           data-transactions-section-collapsed-value="<%= Current.user.transactions_section_collapsed?("upcoming_recurring") %>">
           <div class="flex items-center gap-2 px-2">
-            <button
-              type="button"
-              class="text-secondary hover:text-primary transition-colors p-0.5"
-              data-action="click->transactions-section#toggle keydown->transactions-section#handleToggleKeydown"
-              data-transactions-section-target="button"
-              aria-label="<%= t("transactions.toggle_recurring_section") %>"
-              aria-expanded="<%= !Current.user.transactions_section_collapsed?("upcoming_recurring") %>">
-              <%= icon("chevron-down", size: "sm", class: "transition-transform", data: { transactions_section_target: "chevron" }) %>
-            </button>
-            <h3 class="text-xs uppercase font-medium text-secondary"><%= t(".upcoming") %></h3>
+            <%# The whole button turns, as the controller rotates its chevron target %>
+            <%= render DS::Button.new(
+                  variant: "icon",
+                  size: "sm",
+                  icon: "chevron-down",
+                  type: "button",
+                  class: "transition-transform",
+                  aria: { label: t("transactions.toggle_recurring_section"), expanded: !Current.user.transactions_section_collapsed?("upcoming_recurring") },
+                  data: {
+                    action: "click->transactions-section#toggle keydown->transactions-section#handleToggleKeydown",
+                    transactions_section_target: "button chevron"
+                  }
+                ) %>
+            <h3 class="text-xs font-medium text-secondary"><%= t(".upcoming") %></h3>
           </div>
           <div data-transactions-section-target="content">
             <% @projected_recurring.group_by(&:next_expected_date).sort.each do |date, transactions| %>

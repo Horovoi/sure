@@ -1,23 +1,26 @@
 <%# locals: (entry:, category_options:) %>
+<%# Narrow (the list's container query): the name and account on the first line, the date
+    and amount on the second, the category select on its own line. Wide: one line, in the
+    columns of the list header (categorizes/_transaction_list) %>
 <div id="<%= dom_id(entry, :categorize) %>"
-     class="grid grid-cols-[1rem_minmax(0,1fr)_6.5rem_6.5rem_9rem] gap-3 items-center px-4 py-3 bg-container hover:bg-container-hover"
+     class="grid grid-cols-[1rem_minmax(0,1fr)_auto] @xl:grid-cols-[1rem_minmax(0,1fr)_6.5rem_6.5rem_9rem] gap-x-3 gap-y-1 @xl:gap-y-0 items-center px-4 py-3 bg-container hover:bg-container-hover"
      data-testid="categorize-entry-row">
   <input type="hidden" name="categorize[all_entry_ids][]" value="<%= entry.id %>">
   <input type="checkbox" name="categorize[entry_ids][]" value="<%= entry.id %>"
          checked
-         class="checkbox checkbox--light shrink-0"
+         class="checkbox checkbox--light shrink-0 row-start-1 col-start-1"
          aria-label="<%= t("transactions.categorizes.entry_row.include_checkbox", name: entry.name) %>"
          data-action="change->categorize#uncheckRule">
-  <div class="min-w-0">
+  <div class="min-w-0 col-span-2 @xl:col-span-1">
     <p class="font-medium text-primary truncate"><%= entry.name %></p>
     <p class="text-xs text-secondary truncate"><%= entry.account.name %></p>
   </div>
-  <span class="text-secondary whitespace-nowrap"><%= format_date(entry.date) %></span>
-  <span class="privacy-sensitive font-medium text-right whitespace-nowrap <%= entry.amount.negative? ? "text-success" : "text-primary" %>">
+  <span class="col-start-2 @xl:col-start-auto text-secondary whitespace-nowrap"><%= format_date(entry.date) %></span>
+  <span class="privacy-sensitive font-medium text-right whitespace-nowrap tabular-nums <%= entry.amount.negative? ? "text-success" : "text-primary" %>">
     <%= format_money(entry.amount_money.abs) %>
   </span>
   <%# No name: the row's own pick saves at once and is never part of the group form %>
-  <select class="w-full text-xs border border-primary rounded-lg px-1.5 py-1 bg-container text-secondary"
+  <select class="col-start-2 col-span-2 @xl:col-start-auto @xl:col-span-1 mt-1 @xl:mt-0 w-full h-7 text-xs border border-secondary rounded-md pl-2 pr-7 py-0 bg-container text-primary"
           aria-label="<%= t("transactions.categorizes.entry_row.assign_category_select", name: entry.name) %>"
           data-entry-id="<%= entry.id %>"
           data-action="change->categorize#assignEntry">

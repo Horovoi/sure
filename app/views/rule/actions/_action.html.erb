@@ -18,7 +18,7 @@
                 data: { rule__actions_target: "actionValue" } do %>
       <%# Initial rendering based on the action executor type. %>
       <%# Subsequent renders are injected by the Stimulus controller, which uses the templates from below. %>
-      <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
+      <span class="font-medium text-secondary text-xs"><%= t("rules.actions.to_label") %></span>
       <% if action.executor.type == "select" %>
         <%= form.select :value, action.options || [], {} %>
       <% elsif action.executor.type == "multi_select" %>
@@ -46,13 +46,13 @@
 
   <%# Templates for different input types - these will be cloned and used by the Stimulus controller %>
   <template data-rule--actions-target="selectTemplate">
-    <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
+    <span class="font-medium text-secondary text-xs"><%= t("rules.actions.to_label") %></span>
     <%= form.select :value, [], {} %>
   </template>
 
   <%# The tag list does not depend on the executor, so the picker is rendered here once %>
   <template data-rule--actions-target="multiSelectTemplate">
-    <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
+    <span class="font-medium text-secondary text-xs"><%= t("rules.actions.to_label") %></span>
     <div class="grow min-w-0">
       <%= render DS::TagSelect.new(
             form: form,
@@ -66,7 +66,7 @@
   </template>
 
   <template data-rule--actions-target="textTemplate">
-    <span class="font-medium text-primary uppercase text-xs"><%= t("rules.actions.to_label") %></span>
+    <span class="font-medium text-secondary text-xs"><%= t("rules.actions.to_label") %></span>
     <%= form.text_field :value, placeholder: t("rules.actions.value_placeholder") %>
   </template>
 

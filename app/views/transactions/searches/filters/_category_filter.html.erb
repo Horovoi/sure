@@ -1,14 +1,9 @@
 <%# locals: (form:) %>
-<div data-controller="list-filter category-filter">
-  <div class="relative">
-    <input type="search"
-           autocomplete="off"
-           placeholder="<%= t(".placeholder") %>"
-           data-list-filter-target="input"
-           data-action="input->list-filter#filter"
-           class="block w-full bg-container border border-secondary rounded-md py-2 pl-10 pr-3 focus:ring-gray-500 sm:text-sm">
-    <%= icon("search", class: "absolute inset-y-0 left-2 top-1/2 transform -translate-y-1/2") %>
-  </div>
+<div data-controller="list-filter category-filter" class="space-y-2">
+  <%= render DS::SearchInput.new(
+        placeholder: t(".placeholder"),
+        data: { list_filter_target: "input", action: "input->list-filter#filter" }
+      ) %>
 
   <% selected_categories = Array(@q[:categories]).map(&:to_s) %>
 
@@ -37,14 +32,14 @@
        end
 
        content_tag :div,
-         class: "filterable-item flex items-center gap-2 p-2 rounded-md hover:bg-container-inset-hover",
+         class: "filterable-item flex items-center gap-2 h-8 px-2 rounded-md hover:bg-container-hover",
          data: { filter_name: category.name } do
            form.check_box(:categories,
                           checkbox_options,
                           category.filter_value,
                           nil) +
-           form.label(:categories, category.name, value: category.filter_value, class: "cursor-pointer w-full") do
-             content_tag(:div, class: "flex items-center gap-2 text-sm text-primary") do
+           form.label(:categories, category.name, value: category.filter_value, class: "flex-1 min-w-0 h-full flex items-center cursor-pointer") do
+             content_tag(:div, class: "flex items-center gap-2 min-w-0 text-sm text-primary") do
                content = []
                if nested
                  content << icon("corner-down-right", size: "sm", class: "text-secondary")
@@ -56,7 +51,7 @@
          end
      end %>
 
-  <div class="my-2 flex flex-col gap-1" id="list" data-list-filter-target="list">
+  <div class="flex flex-col" id="list" data-list-filter-target="list">
     <%= render_category_option.call(Category.uncategorized) %>
 
     <% grouped_family_categories.each do |group| %>

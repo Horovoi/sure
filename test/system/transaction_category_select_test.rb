@@ -118,6 +118,9 @@ class TransactionCategorySelectTest < ApplicationSystemTestCase
   test "creates a category from the list's quick picker with the transaction's nature" do
     transaction = transactions(:one)
     transaction.entry.update!(amount: -40)
+    # Side panels closed: the row is then wide enough for its category column
+    # (between both panels the category sits in the avatar slot instead)
+    @user.update!(show_sidebar: false, show_ai_sidebar: false)
 
     visit transactions_url
 

@@ -2,11 +2,17 @@
 
 <% transaction = entry.entryable %>
 
-<%= turbo_frame_tag dom_id(entry) do %>
+<%# The row is a size container: the lists it sits in run from a phone to a wide main
+    column, between side panels or not, so the columns follow the row's own width.
+    The same columns as the list header (transactions/_results): the name takes the rest;
+    the category gets a 2rem column for its icon from 36rem, and its pill (up to 10rem)
+    from 48rem; the amount at least 7rem. Narrower, the category icon takes the
+    avatar's place and its name goes under the transaction's %>
+<%= turbo_frame_tag dom_id(entry), class: "block @container" do %>
   <%= turbo_frame_tag dom_id(transaction) do %>
-    <div class="flex lg:grid lg:grid-cols-12 items-center text-primary text-sm font-medium p-3 lg:p-4 <%= entry.excluded ? "opacity-50 text-subdued" : "" %>">
+    <div class="grid grid-cols-[minmax(0,1fr)_auto] @xl:grid-cols-[minmax(0,1fr)_2rem_minmax(7rem,auto)] @3xl:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_minmax(7rem,auto)] gap-x-2 items-center text-primary text-sm font-medium p-3 lg:p-4 <%= entry.excluded ? "opacity-50 text-subdued" : "" %>">
 
-      <div class="pr-4 lg:pr-10 flex items-center gap-3 lg:gap-4 col-span-8 min-w-0">
+      <div class="@xl:pr-4 flex items-center gap-3 lg:gap-4 min-w-0">
         <%= check_box_tag dom_id(entry, "selection"),
             disabled: transaction.transfer.present?,
             class: "checkbox checkbox--light hidden lg:block",
@@ -18,9 +24,9 @@
               checkbox_toggle_target: "selectionEntry"
             } %>
 
-        <div class="max-w-full">
+        <div class="min-w-0">
           <%= content_tag :div, class: ["flex items-center gap-3 lg:gap-4"] do %>
-            <div class="hidden lg:flex shrink-0">
+            <div class="hidden @xl:flex shrink-0">
               <% if transaction.transfer? %>
                 <%= render DS::FilledIcon.new(
                   icon: "arrow-right-left",
@@ -33,7 +39,7 @@
                     class: "w-9 h-9 rounded-full border border-secondary",
                     loading: "lazy" %>
               <% else %>
-                <div class="hidden lg:flex">
+                <div class="flex">
                   <%= render DS::FilledIcon.new(
                     variant: :text,
                     text: entry.name,
@@ -43,7 +49,7 @@
                 </div>
               <% end %>
             </div>
-            <div class="flex md:hidden items-center gap-1 col-span-2 relative">
+            <div class="flex @xl:hidden items-center gap-1 shrink-0 relative">
               <%= render "transactions/transaction_category", transaction: transaction, variant: "mobile" %>
               <% if transaction.merchant&.logo_url.present? %>
                 <%= image_tag Setting.transform_brand_fetch_url(transaction.merchant.logo_url),
@@ -64,7 +70,7 @@
                               turbo_frame: "drawer",
                               turbo_prefetch: false
                             },
-                            class: "hover:underline"
+                            class: "hover:underline rounded-sm"
                           ) %>
                     <% else %>
                       <%= link_to(
@@ -74,7 +80,7 @@
                               turbo_frame: "drawer",
                               turbo_prefetch: false
                             },
-                            class: "hover:underline"
+                            class: "hover:underline rounded-sm"
                           ) %>
                     <% end %>
                   </div>
@@ -132,18 +138,18 @@
                     <%= render "transactions/transfer_accounts", entry: entry, transaction: transaction %>
                   <% else %>
                     <% if transaction.merchant&.present? %>
-                      <span class="hidden lg:inline truncate"><%= render "transactions/merchant_link", merchant: transaction.merchant %> • </span>
+                      <span class="hidden @xl:inline truncate"><%= render "transactions/merchant_link", merchant: transaction.merchant %> • </span>
                     <% end %>
-                    <span class="text-secondary hidden lg:inline">
+                    <span class="text-secondary hidden @xl:inline">
                       <%= link_to entry.account.name,
                           account_path(entry.account, tab: "transactions"),
                           data: { turbo_frame: "_top" },
-                          class: "hover:underline" %>
+                          class: "hover:underline rounded-sm" %>
                     </span>
                     <div class="flex items-center gap-1 truncate">
                       <%= render "categories/category_name_mobile", transaction: transaction %>
                       <% if transaction.merchant&.present? %>
-                        <span class="lg:hidden truncate">• <%= render "transactions/merchant_link", merchant: transaction.merchant %></span>
+                        <span class="@xl:hidden truncate">• <%= render "transactions/merchant_link", merchant: transaction.merchant %></span>
                       <% end %>
                     </div>
                   <% end %>
@@ -156,7 +162,7 @@
         <%= render "tags/menu", entry: entry, transaction: transaction %>
       </div>
 
-      <div class="hidden md:flex items-center gap-1 col-span-2 min-w-0">
+      <div class="hidden @xl:flex items-center gap-1 min-w-0">
         <% if entry.account.investment? && !transaction.transfer? %>
           <%# For investment accounts, show activity label instead of category %>
           <%= render "investment_activity/quick_edit_badge", entry: entry, entryable: transaction %>
@@ -165,10 +171,10 @@
         <% end %>
       </div>
 
-      <div class="shrink-0 col-span-4 lg:col-span-2 ml-auto text-right">
+      <div class="justify-self-end text-right">
         <%= content_tag :p,
             transaction.transfer? && view_ctx == "global" ? "+/- #{format_money(entry.amount_money.abs)}" : format_money(-entry.amount_money),
-            class: ["privacy-sensitive whitespace-nowrap", "text-success": entry.amount.negative?] %>
+            class: ["privacy-sensitive whitespace-nowrap tabular-nums", "text-success": entry.amount.negative?] %>
       </div>
     </div>
   <% end %>

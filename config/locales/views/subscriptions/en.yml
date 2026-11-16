@@ -2,14 +2,14 @@
 en:
   subscriptions:
     suggestions:
-      title: Subscription Suggestions
+      title: Subscription suggestions
       home: Home
       description: We found potential subscriptions in your transaction history.
       no_suggestions: No pending suggestions
       no_suggestions_back: All caught up! No subscription suggestions to review.
       no_pending_suggestions: No pending suggestions to review.
-      back_to_subscriptions: Back to Subscriptions
-      approve_all: Approve All
+      back_to_subscriptions: Back to subscriptions
+      approve_all: Approve all
       approve: Approve
       dismiss: Dismiss
       transaction_count:
@@ -17,11 +17,11 @@ en:
         other: "%{count} transactions"
       approve_usd_option: "Approve as %{currency}"
       approve_local_option: "Keep local currency"
-      dismiss_all: Dismiss All
+      dismiss_all: Dismiss all
       dismiss_all_confirm: Are you sure you want to dismiss all suggestions?
       previously_dismissed:
-        one: "Previously Dismissed (1)"
-        other: "Previously Dismissed (%{count})"
+        one: "Previously dismissed (1)"
+        other: "Previously dismissed (%{count})"
       detection:
         label: Detect recurring patterns automatically
         description: After each import or sync, look for repeating transactions, suggest subscriptions and pause patterns that stopped. Detect from history still works when this is off.
@@ -51,10 +51,10 @@ en:
     index:
       title: Subscriptions
       home: Home
-      new_subscription: New Subscription
-      add_subscription: Add Subscription
-      add_manually: Add Manually
-      detect_from_history: Detect from History
+      new_subscription: New subscription
+      add_subscription: New subscription
+      add_manually: Add manually
+      detect_from_history: Detect from history
       calendar: Calendar
       no_subscriptions: No subscriptions found
       no_subscriptions_description: Create a subscription to start tracking your recurring payments.
@@ -66,8 +66,8 @@ en:
         yearly: Yearly
         subscriptions: Subscriptions
         other_recurring: Other recurring
-      search_placeholder: Search subscriptions...
-      search_other_placeholder: Search recurring transactions...
+      search_placeholder: Search subscriptions
+      search_other_placeholder: Search recurring transactions
       suggestion_banner: Review and approve to add them to your subscriptions.
       summary:
         active: active
@@ -78,13 +78,13 @@ en:
         name: Name
         amount: Amount
         cycle: Cycle
-        next_billing: Next Billing
+        next_billing: Next billing
         status: Status
         actions: Actions
         overdue: Overdue
-        due_today: Due Today
+        due_today: Due today
     calendar:
-      title: Subscription Calendar
+      title: Subscription calendar
       list: List
       home: Home
       today: Today
@@ -94,7 +94,7 @@ en:
         monthly: Monthly
         yearly: Yearly
     new:
-      title: New Subscription
+      title: New subscription
       home: Home
     edit:
       home: Home
@@ -108,26 +108,26 @@ en:
       name_placeholder: "e.g. Netflix, Spotify"
       amount: Amount
       currency: Currency
-      billing_cycle: Billing Cycle
-      billing_day: Billing Day
+      billing_cycle: Billing cycle
+      billing_day: Billing day
       billing_day_hint: Day of the month when you're billed
-      expected_month: Billing Month
-      expected_month_placeholder: Select month
+      expected_month: Billing month
+      expected_month_placeholder: Select a month
       expected_month_hint: Month when the yearly subscription renews
-      next_expected_date: Next Billing Date
+      next_expected_date: Next billing date
       next_expected_date_hint: Override the next expected billing date (set to past date to test overdue features)
       category: Category
-      category_placeholder: Select category
+      category_placeholder: Select a category
       merchant: Merchant
-      merchant_placeholder: Select merchant
-      default_account: Payment Account
-      default_account_placeholder: Select account
+      merchant_placeholder: Select a merchant
+      default_account: Payment account
+      default_account_placeholder: Select an account
       default_account_hint: Account where subscription payments appear (for auto-recording transactions)
       notes: Notes
       notes_placeholder: Add any notes about this subscription...
-      logo: Custom Logo
+      logo: Custom logo
       logo_hint: Upload a custom logo for this subscription (overrides service logo)
-      save: Save Subscription
+      save: Save subscription
       cancel: Cancel
     status:
       active: Active
@@ -148,12 +148,12 @@ en:
       success: Occurrence skipped
     other_recurring_table:
       empty_title: No other recurring transactions
-      empty_description: Use Mark as Recurring in a transaction's details to track a repeating bill or income that is not a subscription.
+      empty_description: Use Mark as recurring in a transaction's details to track a repeating bill or income that is not a subscription.
       name: Name
       amount: Amount
-      expected_day: Expected Day
-      next_date: Next Date
-      last_occurrence: Last Occurrence
+      expected_day: Expected day
+      next_date: Next date
+      last_occurrence: Last occurrence
       status: Status
       actions: Actions
     other_recurring:

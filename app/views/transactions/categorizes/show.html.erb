@@ -52,29 +52,35 @@
                 <%= t(".rule_description_prefix", type: type_label) %>
                 <span class="inline-flex items-center gap-1 align-middle">
                   <span class="font-medium text-primary" data-categorize-target="filterDisplay">"<%= @group.grouping_key %>"</span>
-                  <button type="button"
-                          class="text-secondary hover:text-primary"
-                          title="<%= t(".edit_filter") %>"
-                          aria-label="<%= t(".edit_filter") %>"
-                          data-action="click->categorize#startFilterEdit"
-                          data-categorize-target="filterEditTrigger">
-                    <%= icon("pencil", size: "sm") %>
-                  </button>
+                  <%# flex, not the default inline-flex, so the hidden the controller adds wins %>
+                  <%= render DS::Button.new(
+                        variant: "icon",
+                        size: "sm",
+                        icon: "pencil",
+                        type: "button",
+                        class: "flex",
+                        title: t(".edit_filter"),
+                        aria: { label: t(".edit_filter") },
+                        data: { action: "click->categorize#startFilterEdit", categorize_target: "filterEditTrigger" }
+                      ) %>
                   <span class="hidden items-center gap-1" data-categorize-target="filterEditArea">
                     <input type="text"
                            value="<%= @group.grouping_key %>"
                            autocomplete="off"
                            aria-label="<%= t(".edit_filter") %>"
-                           class="text-sm border border-primary rounded-lg px-2 py-0.5 bg-container text-primary focus:outline-none focus:ring-1 w-40"
+                           class="h-7 w-40 text-sm border border-secondary rounded-md px-2 py-0 bg-container text-primary focus-ring focus:ring-0"
                            data-categorize-target="filterInput"
                            data-action="keydown.enter->categorize#confirmFilterEdit keydown.esc->categorize#cancelFilterEdit">
-                    <button type="button"
-                            class="flex items-center justify-center w-6 h-6 rounded-md button-bg-primary text-inverse shrink-0"
-                            title="<%= t(".confirm_filter") %>"
-                            aria-label="<%= t(".confirm_filter") %>"
-                            data-action="click->categorize#confirmFilterEdit">
-                      <%= icon("check", size: "sm", color: "current") %>
-                    </button>
+                    <%= render DS::Button.new(
+                          variant: "primary",
+                          size: "sm",
+                          icon: "check",
+                          type: "button",
+                          class: "shrink-0",
+                          title: t(".confirm_filter"),
+                          aria: { label: t(".confirm_filter") },
+                          data: { action: "click->categorize#confirmFilterEdit" }
+                        ) %>
                   </span>
                 </span>
                 <%= t(".rule_description_suffix") %>

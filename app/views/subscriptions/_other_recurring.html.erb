@@ -1,10 +1,12 @@
 <%# locals: (recurring_transaction:) %>
 <%# One manual recurring row on the Other recurring tab. %>
 
+<%# Like subscriptions/_subscription: a table row when wide, a card below 48rem. The card
+    leaves out the expected day, which the next date already says %>
 <tr id="<%= dom_id(recurring_transaction) %>"
-    class="border-b border-subdued hover:bg-surface-hover"
+    class="group/row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 @3xl:table-row @3xl:p-0 border-b border-subdued last:border-b-0 hover:bg-container-hover"
     data-testid="other-recurring-row">
-  <td class="py-3 px-4 <%= "opacity-60" unless recurring_transaction.active? %>">
+  <td class="col-span-3 min-w-0 @3xl:table-cell @3xl:py-3 @3xl:px-4 <%= "opacity-60" unless recurring_transaction.active? %>">
     <div class="flex items-center gap-3">
       <% if recurring_transaction.merchant&.logo_url.present? %>
         <%= image_tag Setting.transform_brand_fetch_url(recurring_transaction.merchant.logo_url),
@@ -21,8 +23,8 @@
         ) %>
       <% end %>
 
-      <div>
-        <span class="text-sm text-primary font-medium block"><%= recurring_transaction.display_name %></span>
+      <div class="min-w-0">
+        <span class="text-sm text-primary font-medium block truncate"><%= recurring_transaction.display_name %></span>
         <% if recurring_transaction.category.present? %>
           <span class="text-xs text-secondary"><%= recurring_transaction.category.name %></span>
         <% end %>
@@ -30,7 +32,7 @@
     </div>
   </td>
 
-  <td class="py-3 px-4 text-sm font-medium privacy-sensitive <%= recurring_transaction.amount.negative? ? "text-success" : "text-primary" %> <%= "opacity-60" unless recurring_transaction.active? %>">
+  <td class="col-start-4 row-start-1 text-right @3xl:text-left whitespace-nowrap tabular-nums @3xl:table-cell @3xl:py-3 @3xl:px-4 text-sm font-medium privacy-sensitive <%= recurring_transaction.amount.negative? ? "text-success" : "text-primary" %> <%= "opacity-60" unless recurring_transaction.active? %>">
     <% if recurring_transaction.has_amount_variance? %>
       <span class="inline-flex items-center gap-1 cursor-help"
             title="<%= t(".amount_range", min: format_money(-recurring_transaction.expected_amount_min_money), max: format_money(-recurring_transaction.expected_amount_max_money)) %>">
@@ -42,19 +44,19 @@
     <% end %>
   </td>
 
-  <td class="py-3 px-4 text-sm text-secondary <%= "opacity-60" unless recurring_transaction.active? %>">
+  <td class="hidden @3xl:table-cell @3xl:py-3 @3xl:px-4 text-sm text-secondary whitespace-nowrap <%= "opacity-60" unless recurring_transaction.active? %>">
     <%= t(".day_of_month", day: recurring_transaction.expected_day_of_month) %>
   </td>
 
-  <td class="py-3 px-4 text-sm text-secondary <%= "opacity-60" unless recurring_transaction.active? %>">
+  <td class="col-start-1 row-start-2 @3xl:table-cell @3xl:py-3 @3xl:px-4 text-sm text-secondary whitespace-nowrap <%= "opacity-60" unless recurring_transaction.active? %>">
     <%= l(recurring_transaction.next_expected_date, format: :short) %>
   </td>
 
-  <td class="py-3 px-4 text-sm text-secondary <%= "opacity-60" unless recurring_transaction.active? %>">
+  <td class="hidden @3xl:table-cell @3xl:py-3 @3xl:px-4 text-sm text-secondary whitespace-nowrap <%= "opacity-60" unless recurring_transaction.active? %>">
     <%= recurring_transaction.last_occurrence_date ? l(recurring_transaction.last_occurrence_date, format: :short) : "–" %>
   </td>
 
-  <td class="py-3 px-4 <%= "opacity-60" unless recurring_transaction.active? %>">
+  <td class="col-start-2 col-span-2 row-start-2 @3xl:table-cell @3xl:py-3 @3xl:px-4 <%= "opacity-60" unless recurring_transaction.active? %>">
     <% if recurring_transaction.active? %>
       <%= render DS::Pill.new(label: t("subscriptions.status.active"), tone: :success, marker: false) %>
     <% else %>
@@ -62,8 +64,8 @@
     <% end %>
   </td>
 
-  <td class="py-3 px-4 text-right">
-    <div class="flex items-center justify-end gap-2">
+  <td class="col-start-4 row-start-2 justify-self-end text-right @3xl:table-cell @3xl:py-3 @3xl:px-4 @3xl:sticky @3xl:right-0 bg-container group-hover/row:bg-container-hover">
+    <div class="flex items-center justify-end gap-1">
       <%= render DS::Menu.new(testid: "other-recurring-menu") do |menu| %>
         <% menu.with_item(variant: "button", text: t(".make_subscription"), icon: "credit-card",
             href: make_subscription_subscription_path(recurring_transaction), method: :post, frame: "_top") %>

@@ -1,35 +1,50 @@
-<div class="fixed bottom-[calc(5rem_+_env(safe-area-inset-bottom))] md:bottom-6 z-50 flex items-center justify-between rounded-xl bg-surface-inset border-secondary shadow-border-xs px-4 text-sm text-primary md:w-[420px] w-[90%] py-1.5">
-  <div class="flex items-center gap-2">
-    <%= check_box_tag "entry_selection", 1, true, class: "checkbox checkbox--light", data: { action: "bulk-select#deselectAll" } %>
+<%# A floating bar, so it takes the overlay recipe: bg-container with shadow-border-lg,
+    whose ring keeps an edge over the cards in dark mode %>
+<div class="fixed bottom-[calc(5rem_+_env(safe-area-inset-bottom))] md:bottom-6 z-50 flex items-center justify-between gap-2 rounded-xl bg-container shadow-border-lg pl-4 pr-2 py-2 text-sm text-primary md:w-[420px] w-[90%]">
+  <div class="flex items-center gap-2 min-w-0">
+    <%= check_box_tag "entry_selection", 1, true, class: "checkbox checkbox--light", aria: { label: t(".deselect_all") }, data: { action: "bulk-select#deselectAll" } %>
 
-    <p data-bulk-select-target="selectionBarText"></p>
+    <p class="truncate" data-bulk-select-target="selectionBarText"></p>
   </div>
 
-  <div class="flex items-center gap-1 text-secondary">
+  <div class="flex items-center gap-1 shrink-0">
     <%= turbo_frame_tag "bulk_transaction_edit_drawer" %>
 
-    <%# One transaction selected: open the new-transaction form filled from it (bulk-select sets the id) %>
-    <%= link_to new_transaction_path,
-                class: "p-1.5 group/duplicate hover:bg-inverse flex items-center justify-center rounded-md hidden",
-                title: t(".duplicate"),
-                aria: { label: t(".duplicate") },
-                data: { turbo_frame: "modal", bulk_select_target: "duplicateLink" } do %>
-      <%= icon "copy", class: "group-hover/duplicate:text-inverse" %>
-    <% end %>
+    <%# One transaction selected: open the new-transaction form filled from it (bulk-select sets the id).
+        "flex hidden": bulk-select toggles hidden, and flex (not the default inline-flex) gives way to it %>
+    <%= render DS::Link.new(
+          variant: "icon",
+          size: "sm",
+          icon: "copy",
+          href: new_transaction_path,
+          class: "flex hidden",
+          title: t(".duplicate"),
+          aria: { label: t(".duplicate") },
+          data: { turbo_frame: "modal", bulk_select_target: "duplicateLink" }
+        ) %>
 
-    <%= link_to new_transactions_bulk_update_path,
-                class: "p-1.5 group/edit hover:bg-inverse flex items-center justify-center rounded-md",
-                title: t(".edit"),
-                data: { turbo_frame: "bulk_transaction_edit_drawer" } do %>
-      <%= icon "pencil-line", class: "group-hover/edit:text-inverse" %>
-    <% end %>
+    <%= render DS::Link.new(
+          variant: "icon",
+          size: "sm",
+          icon: "pencil-line",
+          href: new_transactions_bulk_update_path,
+          title: t(".edit"),
+          aria: { label: t(".edit") },
+          data: { turbo_frame: "bulk_transaction_edit_drawer" }
+        ) %>
 
     <%= render "transactions/reconcile_bulk_menu" %><%# w3-toolstrx %>
 
     <%= form_with url: transactions_bulk_deletion_path, data: { turbo_confirm: true, turbo_frame: "_top" } do %>
-      <button type="button" data-bulk-select-scope-param="bulk_delete" data-action="bulk-select#submitBulkRequest" class="p-1.5 group/delete hover:bg-inverse flex items-center justify-center rounded-md" title="<%= t(".delete") %>">
-        <%= icon "trash-2", class: "group-hover/delete:text-inverse" %>
-      </button>
+      <%= render DS::Button.new(
+            variant: "icon",
+            size: "sm",
+            icon: "trash-2",
+            type: "button",
+            title: t(".delete"),
+            aria: { label: t(".delete") },
+            data: { bulk_select_scope_param: "bulk_delete", action: "bulk-select#submitBulkRequest" }
+          ) %>
     <% end %>
   </div>
 </div>

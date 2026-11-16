@@ -1,8 +1,10 @@
 <%# locals: (recurring_transaction:) %>
 
-<div class="grid grid-cols-12 items-center text-subdued text-sm font-medium p-4 lg:p-4 bg-container-inset rounded">
-  <div class="pr-4 lg:pr-10 flex items-center gap-3 lg:gap-4 col-span-8">
-    <div class="max-w-full">
+<%# The columns of transactions/_transaction, by its own width %>
+<div class="@container">
+<div class="grid grid-cols-[minmax(0,1fr)_auto] @xl:grid-cols-[minmax(0,1fr)_2rem_minmax(7rem,auto)] @3xl:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_minmax(7rem,auto)] gap-x-2 items-center text-subdued text-sm font-medium p-3 lg:p-4 bg-container-inset rounded-lg">
+  <div class="@xl:pr-4 flex items-center gap-3 lg:gap-4 min-w-0">
+    <div class="min-w-0">
       <%= content_tag :div, class: ["flex items-center gap-2"] do %>
         <% if recurring_transaction.merchant.present? %>
           <% if recurring_transaction.merchant.logo_url.present? %>
@@ -34,7 +36,7 @@
               </div>
 
               <div class="flex items-center gap-1 flex-shrink-0">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-tint-10 text-link">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-tint-10 text-link">
                   <%= t(".projected") %>
                 </span>
               </div>
@@ -49,12 +51,13 @@
     </div>
   </div>
 
-  <div class="hidden lg:flex items-center gap-1 col-span-2">
-    <span class="text-xs text-secondary"><%= t(".recurring") %></span>
+  <div class="hidden @xl:flex items-center gap-1 min-w-0">
+    <span class="text-xs text-secondary hidden @3xl:inline"><%= t(".recurring") %></span>
   </div>
 
-  <div class="col-span-2 ml-auto text-right">
+  <div class="justify-self-end text-right">
     <% display_amount = recurring_transaction.manual? && recurring_transaction.expected_amount_avg.present? ? recurring_transaction.expected_amount_avg : recurring_transaction.amount %>
-    <%= content_tag :p, format_money(-Money.new(display_amount, recurring_transaction.currency)), class: ["font-medium privacy-sensitive whitespace-nowrap", display_amount.negative? ? "text-success" : "text-subdued"] %>
+    <%= content_tag :p, format_money(-Money.new(display_amount, recurring_transaction.currency)), class: ["font-medium privacy-sensitive whitespace-nowrap tabular-nums", display_amount.negative? ? "text-success" : "text-subdued"] %>
   </div>
+</div>
 </div>

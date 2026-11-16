@@ -3,15 +3,16 @@ en:
   transactions:
     selection_bar:
       delete: Delete
+      deselect_all: Clear the selection
       duplicate: Duplicate
       edit: Edit
     unknown_name: Unknown transaction
     form:
       account: Account
-      account_prompt: Select an Account
+      account_prompt: Select an account
       amount: Amount
       category: Category
-      category_prompt: Select a Category
+      category_prompt: Select a category
       date: Date
       description: Description
       description_placeholder: Describe transaction
@@ -31,9 +32,9 @@ en:
       already_button: Already recurring
       already_recurring: "%{name} is already a recurring transaction."
       already_subscription: "%{name} is already a subscription."
-      button: Mark as Recurring
+      button: Mark as recurring
       subtitle: Track this as a recurring transaction. Amount variance is automatically calculated from past 6 months of similar transactions.
-      title: Recurring Transaction
+      title: Recurring transaction
       view: View
     mark_as_recurring:
       already_recurring: A manual recurring transaction already exists for this pattern
@@ -54,7 +55,11 @@ en:
       projected: Projected
       recurring: Recurring
     results:
-      upcoming: Upcoming Recurring Transactions
+      col_amount: Amount
+      col_category: Category
+      col_transaction: Transaction
+      select_page: Select every transaction on this page
+      upcoming: Upcoming recurring transactions
     exchange_rate_field:
       hint: Leave blank to use the market rate.
       label: Exchange rate, 1 %{from} in %{to}
@@ -106,13 +111,14 @@ en:
       details: Details
       exclude: Exclude
       exclude_description: Excluded transactions will be removed from budgeting calculations and reports.
-      activity_type: Activity Type
+      activity_type: Activity type
       activity_type_description: Type of investment activity (Buy, Sell, Dividend, etc.). Auto-detected or set manually.
-      one_time_title: One-time %{type}
+      one_time_expense_title: One-time expense
+      one_time_income_title: One-time income
       one_time_description: One-time transactions will be excluded from certain budgeting calculations and reports to help you see what's really important.
-      convert_to_trade_title: Convert to Security Trade
-      convert_to_trade_description: Convert this transaction into a Buy or Sell trade with security details for portfolio tracking.
-      convert_to_trade_button: Convert to Trade
+      convert_to_trade_title: Convert to security trade
+      convert_to_trade_description: Convert this transaction into a buy or sell trade with security details for portfolio tracking.
+      convert_to_trade_button: Convert to trade
       overview: Overview
       settings: Settings
       name_label: Name
@@ -217,6 +223,8 @@ en:
       outflow: Outflow
       total_transactions: Total transactions
     index:
+      drop_subtitle: Upload transactions directly
+      drop_title: Drop CSV to import
       transaction: transaction
       transactions: transactions
       import: Import
@@ -232,7 +240,7 @@ en:
         tag: Tag
         merchant: Merchant
     convert_to_trade:
-      title: Convert to Security Trade
+      title: Convert to security trade
       description: Convert this transaction into a trade with security details
       date_label: "Date:"
       account_label: "Account:"
@@ -250,17 +258,17 @@ en:
       quantity_label: Quantity (Shares)
       quantity_placeholder: e.g. 20
       quantity_hint: Number of shares traded
-      price_label: Price per Share
+      price_label: Price per share
       price_placeholder: e.g. 52.15
       price_hint: Price per share (%{currency})
       qty_or_price_hint: Enter at least qty OR price. The other will be calculated from the transaction amount (%{amount}).
-      trade_type_label: Trade Type
-      trade_type_hint: Buy or Sell shares of a security
+      trade_type_label: Trade type
+      trade_type_hint: Buy or sell shares of a security
       exchange_label: Exchange (Optional)
       exchange_placeholder: XNAS
       exchange_hint: Leave blank to auto-detect
       cancel: Cancel
-      submit: Convert to Trade
+      submit: Convert to trade
       success: Transaction converted to trade
       errors:
         not_investment_account: Only transactions in investment accounts can be converted to trades
@@ -289,6 +297,7 @@ en:
       new:
         cancel: Cancel
         category_label: Category
+        date_hint: Leave blank to keep each date
         date_label: Date
         header_title: Edit transactions
         merchant_label: Merchant
@@ -310,12 +319,15 @@ en:
           other: "%{count} transactions updated"
     searches:
       filters:
+        account_filter:
+          placeholder: Filter accounts
         amount_filter:
           equal_to: Equal to
           greater_than: Greater than
           less_than: Less than
           placeholder: '0'
         badge:
+          remove: Remove filter
           expense: Expense
           income: Income
           on_or_after: on or after %{date}
@@ -338,6 +350,9 @@ en:
         status_filter:
           confirmed: Confirmed
           pending: Pending
+        date_filter:
+          from: From
+          to: To
         category_filter:
           placeholder: Filter categories
         merchant_filter:
@@ -364,4 +379,5 @@ en:
         less_than: less than
       form:
         filter: Filter
-        toggle_selection_checkboxes: Toggle all checkboxes
+        search_placeholder: Search transactions
+        toggle_selection_checkboxes: Show or hide the checkboxes

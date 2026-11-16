@@ -20,13 +20,15 @@
   </section>
 
   <section class="space-y-2">
-    <%# Past names as you type; picking one also picks its usual category (category_suggestion_controller) %>
+    <%# Past names as you type; picking one also picks its usual category (category_suggestion_controller).
+        The label carries the required * the way StyledFormBuilder#build_label draws it %>
     <div class="form-field combobox">
       <%= f.combobox :name,
             name_suggestions_transactions_path(nature: nature),
             free_text: true,
             autocomplete: :list,
-            label: t(".description"),
+            label: safe_join([ t(".description"), tag.span("*", class: "text-red-500 ml-0.5") ]),
+            dialog_label: t(".description"),
             placeholder: t(".description_placeholder"),
             required: true,
             input: { data: { category_suggestion_target: "name" } } %>

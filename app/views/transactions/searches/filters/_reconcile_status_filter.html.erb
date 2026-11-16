@@ -1,9 +1,11 @@
 <%# locals: (form:) %>
-<%# w3-toolstrx reconciliation-status: transactions of manual accounts by their mark %>
+<%# w3-toolstrx reconciliation-status: transactions of manual accounts by their mark.
+    The checkbox alone marks the row: the status icons are circles and ticks too, and
+    beside a checkbox they read as a second one %>
 
-<div class="p-2 space-y-3">
+<div class="flex flex-col">
   <% Entry::RECONCILED_STATUS_CYCLE.each do |status| %>
-    <div class="flex items-center gap-3" data-filter-name="<%= status %>">
+    <div class="filterable-item flex items-center gap-2 h-8 px-2 rounded-md hover:bg-container-hover" data-filter-name="<%= status %>">
       <%= form.check_box :reconcile_status,
                          {
                            multiple: true,
@@ -12,10 +14,7 @@
                          },
                          status,
                          nil %>
-      <%= form.label :reconcile_status, value: status, class: "text-sm text-primary flex items-center gap-2" do %>
-        <%= icon(reconcile_status_presentation(status)[:icon], size: "sm", color: "current", class: reconcile_status_presentation(status)[:text_class]) %>
-        <%= t("transactions.reconcile.statuses.#{status}") %>
-      <% end %>
+      <%= form.label :reconcile_status, t("transactions.reconcile.statuses.#{status}"), value: status, class: "flex-1 min-w-0 h-full flex items-center gap-2 text-sm text-primary cursor-pointer" %>
     </div>
   <% end %>
 </div>

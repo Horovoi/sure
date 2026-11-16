@@ -4,17 +4,18 @@
       <div class="w-fit m-auto mb-4">
         <%= render partial: "shared/color_badge", locals: { name: tag.name, color: tag.color } %>
       </div>
-      <div class="flex gap-2 items-center justify-center">
+      <%# Colour swatches: the picked one ringed in the primary text colour, keyboard
+          focus in the focus-ring token %>
+      <fieldset class="flex flex-wrap gap-2 items-center justify-center">
+        <legend class="sr-only"><%= t(".color_label") %></legend>
         <% Tag::COLORS.each do |color| %>
           <label class="relative">
-            <%= f.radio_button :color, color, class: "sr-only peer", data: { action: "change->color-badge#handleColorChange" } %>
-            <div class="w-6 h-6 rounded-full cursor-pointer peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-blue-500" style="background-color: <%= color %>"></div>
+            <%= f.radio_button :color, color, class: "sr-only peer", aria: { label: color }, data: { action: "change->color-badge#handleColorChange" } %>
+            <div class="w-6 h-6 rounded-full cursor-pointer peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-offset-container peer-checked:ring-[var(--color-text-primary)] outline-2 outline-transparent outline-offset-4 peer-focus-visible:outline-focus-ring" style="background-color: <%= color %>"></div>
           </label>
         <% end %>
-      </div>
-      <div class="relative flex items-center border border-secondary rounded-lg text-subdued">
-        <%= f.text_field :name, placeholder: t(".placeholder"), autofocus: true, required: true, data: { action: "input->color-badge#handleNameChange" } %>
-      </div>
+      </fieldset>
+      <%= f.text_field :name, label: t(".name_label"), placeholder: t(".placeholder"), autofocus: true, required: true, data: { action: "input->color-badge#handleNameChange" } %>
     </section>
 
     <section>

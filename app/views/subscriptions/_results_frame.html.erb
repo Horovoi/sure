@@ -3,38 +3,39 @@
     <% if @other_recurring %>
       <%= render "subscriptions/other_recurring_table", recurring_transactions: @subscriptions %>
     <% elsif @subscriptions.empty? %>
-      <div class="text-center py-12 px-4">
-        <div class="text-secondary mb-4">
-          <%= icon "credit-card", size: "xl" %>
-        </div>
-        <p class="text-primary font-medium mb-2"><%= t("subscriptions.index.no_subscriptions") %></p>
-        <p class="text-secondary text-sm mb-4"><%= t("subscriptions.index.no_subscriptions_description") %></p>
-        <%= render DS::Link.new(
-          text: t("subscriptions.index.new_subscription"),
-          icon: "plus",
-          variant: "primary",
-          href: new_subscription_path
-        ) %>
-      </div>
+      <%= render DS::EmptyState.new(icon: "credit-card", title: t("subscriptions.index.no_subscriptions"), description: t("subscriptions.index.no_subscriptions_description")) do |empty| %>
+        <% empty.with_action do %>
+          <%= render DS::Link.new(
+            text: t("subscriptions.index.new_subscription"),
+            icon: "plus",
+            variant: "primary",
+            href: new_subscription_path
+          ) %>
+        <% end %>
+      <% end %>
     <% else %>
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="text-xs uppercase font-medium text-secondary border-b border-divider">
-              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.name") %></th>
-              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.amount") %></th>
-              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.cycle") %></th>
-              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.next_billing") %></th>
-              <th class="text-left py-3 px-4"><%= t("subscriptions.index.table.status") %></th>
-              <th class="text-right py-3 px-4"><%= t("subscriptions.index.table.actions") %></th>
-            </tr>
-          </thead>
-          <tbody>
-            <% @subscriptions.each do |subscription| %>
-              <%= render "subscriptions/subscription", subscription: subscription %>
-            <% end %>
-          </tbody>
-        </table>
+      <%# A table when the card is wide; below 48rem each row is a card of its own
+          (subscriptions/_subscription), so a phone never scrolls sideways %>
+      <div class="@container">
+        <div class="overflow-x-auto" tabindex="-1">
+          <table class="w-full">
+            <thead class="hidden @3xl:table-header-group">
+              <tr class="text-xs font-medium text-secondary border-b border-divider">
+                <th scope="col" class="text-left py-3 px-4"><%= t("subscriptions.index.table.name") %></th>
+                <th scope="col" class="text-left py-3 px-4"><%= t("subscriptions.index.table.amount") %></th>
+                <th scope="col" class="text-left py-3 px-4"><%= t("subscriptions.index.table.cycle") %></th>
+                <th scope="col" class="text-left py-3 px-4"><%= t("subscriptions.index.table.next_billing") %></th>
+                <th scope="col" class="text-left py-3 px-4"><%= t("subscriptions.index.table.status") %></th>
+                <th scope="col" class="text-right py-3 px-4 sticky right-0 bg-container"><span class="sr-only"><%= t("subscriptions.index.table.actions") %></span></th>
+              </tr>
+            </thead>
+            <tbody class="block @3xl:table-row-group">
+              <% @subscriptions.each do |subscription| %>
+                <%= render "subscriptions/subscription", subscription: subscription %>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
       </div>
     <% end %>
   </div>
