@@ -1,12 +1,12 @@
-/* 
-  Fix for date input calendar picker icon visibility in dark mode.
-  
-  The native browser calendar picker icon is typically dark, making it 
-  invisible on dark backgrounds. This rule inverts the icon color in 
-  dark mode to ensure proper visibility.
+/*
+  The date input's calendar picker icon in dark mode.
+
+  The browser draws the icon for the page's color-scheme, which follows
+  data-theme (sure-design-system.css), so it is already light on a dark
+  background. It used to be inverted here as well, which turned it dark
+  again and almost invisible.
 */
 
 [data-theme=dark] input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
   cursor: pointer;
 }

@@ -480,11 +480,9 @@
     @apply transition-opacity duration-300;
     @apply placeholder:text-subdued;
 
-    @variant theme-dark {
-      &::-webkit-calendar-picker-indicator {
-        filter: invert(1);
-        cursor: pointer;
-      }
+    /* The color-scheme already draws the picker icon light in dark mode */
+    &::-webkit-calendar-picker-indicator {
+      cursor: pointer;
     }
   }
 
