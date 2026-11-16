@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_16_100006) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_16_100007) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -1020,6 +1020,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100006) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "page_balance_minor"
+    t.uuid "goal_id"
+    t.decimal "goal_synced_target", precision: 19, scale: 4
+    t.string "goal_synced_title"
+    t.datetime "goal_dismissed_at"
+    t.index ["goal_id"], name: "index_monobank_accounts_on_goal_id"
     t.index ["monobank_item_id", "account_id"], name: "index_monobank_accounts_on_monobank_item_id_and_account_id", unique: true
     t.index ["monobank_item_id"], name: "index_monobank_accounts_on_monobank_item_id"
   end
@@ -1618,6 +1623,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100006) do
   add_foreign_key "merchants", "families"
   add_foreign_key "messages", "chats"
   add_foreign_key "mobile_devices", "users"
+  add_foreign_key "monobank_accounts", "goals", on_delete: :nullify
   add_foreign_key "monobank_accounts", "monobank_items"
   add_foreign_key "monobank_items", "families"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"

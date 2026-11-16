@@ -8,6 +8,8 @@
 #
 # For an account monobank created (no cut-over), the opening anchor is set once,
 # when the history backfill is complete, to the balance before the oldest row.
+#
+# A jar with a savings target gets a Sure goal funded by its account (JarGoal).
 class MonobankAccount::Processor
   attr_reader :monobank_account
 
@@ -23,6 +25,7 @@ class MonobankAccount::Processor
     write_balance(account, adapter)
     result = MonobankAccount::Transactions::Processor.new(monobank_account, import_adapter: adapter).process
     set_opening_anchor(account)
+    MonobankAccount::JarGoal.new(monobank_account, account).sync
     result
   end
 

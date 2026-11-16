@@ -51,6 +51,24 @@ class MonobankAccount::ProcessorTest < ActiveSupport::TestCase
     assert_equal 10_000, accounts[fop].reload.balance
   end
 
+  test "a jar with a target gets a goal funded by its account, other products none" do
+    jar = create_monobank_product(account_id: "jar", kind: "jar", title: "Відпустка", balance: 150_000, goal: 2_000_000)
+    reserve = create_monobank_product(account_id: "reserve", kind: "jar", title: "Подушка", balance: 100_000)
+    card = create_monobank_product(account_id: "card", balance: 10_000, goal: 2_000_000)
+    jar_account = @item.create_linked_account!(monobank_account: jar)
+    [ reserve, card ].each { |product| @item.create_linked_account!(monobank_account: product) }
+
+    assert_difference -> { Goal.count } => 1 do
+      [ jar, reserve, card ].each { |product| process(product) }
+      process(jar)
+    end
+
+    goal = jar.reload.linked_goal
+    assert_equal [ "Відпустка", BigDecimal("20000"), [ jar_account ] ], [ goal.name, goal.target_amount, goal.linked_accounts.to_a ]
+    assert_nil reserve.reload.goal_id
+    assert_nil card.reload.goal_id
+  end
+
   test "nothing for an unlinked product" do
     assert_nil process(create_monobank_product(account_id: "card"))
   end

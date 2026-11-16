@@ -28,6 +28,9 @@ class MonobankAccount < ApplicationRecord
   has_one :account_provider, as: :provider, dependent: :destroy
   has_one :account, through: :account_provider, source: :account
   has_one :linked_account, through: :account_provider, source: :account
+  # The Sure goal made from a jar's target (MonobankAccount::JarGoal). Not `goal`: that
+  # column is the jar's target as monobank sends it. Deleting the goal clears the link.
+  belongs_to :linked_goal, class_name: "Goal", foreign_key: :goal_id, optional: true, inverse_of: false
 
   validates :name, :currency, :account_id, :account_kind, presence: true
   validates :account_id, uniqueness: { scope: :monobank_item_id }
@@ -62,6 +65,16 @@ class MonobankAccount < ApplicationRecord
 
   def jar?
     account_kind == JAR_KIND
+  end
+
+  # The jar's savings target in major units, nil for a card or a jar without one
+  def jar_target
+    goal if jar? && goal.to_d.positive?
+  end
+
+  # The jar's title as monobank sends it now (name keeps the first one)
+  def jar_title
+    raw_payload.to_h["title"].presence || name
   end
 
   def fop?
