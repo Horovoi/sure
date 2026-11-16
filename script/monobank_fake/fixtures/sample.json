@@ -128,6 +128,32 @@
     { "path_prefix": "/personal/statement/", "status": 429, "times": 1, "body": { "errorDescription": "Too many requests" }, "_note": "the very first statement request gets the bank's 429 although it kept the interval: the chain waits and asks again" },
     { "path_prefix": "/personal/statement/mbf-eur", "status": 500, "times": 1, "_note": "first EUR statement fails once: the account backs off, the others continue" }
   ],
+  "jar_goal_rounds": [
+    {
+      "_note": "the bank renames the vacation jar and gives the reserve jar a target; the owner set the vacation goal's target in Sure, which must survive (the jar's target did not move)",
+      "bank": [
+        { "jar": "mbf-jar-vacation", "title": "Відпустка в Карпатах" },
+        { "jar": "mbf-jar-reserve", "goal": 5000000 }
+      ],
+      "owner": [ { "jar": "mbf-jar-vacation", "target": 30000 } ],
+      "expected": {
+        "mbf-jar-vacation": { "name": "Відпустка в Карпатах", "target": 30000.00 },
+        "mbf-jar-reserve": { "name": "Подушка безпеки", "target": 50000.00 }
+      }
+    },
+    {
+      "_note": "the bank moves the vacation target (it wins over the owner's) and renames the reserve jar, whose goal the owner renamed in Sure (the owner's name stays)",
+      "bank": [
+        { "jar": "mbf-jar-vacation", "goal": 2500000 },
+        { "jar": "mbf-jar-reserve", "title": "Подушка" }
+      ],
+      "owner": [ { "jar": "mbf-jar-reserve", "name": "Emergency fund" } ],
+      "expected": {
+        "mbf-jar-vacation": { "name": "Відпустка в Карпатах", "target": 25000.00 },
+        "mbf-jar-reserve": { "name": "Emergency fund", "target": 50000.00 }
+      }
+    }
+  ],
   "expected": {
     "link": { "account_name": "Mono Visa", "monobank_account_id": "mbf-uah-black", "cutover_date": "auto" },
     "claims": 4,
@@ -160,6 +186,10 @@
       "mbf-jar-reserve": "Depository"
     },
     "categories": { "groceries": 2, "mobile_plan": 1, "streaming": 1, "eating_out": 1, "taxi": 1, "pharmacy": 1, "refund": 1, "own_transfer": 0 },
-    "category_names": { "groceries": "Groceries", "mobile_plan": "Mobile Plan", "streaming": "Streaming", "eating_out": "Eating Out", "taxi": "Taxi", "pharmacy": "Pharmacies", "refund": "Refund" }
+    "category_names": { "groceries": "Groceries", "mobile_plan": "Mobile Plan", "streaming": "Streaming", "eating_out": "Eating Out", "taxi": "Taxi", "pharmacy": "Pharmacies", "refund": "Refund" },
+    "jar_goals": {
+      "mbf-jar-vacation": { "name": "Відпустка", "target": 20000.00 },
+      "mbf-jar-reserve": null
+    }
   }
 }

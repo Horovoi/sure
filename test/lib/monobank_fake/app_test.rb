@@ -236,6 +236,25 @@ class MonobankFake::AppTest < ActiveSupport::TestCase
     assert_equal (START + 120 - 1.day).to_i, app.statement("usd").last["time"], "days_ago counts from now"
   end
 
+  test "update_jar renames a jar and moves or removes its target" do
+    response = post_admin("/__fake/update_jar", jar: "jar", title: "Відпустка в Карпатах", goal: 150_000)
+
+    assert_equal 200, response.status
+    jar = JSON.parse(get("/personal/client-info").body)["jars"].sole
+    assert_equal [ "Відпустка в Карпатах", 150_000, 7_000 ], jar.values_at("title", "goal", "balance")
+
+    app.update_jar!(jar: "jar", goal: nil)
+    assert_equal [ "Відпустка в Карпатах", nil ], JSON.parse(admin_get("/__fake/state").body)["jars"].sole.values_at("title", "goal"),
+                 "only the keys given change"
+
+    assert_equal 404, post_admin("/__fake/update_jar", jar: "uah", title: "x").status, "cards are not jars"
+    assert_equal 400, post_admin("/__fake/update_jar", jar: "jar", balance: 1).status
+    assert_equal 400, post_admin("/__fake/update_jar", title: "x").status
+
+    post_admin("/__fake/reset")
+    assert_equal [ "Відпустка", 100_000 ], JSON.parse(admin_get("/__fake/state").body)["jars"].sole.values_at("title", "goal")
+  end
+
   test "reset goes back to the fixture and clears the log and the rate limits" do
     get("/personal/client-info")
     app.cancel_hold!(account: "uah", hold_id: "hold")

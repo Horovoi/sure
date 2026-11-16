@@ -15,6 +15,7 @@
 #   POST /__fake/settle_hold  {account, hold_id, settled_id?, amount?}
 #   POST /__fake/cancel_hold  {account, hold_id}
 #   POST /__fake/add          {account, item}
+#   POST /__fake/update_jar   {jar, title?, goal?}
 #   POST /__fake/reset        back to the fixture, log and rate limits cleared
 #   GET  /__fake/log          every request with its time and status
 #   GET  /__fake/state        accounts and jars with their current balances
@@ -191,6 +192,21 @@ module MonobankFake
       end
     end
 
+    # The owner renamed a jar or changed its target in the monobank app. Only the keys
+    # given change; goal nil (or 0) removes the target.
+    def update_jar!(jar:, **fields)
+      @lock.synchronize do
+        product = @jars.find { |candidate| candidate["id"] == jar.to_s } || raise(NotFound, "No jar #{jar}")
+        fields = deep_stringify(fields)
+        unknown = fields.keys - %w[title goal]
+        raise BadRequest, "Unknown jar fields: #{unknown.join(', ')}" if unknown.any?
+
+        product["title"] = fields["title"].to_s if fields.key?("title")
+        product["goal"] = fields["goal"].nil? ? nil : Integer(fields["goal"]) if fields.key?("goal")
+        public_fields(product)
+      end
+    end
+
     private
 
       def dispatch(request)
@@ -279,6 +295,8 @@ module MonobankFake
             cancel_hold!(account: params.fetch("account"), hold_id: params.fetch("hold_id"))
           when [ "POST", "/__fake/add" ]
             add_item!(account: params.fetch("account"), item: params.fetch("item"))
+          when [ "POST", "/__fake/update_jar" ]
+            update_jar!(jar: params.fetch("jar"), **params.except("jar").transform_keys(&:to_sym))
           else
             return json(404, "errorDescription" => "Not found")
           end

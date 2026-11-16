@@ -163,6 +163,7 @@ module MonobankFake
       started = Time.current
       scenario.connect_and_backfill!
       scenario.settle_and_cancel_holds!
+      scenario.jar_goals_follow_the_bank!
       scenario.hourly_sync_is_quiet!(gap: (INTERVAL + 1).seconds)
 
       drain.errors.each { |error| puts "job error: #{error[:job]}: #{error[:error]}" }

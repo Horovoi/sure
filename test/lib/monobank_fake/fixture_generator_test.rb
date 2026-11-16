@@ -166,6 +166,16 @@ class MonobankFake::FixtureGeneratorTest < ActiveSupport::TestCase
     assert_equal [ "e2e-fake-token" ], fixture["tokens"]
   end
 
+  test "jar goals and their rounds of changes come from the sample" do
+    fixture = generator.build
+    sample = MonobankFake::App.load_fixture(MonobankFake::FixtureGenerator::SAMPLE)
+
+    assert_equal({ "mbf-jar-vacation" => { "name" => "Відпустка", "target" => 20_000.0 }, "mbf-jar-reserve" => nil },
+                 fixture.dig("expected", "jar_goals"))
+    assert_equal sample["jar_goal_rounds"], fixture["jar_goal_rounds"]
+    assert_equal 2, fixture["jar_goal_rounds"].size
+  end
+
   test "the fixture loads into the fake and the card shows the rows of the first fetch window" do
     fixture = generator(rate_limit_seconds: 1).build
     fake = MonobankFake::App.new(fixture)

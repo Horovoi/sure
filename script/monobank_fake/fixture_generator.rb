@@ -13,6 +13,8 @@ require_relative "app"
 # - new rows from the cutover to now: purchases for the MCC groups, a refund, card <-> jar,
 #   UAH -> USD and FOP -> card transfers, and two holds
 # - the sample's faults: the first statement request gets a 429, the first EUR one a 500
+# - the sample's jar goals: the jar with a target becomes a goal, then the rounds of
+#   renames and target changes (jar_goal_rounds)
 # - the other products (USD, EUR, FOP, two jars) from the sample fixture, dated from now
 # - the card's balance and credit limit chosen so the bank's balance equals the
 #   hand-kept balance plus the new rows: the cutover day then shows no drift
@@ -93,7 +95,8 @@ module MonobankFake
         "accounts" => [ card ] + sample["accounts"].reject { |product| product["id"] == CARD_ID },
         "jars" => sample["jars"],
         "statements" => statements,
-        "faults" => sample["faults"]
+        "faults" => sample["faults"],
+        "jar_goal_rounds" => sample["jar_goal_rounds"]
       }
       fixture["expected"] = expected(sample, fixture, overlap, card)
       fixture
@@ -258,7 +261,8 @@ module MonobankFake
           "balances" => balances,
           "account_types" => sample.dig("expected", "account_types").merge(CARD_ID => account.accountable_type),
           "categories" => categories.transform_values(&:size),
-          "category_names" => categories.transform_values { |group_rows| group_rows.first["_category"] }
+          "category_names" => categories.transform_values { |group_rows| group_rows.first["_category"] },
+          "jar_goals" => sample.dig("expected", "jar_goals")
         }
       end
 

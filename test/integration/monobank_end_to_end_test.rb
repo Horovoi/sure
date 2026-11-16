@@ -5,7 +5,8 @@ require Rails.root.join("script/monobank_fake/scenario").to_s
 # staging run makes (script/monobank_fake/e2e.rb): a family set up like the owner's, with a
 # hand-kept "Mono Visa" credit card, connects monobank, links Mono Visa, gets new accounts
 # for the other products (USD, EUR, FOP, two jars), and fetches a year of statements one
-# request per minute through the continuation job. Time travels instead of sleeping; the
+# request per minute through the continuation job. The jar with a target becomes a goal,
+# which then follows the bank's renames and target changes and keeps the owner's edits. Time travels instead of sleeping; the
 # fake's clock follows it.
 #
 # It needs the core, framework and mcc streams of the monobank port; until they are merged
@@ -56,6 +57,8 @@ class MonobankEndToEndTest < ActiveSupport::TestCase
       assert_includes import.errors.details[:account].map { |detail| detail[:error] }, :provider_linked
 
       assert_checks scenario.settle_and_cancel_holds!
+      assert_checks scenario.jar_goals_follow_the_bank!
+      assert_equal %i[backfill holds jar_goals_1 jar_goals_2], scenario.phases.keys
       assert_checks scenario.hourly_sync_is_quiet!
 
       scenario.report if verbose_log

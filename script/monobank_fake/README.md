@@ -8,7 +8,7 @@ real bank.
 |---|---|
 | `app.rb` | `MonobankFake::App`, the fake (Rack + Ruby standard library, no Rails) |
 | `config.ru`, `server` | run the fake as a server on 127.0.0.1 |
-| `fixtures/sample.json` | sample client: UAH black card with a credit limit, USD and EUR accounts, FOP, two jars; purchases, a refund, own transfers, two holds; the first statement request gets a 429, the first EUR one a 500 |
+| `fixtures/sample.json` | sample client: UAH black card with a credit limit, USD and EUR accounts, FOP, two jars (one with a target); purchases, a refund, own transfers, two holds; the first statement request gets a 429, the first EUR one a 500; two rounds of jar renames and target changes |
 | `fixture_generator.rb`, `generate_fixture.rb` | build a fixture around a real hand-kept account (staging copy) |
 | `checks.rb`, `drain.rb`, `scenario.rb` | the run and its checks, shared by `e2e.rb` and the integration test |
 | `e2e.rb` | the full run on the staging copy |
@@ -42,12 +42,13 @@ Admin endpoints, only with the header `X-Fake-Admin: 1` (404 without it), JSON b
 | `POST /__fake/settle_hold {account, hold_id, settled_id?, amount?, time?}` | the hold becomes a settled row: by default the same id with `hold: false`; with `settled_id` a new id. A different amount moves the balance by the difference |
 | `POST /__fake/cancel_hold {account, hold_id}` | the hold disappears and its amount returns to the balance |
 | `POST /__fake/add {account, item}` | a new row (dated now unless it has `time` or `days_ago`, counted from now); the balance moves by its amount |
+| `POST /__fake/update_jar {jar, title?, goal?}` | the jar gets a new title or target (minor units; `null` removes it); keys not given stay |
 | `POST /__fake/reset` | back to the fixture; log and rate limits cleared; `days_ago` counted from now |
 | `GET /__fake/log` | every request: `at` (epoch seconds), `method`, `path`, `function`, `token`, `account`, `from`, `to`, `status`, `rows`, `early`, `fault`, `since_previous` |
 | `GET /__fake/state` | accounts and jars with their current balances, row counts |
 
 The same operations are Ruby methods on the app: `settle_hold!`, `cancel_hold!`,
-`add_item!`, `reset!`, `requests`, `early_requests`, `balance(id)`, `statement(id)`.
+`add_item!`, `update_jar!`, `reset!`, `requests`, `early_requests`, `balance(id)`, `statement(id)`.
 
 ## Fixture format
 
@@ -93,6 +94,10 @@ The same operations are Ruby methods on the app: `settle_hold!`, `cancel_hold!`,
   `path_prefix`, `times` times (default 1, `null` for always), with `status` and `body`
   (default `{"errorDescription": "Fake fault"}`), or `raise` one of `Errno::ECONNRESET`,
   `Errno::ECONNREFUSED`, `EOFError`, `Timeout::Error`.
+- `jar_goal_rounds` (read by the scenario, not by the fake): rounds after the holds. Each
+  round has `bank` (`{jar, title?, goal?}`: what changes at the fake), `owner`
+  (`{jar, target?, name?}`: the owner edits that jar's goal in Sure, `target` in major
+  units), and `expected` (the round's `jar_goals`). The scenario syncs after each round.
 - `expected` (read by the checks, not by the fake):
 
 | Key | Checked |
@@ -108,6 +113,7 @@ The same operations are Ruby methods on the app: `settle_hold!`, `cancel_hold!`,
 | `balances` | each product's account balance after the run (credit card: amount owed) |
 | `account_types` | accountable type per product |
 | `categories`, `category_names` | per MCC group, how many new entries get that category |
+| `jar_goals` | per jar: `{name, target}` (major units) for the one goal funded by the whole jar account, linked to the jar; `null`: no goal. No card or currency account has a goal |
 
 ## Commands
 
@@ -143,7 +149,8 @@ removes them at the end), starts the fake on a free 127.0.0.1 port with one requ
 second per function (`MONOBANK_MIN_REQUEST_INTERVAL=1`),
 connects monobank, links Mono Visa, creates accounts for the other products, runs every job
 itself in due order (sleeping until scheduled ones are due), then settles one hold and
-cancels the other, then runs the hourly sync. It prints PASS or FAIL for each check:
+cancels the other, then plays the fixture's `jar_goal_rounds` (rename a jar, move a
+target, edit a goal as the owner), then runs the hourly sync. It prints PASS or FAIL for each check:
 
 - no duplicates: no external id twice; no hand-entered entry left next to a new bank entry
   with the same amount within 3 days
@@ -156,6 +163,9 @@ cancels the other, then runs the hourly sync. It prints PASS or FAIL for each ch
   never imported
 - transfer suggestions for card -> jar, jar -> card, UAH -> USD, FOP -> card
 - categories per MCC group
+- jar goals: the jar with a target is one goal funded by its whole account; the jar
+  without a target has none, until it gets one; a rename and a new target in monobank
+  reach the goal, and the owner's own target and name stay while monobank's do not move
 - 0 requests before the rate limit allowed them, requests at least the interval apart
 - each fixture fault (the 429, the 500) served as often as it says, then the real answers
 - no sync open longer than 30 minutes, none failed or stale; statement fetching finished

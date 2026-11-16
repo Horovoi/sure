@@ -13,6 +13,10 @@ require_relative "drain"
 #   4. sync and drain the queue until statement fetching is finished, then check
 #   5. holds: the fake settles the first hold and cancels the second; sync, drain, check
 #      that the settled one is a plain entry, the cancelled one is gone and balances moved
+#   6. jar goals: each round of the fixture's jar_goal_rounds renames jars or moves their
+#      targets at the fake and edits goals in Sure as the owner would; sync, drain, check
+#      every jar's goal
+#   7. the hourly sync with nothing new at the bank is quiet
 module MonobankFake
   class Scenario
     attr_reader :family, :account, :fixture, :fake, :drain, :item, :snapshot, :phases
@@ -79,7 +83,31 @@ module MonobankFake
       record_phase(:holds, result)
     end
 
-    # Step 6: the hourly sync (SyncHourlyJob) after `gap` with nothing new at the bank: no
+    # Step 6: jar goals follow the bank. Each round of the fixture's jar_goal_rounds:
+    # `bank` changes jars at the fake ({jar, title?, goal?}), `owner` edits the jar's goal
+    # in Sure ({jar, target?, name?}), then a sync; `expected` is the round's jar_goals.
+    # Returns the Checks of the last round, nil when the fixture has no rounds.
+    def jar_goals_follow_the_bank!
+      Array(fixture["jar_goal_rounds"]).each_with_index.map do |round, index|
+        # The changed jars arrive with the next client-info, which must be allowed
+        drain.wait_until(@now.call + @interval + 1)
+        Array(round["bank"]).each do |change|
+          fake.update_jar!(jar: change.fetch("jar"), **change.slice("title", "goal").transform_keys(&:to_sym))
+        end
+        in_family_zone { Array(round["owner"]).each { |change| edit_goal!(change) } }
+        say "jar goals round #{index + 1}: bank #{Array(round['bank']).inspect}, owner #{Array(round['owner']).inspect}"
+
+        in_family_zone { item.reload.sync_later }
+        drain.run(item)
+
+        @jar_goals = round.fetch("expected")
+        result = checks
+        result.run(**(@after_holds || {}), balances: live_balances, jar_goals: @jar_goals)
+        record_phase(:"jar_goals_#{index + 1}", result)
+      end.last
+    end
+
+    # Step 7: the hourly sync (SyncHourlyJob) after `gap` with nothing new at the bank: no
     # statement request (no balance changed, no hold open), one client-info, and everything
     # still as after step 5. Only this connection's token is counted: the hourly job syncs
     # every connection (the test database's fixtures have one the fake does not know).
@@ -92,7 +120,7 @@ module MonobankFake
       requests = fake.requests.drop(before).select { |entry| entry["token"] == @token }
 
       result = checks
-      result.run(**(@after_holds || {}), balances: live_balances)
+      result.run(**(@after_holds || {}), balances: live_balances, jar_goals: @jar_goals)
       statements = requests.count { |entry| entry["function"] == "statement" }
       client_info = requests.count { |entry| entry["function"] == "client_info" }
       result.add("hourly sync with nothing new asks no statement", statements.zero?, "#{statements} statement requests")
@@ -175,6 +203,14 @@ module MonobankFake
           created = item.create_linked_account!(monobank_account: mono)
           say "created #{created.accountable_type} #{created.name.inspect} for #{mono.account_id}"
         end
+      end
+
+      # What the owner does to a jar's goal on the goal page
+      def edit_goal!(change)
+        jar = MonobankAccount.find_by!(monobank_item_id: item.id, account_id: change.fetch("jar"))
+        goal = jar.linked_goal || raise("jar #{jar.account_id} has no goal to edit")
+        attributes = { target_amount: change["target"], name: change["name"] }.compact
+        goal.update!(attributes)
       end
 
       def currency_code(numeric)

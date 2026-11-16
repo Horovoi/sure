@@ -77,9 +77,9 @@ module MonobankFake
       passed?
     end
 
-    # Runs every check; pending: and balances: override the fixture's expectation (after
-    # the test settles or cancels holds in the fake).
-    def run(pending: nil, pending_ids: nil, balances: nil, gone: [], settled: [])
+    # Runs every check; pending:, balances: and jar_goals: override the fixture's
+    # expectation (after the test settles or cancels holds, or changes jars, in the fake).
+    def run(pending: nil, pending_ids: nil, balances: nil, gone: [], settled: [], jar_goals: nil)
       @results = []
       @account.reload
       check_link
@@ -98,6 +98,7 @@ module MonobankFake
       check_every_row_imported(gone)
       check_transfers
       check_categories
+      check_jar_goals(jar_goals || expected["jar_goals"])
       check_rate_limit
       check_syncs
       check_fetch_finished
@@ -342,6 +343,38 @@ module MonobankFake
           got = group_rows.count { |row| row["_category"] && entries_for(row["id"]).first&.entryable&.category&.name == row["_category"] }
           record("group #{group}: #{count} categorised", got == count, "got #{got}")
         end
+      end
+
+      # Each jar with a target is one goal funded by the whole of its account, with the
+      # expected name and target in the jar's currency; a jar without one (null) has none;
+      # no card or currency account was given a goal
+      def check_jar_goals(jar_goals)
+        return if jar_goals.nil?
+
+        jar_goals.each do |fake_id, want|
+          mono = monobank_account(fake_id)
+          linked = mono&.current_account
+          goals = linked ? Goal.joins(:goal_accounts).where(goal_accounts: { account_id: linked.id }).distinct.to_a : []
+          if want.nil?
+            record("jar #{fake_id} without a target has no goal", linked && goals.empty? && mono.goal_id.nil?,
+                   linked ? "#{goals.size} goals" : "no account")
+            next
+          end
+
+          goal = goals.first
+          links = goal ? goal.goal_accounts.map { |link| [ link.account_id, link.allocated_amount ] } : []
+          ok = goals.size == 1 && mono.goal_id == goal.id && goal.name == want["name"] &&
+               (goal.target_amount.to_d - want["target"].to_d).abs < BigDecimal("0.005") &&
+               goal.currency == linked.currency && links == [ [ linked.id, nil ] ]
+          detail = if goal.nil? then linked ? "no goal" : "no account"
+          else "#{goals.size} goals; #{goal.name.inspect} #{goal.target_amount.to_d.round(2)} #{goal.currency}, #{links.size} links, linked #{mono.goal_id == goal.id}"
+          end
+          record("jar #{fake_id}: goal #{want['name'].inspect}, target #{format('%.2f', want['target'])}", ok, detail)
+        end
+
+        jar_ids = Array(fixture["jars"]).map { |jar| jar["id"].to_s }
+        with_goal = monobank_accounts.reject { |mono| jar_ids.include?(mono.account_id.to_s) }.select(&:goal_id)
+        record("no goal for a card or currency account", with_goal.empty?, with_goal.map(&:account_id).join(", ").presence)
       end
 
       def check_rate_limit

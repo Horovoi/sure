@@ -3,14 +3,14 @@ require Rails.root.join("script/monobank_fake/checks").to_s
 
 # The checks of the monobank run, on a database state built by hand the way the core must
 # leave it after the sample fixture (claims, skips, new entries, holds, transfer
-# suggestions, balances). The lookups the core and framework own (MonobankAccount,
+# suggestions, balances, the jar's goal). The lookups the core and framework own (MonobankAccount,
 # Entry.pending_from, Account#provider_cutover_date, FetchPlan) are stood in for.
 class MonobankFake::ChecksTest < ActiveSupport::TestCase
   ZONE = ActiveSupport::TimeZone["Europe/Kyiv"]
   START = ZONE.local(2026, 11, 15, 15, 0, 0)
   CUTOVER = Date.new(2026, 11, 15)
 
-  StandIn = Struct.new(:account_id, :current_account)
+  StandIn = Struct.new(:account_id, :current_account, :goal_id)
   StandInItem = Struct.new(:syncs) do
     def reload = self
     def backfill_progress = { chain_active: false, windows_remaining: 0, eta_seconds: 0 }
@@ -162,6 +162,23 @@ class MonobankFake::ChecksTest < ActiveSupport::TestCase
     assert_failed run_checks(since: START - 5.minutes), "no failed or stale sync (1 syncs)"
   end
 
+  test "jar goals: the target, a second goal, a goal for a jar without a target or for a card" do
+    goal = Goal.find(@goal_ids.fetch("mbf-jar-vacation"))
+    goal.update!(target_amount: 19_999)
+    assert_failed run_checks, "jar mbf-jar-vacation: goal \"Відпустка\", target 20000.00"
+
+    goal.update!(target_amount: 20_000)
+    assert run_checks.passed?
+    checks = run_checks(jar_goals: { "mbf-jar-vacation" => { "name" => "Відпустка в Карпатах", "target" => 20_000 } })
+    assert_failed checks, "jar mbf-jar-vacation: goal \"Відпустка в Карпатах\", target 20000.00"
+
+    reserve = @family.goals.new(name: "Reserve", target_amount: 1, currency: "UAH")
+    reserve.goal_accounts.build(account: account_for("mbf-jar-reserve"))
+    reserve.save!
+    @goal_ids["mbf-usd"] = reserve.id
+    assert_failed run_checks, "jar mbf-jar-reserve without a target has no goal", "no goal for a card or currency account"
+  end
+
   test "a product without a linked account" do
     checks = run_checks
     checks.stand_ins = checks.stand_ins.reject { |stand_in| stand_in.account_id == "mbf-jar-reserve" }
@@ -175,7 +192,7 @@ class MonobankFake::ChecksTest < ActiveSupport::TestCase
     def run_checks(cutover: CUTOVER, interval: 60, since: nil, **options)
       checks = StandInChecks.new(family: @family, item: StandInItem.new(Sync.none), fixture: @fixture, fake: @fake,
                                  snapshot: @snapshot, account: @mono_visa, interval: interval, since: since)
-      checks.stand_ins = @products.map { |fake_id, account| StandIn.new(fake_id, account) }
+      checks.stand_ins = @products.map { |fake_id, account| StandIn.new(fake_id, account, @goal_ids[fake_id]) }
       checks.cutover = cutover
       checks.run(**options) if options.any? || true
       checks
@@ -237,6 +254,14 @@ class MonobankFake::ChecksTest < ActiveSupport::TestCase
                      status: "pending").save!(validate: false)
       end
       @fixture.dig("expected", "balances").each { |fake_id, amount| @products.fetch(fake_id).update_columns(balance: amount) }
+
+      @goal_ids = {}
+      @fixture.dig("expected", "jar_goals").compact.each do |fake_id, want|
+        goal = @family.goals.new(name: want["name"], target_amount: want["target"], currency: "UAH")
+        goal.goal_accounts.build(account: account_for(fake_id))
+        goal.save!
+        @goal_ids[fake_id] = goal.id
+      end
     end
 
     def bank_entry(account, row_id, date:, amount:, currency: "UAH", category: nil, pending: false)
