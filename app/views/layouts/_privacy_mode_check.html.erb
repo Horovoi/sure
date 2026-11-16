@@ -1,0 +1,9 @@
+<%# Applies privacy mode before first paint, so amounts never flash unblurred.
+    privacy_mode_controller.js owns the state after this. %>
+<script>
+  try {
+    if (localStorage.getItem("privacyMode") === "true") {
+      document.documentElement.classList.add("privacy-mode");
+    }
+  } catch (e) { /* no storage: privacy mode stays off */ }
+</script>

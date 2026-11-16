@@ -26,3 +26,6 @@ en:
       footer:
         privacy_policy: Privacy Policy
         terms_of_service: Terms of Service
+      privacy_toggle:
+        label: Hide amounts
+        title: Hide amounts (Shift+H)

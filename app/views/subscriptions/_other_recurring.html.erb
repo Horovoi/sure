@@ -30,7 +30,7 @@
     </div>
   </td>
 
-  <td class="py-3 px-4 text-sm font-medium <%= recurring_transaction.amount.negative? ? "text-success" : "text-primary" %> <%= "opacity-60" unless recurring_transaction.active? %>">
+  <td class="py-3 px-4 text-sm font-medium privacy-sensitive <%= recurring_transaction.amount.negative? ? "text-success" : "text-primary" %> <%= "opacity-60" unless recurring_transaction.active? %>">
     <% if recurring_transaction.has_amount_variance? %>
       <span class="inline-flex items-center gap-1 cursor-help"
             title="<%= t(".amount_range", min: format_money(-recurring_transaction.expected_amount_min_money), max: format_money(-recurring_transaction.expected_amount_max_money)) %>">

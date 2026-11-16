@@ -1,0 +1,50 @@
+/*
+  Privacy mode: while <html> has the privacy-mode class, every element marked
+  .privacy-sensitive (money amounts, and the figures that give them away) is
+  blurred. The class is set before first paint by layouts/_privacy_mode_check
+  and toggled by privacy_mode_controller.js.
+
+  - Hovering does not reveal a value, and a blurred value takes no pointer
+    events, so a tooltip or title on it stays closed too. An element that must
+    stay clickable adds .privacy-sensitive-interactive.
+  - A form field blurs only its text, so its border and focus ring stay sharp,
+    and it stays usable: the caret shows and typing works.
+  - The blur is visual only: screen readers still read the values (the mode
+    guards against people looking at the screen, not against the user).
+  - Printing keeps the blur, so a printout made in privacy mode hides the
+    amounts as the screen did.
+*/
+@custom-variant privacy (&:where(.privacy-mode, .privacy-mode *));
+
+/* The blur grows with the text, so a large heading is as unreadable as a row */
+html.privacy-mode .privacy-sensitive {
+  filter: blur(max(6px, 0.35em));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html.privacy-mode .privacy-sensitive:not(.privacy-sensitive-interactive) {
+  pointer-events: none;
+}
+
+html.privacy-mode :is(input, textarea).privacy-sensitive {
+  --privacy-text: var(--color-gray-900);
+  filter: none;
+  pointer-events: auto;
+  user-select: auto;
+  -webkit-user-select: auto;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 8px var(--privacy-text);
+  caret-color: var(--privacy-text);
+}
+
+html.privacy-mode[data-theme="dark"] :is(input, textarea).privacy-sensitive {
+  --privacy-text: var(--color-white);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .privacy-sensitive {
+    transition: filter 0.15s ease;
+  }
+}

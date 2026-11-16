@@ -13,7 +13,7 @@
   <div class="text-sm mr-3">
     <p class="text-primary font-medium mb-0.5"><%= budget_category.category.name %></p>
 
-    <p class="text-secondary"><%= t("budget_categories.budget_category_form.monthly_average", amount: budget_category.avg_monthly_expense_money.format(precision: 0)) %></p>
+    <p class="text-secondary"><%= privacy_money_text(t("budget_categories.budget_category_form.monthly_average", amount: budget_category.avg_monthly_expense_money.format(precision: 0))) %></p>
   </div>
 
   <div class="ml-auto flex items-center gap-1.5">

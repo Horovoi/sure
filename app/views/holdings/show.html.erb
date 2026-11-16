@@ -27,7 +27,7 @@
 
           <div class="flex items-center justify-between text-sm">
             <dt class="text-secondary"><%= t(".current_market_price_label") %></dt>
-            <dd class="text-primary"><%= @holding.security.current_price ? format_money(@holding.security.current_price) : t(".unknown") %></dd>
+            <dd class="text-primary privacy-sensitive"><%= @holding.security.current_price ? format_money(@holding.security.current_price) : t(".unknown") %></dd>
           </div>
 
           <div class="flex items-center justify-between text-sm">
@@ -45,7 +45,7 @@
             <div class="flex items-center justify-between text-sm">
               <dt class="text-secondary"><%= t(".avg_cost_label") %></dt>
               <dd class="text-primary flex items-center gap-1">
-                <%= @holding.avg_cost ? format_money(@holding.avg_cost) : t(".unknown") %>
+                <span class="privacy-sensitive"><%= @holding.avg_cost ? format_money(@holding.avg_cost) : t(".unknown") %></span>
                 <% if @holding.cost_basis_locked? %>
                   <%= icon "lock", size: "xs", class: "text-secondary" %>
                 <% end %>
@@ -158,7 +158,7 @@
                   <div>
                     <p class="text-secondary text-xs uppercase"><%= l(trade_entry.date, format: :long) %></p>
 
-                    <p class="text-primary"><%= t(
+                    <p class="text-primary privacy-sensitive"><%= t(
                       ".trade_history_entry",
                       qty: trade_entry.trade.qty,
                       security: trade_entry.trade.security.ticker,

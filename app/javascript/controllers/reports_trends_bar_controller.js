@@ -104,6 +104,7 @@ export default class extends Controller {
       .call((sel) =>
         sel
           .selectAll("text")
+          .classed("privacy-sensitive", true)
           .style("fill", "var(--color-text-secondary)")
           .attr("font-size", "13px")
       )
@@ -163,6 +164,7 @@ export default class extends Controller {
       .attr("y", (d) => y(d.income) - 3)
       .attr("text-anchor", "middle")
       .attr("font-size", labelSize)
+      .attr("class", "privacy-sensitive")
       .style("fill", "var(--color-text-secondary)")
       .text((d) => d.income > 0 ? this._formatNumber(d.income) : "");
 
@@ -172,6 +174,7 @@ export default class extends Controller {
       .attr("y", (d) => y(d.expenses) - 3)
       .attr("text-anchor", "middle")
       .attr("font-size", labelSize)
+      .attr("class", "privacy-sensitive")
       .style("fill", "var(--color-text-secondary)")
       .text((d) => d.expenses > 0 ? this._formatNumber(d.expenses) : "");
 

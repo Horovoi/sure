@@ -4,7 +4,7 @@
     <%# Current Net Worth %>
     <div class="p-4 bg-surface-inset rounded-lg">
       <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.current_net_worth") %></p>
-      <p class="text-2xl font-semibold <%= net_worth_metrics[:current_net_worth] >= 0 ? "text-success" : "text-destructive" %>">
+      <p class="text-2xl font-semibold privacy-sensitive <%= net_worth_metrics[:current_net_worth] >= 0 ? "text-success" : "text-destructive" %>">
         <%= net_worth_metrics[:current_net_worth].format %>
       </p>
     </div>
@@ -14,7 +14,7 @@
       <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.period_change") %></p>
       <% if net_worth_metrics[:trend] %>
         <% trend = net_worth_metrics[:trend] %>
-        <p class="text-2xl font-semibold mb-1" style="color: <%= trend.color %>">
+        <p class="text-2xl font-semibold mb-1 privacy-sensitive" style="color: <%= trend.color %>">
           <%= trend.value.format(signify_positive: true) %>
         </p>
         <%# A previous value of zero makes the percentage infinite, with nothing useful to print %>
@@ -33,9 +33,9 @@
       <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.assets_vs_liabilities") %></p>
       <%# Large amounts wrap rather than overflow the card when the side panel is open %>
       <div class="flex items-baseline gap-2 flex-wrap">
-        <span class="text-lg font-semibold text-success break-words"><%= net_worth_metrics[:total_assets].format %></span>
+        <span class="text-lg font-semibold text-success break-words privacy-sensitive"><%= net_worth_metrics[:total_assets].format %></span>
         <span class="text-xs text-subdued shrink-0">-</span>
-        <span class="text-lg font-semibold text-destructive break-words"><%= net_worth_metrics[:total_liabilities].format %></span>
+        <span class="text-lg font-semibold text-destructive break-words privacy-sensitive"><%= net_worth_metrics[:total_liabilities].format %></span>
       </div>
     </div>
   </div>

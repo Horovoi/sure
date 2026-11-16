@@ -53,7 +53,7 @@
     <% end %>
   </div>
 
-  <span class="text-right text-sm tabular-nums whitespace-nowrap <%= sub ? "text-secondary" : "text-primary" %>"><%= breakdown_money(item[:amount]) %></span>
+  <span class="text-right text-sm tabular-nums whitespace-nowrap privacy-sensitive <%= sub ? "text-secondary" : "text-primary" %>"><%= breakdown_money(item[:amount]) %></span>
   <span class="text-right text-sm tabular-nums text-secondary"><%= number_to_percentage(item[:share], precision: 1) %></span>
 
   <%# Bar: the amount on the list's shared scale; the tick marks normal, with a

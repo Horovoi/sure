@@ -471,7 +471,7 @@ export default class extends Controller {
       .append("tspan")
       .attr("x", x)
       .attr("dy", "1.2em")
-      .attr("class", "font-mono text-secondary")
+      .attr("class", "font-mono text-secondary privacy-sensitive")
       .style("font-size", "0.65rem")
       .text(this.#formatCurrency(d.value));
   }
@@ -596,7 +596,7 @@ export default class extends Controller {
 
     const formattedValue = this.#formatCurrency(value);
     const percentageText = percentage ? `${percentage}%` : "0%";
-    const valueLine = `${this.#esc(formattedValue)} (${this.#esc(percentageText)})`;
+    const valueLine = `<span class="privacy-sensitive">${this.#esc(formattedValue)}</span> (${this.#esc(percentageText)})`;
     const content = title ? `${this.#esc(title)}<br/>${valueLine}` : valueLine;
 
     this.tooltip.html(content);

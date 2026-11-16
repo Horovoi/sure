@@ -6,8 +6,8 @@
       <p class="text-secondary text-sm mt-1">
         <span class="font-medium text-primary"><%= @active_count %></span> <%= t(".summary.active") %><% if @inactive_count > 0 %> ·
         <span class="font-medium text-primary"><%= @inactive_count %></span> <%= t(".summary.paused") %><% end %> ·
-        <span class="font-medium text-primary"><%= format_money(@monthly_total) %></span><%= t(".summary.per_month") %> ·
-        <span class="font-medium text-primary"><%= format_money(@yearly_total) %></span><%= t(".summary.per_year") %>
+        <span class="font-medium text-primary privacy-sensitive"><%= format_money(@monthly_total) %></span><%= t(".summary.per_month") %> ·
+        <span class="font-medium text-primary privacy-sensitive"><%= format_money(@yearly_total) %></span><%= t(".summary.per_year") %>
       </p>
     </div>
 

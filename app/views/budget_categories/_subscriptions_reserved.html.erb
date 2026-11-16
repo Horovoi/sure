@@ -5,7 +5,7 @@
   <div class="whitespace-nowrap w-full sm:w-auto flex items-center gap-1.5" data-testid="budget-category-reserved">
     <span class="inline-block w-2.5 h-2.5 rounded-sm bg-reserved-hatched text-secondary shrink-0" aria-hidden="true"></span>
     <span class="text-sm text-secondary"><%= t("budgets.subscription_reservations.reserved") %>:</span>
-    <span class="font-medium text-primary">
+    <span class="font-medium text-primary privacy-sensitive">
       <%= format_money(budget_category.subscriptions_reserved) %>
     </span>
     <% if budget_category.subscriptions_reserved_unconvertible_count.positive? %>

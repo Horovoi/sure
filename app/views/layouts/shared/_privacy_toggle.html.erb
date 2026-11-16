@@ -1,0 +1,15 @@
+<%# The privacy mode switch (privacy_mode_controller.js on <html>). The icon shows
+    the current state: an open eye while amounts show, a struck eye while they
+    are blurred. Shift+H toggles it from anywhere (the hotkey in _htmldoc). %>
+<button type="button"
+        class="inline-flex items-center justify-center rounded-lg focus-ring w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 hover:bg-container-inset-hover privacy:bg-container-inset"
+        data-action="privacy-mode#toggle"
+        data-privacy-mode-target="toggle"
+        data-testid="privacy-toggle"
+        title="<%= t("layouts.shared.privacy_toggle.title") %>"
+        aria-label="<%= t("layouts.shared.privacy_toggle.label") %>"
+        aria-keyshortcuts="Shift+H"
+        aria-pressed="false">
+  <%= icon("eye", class: "privacy:hidden") %>
+  <%= icon("eye-off", class: "hidden privacy:block") %>
+</button>

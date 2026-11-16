@@ -474,7 +474,8 @@ class GoalsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "input#goal_allocations_#{account.id}[name='goal[allocations][#{account.id}]']", count: 1 do |inputs|
       input = inputs.first
-      assert_includes input["class"].split, "privacy-sensitive-interactive"
+      # Inputs keep their pointer events in privacy mode (see privacy-mode.css)
+      assert_includes input["class"].split, "privacy-sensitive"
       assert_equal "allocationInput", input["data-goal-earmark-target"]
     end
   end

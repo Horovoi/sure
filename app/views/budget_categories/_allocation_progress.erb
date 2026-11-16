@@ -17,9 +17,9 @@
     <% end %>
 
     <p class="ml-auto text-sm space-x-1">
-      <span class="<%= budget.over_allocated? ? "text-destructive" : "text-primary" %>"><%= format_money(budget.allocated_spending_money) %></span>
+      <span class="privacy-sensitive <%= budget.over_allocated? ? "text-destructive" : "text-primary" %>"><%= format_money(budget.allocated_spending_money) %></span>
       <span class="text-secondary"> / </span>
-      <span class="text-secondary"><%= format_money(budget.budgeted_spending_money) %></span>
+      <span class="text-secondary privacy-sensitive"><%= format_money(budget.budgeted_spending_money) %></span>
     </p>
   </div>
 
@@ -34,10 +34,10 @@
   <div class="text-sm">
     <% if budget.over_allocated? %>
       <p class="text-secondary">
-        <%= t("budget_categories.allocation_progress.exceeded_by_html", amount: tag.span(format_money(budget.available_to_allocate_money.abs), class: "text-destructive")) %>
+        <%= t("budget_categories.allocation_progress.exceeded_by_html", amount: tag.span(format_money(budget.available_to_allocate_money.abs), class: "text-destructive privacy-sensitive")) %>
       </p>
     <% else %>
-      <span class="text-primary"><%= format_money(budget.available_to_allocate_money) %></span>
+      <span class="text-primary privacy-sensitive"><%= format_money(budget.available_to_allocate_money) %></span>
       <span class="text-secondary"><%= t("budget_categories.allocation_progress.left_to_allocate") %></span>
     <% end %>
   </div>

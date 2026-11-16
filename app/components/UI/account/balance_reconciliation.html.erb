@@ -10,7 +10,7 @@
         <%= render DS::Tooltip.new(text: item[:tooltip], placement: "left", size: "sm") %>
       </dt>
       <hr class="grow border-dashed <%= item[:style] == :final ? "border-primary" : "border-secondary" %>">
-      <dd class="<%= item[:style] == :start || item[:style] == :final ? "font-bold" : item[:style] == :subtotal ? "font-medium" : "" %>">
+      <dd class="privacy-sensitive <%= item[:style] == :start || item[:style] == :final ? "font-bold" : item[:style] == :subtotal ? "font-medium" : "" %>">
         <%= item[:value].format %>
       </dd>
     </dl>

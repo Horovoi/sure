@@ -12,9 +12,9 @@
           <%= t("transactions.replaced_subscription_charge.title", date: replaced_date ? l(replaced_date, format: :long) : "-") %>
         </p>
         <p class="text-sm text-secondary">
-          <%= t("transactions.replaced_subscription_charge.description",
+          <%= privacy_money_text(t("transactions.replaced_subscription_charge.description",
                 name: replaced["name"],
-                amount: format_money(Money.new(replaced["amount"].to_d, replaced["currency"].presence || transaction.entry.currency))) %>
+                amount: format_money(Money.new(replaced["amount"].to_d, replaced["currency"].presence || transaction.entry.currency)))) %>
         </p>
         <%= render DS::Button.new(text: t("transactions.replaced_subscription_charge.restore"),
               href: restore_subscription_charge_transaction_path(transaction),

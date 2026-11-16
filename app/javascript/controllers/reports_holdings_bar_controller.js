@@ -107,8 +107,8 @@ export default class extends Controller {
         .style("cursor", "default")
         .on("mouseover", () => {
           tooltip.style("opacity", 1).html(
-            `<strong>${holding.ticker}</strong> ${holding.name}<br>` +
-              `Value: ${currency}${this._formatNumber(holding.value)}<br>` +
+            `<strong>${this._escape(holding.ticker)}</strong> ${this._escape(holding.name)}<br>` +
+              `Value: <span class="privacy-sensitive">${currency}${this._formatNumber(holding.value)}</span><br>` +
               `Weight: ${(holding.weight || 0).toFixed(1)}%<br>` +
               `Return: <span style="color:${barColor}">${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%</span>`
           );
@@ -150,6 +150,13 @@ export default class extends Controller {
         .style("fill", "var(--color-text-secondary)")
         .text(holding.name.length > 18 ? holding.name.slice(0, 18) + "..." : holding.name);
     });
+  }
+
+  // Security names come from a market data provider: escape them for .html()
+  _escape(text) {
+    const div = document.createElement("div");
+    div.textContent = text ?? "";
+    return div.innerHTML;
   }
 
   _formatNumber(num) {

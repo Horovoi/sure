@@ -2,15 +2,15 @@
 
 <div class="grid grid-cols-3 gap-2">
   <%= summary_card title: t(".market_value") do %>
-    <%= format_money(account.balance_money) %>
+    <span class="privacy-sensitive"><%= format_money(account.balance_money) %></span>
   <% end %>
 
   <%= summary_card title: t(".purchase_price") do %>
-    <%= account.property.purchase_price ? format_money(account.property.purchase_price) : t(".unknown") %>
+    <span class="<%= "privacy-sensitive" if account.property.purchase_price %>"><%= account.property.purchase_price ? format_money(account.property.purchase_price) : t(".unknown") %></span>
   <% end %>
 
   <%= summary_card title: t(".trend") do %>
-    <div class="flex items-center gap-1" style="color: <%= account.property.trend.color %>">
+    <div class="flex items-center gap-1 privacy-sensitive" style="color: <%= account.property.trend.color %>">
       <p class="text-xl font-medium">
         <%= account.property.trend.value %>
       </p>

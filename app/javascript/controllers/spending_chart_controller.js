@@ -170,7 +170,7 @@ export default class extends Controller {
       )
       .call((g) => g.select(".domain").remove())
       .selectAll("text")
-      .attr("class", "text-secondary fill-current")
+      .attr("class", "text-secondary fill-current privacy-sensitive")
       .style("font-size", "12px")
       .style("font-weight", "500");
   }
@@ -300,7 +300,7 @@ export default class extends Controller {
         <span class="inline-block w-2 h-2 rounded-full self-center" style="background-color: ${color};"></span>
         <span class="text-primary font-medium">${this.#esc(label)}</span>
         <span class="text-secondary">${this.#esc(point.date_formatted)}</span>
-        <span class="text-primary font-medium text-right">${this.#esc(this.#formatCurrency(point.value))}</span>
+        <span class="text-primary font-medium text-right privacy-sensitive">${this.#esc(this.#formatCurrency(point.value))}</span>
       `;
     };
 

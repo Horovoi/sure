@@ -2,11 +2,11 @@
 
 <div class="grid grid-cols-3 gap-2">
   <%= summary_card title: t(".original_principal") do %>
-    <%= format_money account.loan.original_balance %>
+    <span class="privacy-sensitive"><%= format_money account.loan.original_balance %></span>
   <% end %>
 
   <%= summary_card title: t(".remaining_principal") do %>
-    <%= format_money account.balance_money %>
+    <span class="privacy-sensitive"><%= format_money account.balance_money %></span>
   <% end %>
 
   <%= summary_card title: t(".interest_rate") do %>
@@ -21,7 +21,7 @@
     <% if account.loan.rate_type.present? && account.loan.rate_type != 'fixed' %>
       <%= t(".not_applicable") %>
     <% elsif account.loan.rate_type == 'fixed' && account.loan.monthly_payment.present? %>
-      <%= format_money(account.loan.monthly_payment) %>
+      <span class="privacy-sensitive"><%= format_money(account.loan.monthly_payment) %></span>
     <% else %>
       <%= t(".unknown") %>
     <% end %>

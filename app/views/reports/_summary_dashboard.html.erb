@@ -14,7 +14,7 @@
       </div>
 
       <div class="space-y-2">
-        <p class="text-2xl font-semibold tabular-nums wrap-anywhere text-primary">
+        <p class="text-2xl font-semibold tabular-nums wrap-anywhere text-primary privacy-sensitive">
           <%= metrics[:current_income].format %>
         </p>
 
@@ -51,7 +51,7 @@
       </div>
 
       <div class="space-y-2">
-        <p class="text-2xl font-semibold tabular-nums wrap-anywhere text-primary">
+        <p class="text-2xl font-semibold tabular-nums wrap-anywhere text-primary privacy-sensitive">
           <%= metrics[:current_expenses].format %>
         </p>
 
@@ -88,7 +88,7 @@
       </div>
 
       <div class="space-y-2">
-        <p class="text-2xl font-semibold tabular-nums wrap-anywhere <%= metrics[:net_savings] >= 0 ? "text-success" : "text-destructive" %>">
+        <p class="text-2xl font-semibold tabular-nums wrap-anywhere privacy-sensitive <%= metrics[:net_savings] >= 0 ? "text-success" : "text-destructive" %>">
           <%= metrics[:net_savings].format %>
         </p>
 
