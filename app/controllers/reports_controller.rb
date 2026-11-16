@@ -157,7 +157,7 @@ class ReportsController < ApplicationController
     end
 
     def preferences_params
-      params.expect(preferences: [ :reports_expense_color_mode, reports_collapsed_sections: {}, reports_section_order: [] ]).to_h
+      params.expect(preferences: [ reports_collapsed_sections: {}, reports_section_order: [] ]).to_h
     end
 
     def build_reports_sections
@@ -198,14 +198,14 @@ class ReportsController < ApplicationController
           key: "transactions_breakdown",
           title: "reports.transactions_breakdown.title",
           partial: "reports/transactions_breakdown",
+          actions_partial: "reports/transactions_breakdown_actions",
           locals: {
             transactions: @transactions,
             period_type: @period_type,
             start_date: @start_date,
             end_date: @end_date,
-            # The expenses block also shows spending against normal
-            spending_comparison: spending_comparison,
-            expense_color_mode: Current.user.reports_expense_color_mode
+            # The expenses list also shows spending against normal
+            spending_comparison: spending_comparison
           },
           visible: Current.family.transactions.any?,
           collapsible: true
@@ -620,6 +620,8 @@ class ReportsController < ApplicationController
           type: type,
           total: 0,
           count: 0,
+          # What entries against the category's side (refunds) took off its total
+          netted: 0,
           filter_value: filter_value,
           has_transactions: false,
           subcategories: {}
@@ -641,8 +643,18 @@ class ReportsController < ApplicationController
       end
 
       # Helper to process an entry (transaction or trade)
+      # A categorized entry counts on its category's side: a refund (money in on an
+      # expense category) lowers that category's spending instead of showing up as
+      # income, the way the spending comparison and the cash flow Sankey net it
+      # (IncomeStatement::CategoryNetting). Uncategorized entries and trades have no
+      # side of their own, so their sign decides.
       process_entry = ->(category, entry, is_trade) do
-        type = entry.amount > 0 ? "expense" : "income"
+        type = if category
+          (category.parent || category).classification == "income" ? "income" : "expense"
+        else
+          entry.amount > 0 ? "expense" : "income"
+        end
+        against_side = (entry.amount > 0) != (type == "expense")
         # At the entry's own date; an amount with no rate at all is left out, not counted at 1
         converted = ExchangeRate.convert_or_leave_out(
           Money.new(entry.amount.abs, entry.currency), to: family_currency, date: entry.date,
@@ -650,7 +662,7 @@ class ReportsController < ApplicationController
         )
         next if converted.nil?
 
-        converted_amount = converted.amount
+        converted_amount = against_side ? -converted.amount : converted.amount
 
         if category.nil?
           # Uncategorized or Other Investments (for trades)
@@ -680,6 +692,7 @@ class ReportsController < ApplicationController
 
         grouped_data[parent_key][:count] += 1
         grouped_data[parent_key][:total] += converted_amount
+        grouped_data[parent_key][:netted] += converted.amount if against_side
         grouped_data[parent_key][:has_transactions] = true unless is_trade
       end
 
@@ -693,9 +706,25 @@ class ReportsController < ApplicationController
         process_entry.call(nil, trade.entry, true)
       end
 
+      # A category whose refunds outweigh its spending (or the reverse for income)
+      # moves to the other side with what is left, as CategoryNetting does
+      grouped_data.values.each do |parent_data|
+        next unless parent_data[:total].negative?
+
+        other_type = parent_data[:type] == "expense" ? "income" : "expense"
+        parent_data[:type] = other_type
+        parent_data[:total] = -parent_data[:total]
+        parent_data[:netted] = 0
+        parent_data[:subcategories].each_value { |sub| sub[:total] = -sub[:total] }
+      end
+
       # Convert to array and sort subcategories
-      result = grouped_data.values.map do |parent_data|
-        subcategories = parent_data[:subcategories].values.sort_by { |s| sort_direction == "asc" ? s[:total] : -s[:total] }
+      result = grouped_data.values.reject { |parent_data| parent_data[:total].zero? }.map do |parent_data|
+        # A subcategory netted to nothing or below is left out. If what remains adds up
+        # to more than its parent, the parent shows as one row, never overstated.
+        subcategories = parent_data[:subcategories].values.select { |s| s[:total].positive? }
+        subcategories = [] if subcategories.sum { |s| s[:total] } > parent_data[:total]
+        subcategories = subcategories.sort_by { |s| sort_direction == "asc" ? s[:total] : -s[:total] }
 
         # If parent has subcategories AND direct transactions, inject synthetic "Other" entry
         if subcategories.any?

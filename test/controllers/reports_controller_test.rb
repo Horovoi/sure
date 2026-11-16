@@ -505,6 +505,36 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "div[data-category='category-other_investments'] a", count: 0
   end
 
+  test "a refund lowers its category's spending instead of counting as income" do
+    shopping = @family.categories.create!(name: "Refunded shopping", classification: "expense", color: "#123456")
+    gifts = @family.categories.create!(name: "Returned gifts", classification: "expense", color: "#654321")
+    create_transaction(account: accounts(:depository), name: "Shoes", amount: 500, category: shopping)
+    create_transaction(account: accounts(:depository), name: "Shoes refund", amount: -200, category: shopping)
+    # Refunds that outweigh the spending leave the rest on the income side
+    create_transaction(account: accounts(:depository), name: "Gift", amount: 50, category: gifts)
+    create_transaction(account: accounts(:depository), name: "Gift refund", amount: -80, category: gifts)
+
+    get reports_path(breakdown_period_params)
+
+    groups = controller.instance_variable_get(:@transactions)
+    shopping_groups = groups.select { |group| group[:category_id] == shopping.id }
+    assert_equal [ [ "expense", 300 ] ], shopping_groups.map { |group| [ group[:type], group[:total].to_i ] }
+    assert_equal 200, shopping_groups.first[:netted].to_i
+    assert_equal [ [ "income", 30 ] ], groups.select { |group| group[:category_id] == gifts.id }.map { |group| [ group[:type], group[:total].to_i ] }
+    assert_select "##{"breakdown-expense-#{shopping.id}-details"}", text: /after .*200.* of refunds/
+  end
+
+  test "the print view lists the same netted categories as the page" do
+    shopping = @family.categories.create!(name: "Printed shopping", classification: "expense", color: "#123456")
+    create_transaction(account: accounts(:depository), name: "Shoes", amount: 500, category: shopping)
+    create_transaction(account: accounts(:depository), name: "Shoes refund", amount: -200, category: shopping)
+
+    get print_reports_path(breakdown_period_params)
+
+    assert_response :ok
+    assert_select "tr", text: /Printed shopping\s+\$300\.00/
+  end
+
   test "the synthetic Other subcategory row has no link" do
     parent = @family.categories.create!(name: "Housing", classification: "expense", color: "#FF5733", lucide_icon: "home")
     rent = @family.categories.create!(name: "Rent", classification: "expense", parent: parent, lucide_icon: "home")
@@ -519,79 +549,128 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "div[data-category='category-#{rent.id}'] a"
   end
 
-  test "the expenses breakdown shows spending against normal with links to the changed categories" do
+  test "the expenses list shows spending against normal on its own rows" do
     period_start, period_end = create_vs_normal_history
+    dining = @family.categories.find_by!(name: "Vs normal dining")
+    misc = @family.categories.find_by!(name: "Vs normal misc")
 
     built = count_spending_comparisons do
       get reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
     end
 
     assert_response :ok
-    # One comparison per page: the expenses block does not build its own
+    # One comparison per page: the expenses list does not build its own
     assert_equal 1, built
-    # Spending vs normal is part of the breakdown now, not a section of its own
+    # Spending vs normal is part of the breakdown, not a section of its own
     assert_select "section[data-section-key='spending_vs_normal']", count: 0
     assert_select "section[data-section-key='transactions_breakdown'] [data-testid='breakdown-expense']" do
-      assert_select "[data-testid=spending-summary]", text: /spent in this period/
-      # Category colours first, like the income treemap
-      assert_select "button[aria-pressed='true']", text: I18n.t("reports.spending_vs_normal.color_mode.category")
-      assert_select "button[aria-pressed='false']", text: I18n.t("reports.spending_vs_normal.color_mode.normal")
-      assert_select "[data-testid=spending-legend].hidden"
-      assert_select "[data-testid=spending-changes] a[href=?]",
-        transactions_path(q: { categories: [ "Vs normal dining" ], start_date: period_start, end_date: period_end })
-      assert_select "h3", text: I18n.t("reports.spending_vs_normal.changes_title")
-      assert_select "summary", text: /View category details/
+      assert_select "[data-testid=spending-summary]", text: /more than normal \(/
+      assert_select "[data-testid=spending-summary]", text: /so far/, count: 0
+      assert_select "[data-testid=spending-legend]", text: /Normal for a period this long: .+, based on #{I18n.l(period_start - 200.days, format: "%b %-d, %Y")} – #{I18n.l(period_start - 1.day, format: "%b %-d, %Y")}/
+      # The change sits on the category's own row, which opens its transactions
+      assert_select "[data-testid=spending-changes] div[data-category='category-#{dining.id}']" do
+        assert_select "a[href=?]", transactions_path(q: { categories: [ "Vs normal dining" ], start_date: period_start, end_date: period_end })
+        assert_select "[data-testid=breakdown-delta].text-destructive", text: /\+/
+        assert_select "[data-testid=breakdown-normal-tick]"
+      end
+      # Normally spent on, nothing this period: a row at zero keeps its change, with
+      # nothing to link to
+      assert_select "div[data-category='category-#{misc.id}']" do
+        assert_select "[data-testid=breakdown-delta]", text: /−/
+        assert_select "a", count: 0
+      end
+      # One way to read it: no colour switch, no separate change list
+      assert_select "button[aria-pressed]", count: 0
     end
-    assert_select "[data-testid='breakdown-expense'][data-controller='reports-treemap'][data-reports-treemap-color-mode-value='category']"
-
-    # The expense tiles carry their colour against normal for the Vs normal mode
-    tiles = JSON.parse(css_select("[data-testid='breakdown-expense']").first["data-reports-treemap-categories-value"])
-    dining = tiles.find { |tile| tile["name"] == "Vs normal dining" }
-    assert_equal "#123456", dining["color"]
-    assert_equal ReportsHelper::SPENDING_RATIO_BUCKETS.last[:color], dining["normalColor"]
-    assert dining["normalLines"].any?
   end
 
-  test "the income breakdown has no vs normal parts" do
+  test "income and expenses share one shape and only expenses compare with normal" do
     period_start, period_end = create_vs_normal_history
     create_transaction(account: accounts(:depository), name: "Pay", amount: -2_000, date: period_start + 5.days)
 
     get reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
 
-    assert_select "[data-testid='breakdown-income'][data-controller='reports-treemap']" do
+    %w[income expense].each do |type|
+      assert_select "[data-testid='breakdown-#{type}'][data-controller='breakdown-list']" do
+        assert_select "h3", count: 1
+        assert_select "[data-testid='breakdown-#{type}-total']", count: 1
+        assert_select "a", text: I18n.t("reports.transactions_breakdown.table.amount")
+        assert_select "button[aria-controls][aria-expanded='false']", minimum: 1
+      end
+    end
+    assert_select "[data-testid='breakdown-income']" do
       assert_select "[data-testid=spending-summary]", count: 0
       assert_select "[data-testid=spending-legend]", count: 0
-      assert_select "[data-testid=spending-changes]", count: 0
-      assert_select "button[data-reports-treemap-target='modeButton']", count: 0
+      assert_select "[data-testid=breakdown-delta]", count: 0
+      assert_select "[data-testid=spending-no-normal]", count: 0
+      assert_select "[data-testid=breakdown-normal-tick]", count: 0
+      assert_select "p", text: "1 category, 1 transaction"
     end
-    tiles = JSON.parse(css_select("[data-testid='breakdown-income']").first["data-reports-treemap-categories-value"])
-    assert tiles.none? { |tile| tile.key?("normalColor") }
   end
 
-  test "the expenses breakdown remembers the Vs normal color mode" do
+  test "a row opens to its transactions, average, normal and subcategories" do
     period_start, period_end = create_vs_normal_history
-
-    patch update_preferences_reports_url, params: { preferences: { reports_expense_color_mode: "normal" } }, as: :json
-    assert_response :ok
-    assert_equal "normal", @user.reload.reports_expense_color_mode
+    dining = @family.categories.find_by!(name: "Vs normal dining")
+    lunch = @family.categories.create!(name: "Vs normal lunch", classification: "expense", parent: dining)
+    create_transaction(account: accounts(:depository), name: "Lunch", amount: 200, category: lunch, date: period_start + 4.days)
 
     get reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
 
-    assert_select "[data-testid='breakdown-expense'][data-reports-treemap-color-mode-value='normal'][data-reports-treemap-preference-url-value=?]",
-      update_preferences_reports_path
-    assert_select "[data-testid=spending-legend]:not(.hidden)"
-    assert_select "button[aria-pressed='true']", text: I18n.t("reports.spending_vs_normal.color_mode.normal")
+    assert_select "div[data-category='category-#{dining.id}'] button[aria-expanded='false'][aria-controls=?]", "breakdown-expense-#{dining.id}-details"
+    assert_select "##{"breakdown-expense-#{dining.id}-details"}[hidden]" do
+      assert_select "p", text: /2 transactions, average .+, .+ a day/
+      assert_select "p", text: /Normal: /
+      assert_select "div[data-category='category-#{lunch.id}']", text: /Vs normal lunch/
+      assert_select "div[data-category='category-#{dining.id}_other']", text: /Other Vs normal dining/
+    end
   end
 
-  test "an unknown expense color mode is not saved" do
-    patch update_preferences_reports_url, params: { preferences: { reports_expense_color_mode: "rainbow" } }, as: :json
+  test "a long list shows its top eight and folds the rest into one row" do
+    11.times do |index|
+      category = @family.categories.create!(name: "Many #{index}", classification: "expense", color: "#123456")
+      create_transaction(account: accounts(:depository), name: "Spend #{index}", amount: 1_000 + index, category: category)
+    end
 
-    assert_response :unprocessable_entity
-    assert_equal "category", @user.reload.reports_expense_color_mode
+    get reports_path(breakdown_period_params)
+
+    assert_select "[data-testid='breakdown-expense'] ul#breakdown-expense-list" do
+      assert_select "> li:not([hidden])", count: ReportsHelper::BREAKDOWN_TOP_ROWS
+      assert_select "> li[hidden][data-breakdown-list-target='extra']", minimum: 2
+    end
+    assert_select "[data-testid='breakdown-expense-more'][aria-expanded='false'][aria-controls='breakdown-expense-list']", text: /more categories/
   end
 
-  test "without earlier history the expenses breakdown uses category colors only" do
+  test "the export menu sits in the section header" do
+    get reports_path(breakdown_period_params.merge(sort_by: "amount", sort_direction: "asc"))
+
+    assert_select "section[data-section-key='transactions_breakdown']" do
+      assert_select "[data-testid=breakdown-export] [role=menu]" do
+        assert_select "a[role=menuitem][href=?]",
+          export_transactions_reports_path(period_type: :custom, start_date: 30.days.ago.to_date, end_date: Date.current, sort_by: "amount", sort_direction: "asc", format: :csv),
+          text: I18n.t("reports.transactions_breakdown.export.csv")
+        assert_select "a[role=menuitem][data-turbo-frame=modal]", text: I18n.t("reports.transactions_breakdown.export.google_sheets")
+      end
+      # No export buttons float above the lists
+      assert_select "[data-reports-section-target=content] a[href*='export_transactions']", count: 0
+    end
+  end
+
+  test "a color mode saved by the old expenses treemap is ignored" do
+    period_start, period_end = create_vs_normal_history
     @user.update!(preferences: (@user.preferences || {}).merge("reports_expense_color_mode" => "normal"))
+
+    get reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
+    assert_response :ok
+    assert_select "[data-testid=spending-summary]"
+
+    # An open tab from before still sends it: the request works, nothing is stored
+    patch update_preferences_reports_url, params: { preferences: { reports_expense_color_mode: "category", reports_section_order: %w[transactions_breakdown] } }, as: :json
+    assert_response :ok
+    assert_equal "normal", @user.reload.preferences["reports_expense_color_mode"]
+    assert_equal %w[transactions_breakdown], @user.reports_section_order
+  end
+
+  test "without earlier history the expenses list has no vs normal parts" do
     Entry.where(account: @family.accounts).destroy_all
     dining = @family.categories.create!(name: "Vs normal dining", classification: "expense", color: "#123456")
     create_transaction(account: accounts(:depository), name: "Dinner", amount: 100, category: dining, date: 3.days.ago.to_date)
@@ -599,13 +678,15 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     get reports_path(period_type: :monthly)
 
     assert_response :ok
-    assert_select "[data-testid='breakdown-expense'][data-controller='reports-treemap'][data-reports-treemap-color-mode-value='category']" do
+    assert_select "[data-testid='breakdown-expense']" do
       assert_select "[data-testid=spending-summary]", count: 0
       assert_select "[data-testid=spending-legend]", count: 0
       assert_select "[data-testid=spending-changes]", count: 0
-      assert_select "button[data-reports-treemap-target='modeButton']", count: 0
+      assert_select "[data-testid=breakdown-delta]", count: 0
+      assert_select "[data-testid=breakdown-normal-tick]", count: 0
+      assert_select "p", text: "1 category, 1 transaction"
+      assert_select "[data-testid=spending-no-normal]", text: I18n.t("reports.transactions_breakdown.vs_normal.no_normal")
     end
-    assert_select "[data-testid='breakdown-expense'][data-reports-treemap-preference-url-value]", count: 0
   end
 
   test "the expenses breakdown handles every period type" do

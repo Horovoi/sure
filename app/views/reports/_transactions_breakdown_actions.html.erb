@@ -1,0 +1,25 @@
+<%# locals: (period_type:, start_date:, end_date:, **) %>
+<%# The Activity Breakdown's one place for actions, in its section header: both
+    exports in one menu %>
+<%
+  export_params = {
+    period_type: period_type,
+    start_date: start_date,
+    end_date: end_date,
+    sort_by: params[:sort_by],
+    sort_direction: params[:sort_direction]
+  }.compact
+%>
+
+<%= render DS::Menu.new(variant: :button, testid: "breakdown-export") do |menu| %>
+  <% menu.with_button(variant: "ghost", size: "sm", icon: "download", text: t("reports.transactions_breakdown.export.label")) %>
+  <% menu.with_item(variant: :link,
+                    text: t("reports.transactions_breakdown.export.csv"),
+                    icon: "file-spreadsheet",
+                    href: export_transactions_reports_path(export_params.merge(format: :csv))) %>
+  <% menu.with_item(variant: :link,
+                    text: t("reports.transactions_breakdown.export.google_sheets"),
+                    icon: "external-link",
+                    href: google_sheets_instructions_reports_path(export_params),
+                    frame: "modal") %>
+<% end %>

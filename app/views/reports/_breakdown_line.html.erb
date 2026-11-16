@@ -1,0 +1,62 @@
+<%# locals: (item:, level:, panel_id:) %>
+<%# The grid of one breakdown row (a category or one of its subcategories) %>
+<% sub = level == :subcategory %>
+
+<%= tag.div class: class_names("relative grid items-center gap-y-1.5 rounded-lg px-2", ReportsHelper::BREAKDOWN_GRID,
+                               sub ? "py-1.5" : "py-2",
+                               "group/category-row hover:bg-surface-hover" => item[:href]),
+            data: { category: "category-#{item[:key]}" } do %>
+  <% if panel_id %>
+    <button type="button"
+            class="group/toggle relative z-10 row-span-2 -m-1 self-start rounded-md p-1 text-subdued hover:text-primary focus-ring"
+            aria-expanded="false"
+            aria-controls="<%= panel_id %>"
+            aria-label="<%= t("reports.transactions_breakdown.column.details", category: item[:name]) %>"
+            data-action="breakdown-list#toggleRow">
+      <%= icon("chevron-right", size: "sm", class: "transition-transform group-aria-expanded/toggle:rotate-90") %>
+    </button>
+  <% end %>
+
+  <%# On a phone the bar carries the colour, so the icon goes and the name gets the room %>
+  <div class="col-start-2 flex min-w-0 items-center gap-2">
+    <% if sub %>
+      <span class="h-2 w-2 shrink-0 rounded-full" style="background-color: <%= item[:color] %>" aria-hidden="true"></span>
+    <% elsif item[:icon] %>
+      <span class="hidden h-6 w-6 shrink-0 items-center justify-center rounded-full @md:flex"
+            style="background-color: color-mix(in oklab, <%= item[:color] %> 12%, transparent); color: <%= item[:color] %>"
+            aria-hidden="true">
+        <%= icon(item[:icon], color: "current", size: "xs") %>
+      </span>
+    <% else %>
+      <span class="hidden shrink-0 @md:inline-flex"><%= render DS::FilledIcon.new(variant: :text, hex_color: item[:color], text: item[:name], size: "sm", rounded: true) %></span>
+    <% end %>
+
+    <% name_classes = sub ? "truncate text-sm text-secondary" : "truncate text-sm font-medium text-primary" %>
+    <% if item[:href] %>
+      <%# The link's ::before covers the whole row, which is relative %>
+      <%= link_to item[:name], item[:href],
+            class: "#{name_classes} rounded-sm hover:underline focus-ring before:absolute before:inset-0 before:rounded-lg before:content-['']",
+            data: { turbo_frame: "_top", turbo_prefetch: false } %>
+    <% else %>
+      <span class="<%= name_classes %>"><%= item[:name] %></span>
+    <% end %>
+  </div>
+
+  <span class="text-right text-sm tabular-nums whitespace-nowrap <%= sub ? "text-secondary" : "text-primary" %>"><%= breakdown_money(item[:amount]) %></span>
+  <span class="text-right text-sm tabular-nums text-secondary"><%= number_to_percentage(item[:share], precision: 1, strip_insignificant_zeros: true) %></span>
+
+  <%# Bar: the amount on the list's shared scale; the tick marks normal %>
+  <div class="relative col-start-2 <%= sub ? "h-1" : "h-1.5" %> rounded-full bg-surface-inset" aria-hidden="true">
+    <% if item[:bar].positive? %>
+      <span class="absolute inset-y-0 left-0 rounded-full" style="width: max(<%= item[:bar] %>%, 2px); background-color: <%= item[:color] %>"></span>
+    <% end %>
+    <% if item[:tick] %>
+      <span class="absolute -inset-y-1 -ml-px w-0.5 rounded-full bg-inverse" style="left: <%= item[:tick] %>%" data-testid="breakdown-normal-tick"></span>
+    <% end %>
+  </div>
+  <% if (delta = item[:delta]) %>
+    <span class="col-start-3 text-right text-xs tabular-nums whitespace-nowrap <%= delta[:tone_class] %>" data-testid="breakdown-delta">
+      <%= delta[:label] %><span class="sr-only"> <%= t("reports.transactions_breakdown.vs_normal.delta_#{delta[:direction]}") %></span>
+    </span>
+  <% end %>
+<% end %>

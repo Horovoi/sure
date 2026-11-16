@@ -40,7 +40,7 @@ class ReportsTest < ApplicationSystemTestCase
     assert_no_text "Corner shop"
   end
 
-  test "switch the expenses treemap to vs normal, keep it after a reload and open a changed category" do
+  test "an expense row shows its change against normal, opens its details and then its transactions" do
     period_start = 2.months.ago.to_date.beginning_of_month
     period_end = period_start.end_of_month
     dining = @family.categories.create!(name: "Vs normal dining", classification: "expense", color: "#123456")
@@ -50,31 +50,19 @@ class ReportsTest < ApplicationSystemTestCase
     visit reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
 
     assert_no_selector "[data-section-key='spending_vs_normal']"
-    # Category colours first, like the income treemap
-    assert_selector "[data-testid=breakdown-expense][data-color-mode='category']"
     within "[data-testid=breakdown-expense]" do
-      assert_selector "[data-testid=spending-summary]"
-      assert_selector "svg g[data-category-name='Vs normal dining']"
-      assert_selector "[data-testid=spending-legend]", visible: :hidden
+      assert_selector "[data-testid=spending-summary]", text: "more than normal"
+      assert_selector "[data-testid=spending-legend]", text: "based on"
 
-      click_button I18n.t("reports.spending_vs_normal.color_mode.normal")
-      assert_selector "[data-testid=spending-legend]", visible: true
-      assert_selector "button[aria-pressed='true']", text: I18n.t("reports.spending_vs_normal.color_mode.normal")
-    end
-    assert_selector "[data-testid=breakdown-expense][data-color-mode='normal']"
+      within "[data-category='category-#{dining.id}']" do
+        assert_selector "[data-testid=breakdown-delta]", text: "+"
+        find("button[aria-label='#{I18n.t("reports.transactions_breakdown.column.details", category: "Vs normal dining")}']").click
+      end
+      assert_selector "[data-testid=breakdown-details]", text: "1 transaction", visible: true
+      find("[data-category='category-#{dining.id}'] button[aria-expanded='true']").click
+      assert_no_selector "[data-testid=breakdown-details]", visible: true
 
-    # The choice is saved for the user: a fresh visit opens in Vs normal
-    assert_selector "[data-testid=breakdown-expense][data-saved-color-mode='normal']"
-    visit reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
-    assert_selector "[data-testid=breakdown-expense][data-color-mode='normal']"
-
-    within "[data-testid=breakdown-expense]" do
-      assert_selector "[data-testid=spending-legend]", visible: true
-
-      click_button I18n.t("reports.spending_vs_normal.color_mode.category")
-      assert_selector "[data-testid=spending-legend]", visible: :hidden
-
-      within "[data-testid=spending-changes]" do
+      within "[data-category='category-#{dining.id}']" do
         click_link "Vs normal dining"
       end
     end
@@ -82,6 +70,42 @@ class ReportsTest < ApplicationSystemTestCase
     assert_current_path(/\/transactions/)
     assert_text "Big dinner"
     assert_no_text "Corner shop"
+  end
+
+  test "the rest of a long list opens and closes from one row" do
+    10.times do |index|
+      category = @family.categories.create!(name: "Many #{index}", classification: "expense", color: "#123456")
+      create_transaction(account: @account, currency: @family.currency, category: category, amount: 100 + index, name: "Spend #{index}", date: Date.current)
+    end
+
+    visit_breakdown
+
+    within "[data-testid=breakdown-expense]" do
+      # The fixtures add expense rows of their own
+      rows = all("#breakdown-expense-list > li", visible: :all).size
+      assert_operator rows, :>=, 10 + ReportsHelper::BREAKDOWN_MIN_TAIL
+      assert_selector "#breakdown-expense-list > li", count: ReportsHelper::BREAKDOWN_TOP_ROWS
+      more = find("[data-testid=breakdown-expense-more]")
+      assert_text "#{rows - ReportsHelper::BREAKDOWN_TOP_ROWS} more categories"
+
+      more.click
+      assert_selector "#breakdown-expense-list > li", count: rows
+      assert_selector "[data-testid=breakdown-expense-more][aria-expanded='true']", text: I18n.t("reports.transactions_breakdown.column.fewer")
+
+      more.click
+      assert_selector "#breakdown-expense-list > li", count: ReportsHelper::BREAKDOWN_TOP_ROWS
+    end
+  end
+
+  test "the export menu in the section header holds both exports" do
+    visit_breakdown
+
+    within "section[data-section-key='transactions_breakdown'] [data-testid=breakdown-export]" do
+      click_button I18n.t("reports.transactions_breakdown.export.label")
+      assert_selector "a[role=menuitem]", text: I18n.t("reports.transactions_breakdown.export.csv")
+      click_link I18n.t("reports.transactions_breakdown.export.google_sheets")
+    end
+    assert_selector "dialog[open]"
   end
 
   # --- w2-netw ---
@@ -168,34 +192,28 @@ class ReportsTest < ApplicationSystemTestCase
   end
 
   # With the accounts and assistant panels open (the default), the main
-  # column is narrow on a wide screen. "What changed" used to stay beside the
-  # treemap there (a viewport breakpoint) and lost its bars; the treemap
-  # stopped at 280px under a much taller list.
-  test "what changed keeps its bars in a narrow main column and the treemap matches its height in a wide one" do
+  # column is narrow on a wide screen: income and expenses stack there and
+  # sit side by side once the panels close. Either way every bar keeps room
+  # and no name is cut off.
+  test "income and expenses stack in a narrow main column and sit side by side in a wide one" do
     create_spending_history
+    create_transaction(account: @account, currency: @family.currency, amount: -5_000, name: "Pay", date: @period_start + 2.days)
 
     visit reports_path(period_type: :custom, start_date: @period_start, end_date: @period_end)
-    assert_selector "[data-testid=breakdown-expense] [data-reports-treemap-target=chart] > svg"
     assert_operator main_width, :<, 700, "both side panels are open"
+    income = find("[data-testid=breakdown-income]").native.rect
+    expense = find("[data-testid=breakdown-expense]").native.rect
+    assert_operator expense.y, :>=, income.y + income.height, "expenses stack under income"
+    assert_list_rows_fit
 
-    treemap = find("[data-testid=breakdown-expense] [data-reports-treemap-target=chart]").native.rect
-    changes = find("[data-testid=spending-changes-column]").native.rect
-    assert_operator changes.y, :>=, treemap.y + treemap.height, "the list stacks under the treemap"
-    assert_change_bars_visible
-
-    # Both panels closed: the list goes beside the treemap, which grows to its height
     @user.update!(show_sidebar: false, show_ai_sidebar: false)
     visit reports_path(period_type: :custom, start_date: @period_start, end_date: @period_end)
-    assert_selector "[data-testid=breakdown-expense] [data-reports-treemap-target=chart] > svg"
     assert_operator main_width, :>, 900
-
-    changes = find("[data-testid=spending-changes-column]").native.rect
-    treemap_column = find("[data-testid=breakdown-expense] [data-reports-treemap-target=chart]").find(:xpath, "..").native.rect
-    assert_in_delta changes.y, treemap_column.y, 1, "the list sits beside the treemap"
-    assert_in_delta changes.height, treemap_column.height, 2, "the treemap column is as tall as the list"
-    svg_height = evaluate_script("document.querySelector('[data-testid=breakdown-expense] [data-reports-treemap-target=chart] > svg').getBoundingClientRect().height")
-    assert_operator svg_height, :>, 300, "the treemap grows past its 280px minimum"
-    assert_change_bars_visible
+    income = find("[data-testid=breakdown-income]").native.rect
+    expense = find("[data-testid=breakdown-expense]").native.rect
+    assert_in_delta income.y, expense.y, 1, "the two lists start on one line"
+    assert_operator expense.x, :>, income.x + income.width, "expenses sit beside income"
+    assert_list_rows_fit
   end
 
   # The four summary cards stayed in four columns inside the narrow main
@@ -242,7 +260,10 @@ class ReportsTest < ApplicationSystemTestCase
     assert_empty clicked_hotkeys
     page.send_keys(:escape)
 
-    click_link I18n.t("reports.transactions_breakdown.export.google_sheets")
+    within("[data-testid=breakdown-export]") do
+      click_button I18n.t("reports.transactions_breakdown.export.label")
+      click_link I18n.t("reports.transactions_breakdown.export.google_sheets")
+    end
     assert_selector "dialog[open]"
     page.send_keys(:arrow_left)
     assert_empty clicked_hotkeys
@@ -331,23 +352,20 @@ class ReportsTest < ApplicationSystemTestCase
       end
     end
 
-    def assert_change_bars_visible
-      rows = all("[data-testid=spending-changes] li", minimum: 14)
+    # Every visible row of the expense list keeps a usable bar and its whole name
+    def assert_list_rows_fit
+      rows = all("[data-testid=breakdown-expense] #breakdown-expense-list > li > div[data-category]", minimum: ReportsHelper::BREAKDOWN_TOP_ROWS)
       rows.each do |row|
-        bars = row.all("span[aria-hidden='true']", visible: :all).first
-        assert_operator bars.native.rect.width, :>=, 48, "#{row.text} has room for its bar"
-        name = row.first("span.truncate")
+        bar = row.find("div[aria-hidden='true']", visible: :all)
+        assert_operator bar.native.rect.width, :>=, 120, "#{row.text.squish} has room for its bar"
+        name = row.first(".truncate")
         assert_not evaluate_script("arguments[0].scrollWidth > arguments[0].clientWidth", name), "#{name.text} is cut off"
       end
     end
 
     def visit_breakdown
       visit reports_path(period_type: :custom, start_date: 30.days.ago.to_date, end_date: Date.current)
-
-      # The category table sits in a closed <details> under the expense treemap
-      within "[data-section-key='transactions_breakdown']" do
-        all("summary", text: /View category details/).each(&:click)
-      end
+      assert_selector "[data-section-key='transactions_breakdown'] [data-controller='breakdown-list']"
     end
 
     # The tooltip only shows once the page's controllers are connected, so

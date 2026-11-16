@@ -1,0 +1,23 @@
+<%# locals: (row:, type:, extra: false) %>
+<%# One category of a breakdown list: name, amount and share on the first line,
+    the bar (with a tick at normal) and the change under them. The whole row
+    opens the category's transactions; the chevron opens its details and
+    subcategories instead. %>
+<% panel_id = "breakdown-#{type}-#{row[:key].parameterize}-details" %>
+
+<%= tag.li hidden: extra, data: { breakdown_list_target: ("extra" if extra) } do %>
+  <%= render "reports/breakdown_line", item: row, level: :category, panel_id: panel_id %>
+
+  <div id="<%= panel_id %>" class="pb-2" hidden data-testid="breakdown-details">
+    <% row[:details].each do |line| %>
+      <p class="pl-9 pr-2 text-xs text-secondary @md:pl-10"><%= line %></p>
+    <% end %>
+    <% if row[:subcategories].any? %>
+      <ul class="mt-1 space-y-0.5">
+        <% row[:subcategories].each do |sub| %>
+          <li><%= render "reports/breakdown_line", item: sub, level: :subcategory, panel_id: nil %></li>
+        <% end %>
+      </ul>
+    <% end %>
+  </div>
+<% end %>

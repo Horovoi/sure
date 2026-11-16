@@ -1,0 +1,84 @@
+<%# locals: (column:, amount_sort_params:, current_sort_by:, current_sort_direction:, span_all: false) %>
+<%# One side of the activity breakdown (income or expenses), from
+    ReportsHelper#breakdown_column. Both sides share this shape; expenses with a
+    normal add a summary of the change, a tick per bar and a change per row. %>
+<%
+  type = column[:type]
+  comparison = column[:comparison]
+  title_id = "breakdown-#{type}-title"
+  list_id = "breakdown-#{type}-list"
+  title_key = type == :income ? "reports.transactions_breakdown.table.income" : "reports.transactions_breakdown.table.expense"
+  icon_name = type == :income ? "trending-up" : "trending-down"
+%>
+
+<%= tag.div class: class_names("min-w-0", "@3xl:col-span-2" => span_all),
+            role: "group",
+            aria: { labelledby: title_id },
+            data: { testid: "breakdown-#{type}", controller: "breakdown-list" } do %>
+  <div class="flex items-baseline justify-between gap-3">
+    <h3 id="<%= title_id %>" class="flex items-center gap-2 text-sm font-medium text-secondary">
+      <%= icon(icon_name, size: "sm") %>
+      <%= t(title_key) %>
+    </h3>
+    <p class="text-lg font-medium text-primary tabular-nums whitespace-nowrap" data-testid="breakdown-<%= type %>-total">
+      <%= Money.new(column[:total], Current.family.currency).format %>
+    </p>
+  </div>
+  <p class="mt-0.5 text-sm text-secondary" <%= "data-testid=spending-summary" if comparison %>>
+    <%= breakdown_column_summary(column) %>
+  </p>
+
+  <%# Column labels; the rows below use the same grid %>
+  <div class="mt-4 grid <%= ReportsHelper::BREAKDOWN_GRID %> items-end border-b border-divider px-2 pb-1.5 text-xs text-secondary">
+    <span class="col-start-2"><%= t("reports.transactions_breakdown.table.category") %></span>
+    <%= link_to reports_path(amount_sort_params),
+          class: "inline-flex items-center justify-end gap-1 rounded-sm hover:text-primary focus-ring",
+          aria: { label: t("reports.transactions_breakdown.table.sort_by_amount") } do %>
+      <%= t("reports.transactions_breakdown.table.amount") %>
+      <% if current_sort_by == "amount" %>
+        <%= icon(current_sort_direction == "asc" ? "chevron-up" : "chevron-down", size: "xs") %>
+      <% end %>
+    <% end %>
+    <span class="text-right"><%= t("reports.transactions_breakdown.table.share") %></span>
+  </div>
+
+  <ul id="<%= list_id %>" class="mt-1 space-y-0.5" <%= "data-testid=spending-changes" if comparison %>>
+    <% column[:rows].each_with_index do |row, index| %>
+      <%= render "reports/breakdown_row", row: row, type: type, extra: index >= column[:top].size %>
+    <% end %>
+  </ul>
+
+  <% if column[:tail].any? %>
+    <%# The long tail folds into one row that opens the rest of the list %>
+    <button type="button"
+            class="group/tail mt-0.5 grid w-full <%= ReportsHelper::BREAKDOWN_GRID %> items-center gap-y-1 rounded-lg px-2 py-2 text-left text-sm text-secondary hover:bg-surface-hover hover:text-primary focus-ring"
+            aria-expanded="false"
+            aria-controls="<%= list_id %>"
+            data-action="breakdown-list#toggleTail"
+            data-testid="breakdown-<%= type %>-more">
+      <%= icon("chevron-down", size: "sm", class: "transition-transform group-aria-expanded/tail:rotate-180") %>
+      <span class="truncate group-aria-expanded/tail:hidden"><%= t("reports.transactions_breakdown.column.more", count: column[:tail].size) %></span>
+      <span class="hidden truncate group-aria-expanded/tail:inline"><%= t("reports.transactions_breakdown.column.fewer") %></span>
+      <span class="text-right tabular-nums whitespace-nowrap group-aria-expanded/tail:invisible"><%= breakdown_money(column[:tail_amount]) %></span>
+      <span class="text-right tabular-nums group-aria-expanded/tail:invisible"><%= number_to_percentage(column[:tail_share], precision: 1, strip_insignificant_zeros: true) %></span>
+      <% if (delta = column[:tail_delta]) %>
+        <span class="col-start-3 text-right text-xs tabular-nums whitespace-nowrap group-aria-expanded/tail:hidden <%= delta[:tone_class] %>">
+          <%= delta[:label] %><span class="sr-only"> <%= t("reports.transactions_breakdown.vs_normal.delta_#{delta[:direction]}") %></span>
+        </span>
+      <% end %>
+    </button>
+  <% end %>
+
+  <% if comparison %>
+    <p class="mt-3 flex items-start gap-2 px-2 text-xs text-secondary" data-testid="spending-legend">
+      <span class="relative mt-px h-3.5 w-3 shrink-0" aria-hidden="true">
+        <span class="absolute inset-y-0 left-1/2 -ml-px w-0.5 rounded-full bg-inverse"></span>
+      </span>
+      <span><%= breakdown_normal_key(comparison) %></span>
+    </p>
+  <% elsif column[:no_normal] %>
+    <p class="mt-3 px-2 text-xs text-secondary" data-testid="spending-no-normal">
+      <%= t("reports.transactions_breakdown.vs_normal.no_normal") %>
+    </p>
+  <% end %>
+<% end %>

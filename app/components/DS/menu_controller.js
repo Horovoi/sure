@@ -51,6 +51,7 @@ export default class extends Controller {
   addEventListeners() {
     this.buttonTarget.addEventListener("click", this.toggle);
     this.element.addEventListener("keydown", this.handleKeydown);
+    this.contentTarget.addEventListener("click", this.handleItemClick);
     document.addEventListener("click", this.handleOutsideClick);
     document.addEventListener("turbo:load", this.handleTurboLoad);
     document.addEventListener("turbo:before-cache", this.handleBeforeCache);
@@ -60,6 +61,7 @@ export default class extends Controller {
   removeEventListeners() {
     this.buttonTarget.removeEventListener("click", this.toggle);
     this.element.removeEventListener("keydown", this.handleKeydown);
+    this.contentTarget.removeEventListener("click", this.handleItemClick);
     document.removeEventListener("click", this.handleOutsideClick);
     document.removeEventListener("turbo:load", this.handleTurboLoad);
     document.removeEventListener("turbo:before-cache", this.handleBeforeCache);
@@ -85,6 +87,17 @@ export default class extends Controller {
 
   handleTurboLoad = () => {
     if (!this.show) this.close();
+  };
+
+  // A chosen link item closes the menu and hands focus back to its trigger
+  // (ARIA menu pattern). Without this a link that stays on the page (one that
+  // opens a modal in a Turbo frame, or a new tab) left the menu open, with
+  // focus on an item that kept the page's arrow-key shortcuts away.
+  handleItemClick = (event) => {
+    if (!event.target.closest?.('a[role^="menuitem"]')) return;
+
+    this.close();
+    this.buttonTarget.focus({ preventScroll: true });
   };
 
   handleOutsideClick = (event) => {

@@ -293,25 +293,12 @@ class User < ApplicationRecord
     preferences&.[]("reports_section_order") || default_reports_section_order
   end
 
-  # How the Reports expenses treemap colours its tiles: by category, or by the change
-  # against normal spending
-  REPORTS_EXPENSE_COLOR_MODES = %w[category normal].freeze
-
-  def reports_expense_color_mode
-    mode = preferences&.[]("reports_expense_color_mode")
-    REPORTS_EXPENSE_COLOR_MODES.include?(mode) ? mode : REPORTS_EXPENSE_COLOR_MODES.first
-  end
-
   # Saved preferences can name sections Reports no longer has (Spending vs normal is
-  # now part of the activity breakdown). The page skips keys it does not know, so they
-  # stay harmless and need no migration.
+  # now part of the activity breakdown), or the retired reports_expense_color_mode of
+  # the old expenses treemap. The page skips keys it does not know, so they stay
+  # harmless and need no migration.
   def update_reports_preferences(prefs)
-    prefs = prefs.to_h.stringify_keys
-    if prefs.key?("reports_expense_color_mode") && !REPORTS_EXPENSE_COLOR_MODES.include?(prefs["reports_expense_color_mode"])
-      return false
-    end
-
-    merge_preferences(prefs)
+    merge_preferences(prefs.to_h.stringify_keys)
   end
 
   # Transactions preferences management

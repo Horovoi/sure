@@ -116,7 +116,7 @@ en:
         amount_asc: Amount (Low to High)
       export:
         label: Export
-        csv: CSV
+        csv: Download CSV
         excel: Excel
         pdf: PDF
         google_sheets: Open in Google Sheets
@@ -131,18 +131,44 @@ en:
         entries:
           one: "%{count} entry"
           other: "%{count} entries"
-        percentage: "% of Total"
-        transactions_short: Txns
-        average_short: Avg
-        view_category_details:
-          one: "View category details (%{count} category)"
-          other: "View category details (%{count} categories)"
-      pagination:
-        showing:
-          one: Showing %{count} entry
-          other: Showing %{count} entries
-        previous: Previous
-        next: Next
+        share: Share
+        sort_by_amount: Sort by amount
+      column:
+        categories:
+          one: "%{count} category"
+          other: "%{count} categories"
+        transactions:
+          one: "%{count} transaction"
+          other: "%{count} transactions"
+        details: "Details for %{category}"
+        more:
+          one: "%{count} more category"
+          other: "%{count} more categories"
+        fewer: Show fewer
+      details:
+        average: "average %{amount}"
+        per_day: "%{amount} a day"
+        normal: "Normal: %{amount}"
+        nothing_spent: Nothing spent in this period
+        netted_expense: "after %{amount} of refunds"
+        netted_income: "after %{amount} paid back"
+      # Expenses against normal: the line under the total, the key under the list
+      vs_normal:
+        more_so_far_html: "%{amount} more than normal so far (%{percent})"
+        less_so_far_html: "%{amount} less than normal so far (%{percent})"
+        more_period_html: "%{amount} more than normal (%{percent})"
+        less_period_html: "%{amount} less than normal (%{percent})"
+        more_so_far_no_percent_html: "%{amount} more than normal so far"
+        less_so_far_no_percent_html: "%{amount} less than normal so far"
+        more_period_no_percent_html: "%{amount} more than normal"
+        less_period_no_percent_html: "%{amount} less than normal"
+        about_so_far: About normal so far
+        about_period: About normal
+        key_so_far: "Normal for this many days: %{normal}, based on %{range}"
+        key_period: "Normal for a period this long: %{normal}, based on %{range}"
+        delta_more: more than normal
+        delta_less: less than normal
+        no_normal: Not enough earlier history to compare with normal spending yet
     net_worth:
       title: Net Worth
       current_net_worth: Current Net Worth
@@ -156,37 +182,6 @@ en:
       chart:
         title: Net worth over time
         aria_label: Monthly net worth chart. Hover a month to see each account group.
-    treemap:
-      txn: txn
-      txns: txns
-      avg: avg
-      per_day: "/day"
-      more: more
-    # Spending against normal, in the expenses block of the activity breakdown
-    spending_vs_normal:
-      summary_html: "%{total} spent in this period. Normal for a period this long is %{normal}, based on %{baseline_start} to %{baseline_end}."
-      summary_so_far_html: "%{total} spent so far. Normal for this many days is %{normal}, based on %{baseline_start} to %{baseline_end}."
-      no_changes: Spending matched normal in every category.
-      changes_title: What changed
-      color_mode:
-        label: Treemap colors
-        normal: Vs normal
-        category: Category colors
-      tooltip:
-        normal: "Normal: %{amount}"
-        more: "%{amount} more than normal (%{percent})"
-        less: "%{amount} less than normal (%{percent})"
-        more_no_percent: "%{amount} more than normal"
-        less_no_percent: "%{amount} less than normal"
-        no_normal: No earlier history to compare with
-        open: Select to see these transactions
-      legend:
-        less: "50% or more less"
-        slightly_less: "15–50% less"
-        normal: About normal
-        slightly_more: "15–50% more"
-        more: "50–100% more"
-        much_more: "100%+ more"
     investment_performance:
       title: Investment Performance
       portfolio_value: Portfolio Value
