@@ -64,6 +64,12 @@
     @apply bg-container text-primary w-full;
   }
 
+  /* The input reads like every other field's (.form-field__input): the gem's own
+     size and padding made the transaction description larger than the rest */
+  .hw-combobox__input {
+    @apply text-sm leading-5 p-0 border-0 ring-0 outline-hidden focus:ring-0 placeholder:text-subdued;
+  }
+
   .hw-combobox__main__wrapper {
     @apply border-0 p-0 focus:border-0 ring-0 focus:ring-0 shadow-none focus:shadow-none focus-within:shadow-none;
   }
@@ -73,7 +79,7 @@
   }
 
   .hw-combobox__label {
-    @apply block text-xs text-gray-500 peer-disabled:text-gray-400;
+    @apply block text-xs text-secondary peer-disabled:text-subdued;
   }
   
   /* Options take their colors from the gem's rules and the --hw-* variables below, so

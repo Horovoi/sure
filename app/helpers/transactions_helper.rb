@@ -82,4 +82,13 @@ module TransactionsHelper
       raw: pretty
     }
   end
+
+  # The Expense / Income / Transfer tabs of the new-transaction dialog, styled as
+  # DS::Tabs: the active tab is raised, the others only tinted on hover
+  def transaction_type_tab_classes(active)
+    class_names(
+      "focus-ring flex items-center justify-center gap-2 rounded-md px-2 py-1 text-sm font-medium motion-safe:transition-colors motion-safe:duration-200",
+      active ? "tab-item-active text-primary shadow-sm" : "text-secondary hover:bg-surface-inset-hover hover:text-primary"
+    )
+  end
 end

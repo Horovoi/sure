@@ -1,25 +1,26 @@
 <%# locals: (active_tab:, account_id: nil) %>
 
 <%# transaction_type_tabs_controller.js carries what the user typed into the tab's link, so a
-    switch between Expense, Income and Transfer keeps it. %>
-<fieldset class="bg-surface-inset rounded-lg p-1 grid grid-flow-col justify-stretch gap-x-2" data-controller="transaction-type-tabs">
+    switch between Expense, Income and Transfer keeps it. Drawn like DS::Tabs: the active
+    tab raised, the others only tinted on hover, so a hovered tab never looks selected. %>
+<fieldset class="bg-surface-inset rounded-lg p-1 grid grid-flow-col auto-cols-fr gap-x-1" data-controller="transaction-type-tabs">
   <%= link_to new_transaction_path(nature: "outflow", account_id: account_id),
               data: { turbo_frame: :modal, tab_kind: "transaction", action: "click->transaction-type-tabs#carry" },
-              class: "flex px-4 py-1 rounded-lg items-center space-x-2 justify-center text-sm #{active_tab == 'expense' ? 'bg-container text-primary shadow-sm' : 'hover:bg-container text-subdued hover:text-primary hover:shadow-sm'}" do %>
+              class: transaction_type_tab_classes(active_tab == "expense"), aria: { current: ("page" if active_tab == "expense") } do %>
     <%= icon "minus-circle" %>
     <%= tag.span t("shared.transaction_tabs.expense") %>
   <% end %>
 
   <%= link_to new_transaction_path(nature: "inflow", account_id: account_id),
               data: { turbo_frame: :modal, tab_kind: "transaction", action: "click->transaction-type-tabs#carry" },
-              class: "flex px-4 py-1 rounded-lg items-center space-x-2 justify-center text-sm #{active_tab == 'income' ? 'bg-container text-primary shadow-sm' : 'hover:bg-container text-subdued hover:text-primary hover:shadow-sm'}" do %>
+              class: transaction_type_tab_classes(active_tab == "income"), aria: { current: ("page" if active_tab == "income") } do %>
     <%= icon "plus-circle" %>
     <%= tag.span t("shared.transaction_tabs.income") %>
   <% end %>
 
   <%= link_to new_transfer_path(from_account_id: account_id),
               data: { turbo_frame: :modal, tab_kind: "transfer", action: "click->transaction-type-tabs#carry" },
-              class: "flex px-4 py-1 rounded-lg items-center space-x-2 justify-center text-sm #{active_tab == 'transfer' ? 'bg-container text-primary shadow-sm' : 'hover:bg-container text-subdued hover:text-primary hover:shadow-sm'}" do %>
+              class: transaction_type_tab_classes(active_tab == "transfer"), aria: { current: ("page" if active_tab == "transfer") } do %>
     <%= icon "arrow-right-left" %>
     <%= tag.span t("shared.transaction_tabs.transfer") %>
   <% end %>

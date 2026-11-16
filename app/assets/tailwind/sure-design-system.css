@@ -432,7 +432,9 @@
   .form-field {
     @apply flex flex-col gap-1 relative px-3 py-2 rounded-md border bg-container border-secondary shadow-xs w-full;
     @apply focus-within:border-secondary focus-within:shadow-none focus-within:ring-4 focus-within:ring-alpha-black-200;
-    @apply transition-all duration-300;
+    /* Only the focus ring and border animate: with transition-all a field whose
+       size or padding changed (a form swapped in a dialog) slid into place */
+    @apply transition-[box-shadow,border-color] duration-200;
 
     @variant theme-dark {
       @apply focus-within:ring-alpha-white-300;

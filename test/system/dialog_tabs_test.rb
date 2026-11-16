@@ -31,6 +31,38 @@ class DialogTabsTest < ApplicationSystemTestCase
     assert_equal 0, evaluate_script("window.__closed")
   end
 
+  # A switch draws the other form at once: nothing in the dialog animates into place
+  # (a morph reused the old fields and their transitions slid them about), and focus
+  # stays in the dialog instead of falling to the page
+  test "a tab switch swaps the form in one step" do
+    visit transactions_path
+    click_on I18n.t("transactions.index.new_transaction", default: "New transaction"), match: :first
+    within("dialog[open]") { click_on "Transfer" }
+    assert_selector "dialog[open] [name='transfer[amount]']", visible: :all
+
+    moving = evaluate_script(<<~JS)
+      document.getAnimations()
+        .filter((a) => document.querySelector("#modal dialog[open]").contains(a.effect?.target))
+        .map((a) => a.transitionProperty || a.animationName)
+    JS
+    assert_empty moving
+    assert evaluate_script("document.activeElement === document.querySelector('#modal dialog[open]')")
+  end
+
+  # The description is a combobox from a gem; its text matches the other fields
+  test "the description reads in the same size as the other fields" do
+    visit transactions_path
+    click_on I18n.t("transactions.index.new_transaction", default: "New transaction"), match: :first
+    assert_selector "dialog[open] .hw-combobox__input"
+
+    sizes = evaluate_script(<<~JS)
+      [".hw-combobox__input", "select[name='entry[account_id]']", "input[name='entry[amount]']"]
+        .map((css) => document.querySelector("#modal dialog[open] " + css))
+        .map((el) => el && getComputedStyle(el).fontSize)
+    JS
+    assert_equal 1, sizes.compact.uniq.size, sizes.inspect
+  end
+
   # The tabs morph the form: the amount input the money field guards can be swapped
   # under it, and its checks must follow the new input
   test "after a tab switch the amount field still refuses a second decimal separator" do
