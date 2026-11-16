@@ -12,6 +12,7 @@ class PrivacyModeTest < ApplicationSystemTestCase
     visit root_path
     assert_not privacy_mode?
 
+    wait_for_page_scripts
     toggle.click
     assert_selector "html.privacy-mode", visible: :all
     assert_equal "true", toggle["aria-pressed"]
@@ -27,7 +28,10 @@ class PrivacyModeTest < ApplicationSystemTestCase
     visit budgets_path
     assert privacy_mode?
 
-    find("body").send_keys([ :shift, "h" ])
+    # The inline head script sets the class before the page's JS starts; a key sent
+    # before the hotkey is installed is lost
+    wait_for_page_scripts
+    press_shift_h
     assert_no_selector "html.privacy-mode", visible: :all
     assert_equal "false", toggle["aria-pressed"]
 
@@ -46,6 +50,25 @@ class PrivacyModeTest < ApplicationSystemTestCase
   end
 
   private
+    # Through the Actions API: an element's send_keys turns a letter into a key event
+    # through the machine's keyboard layout, so with a non-Latin layout active (Ukrainian)
+    # Chrome gets a keydown with an empty key and no hotkey fires.
+    def press_shift_h
+      page.driver.browser.action.key_down(:shift).send_keys("h").key_up(:shift).perform
+    end
+
+    # The page's Stimulus controllers are connected: the toggle shows the stored state
+    # and the Shift+H hotkey is installed.
+    def wait_for_page_scripts
+      assert_selector "[data-testid='privacy-toggle'][aria-pressed='#{privacy_mode?}']"
+      page.document.synchronize do
+        installed = page.evaluate_script(<<~JS)
+          !!window.Stimulus?.getControllerForElementAndIdentifier(document.querySelector("[data-hotkey='Shift+H']"), "hotkey")?.installed
+        JS
+        raise Capybara::ExpectationNotMet, "the Shift+H hotkey is not installed yet" unless installed
+      end
+    end
+
     def toggle
       find("[data-testid='privacy-toggle']", visible: true)
     end
