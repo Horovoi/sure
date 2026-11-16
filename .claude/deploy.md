@@ -79,7 +79,8 @@ bin/staging bench <old> <new>   # compare page speed of two versions on the copy
 - Background jobs are off unless `--worker` is given, so the copied data stays as it
   was. Leave them off for benchmarks.
 - `bin/staging dev` and `bin/staging run` use the staging database on port 5433 and
-  Redis on port 6380. They run on the host, which does have internet access; the
+  Redis on port 6380. They copy the copy's cached logos into `public/icons` and pass
+  production's Brandfetch settings, so logos look as they do in production. They run on the host, which does have internet access; the
   placeholder credentials are what keeps them safe. `bin/staging dev` stops the
   staging worker container if it runs, so bin/dev's own worker runs every job.
 - `bin/staging bench` runs the old version twice and the new one once, taking turns.

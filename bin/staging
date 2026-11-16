@@ -61,6 +61,23 @@ copy_env() {
     value=$(env_value "$key")
     [ -z "$value" ] || export "$key=$value"
   done
+  # Logos: production builds Brandfetch URLs for logos it has not cached, so the copy shows the same
+  for key in BRAND_FETCH_CLIENT_ID BRAND_FETCH_HIGH_RES_LOGOS; do
+    value=$(env_value "$key")
+    [ -z "$value" ] || export "$key=$value"
+  done
+}
+
+# The cached logos live in the copy's icons volume, which only the containers see. A command run
+# on the host serves public/icons from the working tree (gitignored), so fill it from the copy.
+copy_icons() {
+  mkdir -p public/icons
+  if staging run --rm --no-deps -T --entrypoint sh web -c 'tar -C /rails/public/icons -cf - .' 2>/dev/null |
+    tar -C public/icons -xf - 2>/dev/null; then
+    echo "  cached logos copied into public/icons ($(find public/icons -type f | wc -l | tr -d ' ') files)"
+  else
+    echo "  could not copy the cached logos; logos fall back to Brandfetch or initials"
+  fi
 }
 
 command="${1:-help}"
@@ -115,6 +132,7 @@ case "$command" in
   dev)
     ensure_copy
     copy_env
+    copy_icons
     # bin/dev runs its own Sidekiq worker on the copy's Redis. A staging worker
     # container would take jobs from the same queues and run the image's code, so
     # stop it: every job then runs the working tree.
@@ -130,6 +148,7 @@ case "$command" in
     [ $# -gt 0 ] || die "usage: bin/staging run <command...>"
     ensure_copy
     copy_env
+    copy_icons >&2
     exec "$@"
     ;;
 
