@@ -11,6 +11,8 @@ class ReportsTest < ApplicationSystemTestCase
     @category = @family.categories.create!(name: "Reports Groceries", classification: "expense", color: "#123456")
     create_transaction(account: @account, currency: @family.currency, category: @category, amount: 42, name: "Corner shop", date: Date.current)
     create_transaction(account: @account, currency: @family.currency, amount: 17, name: "Loose receipt", date: Date.current)
+    # History years back, so the back arrow has earlier periods to step into
+    create_transaction(account: @account, currency: @family.currency, amount: 5, name: "Old history", date: 3.years.ago.to_date)
     sign_in @user
   end
 
