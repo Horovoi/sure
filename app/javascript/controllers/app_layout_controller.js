@@ -1,8 +1,20 @@
 import { Controller } from "@hotwired/stimulus";
 
+// The window width below which only one side panel fits beside the main column. The
+// layout CSS (max-xl:group-data-[left-panel=open]/layout:w-0) uses the same
+// width to hide the assistant panel while the accounts panel is open.
+const ONE_PANEL_QUERY = "(width >= 1024px) and (width < 1280px)";
+
 // Connects to data-controller="app-layout"
 export default class extends Controller {
-  static targets = ["leftSidebar", "rightSidebar", "mobileSidebar"];
+  static targets = [
+    "leftSidebar",
+    "rightSidebar",
+    "mobileSidebar",
+    "leftToggle",
+    "rightToggle",
+    "mobileToggle",
+  ];
   static values = { userId: String };
   static classes = [
     "expandedSidebar",
@@ -11,45 +23,116 @@ export default class extends Controller {
     "collapsedTransition",
   ];
 
+  connect() {
+    this.onePanelQuery = window.matchMedia(ONE_PANEL_QUERY);
+    this.syncHandler = () => this.#sync();
+    this.onePanelQuery.addEventListener("change", this.syncHandler);
+    this.#sync();
+  }
+
+  disconnect() {
+    this.onePanelQuery?.removeEventListener("change", this.syncHandler);
+  }
+
+  // The accounts drawer on a phone is a modal <dialog>: focus moves into it, the page
+  // behind it is inert and Escape closes it (the dialog's own "close" event)
   openMobileSidebar() {
-    this.mobileSidebarTarget.classList.remove("hidden");
+    if (!this.hasMobileSidebarTarget || this.mobileSidebarTarget.open) return;
+
+    this.mobileSidebarTarget.showModal();
+    this.#setExpanded(this.mobileToggleTargets, true);
   }
 
   closeMobileSidebar() {
-    this.mobileSidebarTarget.classList.add("hidden");
+    if (!this.hasMobileSidebarTarget || !this.mobileSidebarTarget.open) return;
+
+    this.mobileSidebarTarget.close();
+  }
+
+  mobileSidebarClosed() {
+    this.#setExpanded(this.mobileToggleTargets, false);
   }
 
   toggleLeftSidebar() {
-    const isOpen = this.#isExpanded(this.leftSidebarTarget);
-    this.#updateUserPreference("show_sidebar", !isOpen);
-    this.#toggleSidebarWidth(this.leftSidebarTarget, isOpen);
+    const open = !this.#leftShown();
+    this.#setPanel(this.leftSidebarTarget, "show_sidebar", open);
+
+    // No room for both: the assistant panel steps aside
+    if (open && this.#onePanelOnly() && this.#hasExpandedClass(this.rightSidebarTarget)) {
+      this.#setPanel(this.rightSidebarTarget, "show_ai_sidebar", false);
+    }
+
+    this.#sync();
   }
 
   toggleRightSidebar() {
-    const isOpen = this.#isExpanded(this.rightSidebarTarget);
-    this.#updateUserPreference("show_ai_sidebar", !isOpen);
-    this.#toggleSidebarWidth(this.rightSidebarTarget, isOpen);
+    const open = !this.#rightShown();
+
+    if (open && this.#onePanelOnly() && this.#leftShown()) {
+      this.#setPanel(this.leftSidebarTarget, "show_sidebar", false);
+    }
+
+    // When the panel was only pushed aside by the accounts panel, its own setting is
+    // already "show"
+    if (open !== this.#hasExpandedClass(this.rightSidebarTarget)) {
+      this.#setPanel(this.rightSidebarTarget, "show_ai_sidebar", open);
+    }
+
+    this.#sync();
   }
 
   // Opens the chat sidebar if it is closed ("Dig in with AI" loads a chat into it)
   openRightSidebar() {
-    if (this.#isExpanded(this.rightSidebarTarget)) return;
+    if (this.#rightShown()) return;
 
     this.toggleRightSidebar();
   }
 
-  #isExpanded(el) {
+  #onePanelOnly() {
+    return this.onePanelQuery?.matches ?? false;
+  }
+
+  #leftShown() {
+    return this.#hasExpandedClass(this.leftSidebarTarget);
+  }
+
+  #rightShown() {
+    return this.#hasExpandedClass(this.rightSidebarTarget) && !(this.#onePanelOnly() && this.#leftShown());
+  }
+
+  #hasExpandedClass(el) {
     return this.expandedSidebarClasses.every((c) => el.classList.contains(c));
   }
 
-  #toggleSidebarWidth(el, isCurrentlyOpen) {
-    if (isCurrentlyOpen) {
-      el.classList.remove(...this.expandedSidebarClasses);
-      el.classList.add(...this.collapsedSidebarClasses);
-    } else {
+  // The state the CSS and screen readers see: data-left-panel for the one-panel rule,
+  // aria-expanded on the toggles, and inert on a hidden panel so Tab skips its contents
+  #sync() {
+    if (!this.hasLeftSidebarTarget || !this.hasRightSidebarTarget) return;
+
+    const leftShown = this.#leftShown();
+    const rightShown = this.#rightShown();
+
+    this.element.dataset.leftPanel = leftShown ? "open" : "closed";
+    this.leftSidebarTarget.inert = !leftShown;
+    this.rightSidebarTarget.inert = !rightShown;
+    this.#setExpanded(this.leftToggleTargets, leftShown);
+    this.#setExpanded(this.rightToggleTargets, rightShown);
+  }
+
+  #setExpanded(buttons, expanded) {
+    buttons.forEach((button) => button.setAttribute("aria-expanded", String(expanded)));
+  }
+
+  #setPanel(el, preference, open) {
+    if (open) {
       el.classList.add(...this.expandedSidebarClasses);
       el.classList.remove(...this.collapsedSidebarClasses);
+    } else {
+      el.classList.remove(...this.expandedSidebarClasses);
+      el.classList.add(...this.collapsedSidebarClasses);
     }
+
+    this.#updateUserPreference(preference, open);
   }
 
   #updateUserPreference(field, value) {

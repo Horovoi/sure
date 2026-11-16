@@ -9,6 +9,8 @@ en:
         reports: Reports
         subscriptions: Subscriptions
         transactions: Transactions
+      home: Home
+      mobile_sidebar: Accounts
       open_sidebar: Open menu
       toggle_left_sidebar: Show or hide the accounts panel
       toggle_right_sidebar: Show or hide the assistant panel

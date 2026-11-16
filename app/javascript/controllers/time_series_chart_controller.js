@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
+import { chartYGuides } from "utils/chart_y_guides";
 
 const parseLocalDate = d3.timeParse("%Y-%m-%d");
 
@@ -446,7 +447,6 @@ export default class extends Controller {
 
     const isDark = this._isDarkTheme();
     const tickOpacity = isDark ? 0.15 : 0.2;
-    const labelOpacity = isDark ? 0.5 : 0.6;
 
     ticks.forEach((date) => {
       const x = this._d3XScale(date);
@@ -473,9 +473,9 @@ export default class extends Controller {
           .attr("x", x)
           .attr("y", this._d3ContainerHeight + 14)
           .attr("text-anchor", "middle")
-          .attr("opacity", labelOpacity)
-          .style("font-size", "10px")
-          .style("font-weight", "400")
+          // The same size and weight as the start and end dates
+          .style("font-size", "12px")
+          .style("font-weight", "500")
           .text(this._formatIntermediateDate(date));
       }
     });
@@ -782,17 +782,15 @@ export default class extends Controller {
     const values = this._normalDataPoints.map(this._getDatumValue);
     const dataMin = d3.min(values);
     const dataMax = d3.max(values);
-    const dataMid = (dataMin + dataMax) / 2;
 
     const isDark = this._isDarkTheme();
-    const lineOpacityStrong = isDark ? 0.08 : 0.15;
-    const lineOpacitySoft = isDark ? 0.05 : 0.10;
+    // One strength for every guide: each label needs a line you can see under it
+    const lineOpacity = isDark ? 0.12 : 0.15;
 
-    const guides = [
-      { key: "max", v: dataMax, opacity: lineOpacityStrong },
-      { key: "mid", v: dataMid, opacity: lineOpacitySoft },
-      { key: "min", v: dataMin, opacity: lineOpacityStrong },
-    ];
+    // When the series crosses zero, the middle guide is the zero line (drawn by
+    // _drawZeroLine), so its label reads 0 and sits on a line that is there
+    const guides = chartYGuides(dataMin, dataMax).map((g) => ({ ...g, v: g.value, opacity: lineOpacity }));
+    const labelledYs = [];
 
     const end = this._normalDataPoints[this._normalDataPoints.length - 1];
     const yEnd = this._d3YScale(this._getDatumValue(end));
@@ -810,22 +808,28 @@ export default class extends Controller {
       const onEndLabel =
         endLabelY !== null && y - 4 > endLabelY - 12 - 2 && y - 4 - 11 < endLabelY + 3 + 2;
       const tooCloseToBottom = this._d3ContainerHeight - y < 16; // collides with bottom date label
-      const shouldSkipLabel = nearEnd || onEndLabel || (g.key === "min" && tooCloseToBottom);
+      // Two guide labels closer than a line of text would overlap
+      const onOtherLabel = labelledYs.some((other) => Math.abs(other - y) < 14);
+      const shouldSkipLabel =
+        nearEnd || onEndLabel || onOtherLabel || (g.key === "min" && tooCloseToBottom);
 
-      // Line
+      // Line (the zero line is already drawn)
       const [rangeStart, rangeEnd] = this._d3XScale.range();
-      this._d3Group
-        .append("line")
-        .attr("class", "y-guide fg-subdued")
-        .attr("x1", rangeStart)
-        .attr("x2", rangeEnd)
-        .attr("y1", y)
-        .attr("y2", y)
-        .attr("stroke", "currentColor")
-        .attr("stroke-opacity", g.opacity)
-        .attr("stroke-dasharray", "4,4");
+      if (!g.zero) {
+        this._d3Group
+          .append("line")
+          .attr("class", "y-guide fg-subdued")
+          .attr("x1", rangeStart)
+          .attr("x2", rangeEnd)
+          .attr("y1", y)
+          .attr("y2", y)
+          .attr("stroke", "currentColor")
+          .attr("stroke-opacity", g.opacity)
+          .attr("stroke-dasharray", "4,4");
+      }
 
       if (!shouldSkipLabel) {
+        labelledYs.push(y);
         // Label (right aligned)
         const endX = this._d3XScale(end.date);
         // Shift slightly left of the end/gradient boundary to avoid being cut
