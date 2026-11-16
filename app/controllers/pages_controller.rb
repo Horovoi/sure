@@ -19,6 +19,7 @@ class PagesController < ApplicationController
     "cashflow_sankey_section" => "cashflow_sankey",
     "outflows_donut_section" => "outflows_donut",
     "spending_trend_section" => "spending_trend",
+    "spending_trend_fullscreen_section" => "spending_trend",
     "investment_summary_section" => "investment_summary",
     "net_worth_section" => "net_worth_chart"
   }.freeze
@@ -166,11 +167,17 @@ class PagesController < ApplicationController
           }
         },
         "spending_trend" => -> {
+          spending_trend_data = build_spending_trend_data
           {
             key: "spending_trend",
             title: "pages.dashboard.spending_trend.title",
             partial: "pages/dashboard/spending_trend",
-            locals: { spending_trend_data: build_spending_trend_data },
+            locals: { spending_trend_data: spending_trend_data },
+            # Outside the section, so it stays open while the section's frame reloads
+            dialog: {
+              partial: "pages/dashboard/spending_trend_dialog",
+              locals: { spending_trend_data: spending_trend_data }
+            },
             visible: @has_accounts,
             collapsible: true
           }

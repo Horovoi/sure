@@ -276,6 +276,37 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_select "turbo-frame#spending_trend_section"
   end
 
+  test "the spending curve has a fullscreen dialog with its own period picker and filter" do
+    picked = @family.categories.create!(name: "Curve Picked", classification: "expense")
+    create_transaction(account: curve_account, currency: @family.currency, amount: 40, category: picked)
+
+    get root_path(spending_category_ids: [ picked.name ])
+
+    assert_response :ok
+    assert_select "#spending-trend-section button[data-fullscreen-target-id-value=spending_trend_fullscreen_dialog][aria-label=?]",
+      I18n.t("pages.dashboard.spending_trend.expand")
+    # Outside the section's frame, so a frame reload does not close it
+    assert_select "turbo-frame#spending_trend_section dialog", count: 0
+    assert_select "dialog#spending_trend_fullscreen_dialog" do
+      assert_select "turbo-frame#spending_trend_fullscreen_section #spending-trend-fullscreen-section" do
+        assert_select "form[data-turbo-frame=spending_trend_fullscreen_section] select#spending_period_fullscreen[name=spending_period]"
+        assert_select "form[data-turbo-frame=spending_trend_fullscreen_section] input[type=checkbox][name='spending_category_ids[]'][value=?][checked]", picked.name
+        assert_select "button", text: I18n.t("pages.dashboard.spending_trend.filter_categories", count: 1)
+        assert_select "[data-controller='spending-chart']"
+      end
+    end
+  end
+
+  test "the fullscreen spending frame request builds only that widget" do
+    IncomeStatement::Sankey.expects(:new).never
+
+    get root_path(spending_period: 1.month.ago.to_date.iso8601), headers: { "Turbo-Frame" => "spending_trend_fullscreen_section" }
+
+    assert_response :ok
+    assert_select "turbo-frame#spending_trend_fullscreen_section select[name=spending_period] option[selected][value=?]",
+      @family.budget_period_start_for(1.month.ago.to_date).iso8601
+  end
+
   test "customize mode carries the spending filter through its links" do
     name = categories(:food_and_drink).name
 

@@ -202,6 +202,46 @@ class DashboardTest < ApplicationSystemTestCase
     end
   end
 
+  test "the spending fullscreen dialog keeps its period picker and category filter working" do
+    travel = @family.categories.create!(name: "Curve Travel", color: "#2244aa")
+    create_transaction(account: @account, currency: @family.currency, category: travel, amount: 700_000, date: @start_date)
+
+    visit root_path
+    within "#spending-trend-section" do
+      assert_selector "[data-controller='spending-chart'] svg path[data-series='current']"
+      click_button I18n.t("pages.dashboard.spending_trend.expand"), enable_aria_label: true
+    end
+
+    total = nil
+    within "#spending_trend_fullscreen_dialog" do
+      assert_selector "#spending-trend-fullscreen-section [data-controller='spending-chart'] svg path[data-series='current']"
+      total = find("[data-testid='spending-trend-current-total']").text
+
+      click_button I18n.t("pages.dashboard.spending_trend.filter_categories_all")
+      find("label[data-filter-name='Curve Travel'] input[type='checkbox']").click
+      click_button I18n.t("pages.dashboard.spending_trend.apply")
+
+      # The dialog stays open, and its frame shows the narrowed curve
+      assert_no_selector "[data-testid='spending-trend-current-total']", exact_text: total
+      assert_selector "[data-controller='spending-chart'] svg path[data-series='current']"
+    end
+    narrowed = find("#spending_trend_fullscreen_dialog [data-testid='spending-trend-current-total']").text
+
+    # The inline widget behind the dialog follows to the same filter
+    assert_selector "#spending-trend-section [data-testid='spending-trend-current-total']", exact_text: narrowed, visible: :all
+
+    # The period picker inside the dialog loads the previous period, still in the dialog
+    previous_start = @family.budget_period_start_for(@family.budget_period_start_for(Date.current) - 1)
+    previous_label = I18n.l(previous_start, format: I18n.t("pages.dashboard.spending_trend.period_format"))
+    within "#spending_trend_fullscreen_dialog" do
+      select previous_label, from: "spending_period_fullscreen"
+      assert_selector "select#spending_period_fullscreen option[selected]", text: previous_label, visible: :all
+      assert_selector "#spendingFullscreenPeriod", text: I18n.l(previous_start, format: :long)
+    end
+    assert_selector "#spending_trend_fullscreen_dialog[open]"
+    assert_selector "#spending-trend-section select#spending_period option[selected]", text: previous_label, visible: :all
+  end
+
   # --- w2-netw ---
 
   test "a drag across the net worth chart selects that date range" do
