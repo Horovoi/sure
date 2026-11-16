@@ -111,7 +111,8 @@ class StyledFormBuilder < ActionView::Helpers::FormBuilder
           menu_placement: options[:menu_placement],
           variant: options.fetch(:variant, :simple),
           include_blank: options[:include_blank],
-          label: options[:label],
+          # A required field's label carries the same "*" as build_label gives the plain fields
+          label: required_label(options[:label], options[:required] || html_options[:required]),
           container_class: options[:container_class],
           scoped_ids: options.fetch(:scoped_ids, false),
           disabled: html_options[:disabled],
@@ -151,6 +152,12 @@ class StyledFormBuilder < ActionView::Helpers::FormBuilder
 
     def normalize_options(options, html_options)
       options.merge(required: options[:required] || html_options[:required])
+    end
+
+    def required_label(label_text, required)
+      return label_text unless required && label_text.present?
+
+      @template.safe_join([ label_text, @template.tag.span("*", class: "text-red-500 ml-0.5") ])
     end
 
     def build_label(method, options)

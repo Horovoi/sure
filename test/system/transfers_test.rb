@@ -145,9 +145,10 @@ class TransfersTest < ApplicationSystemTestCase
   end
 
   private
-    # The account pickers are design-system listboxes (DS::Select), not native selects
+    # The account pickers are design-system listboxes (DS::Select), not native selects.
+    # Their labels end in the required "*".
     def pick_account(label_text, account)
-      container = find("label", exact_text: label_text).find(:xpath, "./ancestor::div[contains(concat(' ', @data-controller, ' '), ' select ')][1]")
+      container = find("label", text: /\A#{Regexp.escape(label_text)}\s*\*?\z/).find(:xpath, "./ancestor::div[contains(concat(' ', @data-controller, ' '), ' select ')][1]")
       container.find("button[aria-haspopup='listbox']").click
 
       if container.has_selector?("input[type='search']", visible: true, wait: 0)

@@ -84,6 +84,10 @@ class DialogTabsTest < ApplicationSystemTestCase
     transfer = field_heights
     assert_equal [ expense.first ], transfer.uniq, transfer.inspect
     assert_equal title_top, dialog_title_top
+
+    # From and To are required, and marked so like the transaction form's Account
+    assert_selector "dialog[open] label", text: /\AFrom\s*\*\z/
+    assert_selector "dialog[open] label", text: /\ATo\s*\*\z/
   end
 
   # The tabs morph the form: the amount input the money field guards can be swapped
