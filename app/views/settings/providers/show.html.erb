@@ -16,7 +16,8 @@
   <%# Family-scoped connections (their own *_item models) render their own panel, one per %>
   <%# enabled provider that registered a settings_partial (see BankConnections).          %>
   <% @provider_panels.each do |provider| %>
-    <%= settings_section title: provider.label, collapsible: true, open: false do %>
+    <%# Bank Sync links here with ?open=<key>: that provider's panel starts open %>
+    <%= settings_section title: provider.label, collapsible: true, open: params[:open] == provider.key do %>
       <turbo-frame id="<%= provider.key %>-providers-panel">
         <%= render provider.settings_partial %>
       </turbo-frame>

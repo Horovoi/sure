@@ -6,9 +6,11 @@ module Breadcrumbable
   end
 
   private
-    # The default, unless specific controller or action explicitly overrides
+    # The default, unless specific controller or action explicitly overrides. The page
+    # name comes from breadcrumbs.<controller_name> when the controller's own name reads
+    # wrong ("Budgetings", "Monobank Items")
     def set_breadcrumbs
-      @breadcrumbs = [ [ "Home", root_path ], [ controller_name.titleize, nil ] ]
+      @breadcrumbs = [ [ t("breadcrumbs.home"), root_path ], [ t("breadcrumbs.#{controller_name}", default: controller_name.titleize), nil ] ]
     end
 
     # Budgets and goals live under the Plan page: Home > Plan > the given crumbs

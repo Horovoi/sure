@@ -204,4 +204,15 @@ class Transactions::BulkUpdatesControllerTest < ActionDispatch::IntegrationTest
         entryable: Transaction.new
       )
     end
+
+    test "the tag picker is as tall as its tags, and says so when there are none" do
+      family = users(:family_admin).family
+      get new_transactions_bulk_update_url
+      assert_select "select[name='bulk_update[tag_ids][]'][size=?]", (family.tags.count + 1).clamp(2, 6).to_s
+
+      family.tags.destroy_all
+      get new_transactions_bulk_update_url
+      assert_select "select[name='bulk_update[tag_ids][]']", count: 0
+      assert_match I18n.t("transactions.bulk_updates.new.no_tags"), response.body
+    end
 end

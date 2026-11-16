@@ -155,6 +155,7 @@ en:
       description: "Choose which provider you want to use to link %{account_name}"
       already_linked: "Account is already linked to a provider"
       no_providers: "No providers are currently configured"
+      connect_first: Connect a bank here first, then link the account to it.
     # w3-reports exclude-from-reports
     exclude_from_reports:
       form_label: Exclude from all reports

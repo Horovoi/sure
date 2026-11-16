@@ -5,6 +5,13 @@ en:
       payments:
         renewal: "Your contribution continues on %{date}."
   settings:
+    bank_sync:
+      show:
+        page_title: Bank Sync
+        providers: Providers
+        none_title: No providers configured
+        none_body: Configure providers to link your bank accounts.
+        docs: Read about %{name}
     ai_prompts:
       show:
         page_title: AI integrations

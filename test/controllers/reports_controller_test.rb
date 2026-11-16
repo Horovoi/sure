@@ -106,7 +106,19 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
       get reports_path(period_type: :monthly)
     end
     assert_response :ok
-    assert_equal 0, controller.instance_variable_get(:@summary_metrics)[:budget_percent]
+    # No budget: the card says so instead of "0% of budget used"
+    assert_nil controller.instance_variable_get(:@summary_metrics)[:budget_percent]
+    assert_match I18n.t("reports.summary.no_budget_data"), response.body
+  end
+
+  test "a budget not set up for the month reads as no budget data" do
+    budget = Budget.find_or_bootstrap(@family, start_date: Date.current)
+    budget.update!(budgeted_spending: nil)
+
+    get reports_path(period_type: :monthly)
+
+    assert_nil controller.instance_variable_get(:@summary_metrics)[:budget_percent]
+    assert_no_match I18n.t("reports.summary.of_budget_used"), response.body
   end
 
   test "index calculates summary metrics correctly" do

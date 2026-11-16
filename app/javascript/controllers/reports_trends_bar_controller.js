@@ -1,11 +1,14 @@
 import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
+import { barAxisLabels, barValueLabelsFit } from "utils/bar_axis_labels";
 
 // Draws a grouped bar chart for monthly income vs expenses
 // Connects to data-controller="reports-trends-bar"
 export default class extends Controller {
   static values = {
     trends: { type: Array, default: [] },
+    incomeLabel: { type: String, default: "Income" },
+    expensesLabel: { type: String, default: "Expenses" },
   };
 
   _resizeObserver = null;
@@ -110,11 +113,18 @@ export default class extends Controller {
       )
       .call((sel) => sel.selectAll("line").remove());
 
-    // X-axis
+    // X-axis: whole labels when they fit the bar group, else the month alone, else
+    // every n-th month (a year in a narrow column ran into one string)
     const xAxisFontSize = trends.length > 8 ? "11px" : "13px";
+    const shownLabels = barAxisLabels(
+      trends.map((d) => d.month),
+      x0.step(),
+      { charWidth: trends.length > 8 ? 6 : 7 },
+    );
+    const labelFor = new Map(trends.map((d, i) => [d.month, shownLabels[i]]));
     g.append("g")
       .attr("transform", `translate(0, ${innerHeight})`)
-      .call(d3.axisBottom(x0).tickSize(0))
+      .call(d3.axisBottom(x0).tickSize(0).tickFormat((month) => labelFor.get(month)))
       .call((sel) => sel.select(".domain").remove())
       .call((sel) =>
         sel
@@ -154,9 +164,12 @@ export default class extends Controller {
       .attr("fill", "var(--color-destructive)")
       .attr("opacity", 0.8);
 
-    // Value labels above each respective bar
+    // Value labels above each respective bar, only when they fit over it: the table
+    // below the chart has every figure
     const halfBand = x1.bandwidth() / 2;
-    const labelSize = trends.length > 8 ? "8px" : "11px";
+    const labelSize = trends.length > 8 ? "9px" : "11px";
+    const valueTexts = trends.flatMap((d) => [this._formatNumber(d.income), this._formatNumber(d.expenses)]);
+    const showValues = barValueLabelsFit(valueTexts, x1.bandwidth(), { charWidth: trends.length > 8 ? 5.5 : 6.5 });
 
     monthGroups
       .append("text")
@@ -166,7 +179,7 @@ export default class extends Controller {
       .attr("font-size", labelSize)
       .attr("class", "privacy-sensitive")
       .style("fill", "var(--color-text-secondary)")
-      .text((d) => d.income > 0 ? this._formatNumber(d.income) : "");
+      .text((d) => (showValues && d.income > 0 ? this._formatNumber(d.income) : ""));
 
     monthGroups
       .append("text")
@@ -176,7 +189,7 @@ export default class extends Controller {
       .attr("font-size", labelSize)
       .attr("class", "privacy-sensitive")
       .style("fill", "var(--color-text-secondary)")
-      .text((d) => d.expenses > 0 ? this._formatNumber(d.expenses) : "");
+      .text((d) => (showValues && d.expenses > 0 ? this._formatNumber(d.expenses) : ""));
 
     // Legend
     const legendG = svg
@@ -187,8 +200,8 @@ export default class extends Controller {
       );
 
     [
-      { label: "Income", color: "var(--color-success)" },
-      { label: "Expenses", color: "var(--color-destructive)" },
+      { label: this.incomeLabelValue, color: "var(--color-success)" },
+      { label: this.expensesLabelValue, color: "var(--color-destructive)" },
     ].forEach((item, i) => {
       const lg = legendG
         .append("g")

@@ -1,8 +1,10 @@
 ---
 en:
   breadcrumbs:
+    budgetings: Budgeting
     budgets: Budgets
     exports: Exports
     home: Home
     imports: Imports
+    monobank_items: monobank
     plan: Plan

@@ -503,7 +503,8 @@ class ReportsController < ApplicationController
       return nil unless @period_type == :monthly && (@start_date.to_date..@end_date.to_date).cover?(Date.current)
 
       budget = Budget.find_for_date(Current.family, Date.current)
-      return 0 if budget.nil? || !budget.initialized?
+      # No budget set for the period: "No budget data", as the other views say, not 0%
+      return nil if budget.nil? || !budget.initialized?
 
       budget.percent_of_budget_spent.round(1)
     rescue StandardError

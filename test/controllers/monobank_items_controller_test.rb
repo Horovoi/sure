@@ -216,5 +216,8 @@ class MonobankItemsControllerTest < ActionDispatch::IntegrationTest
   test "the connection dialog renders" do
     get new_monobank_item_url
     assert_response :success
+    # The bank's own name, not the controller's ("Monobank Items")
+    assert_select "nav a", text: "Monobank Items", count: 0
+    assert_match ">monobank<", response.body
   end
 end

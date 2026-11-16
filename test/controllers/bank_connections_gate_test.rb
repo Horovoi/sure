@@ -116,6 +116,34 @@ class BankConnectionsGateTest < ActionDispatch::IntegrationTest
     assert_select "p", text: "Lunch Flow", count: 0
   end
 
+  test "bank sync opens monobank's connect panel in the app, not the bank's website" do
+    enable_bank_connections(:monobank)
+    sign_in @user
+
+    get settings_bank_sync_path
+
+    assert_select "a[href=?]:not([target])", settings_providers_path(open: "monobank"), text: /monobank/
+    assert_select "a[href^='https://api.monobank.ua']", count: 0
+
+    with_self_hosting do
+      get settings_providers_path(open: "monobank")
+      assert_response :success
+      assert_select "details[open] turbo-frame#monobank-providers-panel"
+    end
+  end
+
+  test "linking an account with no bank connected yet leads to Bank Sync" do
+    enable_bank_connections(:monobank)
+    @user.family.monobank_items.destroy_all
+    sign_in @user
+    account = @user.family.accounts.create!(name: "Mono Visa", balance: 0, currency: "UAH", accountable: CreditCard.new)
+
+    get select_provider_account_path(account)
+
+    assert_redirected_to settings_bank_sync_path
+    assert_equal I18n.t("accounts.select_provider.connect_first"), flash[:alert]
+  end
+
   test "accounts page lists a plaid-linked account with the manual ones while plaid is off" do
     enable_bank_connections(:lunchflow)
     sign_in @user

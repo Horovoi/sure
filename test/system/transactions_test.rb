@@ -44,6 +44,23 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "on a phone the filter panel opens inside the window" do
+    # A desktop Chrome window does not get narrower than about 500px; the emulated screen does
+    page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 390, height: 844, deviceScaleFactor: 1, mobile: true)
+    visit transactions_path
+
+    find("#transaction-filters-button").click
+    assert_selector "#transaction-filters-menu"
+
+    top, bottom = page.evaluate_script(<<~JS)
+      (() => { const r = document.getElementById("transaction-filters-menu").getBoundingClientRect(); return [r.top, r.bottom]; })()
+    JS
+    assert_operator top, :>=, 0, "the panel starts above the window"
+    assert_operator bottom, :<=, page.evaluate_script("window.innerHeight")
+  ensure
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+  end
+
   test "can open filters and apply one or more" do
     find("#transaction-filters-button").click
 

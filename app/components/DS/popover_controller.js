@@ -180,7 +180,9 @@ export default class extends Controller {
 
     computePosition(this.buttonTarget, this.contentTarget, {
       placement: useMobileFullwidth ? "bottom" : this.placementValue,
-      middleware: [offset(this.offsetValue), flip({ padding: 5 }), shift({ padding: 5 })],
+      // crossAxis: a panel taller than the room above or below its button (the
+      // transactions filter on a phone) is kept inside the window, not cut at the top
+      middleware: [offset(this.offsetValue), flip({ padding: 5 }), shift({ padding: 5, crossAxis: true })],
       strategy: "fixed",
     }).then(({ x, y }) => {
       if (useMobileFullwidth) {

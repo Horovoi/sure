@@ -213,7 +213,12 @@ class AccountsController < ApplicationController
     end
 
     if @available_providers.empty?
-      redirect_to account_path(@account), alert: t("accounts.select_provider.no_providers")
+      # Nothing is connected yet: Bank Sync is where a connection starts
+      if BankConnections.enabled?
+        redirect_to settings_bank_sync_path, alert: t("accounts.select_provider.connect_first")
+      else
+        redirect_to account_path(@account), alert: t("accounts.select_provider.no_providers")
+      end
     end
   end
 

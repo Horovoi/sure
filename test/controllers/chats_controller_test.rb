@@ -28,6 +28,8 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
       assert_select "p", text: I18n.t("chats.ai_consent.openai_body")
       assert_select "a[href=?]", settings_ai_prompts_path, text: I18n.t("chats.ai_consent.setup_button")
       assert_select "a[href=?]", settings_hosting_path, text: I18n.t("chats.ai_consent.openai_button")
+      # The two ways are described in plain rows, not cards that look clickable
+      assert_select "li[class*=bg-]", count: 0
     end
     assert_select "form[action=?]", user_path(@user), count: 0
     assert_no_match "OPENAI_ACCESS_TOKEN", response.body

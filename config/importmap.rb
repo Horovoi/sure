@@ -11,6 +11,7 @@ pin_all_from "app/components", under: "controllers", to: ""
 pin_all_from "app/javascript/services", under: "services", to: "services"
 pin_all_from "app/javascript/utils", under: "utils", to: "utils"
 # pin_all_from skips .mjs, so each .mjs helper gets its own pin (test/config/importmap_test.rb)
+pin "utils/bar_axis_labels", to: "utils/bar_axis_labels.mjs"
 pin "utils/chart_y_guides", to: "utils/chart_y_guides.mjs"
 pin "utils/format_money", to: "utils/format_money.mjs"
 pin "utils/sankey_align", to: "utils/sankey_align.mjs"

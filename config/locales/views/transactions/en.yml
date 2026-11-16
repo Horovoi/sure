@@ -295,6 +295,7 @@ en:
         merchant_prompt: Select a merchant
         name_label: Name
         name_placeholder: Leave blank to keep each name
+        no_tags: No tags yet
         none: None
         notes_label: Notes
         notes_placeholder: Enter a note that will be applied to selected transactions
