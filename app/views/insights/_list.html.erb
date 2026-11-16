@@ -1,7 +1,7 @@
 <%# locals: (insights:) %>
 <div id="insights-list">
   <% if insights.any? %>
-    <div class="bg-container rounded-xl shadow-border-xs p-1 divide-y divide-primary">
+    <div class="bg-container rounded-xl shadow-border-xs p-1 divide-y divide-subdued">
       <% insights.each do |insight| %>
         <%= render "insights/insight", insight: insight %>
       <% end %>

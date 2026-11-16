@@ -1,7 +1,7 @@
 <%# locals: (insight:) %>
 <%# One insight row, used by the dashboard section and the insights page %>
 <% color = insight_icon_css_color(insight) %>
-<div id="<%= dom_id(insight) %>" class="flex gap-3 px-3 py-3 rounded-lg" data-testid="insight-row">
+<div id="<%= dom_id(insight) %>" class="flex gap-3 px-3 py-3" data-testid="insight-row">
   <div class="h-8 w-8 shrink-0 rounded-full flex justify-center items-center"
        style="background-color: color-mix(in oklab, <%= color %> 10%, transparent); color: <%= color %>;">
     <%= icon(insight_icon_key(insight), color: "current", size: "sm") %>
