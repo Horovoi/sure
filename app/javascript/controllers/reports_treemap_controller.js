@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus";
 import * as d3 from "d3";
 
 const WORD_SEPARATORS = /[\s&,/]+/;
+const MIN_HEIGHT = 280;
 
 // Category names are user-named; escape anything put into .html()
 const escapeHtml = (value) =>
@@ -137,7 +138,9 @@ export default class extends Controller {
 
     const uid = Math.random().toString(36).slice(2, 8);
 
-    const height = 280;
+    // At least 280px; taller when the layout stretches the chart box (the
+    // expenses treemap grows to the height of "What changed" beside it).
+    const height = this.hasChartTarget ? Math.max(MIN_HEIGHT, container.clientHeight) : MIN_HEIGHT;
     const width = containerWidth;
 
     // Build hierarchy
@@ -173,6 +176,11 @@ export default class extends Controller {
       .append("svg")
       .attr("width", width)
       .attr("height", height);
+
+    // In a chart target (a positioned box at least MIN_HEIGHT tall) the drawing
+    // stays out of the flow, so it never holds the box at its old height: the
+    // box's size alone decides the next redraw.
+    if (this.hasChartTarget) svg.style("position", "absolute").style("inset", "0");
 
     // Tooltip
     const tooltip = d3

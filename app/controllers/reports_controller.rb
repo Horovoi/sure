@@ -381,10 +381,10 @@ class ReportsController < ApplicationController
       end
     end
 
-    def period_label(start_date, end_date, current: false)
+    def period_label(start_date, end_date, current: false, period_type: @period_type)
       year = start_date.year
 
-      case @period_type
+      case period_type
       when :monthly
         I18n.l(start_date, format: "%B %Y")
       when :quarterly
@@ -401,13 +401,17 @@ class ReportsController < ApplicationController
     end
 
     # One label per month (the 28th: a two-digit day) covers every month name
-    # and quarter or half of the year; Year adds its "to date" form.
+    # and quarter or half of the year, plus Year's "to date" form. Month,
+    # Quarter, 6 Months and Year share one set, so the label slot (and the
+    # Calendar/Fiscal switch after it) keeps its width when the type changes.
+    # Custom has its own, longer labels and no switch.
     def period_label_samples
       year = @start_date.year
       days = (1..12).map { |month| Date.new(year, month, 28) }
+      types = @period_type == :custom ? [ :custom ] : PERIOD_STEP_MONTHS.keys
 
-      samples = days.map { |day| period_label(day, day) }
-      samples << period_label(@start_date, @end_date, current: true) if @period_type == :ytd
+      samples = types.flat_map { |type| days.map { |day| period_label(day, day, period_type: type) } }
+      samples << period_label(@start_date, @end_date, current: true, period_type: :ytd) unless @period_type == :custom
       samples.uniq
     end
 

@@ -128,6 +128,80 @@ class ReportsTest < ApplicationSystemTestCase
     assert_equal 5, labels.uniq.size
   end
 
+  # The label slot used to be only as wide as the widest label of the period
+  # type, so Month, Quarter, 6 Months and Year each put the switch elsewhere.
+  test "the period bar keeps its place across period types" do
+    @family.update!(use_fiscal_months: true, fiscal_month_start_day: 17)
+    tabs = { "month" => "monthly", "quarter" => "quarterly", "six_months" => "last_6_months", "year" => "ytd" }
+
+    [ [ 1400, 1400 ], [ 390, 900 ] ].each do |width, height|
+      with_window_size(width, height) do
+        visit reports_path(period_type: :monthly, fiscal_mode: "true")
+
+        positions = tabs.map do |key, period_type|
+          click_link I18n.t("reports.index.periods.#{key}")
+          assert_current_path(/period_type=#{period_type}/)
+          assert_equal width, evaluate_script("window.innerWidth")
+          {
+            toggle: find("[data-testid='report-period-nav'] + div a", text: I18n.t("reports.index.toggles.calendar")).native.rect.x,
+            next: find("[data-period-arrow='next']").native.rect.x
+          }
+        end
+
+        assert_equal 1, positions.uniq.size, "the period bar moved between period types at #{width} wide: #{positions}"
+      end
+    end
+  end
+
+  # With the accounts and assistant panels open (the default), the main
+  # column is narrow on a wide screen. "What changed" used to stay beside the
+  # treemap there (a viewport breakpoint) and lost its bars; the treemap
+  # stopped at 280px under a much taller list.
+  test "what changed keeps its bars in a narrow main column and the treemap matches its height in a wide one" do
+    create_spending_history
+
+    visit reports_path(period_type: :custom, start_date: @period_start, end_date: @period_end)
+    assert_selector "[data-testid=breakdown-expense] [data-reports-treemap-target=chart] > svg"
+    assert_operator main_width, :<, 700, "both side panels are open"
+
+    treemap = find("[data-testid=breakdown-expense] [data-reports-treemap-target=chart]").native.rect
+    changes = find("[data-testid=spending-changes-column]").native.rect
+    assert_operator changes.y, :>=, treemap.y + treemap.height, "the list stacks under the treemap"
+    assert_change_bars_visible
+
+    # Both panels closed: the list goes beside the treemap, which grows to its height
+    @user.update!(show_sidebar: false, show_ai_sidebar: false)
+    visit reports_path(period_type: :custom, start_date: @period_start, end_date: @period_end)
+    assert_selector "[data-testid=breakdown-expense] [data-reports-treemap-target=chart] > svg"
+    assert_operator main_width, :>, 900
+
+    changes = find("[data-testid=spending-changes-column]").native.rect
+    treemap_column = find("[data-testid=breakdown-expense] [data-reports-treemap-target=chart]").find(:xpath, "..").native.rect
+    assert_in_delta changes.y, treemap_column.y, 1, "the list sits beside the treemap"
+    assert_in_delta changes.height, treemap_column.height, 2, "the treemap column is as tall as the list"
+    svg_height = evaluate_script("document.querySelector('[data-testid=breakdown-expense] [data-reports-treemap-target=chart] > svg').getBoundingClientRect().height")
+    assert_operator svg_height, :>, 300, "the treemap grows past its 280px minimum"
+    assert_change_bars_visible
+  end
+
+  # The four summary cards stayed in four columns inside the narrow main
+  # column and cut off their amounts.
+  test "the summary cards fit the main column with the side panels open" do
+    visit reports_path(period_type: :monthly)
+    assert_operator main_width, :<, 700, "both side panels are open"
+
+    within "[data-testid=report-summary]" do
+      cards = all(".bg-container", minimum: 4)
+      assert_equal 2, cards.map { |card| card.native.rect.x }.uniq.size, "two columns"
+      cards.each do |card|
+        overflow = evaluate_script(<<~JS, card)
+          (function(card) { return Array.from(card.querySelectorAll("*")).some((el) => el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().right > card.getBoundingClientRect().right + 1) })(arguments[0])
+        JS
+        assert_not overflow, "#{card.text.squish} overflows its card"
+      end
+    end
+  end
+
   test "the left and right arrow keys change the period" do
     visit reports_path(period_type: :quarterly)
     wait_for_hotkeys
@@ -202,6 +276,47 @@ class ReportsTest < ApplicationSystemTestCase
   end
 
   private
+    # A desktop Chrome window does not get narrower than about 500px; the
+    # emulated screen does
+    def with_window_size(width, height)
+      page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: width, height: height, deviceScaleFactor: 1, mobile: width < 768)
+      yield
+    ensure
+      page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+    end
+
+    def main_width
+      evaluate_script("document.querySelector('main').getBoundingClientRect().width")
+    end
+
+    # 14 expense categories spent in a past month, with a year of history
+    # before it, so "What changed" lists a long column of moves
+    def create_spending_history
+      @period_start = 2.months.ago.to_date.beginning_of_month
+      @period_end = @period_start.end_of_month
+
+      14.times do |index|
+        category = @family.categories.create!(name: "Spending category #{index + 1}", classification: "expense", color: "#123456")
+        1.upto(6) do |months_back|
+          create_transaction(account: @account, currency: @family.currency, category: category,
+            amount: 100 + (index * 10), name: "Usual #{index}", date: @period_start - months_back.months + 5.days)
+        end
+        current = index.even? ? 400 + (index * 50) : 20 + index
+        create_transaction(account: @account, currency: @family.currency, category: category,
+          amount: current, name: "This month #{index}", date: @period_start + 5.days)
+      end
+    end
+
+    def assert_change_bars_visible
+      rows = all("[data-testid=spending-changes] li", minimum: 14)
+      rows.each do |row|
+        bars = row.all("span[aria-hidden='true']", visible: :all).first
+        assert_operator bars.native.rect.width, :>=, 48, "#{row.text} has room for its bar"
+        name = row.first("span.truncate")
+        assert_not evaluate_script("arguments[0].scrollWidth > arguments[0].clientWidth", name), "#{name.text} is cut off"
+      end
+    end
+
     def visit_breakdown
       visit reports_path(period_type: :custom, start_date: 30.days.ago.to_date, end_date: Date.current)
 

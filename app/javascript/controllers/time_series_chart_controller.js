@@ -796,14 +796,21 @@ export default class extends Controller {
 
     const end = this._normalDataPoints[this._normalDataPoints.length - 1];
     const yEnd = this._d3YScale(this._getDatumValue(end));
+    // The end value label sits right-aligned in the same column as the guide
+    // labels, so any guide label in its band would be drawn on top of it.
+    const endLabelY = this.endpointMarkersValue ? this._endpointLabelY("end") : null;
 
     guides.forEach((g) => {
       const y = this._d3YScale(g.v);
 
-      // Avoid drawing labels that collide with endpoint labels or x-axis labels
+      // Avoid drawing labels that collide with endpoint labels or x-axis labels.
+      // A guide label is 11px text with its baseline at y - 4; the end label is
+      // 12px text with its baseline at endLabelY.
       const nearEnd = Math.abs(y - yEnd) < 16 && (g.key === "min" || g.key === "max");
+      const onEndLabel =
+        endLabelY !== null && y - 4 > endLabelY - 12 - 2 && y - 4 - 11 < endLabelY + 3 + 2;
       const tooCloseToBottom = this._d3ContainerHeight - y < 16; // collides with bottom date label
-      const shouldSkipLabel = nearEnd || (g.key === "min" && tooCloseToBottom);
+      const shouldSkipLabel = nearEnd || onEndLabel || (g.key === "min" && tooCloseToBottom);
 
       // Line
       const [rangeStart, rangeEnd] = this._d3XScale.range();
@@ -836,6 +843,19 @@ export default class extends Controller {
     });
   }
 
+  // Baseline y of the start or end value label. It goes to the side the line
+  // does not come from, so it stays off the line next to the marker: below
+  // when the neighbouring point is higher, above when it is lower or level.
+  _endpointLabelY(align) {
+    const points = this._normalDataPoints;
+    const d = align === "start" ? points[0] : points[points.length - 1];
+    const neighbor = (align === "start" ? points[1] : points[points.length - 2]) || d;
+    const cy = this._d3YScale(this._getDatumValue(d));
+    const ny = this._d3YScale(this._getDatumValue(neighbor));
+    const slopeUp = ny < cy; // smaller y is visually higher
+    return cy + (slopeUp ? 14 : -14);
+  }
+
   // Add start/end markers with value labels near the path extremes
   _drawEndpointMarkers() {
     const first = this._normalDataPoints[0];
@@ -860,16 +880,6 @@ export default class extends Controller {
     points.forEach(({ d, align }) => {
       const cx = this._d3XScale(d.date);
       const cy = this._d3YScale(this._getDatumValue(d));
-
-      // Determine local slope using a neighbor to better place labels and avoid overlaps
-      let neighbor;
-      if (align === "start") {
-        neighbor = this._normalDataPoints[1] || d;
-      } else {
-        neighbor = this._normalDataPoints[this._normalDataPoints.length - 2] || d;
-      }
-      const ny = this._d3YScale(this._getDatumValue(neighbor));
-      const slopeUp = ny < cy; // smaller y is visually higher
       const isDark = this._isDarkTheme();
       const outlineColor = isDark ? "var(--color-gray-900)" : "var(--color-white)";
 
@@ -902,8 +912,7 @@ export default class extends Controller {
 
       // Value label
       const labelOffsetX = align === "start" ? 12 : -12;
-      // Place label opposite to slope to reduce overlap with the line near the endpoint
-      const labelOffsetY = slopeUp ? 14 : -14; // if line goes up, put label below; else above
+      const labelY = this._endpointLabelY(align);
       const anchor = align === "start" ? "start" : "end";
 
       // Group for label + background
@@ -915,7 +924,7 @@ export default class extends Controller {
         // Keep label color as-is (theme-provided via text-primary)
         .attr("class", "text-primary fill-current")
         .attr("x", cx + labelOffsetX)
-        .attr("y", cy + labelOffsetY)
+        .attr("y", labelY)
         .attr("text-anchor", anchor)
         .style("font-size", "12px")
         .style("font-weight", "600")
@@ -926,7 +935,7 @@ export default class extends Controller {
         const haloColor = isDark ? "var(--color-gray-900)" : "var(--color-white)";
         g.insert("text", "text")
           .attr("x", cx + labelOffsetX)
-          .attr("y", cy + labelOffsetY)
+          .attr("y", labelY)
           .attr("text-anchor", anchor)
           .style("font-size", "12px")
           .style("font-weight", "600")
