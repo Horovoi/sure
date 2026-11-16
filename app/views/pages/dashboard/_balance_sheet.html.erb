@@ -39,82 +39,67 @@
               <div class="flex items-center gap-2 text-sm">
                 <div class="h-2.5 w-2.5 rounded-full" style="background-color: <%= account_group.color %>;"></div>
                 <p class="text-secondary"><%= account_group.name %></p>
-                <p class="text-primary font-mono"><%= number_to_percentage(account_group.weight, precision: 0) %></p>
+                <p class="text-primary tabular-nums"><%= number_to_percentage(account_group.weight, precision: 1) %></p>
               </div>
             <% end %>
           </div>
         </div>
 
-        <div class="bg-container-inset rounded-xl p-1 space-y-1 overflow-x-auto">
-          <div class="px-4 py-2 flex items-center text-xs font-medium text-secondary">
-            <div class="w-40"><%= t("pages.dashboard.balance_sheet.name") %></div>
-            <div class="ml-auto text-right flex items-center gap-6">
-              <div class="w-24 hidden @lg:block">
-                <p><%= t("pages.dashboard.balance_sheet.weight") %></p>
-              </div>
-              <div class="w-40">
-                <p><%= t("pages.dashboard.balance_sheet.value") %></p>
-              </div>
-            </div>
+        <%# Names truncate and figures never wrap, so a narrow column needs no sideways
+            scroll. Rows sit 4px inside their panel and take the container hover. %>
+        <div class="bg-container-inset rounded-xl p-1 space-y-1">
+          <div class="px-4 py-2 flex items-center gap-6 text-xs font-medium text-secondary">
+            <p class="min-w-0 flex-1 truncate"><%= t("pages.dashboard.balance_sheet.name") %></p>
+            <p class="w-28 shrink-0 text-right hidden @lg:block"><%= t("pages.dashboard.balance_sheet.weight") %></p>
+            <p class="@lg:min-w-40 shrink-0 text-right"><%= t("pages.dashboard.balance_sheet.value") %></p>
           </div>
 
-          <div class="rounded-lg bg-container font-medium text-sm min-w-fit">
+          <div class="p-1 rounded-lg bg-container shadow-border-xs font-medium text-sm">
             <% classification_group.account_groups.each_with_index do |account_group, idx| %>
-              <details data-disclosure-group-key="<%= account_group.key %>" class="group open:bg-container
-                <%= idx == 0 ? "rounded-t-lg" : "" %>
-                <%= idx == classification_group.account_groups.size - 1 ? "rounded-b-lg" : "" %>
-              ">
-                <summary class="cursor-pointer p-4 group-open:bg-container rounded-lg flex items-center justify-between">
-                  <div class="w-40 shrink-0 flex items-center gap-4">
-                    <%= icon("chevron-right", class: "group-open:rotate-90") %>
+              <details data-disclosure-group-key="<%= account_group.key %>" class="group">
+                <summary class="cursor-pointer px-3 py-3 rounded-lg flex items-center gap-6 hover:bg-container-hover focus-ring">
+                  <div class="min-w-0 flex-1 flex items-center gap-4">
+                    <%= icon("chevron-right", class: "shrink-0 group-open:rotate-90 motion-safe:transition-transform") %>
 
-                    <p><%= account_group.name %></p>
+                    <p class="min-w-0 truncate"><%= account_group.name %></p>
                   </div>
 
-                  <div class="flex items-center justify-between text-right gap-6">
-                    <div class="w-28 shrink-0 hidden @lg:flex items-center justify-end gap-2">
-                      <%= render "pages/dashboard/group_weight", weight: account_group.weight, color: account_group.color %>
-                    </div>
-
-                    <div class="w-40 shrink-0">
-                      <p class="privacy-sensitive"><%= format_money(account_group.total_money) %></p>
-                    </div>
+                  <div class="w-28 shrink-0 hidden @lg:flex items-center justify-end gap-2">
+                    <%= render "pages/dashboard/group_weight", weight: account_group.weight, color: account_group.color %>
                   </div>
+
+                  <p class="@lg:min-w-40 shrink-0 text-right whitespace-nowrap tabular-nums privacy-sensitive"><%= format_money(account_group.total_money) %></p>
                 </summary>
 
                 <div>
                   <% account_group.accounts.each_with_index do |account, idx| %>
-                    <div class="pl-12 pr-4 py-3 flex items-center justify-between text-sm font-medium">
-                      <div class="flex items-center gap-3">
+                    <div class="pl-11 pr-3 py-3 flex items-center gap-6 text-sm font-medium">
+                      <div class="min-w-0 flex-1 flex items-center gap-3">
                         <%= render "accounts/logo", account: account, size: "sm", color: account_group.color %>
 
-                        <%= link_to account.name, account_path(account) %>
+                        <%= link_to account.name, account_path(account), class: "min-w-0 truncate rounded-sm focus-ring" %>
                       </div>
 
-                      <div class="ml-auto flex items-center text-right gap-6">
-                        <div class="w-28 shrink-0 hidden @lg:flex items-center justify-end gap-2">
-                          <%
-                              # Calculate weight as percentage of classification total
-                              classification_total = classification_group.total_money.amount
-                              account_weight = classification_total.zero? ? 0 : account.converted_balance / classification_total * 100
-                          %>
-                          <%= render "pages/dashboard/group_weight", weight: account_weight, color: account_group.color %>
-                        </div>
-
-                        <div class="w-40 shrink-0">
-                          <p class="privacy-sensitive"><%= format_money(account.balance_money) %></p>
-                        </div>
+                      <div class="w-28 shrink-0 hidden @lg:flex items-center justify-end gap-2">
+                        <%
+                            # Calculate weight as percentage of classification total
+                            classification_total = classification_group.total_money.amount
+                            account_weight = classification_total.zero? ? 0 : account.converted_balance / classification_total * 100
+                        %>
+                        <%= render "pages/dashboard/group_weight", weight: account_weight, color: account_group.color %>
                       </div>
+
+                      <p class="@lg:min-w-40 shrink-0 text-right whitespace-nowrap tabular-nums privacy-sensitive"><%= format_money(account.balance_money) %></p>
                     </div>
 
                     <% if idx < account_group.accounts.size - 1 %>
-                      <%= render "shared/ruler", classes: "ml-21 mr-4" %>
+                      <%= render "shared/ruler", classes: "ml-20 mr-3" %>
                     <% end %>
                   <% end %>
                 </div>
               </details>
               <% unless idx == classification_group.account_groups.size - 1 %>
-                <%= render "shared/ruler", classes: "mx-4 group-ruler" %>
+                <%= render "shared/ruler", classes: "mx-3 group-ruler" %>
               <% end %>
             <% end %>
           </div>

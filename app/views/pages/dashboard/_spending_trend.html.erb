@@ -11,7 +11,7 @@
   delta_class = delta.negative? ? "text-success" : (delta.zero? ? "text-secondary" : "text-destructive")
   parent_ids = filter.options.filter_map { |option| option.category.parent_id }.to_set
   frame_id = fullscreen ? "spending_trend_fullscreen_section" : "spending_trend_section"
-  long_range = t("pages.dashboard.spending_trend.date_range", start_date: l(range.begin, format: :long), end_date: l(range.end, format: :long))
+  long_range = t("pages.dashboard.spending_trend.date_range", start_date: l(range.begin, format: "%B %-d, %Y"), end_date: l(range.end, format: "%B %-d, %Y"))
 %>
 <%= turbo_frame_tag frame_id do %>
 <div id="<%= fullscreen ? "spending-trend-fullscreen-section" : "spending-trend-section" %>"
@@ -23,20 +23,8 @@
       overflowing the card. Full screen shows the dates in the dialog header. %>
   <div class="flex flex-wrap items-center <%= fullscreen ? "justify-end" : "justify-between" %> gap-3">
     <% unless fullscreen %>
-      <div class="flex items-center gap-2">
-        <p class="text-sm text-secondary hidden sm:block"><%= long_range %></p>
-        <p class="text-sm text-secondary sm:hidden"><%= spending_trend_data[:compact_range] %></p>
-        <%= render DS::Button.new(
-          variant: :icon,
-          size: :sm,
-          icon: "maximize-2",
-          type: "button",
-          title: t("pages.dashboard.spending_trend.expand"),
-          aria: { label: t("pages.dashboard.spending_trend.expand") },
-          data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "spending_trend_fullscreen_dialog" },
-          class: "hidden sm:inline-flex"
-        ) %>
-      </div>
+      <p class="text-sm text-secondary hidden sm:block"><%= long_range %></p>
+      <p class="text-sm text-secondary sm:hidden"><%= spending_trend_data[:compact_range] %></p>
     <% end %>
 
     <div class="flex flex-wrap items-center gap-2">
@@ -50,7 +38,7 @@
               id: fullscreen ? "spending_period_fullscreen" : "spending_period",
               data: { "auto-submit-form-target": "auto" },
               aria: { label: t("pages.dashboard.spending_trend.period_picker_label") },
-              class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-xs sm:text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+              class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
       <% end %>
 
       <%= render layout: "pages/dashboard/filter_popover", locals: {
@@ -89,6 +77,18 @@
           <% end %>
         <% end %>
       <% end %>
+
+      <% unless fullscreen %>
+        <%= render DS::Button.new(
+          variant: :icon,
+          icon: "maximize-2",
+          type: "button",
+          title: t("pages.dashboard.spending_trend.expand"),
+          aria: { label: t("pages.dashboard.spending_trend.expand") },
+          data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "spending_trend_fullscreen_dialog" },
+          class: "hidden sm:inline-flex"
+        ) %>
+      <% end %>
     </div>
   </div>
 
@@ -111,7 +111,7 @@
           <span><%= spending_trend_data[:previous_label] %></span>
           <%# While the selected period runs, the figure covers the same days so far %>
           <% if trend.partial_comparison? %>
-            <span class="text-xs"><%= t("pages.dashboard.spending_trend.previous_through", date: l(trend.comparison_end_date, format: :short)) %></span>
+            <span class="text-xs"><%= t("pages.dashboard.spending_trend.previous_through", date: l(trend.comparison_end_date, format: "%b %-d")) %></span>
           <% end %>
         </p>
         <p class="font-medium text-lg tabular-nums text-secondary whitespace-nowrap privacy-sensitive" data-testid="spending-trend-previous-total"><%= format_money Money.new(trend.previous_total, currency) %></p>
@@ -124,6 +124,7 @@
       data-controller="spending-chart"
       data-spending-chart-data-value="<%= spending_trend_data[:chart_data].to_json %>"
       data-spending-chart-currency-value="<%= currency %>"
+      data-spending-chart-money-format-value="<%= Money.new(0, currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
       data-spending-chart-current-label-value="<%= spending_trend_data[:current_label] %>"
       data-spending-chart-previous-label-value="<%= spending_trend_data[:previous_label] %>"
       data-spending-chart-day-label-value="<%= t("pages.dashboard.spending_trend.tooltip_day", day: "%{day}") %>">

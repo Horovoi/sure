@@ -9,8 +9,12 @@ import {
   appendLevelLine,
   styleAxisLabels,
 } from "utils/chart_grid";
+import { CHART_TOOLTIP_CLASSES, CHART_TOOLTIP_CONTEXT_CLASSES, CHART_TOOLTIP_VALUE_CLASSES } from "utils/chart_tooltip";
+import { formatMoneyCompact } from "utils/format_money";
 
 const parseLocalDate = d3.timeParse("%Y-%m-%d");
+// The tooltip names its day as the axis does: "Nov 4, 2026"
+const tooltipDate = d3.timeFormat("%b %-d, %Y");
 
 export default class extends Controller {
   static values = {
@@ -32,6 +36,9 @@ export default class extends Controller {
     // the range then loads into that frame, as the widget's period select does,
     // so the dashboard keeps its scroll position instead of reloading at the top.
     selectFrame: { type: String, default: "" },
+    // Money#format_options of the series currency (unit, delimiter, separator,
+    // format): the guide amounts then read as the server writes them, "33.4K ₴"
+    moneyFormat: { type: Object, default: {} },
   };
 
   _d3SvgMemo = null;
@@ -208,6 +215,10 @@ export default class extends Controller {
 
     if (this.endpointMarkersValue) {
       this._drawEndpointMarkers();
+    }
+
+    if (this.showYGuidesValue && this.endpointMarkersValue) {
+      this._dropGuideLabelsOnEndLabel();
     }
 
     if (this.useTooltipValue) {
@@ -401,7 +412,8 @@ export default class extends Controller {
             this._normalDataPoints[this._normalDataPoints.length - 1].date,
           ])
           .tickSize(0)
-          .tickFormat(d3.timeFormat("%b %d, %Y")),
+          // The year only on the ends; the dates between are "%b %-d"
+          .tickFormat(d3.timeFormat("%b %-d, %Y")),
       )
       .select(".domain")
       .remove();
@@ -415,6 +427,8 @@ export default class extends Controller {
         const em = Math.max(2.5, Math.min(4.5, this._d3ContainerWidth / 300));
         return i === 0 ? `${em}em` : `-${em}em`;
       })
+      // The same baseline as the dates between (_drawIntermediateTicks)
+      .attr("y", this._xLabelBaseline)
       .attr("dy", "0em");
   }
 
@@ -424,6 +438,8 @@ export default class extends Controller {
     if (data.length < 10) return; // Skip for short datasets
 
     const isFullscreen = this.fullscreenValue;
+    // Only fullscreen labels its ticks; a tick with no date under it is noise
+    if (!isFullscreen) return;
     const [rangeStart, rangeEnd] = this._d3XScale.range();
     const width = rangeEnd - rangeStart;
 
@@ -459,7 +475,7 @@ export default class extends Controller {
           .append("text")
           .attr("class", `${CHART_AXIS_LABEL} intermediate-label`)
           .attr("x", x)
-          .attr("y", this._d3ContainerHeight + 14)
+          .attr("y", this._d3ContainerHeight + this._xLabelBaseline)
           .attr("text-anchor", "middle")
           .text(this._formatIntermediateDate(date));
       }
@@ -467,12 +483,8 @@ export default class extends Controller {
   }
 
   _formatIntermediateDate(date) {
-    const range = this._d3XScale.domain();
-    const daysDiff = (range[1] - range[0]) / (1000 * 60 * 60 * 24);
-
-    if (daysDiff > 365) return d3.timeFormat("%b '%y")(date); // "Jan '24"
-    if (daysDiff > 90) return d3.timeFormat("%b %d")(date); // "Jan 15"
-    return d3.timeFormat("%b %d")(date); // "Jan 15"
+    // One format for every date between the ends, which carry the year
+    return d3.timeFormat("%b %-d")(date); // "Jan 5"
   }
 
   _drawGradientBelowTrendline() {
@@ -527,14 +539,12 @@ export default class extends Controller {
       .style("fill", `url(#${this.element.id}-trendline-gradient)`);
   }
 
+  // The surface every chart tooltip shares (.chart-tooltip), as the Spending one
   _drawTooltip() {
     this._d3Tooltip = d3
       .select(`#${this.element.id}`)
       .append("div")
-      .attr(
-        "class",
-        "bg-container text-sm font-sans absolute p-2 border border-secondary rounded-lg pointer-events-none opacity-0 top-0",
-      );
+      .attr("class", `${CHART_TOOLTIP_CLASSES} opacity-0 top-0`);
   }
 
   // The interaction surface is a plain full-size rect on hover-only charts,
@@ -949,6 +959,11 @@ export default class extends Controller {
   // If dataset already provides formatted values, it simply returns them; otherwise fallbacks to
   // a compact number format in the user's locale.
   _formatMoneyLike(rawNumber) {
+    // The server's own format when the page hands it over
+    if (this.moneyFormatValue?.unit !== undefined) {
+      return formatMoneyCompact(Number(rawNumber), this.moneyFormatValue);
+    }
+
     // Try to infer currency from the last datum, which includes value.current.currency if Money-like
     const sample = this.dataValue?.values?.[this.dataValue.values.length - 1]?.value;
     const currency = typeof sample === "object" && sample?.currency ? sample.currency : undefined;
@@ -978,15 +993,13 @@ export default class extends Controller {
 
   _tooltipTemplate(datum) {
     return `
-      <div style="margin-bottom: 4px; color: var(--color-gray-500);">
-        ${datum.date_formatted}
-      </div>
-      <div class="flex items-center gap-4">
+      <div class="${CHART_TOOLTIP_CONTEXT_CLASSES}">${tooltipDate(datum.date)}</div>
+      <div class="flex items-center gap-4 tabular-nums">
         <div class="flex items-center gap-2 text-primary">
           <div class="flex items-center justify-center h-4 w-4">
             ${this._getTrendIcon(datum)}
           </div>
-          <span class="privacy-sensitive">${this._extractFormattedValue(datum.trend.current)}</span>
+          <span class="${CHART_TOOLTIP_VALUE_CLASSES} privacy-sensitive">${this._extractFormattedValue(datum.trend.current)}</span>
         </div>
 
         ${
@@ -1122,7 +1135,7 @@ export default class extends Controller {
   get _d3XScale() {
     return d3
       .scaleTime()
-      .rangeRound([this._xPaddingLeft, this._d3ContainerWidth - this._xPaddingRight])
+      .rangeRound(this._xRange)
       .domain(d3.extent(this._normalDataPoints, (d) => d.date));
   }
 
@@ -1185,14 +1198,79 @@ export default class extends Controller {
     this._resizeObserver.observe(this.element);
   }
 
+  // A bare line (a 32px sidebar sparkline) only needs room for its stroke caps:
+  // the labelled paddings below are wider than such a chart, and the scale ran
+  // backwards.
+  get _isSparkline() {
+    return !this.useLabelsValue && !this.endpointMarkersValue && !this.showYGuidesValue;
+  }
+
   get _xPaddingLeft() {
+    if (this._isSparkline) return this.strokeWidthValue;
     // Prevent clipped endpoints and labels; add more when endpoint markers are visible
     const base = Math.max(8, this.strokeWidthValue * 2);
     return this.endpointMarkersValue ? base + 8 : base + 4;
   }
 
   get _xPaddingRight() {
+    if (this._isSparkline) return this.strokeWidthValue;
     // Mirror left padding and reserve extra room for right-hand labels/guides
     return this._xPaddingLeft + (this.showYGuidesValue ? 10 : 6);
+  }
+
+  // The x range inside the paddings, or the whole width when they leave none
+  get _xRange() {
+    const width = this._d3ContainerWidth;
+    const left = this._xPaddingLeft;
+    const right = width - this._xPaddingRight;
+    return right > left ? [left, right] : [0, Math.max(0, width)];
+  }
+
+  // Baseline of every x-axis date (the ends and the ones between), below the
+  // plot, measured from its bottom edge: 4px above the bottom of the margin
+  get _xLabelBaseline() {
+    return Math.max(10, this._margin.bottom - 4);
+  }
+
+  // A guide label is right-aligned beside the end marker, in the column of the
+  // end value label. Measured once both are drawn, a guide label within 6px of
+  // the end label's box, or one level with the end marker and within 20px of
+  // it, is dropped. The guide labels are the group's own privacy-sensitive texts;
+  // the value labels sit in g.endpoint-marker groups.
+  _dropGuideLabelsOnEndLabel() {
+    const endLabel = this._d3Group.selectAll("g.endpoint-marker.label text.text-primary").nodes().pop();
+    if (!endLabel) return;
+
+    let endBox;
+    try {
+      endBox = endLabel.getBBox();
+    } catch (_) {
+      return;
+    }
+
+    const last = this._normalDataPoints[this._normalDataPoints.length - 1];
+    const markerX = this._d3XScale(last.date);
+    const markerY = this._d3YScale(this._getDatumValue(last));
+    const markerR = 7; // the outer halo
+
+    const gap = (aStart, aEnd, bStart, bEnd) => Math.max(bStart - aEnd, aStart - bEnd, 0);
+
+    this._d3Group.selectAll(":scope > text.privacy-sensitive").each(function () {
+      let box;
+      try {
+        box = this.getBBox();
+      } catch (_) {
+        return;
+      }
+
+      const nearEndLabel =
+        gap(box.x, box.x + box.width, endBox.x, endBox.x + endBox.width) < 6 &&
+        gap(box.y, box.y + box.height, endBox.y, endBox.y + endBox.height) < 6;
+      const besideMarker =
+        gap(box.x, box.x + box.width, markerX - markerR, markerX + markerR) < 20 &&
+        gap(box.y, box.y + box.height, markerY - markerR, markerY + markerR) === 0;
+
+      if (nearEndLabel || besideMarker) this.remove();
+    });
   }
 }

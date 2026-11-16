@@ -51,3 +51,17 @@ test("percentages have one decimal", () => {
   assert.equal(formatPercent(0, { signed: true }), "0.0%");
   assert.equal(formatPercent(12.34, { separator: "," }), "12,3%");
 });
+
+test("the compact form keeps 3 significant digits in the server format", () => {
+  assert.equal(formatMoneyCompact(33430, UAH), "33.4K ₴");
+  assert.equal(formatMoneyCompact(1250000, USD), "$1.25M");
+  assert.equal(formatMoneyCompact(950, UAH), "950 ₴");
+  assert.equal(formatMoneyCompact(0, UAH), "0 ₴");
+  assert.equal(formatMoneyCompact(-45678, USD), "-$45.7K");
+  assert.equal(formatMoneyCompact(1234.5, EUR_DE), "1,23K €");
+});
+
+test("the compact form moves up a unit when rounding reaches 1000", () => {
+  assert.equal(formatMoneyCompact(999950, UAH), "1M ₴");
+  assert.equal(formatMoneyCompact(999.6, USD), "$1K");
+});

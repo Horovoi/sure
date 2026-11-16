@@ -10,19 +10,22 @@
                   outflows_options,
                   { selected: selected_key },
                   data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+                  aria: { label: t("pages.dashboard.outflows_donut.period_label") },
+                  class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
 
         <% if period.key.nil? %>
           <div class="flex items-center gap-2">
             <%= form.date_field :outflows_start_date,
                   value: period.start_date,
                   data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+                  aria: { label: t("pages.dashboard.outflows_donut.start_date") },
+                  class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
             <span class="text-secondary text-sm"><%= t("pages.dashboard.outflows_donut.to") %></span>
             <%= form.date_field :outflows_end_date,
                   value: period.end_date,
                   data: { "auto-submit-form-target": "auto" },
-                  class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+                  aria: { label: t("pages.dashboard.outflows_donut.end_date") },
+                  class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
           </div>
         <% end %>
       </div>
@@ -50,7 +53,7 @@
                 <span><%= t("pages.dashboard.outflows_donut.total_outflows") %></span>
               </div>
 
-              <div data-donut-chart-target="amount" class="text-3xl font-medium text-primary whitespace-nowrap privacy-sensitive">
+              <div data-donut-chart-target="amount" class="text-3xl font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive">
                 <%= format_money Money.new(outflows_data[:total], outflows_data[:currency]) %>
               </div>
             </div>
@@ -60,11 +63,11 @@
                 <div class="flex flex-col gap-2 items-center">
                   <p class="text-sm text-secondary"><%= category[:name] %></p>
 
-                  <p data-donut-chart-target="amount" class="text-3xl font-medium text-primary whitespace-nowrap privacy-sensitive">
+                  <p data-donut-chart-target="amount" class="text-3xl font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive">
                     <%= format_money Money.new(category[:amount], category[:currency]) %>
                   </p>
 
-                  <p class="text-sm text-secondary"><%= category[:percentage] %>%</p>
+                  <p class="text-sm text-secondary tabular-nums"><%= number_to_percentage(category[:percentage], precision: 1) %></p>
                 </div>
               </div>
             <% end %>
@@ -73,21 +76,15 @@
       </div>
 
       <!-- Category List -->
-      <div class="w-full @2xl:w-2/3 bg-container-inset rounded-xl p-1 space-y-1 overflow-x-auto">
-        <div class="px-4 py-2 flex items-center uppercase text-xs font-medium text-secondary">
-          <div class="w-16 @2xl:w-40">
-            <p><%= t("pages.dashboard.outflows_donut.categories") %><span class="text-subdued mx-1">&middot;</span><%= outflows_data[:categories].count %></p>
-          </div>
-          <div class="ml-auto text-right flex items-center gap-6">
-            <div class="w-16 @2xl:w-40">
-              <p><%= t("pages.dashboard.outflows_donut.value") %></p>
-            </div>
-            <div class="w-16">
-              <p><%= t("pages.dashboard.outflows_donut.weight") %></p>
-            </div>
-          </div>
+      <%# Weight | Value, as in the balance sheet. Rows sit 4px inside their panel and
+          take the container hover; the name column truncates, the figures do not wrap. %>
+      <div class="w-full @2xl:w-2/3 bg-container-inset rounded-xl p-1 space-y-1">
+        <div class="px-4 py-2 flex items-center gap-4 text-xs font-medium text-secondary">
+          <p class="min-w-0 flex-1 truncate"><%= t("pages.dashboard.outflows_donut.categories") %><span class="text-subdued mx-1">&middot;</span><%= outflows_data[:categories].count %></p>
+          <p class="w-14 shrink-0 text-right hidden @sm:block"><%= t("pages.dashboard.outflows_donut.weight") %></p>
+          <p class="min-w-24 shrink-0 text-right"><%= t("pages.dashboard.outflows_donut.value") %></p>
         </div>
-        <div class="py-3 shadow-border-xs rounded-lg bg-container font-medium text-sm max-w-full">
+        <div class="p-1 shadow-border-xs rounded-lg bg-container font-medium text-sm">
           <% outflows_data[:categories].each_with_index do |category, idx| %>
             <%
               category_content = capture do
@@ -112,15 +109,13 @@
                 </div>
                 <span class="text-sm font-medium text-primary truncate"><%= category[:name] %></span>
               </div>
-              <div class="flex items-center gap-4 flex-shrink-0 text-right">
-                <span class="text-sm font-medium text-primary whitespace-nowrap privacy-sensitive"><%= format_money Money.new(category[:amount], category[:currency]) %></span>
-                <span class="text-sm text-secondary whitespace-nowrap w-10 @2xl:w-15"><%= category[:percentage] %>%</span>
-              </div>
+              <span class="w-14 shrink-0 text-right text-sm text-secondary tabular-nums whitespace-nowrap hidden @sm:inline"><%= number_to_percentage(category[:percentage], precision: 1) %></span>
+              <span class="min-w-24 shrink-0 text-right text-sm font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive"><%= format_money Money.new(category[:amount], category[:currency]) %></span>
             <% end %>
 
             <% if category[:clickable] != false %>
               <%= link_to transactions_path(q: { categories: [category[:filter_value]], start_date: period.date_range.first, end_date: period.date_range.last }),
-                  class: "flex items-center justify-between mx-3 p-3 rounded-lg cursor-pointer group gap-3",
+                  class: "flex items-center gap-4 p-3 rounded-lg cursor-pointer group hover:bg-container-hover focus-ring",
                   data: {
                     turbo_frame: "_top",
                     category_id: category[:id],
@@ -129,14 +124,14 @@
                 <%= category_content %>
               <% end %>
             <% else %>
-              <div class="flex items-center justify-between mx-3 p-3 rounded-lg group gap-3"
+              <div class="flex items-center gap-4 p-3 rounded-lg group"
                   data-category-id="<%= category[:id] %>"
                   data-action="mouseenter->donut-chart#highlightSegment mouseleave->donut-chart#unhighlightSegment">
                 <%= category_content %>
               </div>
             <% end %>
             <% if idx < outflows_data[:categories].size - 1 %>
-              <%= render "shared/ruler", classes: "mx-3 lg:mx-4" %>
+              <%= render "shared/ruler", classes: "mx-3" %>
             <% end %>
           <% end %>
         </div>

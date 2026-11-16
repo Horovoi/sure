@@ -8,7 +8,7 @@
     <% if @series.trend&.percent&.finite? %>
       <%= tag.p @series.trend.percent_formatted,
                   style: "color: #{@series.trend.color}",
-                  class: "font-mono text-right text-xs font-medium text-primary" %>
+                  class: "text-right text-xs font-medium tabular-nums whitespace-nowrap text-primary" %>
     <% end %>
   </div>
 <% end %>

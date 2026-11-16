@@ -2,17 +2,24 @@
 
 <div id="<%= account_group.dom_id(tab: all_tab ? :all : nil, mobile: mobile) %>">
   <% is_open = open.nil? ? account_group.accounts.any? { |account| page_active?(account_path(account)) } : open %>
-  <%= render DS::Disclosure.new(align: :left, open: is_open, data: { disclosure_group_key: account_group.key }) do |disclosure| %>
+  <%# A row on the side panel, not the inset tray of a form disclosure: no fill at
+      rest, the page hover, and the corner of the account rows below it %>
+  <%= render DS::Disclosure.new(
+        align: :left,
+        open: is_open,
+        summary_class: "px-3 py-2 rounded-lg cursor-pointer flex items-center justify-between gap-3 hover:bg-surface-hover motion-safe:transition-colors focus-ring min-h-11",
+        data: { disclosure_group_key: account_group.key }
+      ) do |disclosure| %>
     <% disclosure.with_summary_content do %>
       <div class="flex items-center gap-3">
-        <%= icon "chevron-right", class: "group-open:transform group-open:rotate-90" %>
+        <%= icon "chevron-right", class: "shrink-0 group-open:transform group-open:rotate-90 motion-safe:transition-transform" %>
         <%= tag.span class: class_names("text-sm text-primary font-medium", "animate-pulse" => account_group.syncing?) do %>
           <%= account_group.name %>
         <% end %>
       </div>
 
       <div class="ml-auto text-right grow">
-        <%= tag.p format_money(account_group.total_money), class: "text-sm font-medium text-primary privacy-sensitive" %>
+        <%= tag.p format_money(account_group.total_money), class: "text-sm font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive" %>
         <%= turbo_frame_tag "#{account_group.key}_sparkline", src: accountable_sparkline_path(account_group.key), loading: "lazy", data: { controller: "turbo-frame-timeout", turbo_frame_timeout_timeout_value: 10000 } do %>
           <div class="flex items-center w-8 h-4 ml-auto">
             <div class="w-6 h-px bg-loader"></div>
@@ -25,7 +32,7 @@
       <% account_group.accounts.each do |account| %>
         <%= link_to account_path(account),
                   class: class_names(
-                    "block flex items-center gap-2 px-3 py-2 rounded-lg",
+                    "flex items-center gap-2 px-3 py-2 rounded-lg focus-ring",
                     page_active?(account_path(account)) ? "bg-container" : "hover:bg-surface-hover"
                   ),
                   title: account.name do %>
@@ -40,7 +47,7 @@
           </div>
 
           <div class="ml-auto text-right grow h-10">
-            <%= tag.p format_money(account.balance_money), class: "text-sm font-medium text-primary whitespace-nowrap privacy-sensitive" %>
+            <%= tag.p format_money(account.balance_money), class: "text-sm font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive" %>
             <%= turbo_frame_tag dom_id(account, :sparkline), src: sparkline_account_path(account), loading: "lazy", data: { controller: "turbo-frame-timeout", turbo_frame_timeout_timeout_value: 10000 } do %>
               <div class="flex items-center w-8 h-4 ml-auto">
                 <div class="w-6 h-px bg-loader"></div>

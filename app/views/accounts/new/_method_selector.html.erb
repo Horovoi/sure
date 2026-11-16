@@ -10,8 +10,8 @@
          <% end %>
        <% end %>>
     <%# Manual entry option %>
-    <%= link_to path, class: "flex items-center gap-4 w-full text-center text-primary focus:outline-hidden focus:bg-surface border border-transparent focus:border focus:border-gray-200 px-2 hover:bg-surface rounded-lg p-2" do %>
-      <span class="flex w-8 h-8 shrink-0 grow-0 items-center justify-center rounded-lg bg-alpha-black-50 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.02)]">
+    <%= link_to path, autofocus: true, class: "flex items-center gap-4 w-full px-3 py-2 rounded-lg text-left text-primary hover:bg-container-hover focus:bg-container-hover focus-visible:outline-hidden" do %>
+      <span class="flex w-8 h-8 shrink-0 grow-0 items-center justify-center rounded-lg bg-container-inset">
         <%= icon("keyboard") %>
       </span>
       <%= t("accounts.new.method_selector.manual_entry") %>
@@ -23,12 +23,12 @@
       <% is_lunchflow = config[:key] == "lunchflow" %>
 
       <%= link_to link_path,
-                  class: "text-primary flex items-center gap-4 w-full text-center focus:outline-hidden focus:bg-surface border border-transparent focus:border focus:border-primary px-2 hover:bg-surface rounded-lg p-2",
+                  class: "flex items-center gap-4 w-full px-3 py-2 rounded-lg text-left text-primary hover:bg-container-hover focus:bg-container-hover focus-visible:outline-hidden",
                   data: is_lunchflow ? {
                     turbo_frame: "modal",
                     lunchflow_preload_target: "link"
                   } : { turbo_frame: "modal" } do %>
-        <span class="flex w-8 h-8 shrink-0 grow-0 items-center justify-center rounded-lg bg-alpha-black-50 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.02)]">
+        <span class="flex w-8 h-8 shrink-0 grow-0 items-center justify-center rounded-lg bg-container-inset">
           <%= icon("link-2") %>
         </span>
         <% if is_lunchflow %>

@@ -2,23 +2,12 @@
 <%= turbo_frame_tag "net_worth_section" do %>
 <div id="net-worth-chart" data-controller="networth-sync">
   <% series = balance_sheet.net_worth_series(period: period) %>
-  <div class="flex flex-col gap-3 px-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-    <div class="space-y-2">
+  <%# The section header names the widget, so the value leads; the expand button sits
+      with the period controls %>
+  <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-4">
+    <div class="min-w-0 space-y-2">
       <% if series.trend.present? %>
-        <div class="flex items-center gap-2">
-          <p class="text-sm text-secondary font-medium"><%= t(".title") %></p>
-          <%= render DS::Button.new(
-            variant: :icon,
-            size: :sm,
-            icon: "maximize-2",
-            type: "button",
-            title: t(".expand"),
-            aria: { label: t(".expand") },
-            data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "net_worth_fullscreen_dialog" },
-            class: "hidden sm:inline-flex"
-          ) %>
-        </div>
-        <p class="text-primary -space-x-0.5 text-3xl font-medium privacy-sensitive <%= "animate-pulse" if balance_sheet.syncing? %>">
+        <p class="text-primary -space-x-0.5 text-3xl font-medium tabular-nums whitespace-nowrap privacy-sensitive <%= "animate-pulse" if balance_sheet.syncing? %>">
           <%= series.trend.current.format %>
         </p>
         <%= render partial: "shared/trend_change", locals: { trend: series.trend, comparison_label: period.comparison_label } %>
@@ -27,7 +16,7 @@
       <% end %>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "net_worth_section" } do |form| %>
         <div class="flex flex-wrap items-center gap-2">
           <% net_worth_options = Period.as_options + [[t(".custom_period"), "custom"]] %>
@@ -36,22 +25,37 @@
                         net_worth_options,
                         { selected: selected_key },
                         data: { "auto-submit-form-target": "auto" },
-                        class: "bg-container border border-secondary font-medium rounded-lg px-3 py-2 text-xs sm:text-sm pr-7 cursor-pointer text-primary focus:outline-hidden focus:ring-0" %>
+                        aria: { label: t(".period_label") },
+                        class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
 
           <% if period.key.nil? %>
             <div class="flex items-center gap-2">
               <%= form.date_field :net_worth_start_date,
                     value: period.start_date,
                     data: { "auto-submit-form-target": "auto" },
-                    class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+                    aria: { label: t(".start_date") },
+                    class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
               <span class="text-secondary text-sm"><%= t(".date_range_separator") %></span>
               <%= form.date_field :net_worth_end_date,
                     value: period.end_date,
                     data: { "auto-submit-form-target": "auto" },
-                    class: "bg-container border border-secondary rounded-lg px-2 py-2 text-xs sm:text-sm text-primary focus:outline-hidden focus:ring-0" %>
+                    aria: { label: t(".end_date") },
+                    class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
             </div>
           <% end %>
         </div>
+      <% end %>
+
+      <% if series.trend.present? %>
+        <%= render DS::Button.new(
+          variant: :icon,
+          icon: "maximize-2",
+          type: "button",
+          title: t(".expand"),
+          aria: { label: t(".expand") },
+          data: { controller: "fullscreen", action: "click->fullscreen#open", fullscreen_target_id_value: "net_worth_fullscreen_dialog" },
+          class: "hidden sm:inline-flex"
+        ) %>
       <% end %>
     </div>
   </div>
@@ -66,13 +70,14 @@
     data-time-series-chart-data-value="<%= series.to_json %>"
     data-time-series-chart-endpoint-markers-value="true"
     data-time-series-chart-show-y-guides-value="true"
+    data-time-series-chart-money-format-value="<%= Money.new(0, Current.family.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
     data-time-series-chart-selectable-value="true"
     data-time-series-chart-select-period-param-value="net_worth_period"
     data-time-series-chart-select-start-param-value="net_worth_start_date"
     data-time-series-chart-select-end-param-value="net_worth_end_date"
     data-time-series-chart-select-frame-value="net_worth_section"
     draggable="false"
-    data-period-label="<%= period.key.present? ? period.label : t("pages.dashboard.net_worth_chart_dialog.date_range", start: l(period.start_date, format: "%b %d, %Y"), end: l(period.end_date, format: "%b %d, %Y")) %>"
+    data-period-label="<%= period.key.present? ? period.label : t("pages.dashboard.net_worth_chart_dialog.date_range", start: l(period.start_date, format: "%b %-d, %Y"), end: l(period.end_date, format: "%b %-d, %Y")) %>"
     data-period-start="<%= period.start_date %>"
     data-period-end="<%= period.end_date %>"></div>
   <% else %>

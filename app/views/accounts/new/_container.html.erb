@@ -1,52 +1,56 @@
 <%# locals: (title:, back_path: nil) %>
-
+<%# A picker list in a dialog. The first item has focus when it opens (autofocus,
+    which DS--dialog leaves to showModal), so Enter picks it and the arrow keys and
+    j/k move from it. Items sit 4px inside the dialog and share one fill for hover
+    and focus. %>
 <%= render DS::Dialog.new do |dialog| %>
   <div class="flex flex-col relative" data-controller="list-keyboard-navigation">
-    <div class="border-b border-tertiary md:border-alpha-black-25 px-4 pb-4 text-gray-800 flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
+    <div class="border-b border-tertiary px-4 pb-4 flex items-center justify-between gap-2">
+      <div class="min-w-0 flex items-center gap-2">
         <% if back_path %>
           <%= render DS::Link.new(
-          variant: "icon",
-          icon: "arrow-left",
-          href: back_path,
-          size: "lg"
-        ) %>
+            variant: "icon",
+            icon: "arrow-left",
+            href: back_path,
+            size: "sm",
+            aria: { label: t("accounts.new.container.back") }
+          ) %>
         <% end %>
 
-        <span class="text-primary"><%= title %></span>
+        <h2 id="<%= dialog.title_id %>" class="font-medium text-primary truncate"><%= title %></h2>
       </div>
 
-      <%= icon("x", as_button: true, size: "lg", aria: { label: t("ds.dialog.close") }, data: { action: "DS--dialog#close" }) %>
+      <%= dialog.close_button %>
     </div>
 
-    <div class="p-2 text-subdued">
-      <button hidden data-controller="hotkey" data-hotkey="k,K,ArrowUp,ArrowLeft" data-action="list-keyboard-navigation#focusPrevious">Previous</button>
-      <button hidden data-controller="hotkey" data-hotkey="j,J,ArrowDown,ArrowRight" data-action="list-keyboard-navigation#focusNext">Next</button>
+    <div class="p-1 text-primary">
+      <button hidden data-controller="hotkey" data-hotkey="k,K,ArrowUp,ArrowLeft" data-action="list-keyboard-navigation#focusPrevious"><%= t("accounts.new.container.previous") %></button>
+      <button hidden data-controller="hotkey" data-hotkey="j,J,ArrowDown,ArrowRight" data-action="list-keyboard-navigation#focusNext"><%= t("accounts.new.container.next") %></button>
 
       <%= yield %>
     </div>
 
-    <div class="border-t border-alpha-black-25 px-4 pt-4 text-secondary text-sm justify-between hidden md:flex">
-      <div class="flex space-x-5">
-        <div class="flex items-center space-x-2">
-          <span>Select</span>
-          <kbd class="bg-alpha-black-50 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.1)] p-1 rounded-md flex w-5 h-5 shrink-0 grow-0 items-center justify-center">
+    <div class="border-t border-tertiary px-4 pt-4 text-secondary text-sm justify-between hidden md:flex">
+      <div class="flex gap-5">
+        <div class="flex items-center gap-2">
+          <span><%= t("accounts.new.container.select") %></span>
+          <kbd class="bg-container-inset border border-secondary rounded-md flex w-5 h-5 shrink-0 grow-0 items-center justify-center">
             <%= icon("corner-down-left", size: "xs") %>
           </kbd>
         </div>
-        <div class="flex items-center space-x-2">
-          <span>Navigate</span>
-          <kbd class="bg-alpha-black-50 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.1)] p-1 rounded-md flex w-5 h-5 shrink-0 grow-0 items-center justify-center">
+        <div class="flex items-center gap-2">
+          <span><%= t("accounts.new.container.navigate") %></span>
+          <kbd class="bg-container-inset border border-secondary rounded-md flex w-5 h-5 shrink-0 grow-0 items-center justify-center">
             <%= icon("arrow-up", size: "xs") %>
           </kbd>
-          <kbd class="bg-alpha-black-50 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.1)] p-1 rounded-md flex w-5 h-5 shrink-0 grow-0 items-center justify-center">
+          <kbd class="bg-container-inset border border-secondary rounded-md flex w-5 h-5 shrink-0 grow-0 items-center justify-center">
             <%= icon("arrow-down", size: "xs") %>
           </kbd>
         </div>
       </div>
-      <div class="flex items-center space-x-2">
-        <button data-action="DS--dialog#close">Close</button>
-        <kbd class="bg-alpha-black-50 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.1)] p-1 rounded-md flex w-8 h-5 shrink-0 grow-0 items-center justify-center text-xs">ESC</kbd>
+      <div class="flex items-center gap-2">
+        <button type="button" class="rounded-sm hover:text-primary focus-ring" data-action="DS--dialog#close"><%= t("accounts.new.container.close") %></button>
+        <kbd class="bg-container-inset border border-secondary rounded-md flex px-1 h-5 shrink-0 grow-0 items-center justify-center text-xs"><%= t("accounts.new.container.esc") %></kbd>
       </div>
     </div>
   </div>

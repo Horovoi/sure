@@ -198,6 +198,35 @@ class DashboardTest < ApplicationSystemTestCase
     assert_match(/\ADay \d+\s+#{Regexp.escape(current_label)}\s/, tooltip.text)
   end
 
+  test "the spending tooltip flips left before it passes the card edge" do
+    visit root_path
+    chart = find("#spending-trend-section [data-controller='spending-chart'] svg")
+    width = chart.native.rect.width
+    # Near the right end of the curve (left of the amount labels), where a tooltip
+    # to the right of the cursor would run past the card
+    page.driver.browser.action.move_to(chart.native, (width / 2 - 90).round, 0).perform
+
+    find(".chart-tooltip", visible: true)
+    tooltip, card = page.evaluate_script(<<~JS)
+      [document.querySelector("#spending-trend-section .chart-tooltip"), document.querySelector("section[data-section-key='spending_trend']")]
+        .map((el) => { const r = el.getBoundingClientRect(); return [r.left, r.right]; })
+    JS
+    assert tooltip[0] >= card[0] && tooltip[1] <= card[1], "tooltip #{tooltip.inspect} passes the card #{card.inspect}"
+  end
+
+  test "the new-account dialog opens on its first item and the arrow keys move from it" do
+    visit root_path
+    find("a[href='#{new_account_path}']", text: I18n.t("pages.dashboard.new")).click
+
+    within "dialog[open]" do
+      assert_selector "h2", text: I18n.t("accounts.new.title")
+    end
+    assert_equal Depository.new.display_name.singularize, page.evaluate_script("document.activeElement.textContent.trim()")
+
+    page.driver.browser.action.send_keys(:arrow_down).perform
+    assert_equal Investment.new.display_name.singularize, page.evaluate_script("document.activeElement.textContent.trim()")
+  end
+
   test "the spending category filter changes the curve" do
     travel = @family.categories.create!(name: "Curve Travel", color: "#2244aa")
     create_transaction(account: @account, currency: @family.currency, category: travel, amount: 700_000, date: @start_date)
@@ -256,7 +285,7 @@ class DashboardTest < ApplicationSystemTestCase
     within "#spending_trend_fullscreen_dialog" do
       select previous_label, from: "spending_period_fullscreen"
       assert_selector "select#spending_period_fullscreen option[selected]", text: previous_label, visible: :all
-      assert_selector "#spendingFullscreenPeriod", text: I18n.l(previous_start, format: :long)
+      assert_selector "#spendingFullscreenPeriod", text: I18n.l(previous_start, format: "%B %-d, %Y")
     end
     assert_selector "#spending_trend_fullscreen_dialog[open]"
     assert_selector "#spending-trend-section select#spending_period option[selected]", text: previous_label, visible: :all
