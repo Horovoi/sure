@@ -14,10 +14,11 @@ const escapeHtml = (value) =>
 // Connects to data-controller="reports-treemap".
 //
 // colorMode "category" fills each tile with its category colour; "normal" fills it
-// with the tile's normalColor (its change against normal, see the Spending vs normal
-// section). A tile with an href opens it on click or Enter. Optional targets: chart
-// (where the svg goes, else the element), legend (shown in normal mode) and
-// modeButton (the colour mode switch, with a mode param).
+// with the tile's normalColor (its change against normal, in the expenses block of the
+// activity breakdown). A tile with an href opens it on click or Enter. Optional
+// targets: chart (where the svg goes, else the element), legend (shown in normal mode)
+// and modeButton (the colour mode switch, with a mode param). With a preferenceUrl,
+// a chosen mode is saved as the user's reports_expense_color_mode.
 export default class extends Controller {
   static targets = ["chart", "legend", "modeButton"];
 
@@ -26,6 +27,7 @@ export default class extends Controller {
     type: { type: String, default: "expense" },
     colorMode: { type: String, default: "category" },
     labels: { type: Object, default: {} },
+    preferenceUrl: { type: String, default: "" },
   };
 
   _resizeObserver = null;
@@ -42,7 +44,32 @@ export default class extends Controller {
 
   setColorMode(event) {
     const mode = event.params?.mode;
-    if (mode === "normal" || mode === "category") this.colorModeValue = mode;
+    if (mode !== "normal" && mode !== "category") return;
+    if (mode === this.colorModeValue) return;
+
+    this.colorModeValue = mode;
+    this._saveColorMode(mode);
+  }
+
+  // Best effort: the switch works even when saving fails
+  async _saveColorMode(mode) {
+    if (!this.preferenceUrlValue) return;
+    const headers = { "Content-Type": "application/json" };
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+
+    try {
+      // keepalive: the save still arrives when the user leaves the page right away
+      const response = await fetch(this.preferenceUrlValue, {
+        method: "PATCH",
+        keepalive: true,
+        headers,
+        body: JSON.stringify({ preferences: { reports_expense_color_mode: mode } }),
+      });
+      if (response.ok) this.element.dataset.savedColorMode = mode;
+    } catch (error) {
+      console.error("[Reports treemap] Could not save the color mode:", error);
+    }
   }
 
   colorModeValueChanged() {
@@ -439,8 +466,7 @@ export default class extends Controller {
       html += `<div style="height:100%;border-radius:2px;width:${barW}%;background:${swatch};opacity:0.75;"></div>`;
       html += `</div>`;
 
-      // Stats row: count, avg, daily avg (the breakdown sends them; the spending
-      // comparison has no counts)
+      // Stats row: count, avg, daily avg
       const stats = [];
       if (data.count) {
         const txnLabel = data.count === 1 ? this._label("txn", "txn") : this._label("txns", "txns");
@@ -455,7 +481,7 @@ export default class extends Controller {
         html += `</div>`;
       }
 
-      // Against normal (the Spending vs normal section)
+      // Against normal (expenses with a normal to compare with)
       if (data.normalLines && data.normalLines.length > 0) {
         html += `<div style="font-size:11px;color:var(--color-text-secondary);margin-top:6px;">`;
         html += data.normalLines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");

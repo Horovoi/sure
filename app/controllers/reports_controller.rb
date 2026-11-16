@@ -157,7 +157,7 @@ class ReportsController < ApplicationController
     end
 
     def preferences_params
-      params.expect(preferences: [ reports_collapsed_sections: {}, reports_section_order: [] ]).to_h
+      params.expect(preferences: [ :reports_expense_color_mode, reports_collapsed_sections: {}, reports_section_order: [] ]).to_h
     end
 
     def build_reports_sections
@@ -202,15 +202,18 @@ class ReportsController < ApplicationController
             transactions: @transactions,
             period_type: @period_type,
             start_date: @start_date,
-            end_date: @end_date
+            end_date: @end_date,
+            # The expenses block also shows spending against normal
+            spending_comparison: spending_comparison,
+            expense_color_mode: Current.user.reports_expense_color_mode
           },
           visible: Current.family.transactions.any?,
           collapsible: true
-        },
-        spending_vs_normal_section
+        }
       ]
 
-      # Order sections according to user preference
+      # Order sections according to user preference. A saved order can name a section
+      # that no longer exists (spending_vs_normal); it is skipped.
       section_order = Current.user.reports_section_order
       ordered_sections = section_order.map do |key|
         all_sections.find { |s| s[:key] == key }
@@ -222,17 +225,6 @@ class ReportsController < ApplicationController
       end
 
       ordered_sections
-    end
-
-    def spending_vs_normal_section
-      {
-        key: "spending_vs_normal",
-        title: "reports.spending_vs_normal.title",
-        partial: "reports/spending_vs_normal",
-        locals: { comparison: spending_comparison },
-        visible: @has_accounts && Current.family.transactions.any?,
-        collapsible: true
-      }
     end
 
     # This period's spending against the year before it, on the page's one income

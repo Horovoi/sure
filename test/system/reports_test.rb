@@ -38,7 +38,7 @@ class ReportsTest < ApplicationSystemTestCase
     assert_no_text "Corner shop"
   end
 
-  test "switch the spending treemap color mode and open a changed category" do
+  test "switch the expenses treemap to vs normal, keep it after a reload and open a changed category" do
     period_start = 2.months.ago.to_date.beginning_of_month
     period_end = period_start.end_of_month
     dining = @family.categories.create!(name: "Vs normal dining", classification: "expense", color: "#123456")
@@ -47,18 +47,30 @@ class ReportsTest < ApplicationSystemTestCase
 
     visit reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
 
-    within "[data-testid=spending-vs-normal]" do
+    assert_no_selector "[data-section-key='spending_vs_normal']"
+    # Category colours first, like the income treemap
+    assert_selector "[data-testid=breakdown-expense][data-color-mode='category']"
+    within "[data-testid=breakdown-expense]" do
+      assert_selector "[data-testid=spending-summary]"
       assert_selector "svg g[data-category-name='Vs normal dining']"
-      assert_selector "[data-controller='reports-treemap'][data-color-mode='normal']"
+      assert_selector "[data-testid=spending-legend]", visible: :hidden
+
+      click_button I18n.t("reports.spending_vs_normal.color_mode.normal")
+      assert_selector "[data-testid=spending-legend]", visible: true
+      assert_selector "button[aria-pressed='true']", text: I18n.t("reports.spending_vs_normal.color_mode.normal")
+    end
+    assert_selector "[data-testid=breakdown-expense][data-color-mode='normal']"
+
+    # The choice is saved for the user: a fresh visit opens in Vs normal
+    assert_selector "[data-testid=breakdown-expense][data-saved-color-mode='normal']"
+    visit reports_path(period_type: :custom, start_date: period_start, end_date: period_end)
+    assert_selector "[data-testid=breakdown-expense][data-color-mode='normal']"
+
+    within "[data-testid=breakdown-expense]" do
       assert_selector "[data-testid=spending-legend]", visible: true
 
       click_button I18n.t("reports.spending_vs_normal.color_mode.category")
-      assert_selector "[data-controller='reports-treemap'][data-color-mode='category']"
       assert_selector "[data-testid=spending-legend]", visible: :hidden
-      assert_selector "button[aria-pressed='true']", text: I18n.t("reports.spending_vs_normal.color_mode.category")
-
-      click_button I18n.t("reports.spending_vs_normal.color_mode.normal")
-      assert_selector "[data-controller='reports-treemap'][data-color-mode='normal']"
 
       within "[data-testid=spending-changes]" do
         click_link "Vs normal dining"
