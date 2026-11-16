@@ -324,6 +324,11 @@ class ReportsTest < ApplicationSystemTestCase
       assert_text(/#{Regexp.escape(I18n.t("reports.net_worth.total_liabilities"))}/i)
       assert_text I18n.t("accounts.types.depository")
       assert_text I18n.t("accounts.types.credit_card")
+
+      # Privacy mode blurs every amount in it: the group totals and each group
+      amounts = all(".tabular-nums")
+      assert_operator amounts.size, :>=, 4
+      amounts.each { |amount| assert_includes amount[:class], "privacy-sensitive", "#{amount.text} is not blurred" }
     end
   end
 

@@ -26,6 +26,7 @@ en:
         process_help: Click the button below to process your CSV and generate rule rows.
       show:
         description: Select the columns that correspond to each field in your CSV.
+        sample_caption: Sample data from your uploaded CSV
         title: Configure your import
       trade_import:
         date_format_label: Date format

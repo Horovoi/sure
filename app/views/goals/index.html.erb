@@ -26,8 +26,12 @@
               <%= t(".kpi.velocity_delta_flat") %>
             <% end %>
           </p>
-        <% elsif @kpi[:velocity_delta_percent].nil? %>
+        <% elsif @kpi[:velocity_zero_base] %>
           <p class="text-xs text-success mt-1 tabular-nums"><%= t(".kpi.velocity_delta_zero_base") %></p>
+        <% elsif @kpi[:velocity_delta_percent].nil? %>
+          <p class="text-xs <%= @kpi[:velocity_direction] == :up ? "text-success" : "text-destructive" %> mt-1">
+            <%= t(".kpi.velocity_delta_#{@kpi[:velocity_direction]}_no_percent") %>
+          </p>
         <% else %>
           <p class="text-xs <%= @kpi[:velocity_direction] == :up ? "text-success" : "text-destructive" %> mt-1 tabular-nums">
             <%= t(".kpi.velocity_delta_#{@kpi[:velocity_direction]}", percent: @kpi[:velocity_delta_percent].abs) %>

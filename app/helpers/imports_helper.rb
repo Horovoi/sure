@@ -71,6 +71,16 @@ module ImportsHelper
     end
   end
 
+  # A plain number, with an optional sign, currency symbol or brackets: "-1234.56",
+  # "25 000", "(12,50)", "$5". Dates ("01/02/2024", "2024-01-02") are not.
+  NUMBER_CELL = /\A[-+−(]?\s?\p{Sc}?\s?\d[\d.,\s  ]*\s?\p{Sc}?\)?\z/
+
+  # A cell of the sample table is blurred when its column is mapped to an amount, or
+  # when it holds a number (any column may hold the amounts until the mapping is saved)
+  def privacy_sensitive_cell?(header, value, sensitive_headers)
+    sensitive_headers.include?(header) || value.to_s.strip.match?(NUMBER_CELL)
+  end
+
   def cell_is_valid?(row, field)
     row.valid? # populate errors
     !row.errors.key?(field)

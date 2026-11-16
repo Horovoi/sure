@@ -24,6 +24,8 @@ en:
         contributed_label: Contributed · last 30d
         velocity_delta_up: "↑ %{percent}%% vs. prior 30d"
         velocity_delta_down: "↓ %{percent}%% vs. prior 30d"
+        velocity_delta_down_no_percent: "↓ Less than the prior 30d"
+        velocity_delta_up_no_percent: "↑ More than the prior 30d"
         velocity_delta_flat: vs. prior 30d
         velocity_delta_zero_base: First 30d of activity
         needs_this_month_label: Needs this month

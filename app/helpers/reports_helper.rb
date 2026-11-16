@@ -207,7 +207,7 @@ module ReportsHelper
   # The key for the ticks, short: what they mark and the normal total
   def breakdown_normal_key(comparison)
     t(comparison.in_progress? ? "reports.transactions_breakdown.vs_normal.key_so_far_html" : "reports.transactions_breakdown.vs_normal.key_period_html",
-      normal: tag.span(breakdown_money(comparison.normal_total), class: "text-primary tabular-nums"))
+      normal: tag.span(breakdown_money(comparison.normal_total), class: "text-primary tabular-nums privacy-sensitive"))
   end
 
   # The rest of the key, for the info tooltip: which days normal comes from and

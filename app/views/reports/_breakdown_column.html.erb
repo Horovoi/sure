@@ -67,7 +67,7 @@
       <span class="text-right tabular-nums whitespace-nowrap privacy-sensitive group-aria-expanded/tail:invisible"><%= breakdown_money(column[:tail_amount]) %></span>
       <span class="text-right tabular-nums group-aria-expanded/tail:invisible"><%= number_to_percentage(column[:tail_share], precision: 1) %></span>
       <% if (delta = column[:tail_delta]) %>
-        <span class="col-start-3 text-right text-xs tabular-nums whitespace-nowrap group-aria-expanded/tail:hidden <%= delta[:tone_class] %>">
+        <span class="col-start-3 text-right text-xs tabular-nums whitespace-nowrap privacy-sensitive group-aria-expanded/tail:hidden <%= delta[:tone_class] %>">
           <%= delta[:label] %><span class="sr-only"> <%= t("reports.transactions_breakdown.vs_normal.delta_#{delta[:direction]}") %></span>
         </span>
       <% end %>

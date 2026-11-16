@@ -67,7 +67,8 @@
     <% end %>
   </div>
   <% if delta %>
-    <span class="col-start-3 text-right text-xs tabular-nums whitespace-nowrap <%= delta[:tone_class] %>" data-testid="breakdown-delta">
+    <%# The change is money: with the percent beside it, it would give the amount away %>
+    <span class="col-start-3 text-right text-xs tabular-nums whitespace-nowrap privacy-sensitive <%= delta[:tone_class] %>" data-testid="breakdown-delta">
       <%= delta[:label] %><span class="sr-only"> <%= t("reports.transactions_breakdown.vs_normal.delta_#{delta[:direction]}") %></span>
     </span>
     <% if delta[:percent] %>

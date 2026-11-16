@@ -56,7 +56,7 @@ export default class extends TimeSeriesChartController {
               <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${this._escape(group.color)};"></span>
               ${this._escape(group.name)}
             </div>
-            <span class="text-primary tabular-nums">${this._escape(this._extractFormattedValue(group.value))}</span>
+            <span class="text-primary tabular-nums privacy-sensitive">${this._escape(this._extractFormattedValue(group.value))}</span>
           </div>
         `,
       )
@@ -65,8 +65,8 @@ export default class extends TimeSeriesChartController {
     return `
       <div class="space-y-1 text-xs">
         <div class="flex items-center justify-between gap-4 font-medium">
-          <span class="text-secondary uppercase">${this._escape(label)}</span>
-          <span class="text-primary tabular-nums">${this._escape(this._extractFormattedValue(total))}</span>
+          <span class="text-secondary">${this._escape(label)}</span>
+          <span class="text-primary tabular-nums privacy-sensitive">${this._escape(this._extractFormattedValue(total))}</span>
         </div>
         ${rows}
       </div>

@@ -132,7 +132,10 @@
   <%= render "goals/currency_warning", goal: @goal %>
 
   <%# Top row: ring panel (status, no elevation) + projection chart card %>
-  <section class="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-3">
+  <%# Side by side only when the content column is wide enough: with the side panels
+      open it is narrow on a wide window, and the projection card got 170px %>
+  <div class="@container">
+  <section class="grid grid-cols-1 @3xl:grid-cols-[320px_minmax(0,1fr)] gap-3">
     <div class="rounded-xl p-5 flex flex-col items-center justify-center text-center">
       <%= render Goals::ProgressRingComponent.new(goal: @goal, size: 180) %>
       <%# The figure the ring is drawn from — held plus already spent on the
@@ -169,6 +172,7 @@
 
     <%= render Goals::LifecyclePanelComponent.new(goal: @goal) %>
   </section>
+  </div>
 
   <% if @goal.linked_accounts.any? %>
     <%= render DS::Card.new do %>

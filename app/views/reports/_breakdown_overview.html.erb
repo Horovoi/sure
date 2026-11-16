@@ -75,8 +75,9 @@
       <span class="relative h-3.5 w-3 shrink-0" aria-hidden="true">
         <span class="absolute inset-y-0 left-1/2 -ml-px w-0.5 rounded-full bg-inverse"></span>
       </span>
-      <span><%= privacy_money_text(breakdown_normal_key(comparison)) %></span>
-      <%= render DS::Tooltip.new(text: breakdown_normal_details(comparison), icon: "info", size: "xs", color: "default") %>
+      <%# The key carries its own privacy-sensitive span around the amount %>
+      <span><%= breakdown_normal_key(comparison) %></span>
+      <%= render DS::Tooltip.new(text: privacy_money_text(breakdown_normal_details(comparison)), icon: "info", size: "xs", color: "default") %>
     </div>
   <% end %>
 </div>

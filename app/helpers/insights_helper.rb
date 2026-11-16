@@ -10,28 +10,16 @@ module InsightsHelper
     "maintained_goal_depleted" => "shield-alert"
   }.freeze
 
-  # Numeric fragments inside insight prose: amounts ("₴1,234.56", "1 234,56 €"),
-  # percentages and counts. They start and end on a digit, so punctuation stays out.
-  INSIGHT_NUMERIC_FRAGMENT = /
-    (?:\p{Sc}[\s  ]?)?
-    [−-]?\d(?:[\d.,\s  ]*\d)?
-    (?:[\s  ]?(?:%|\p{Sc}))?
-  /x
-
   def insight_icon_key(insight)
     INSIGHT_ICONS.fetch(insight.kind, "lightbulb")
   end
 
-  # The text is rendered from templates with the amounts already in it, so the numbers
-  # cannot be tagged where they are formatted. Each numeric fragment is wrapped in a
-  # privacy-sensitive span instead, so privacy mode blurs the figures and keeps the
-  # sentence readable.
+  # The text is rendered from templates with the amounts already in it, so the amounts
+  # cannot be tagged where they are formatted. Each amount is wrapped in a
+  # privacy-sensitive span instead (PrivacyHelper#privacy_money_text). Dates, day counts
+  # and percentages stay readable: they give no amount away.
   def insight_privacy_text(text)
-    safe_join(
-      text.to_s.split(/(#{INSIGHT_NUMERIC_FRAGMENT})/o).map.with_index do |part, index|
-        index.odd? ? tag.span(part, class: "privacy-sensitive") : part
-      end
-    )
+    privacy_money_text(text.to_s)
   end
 
   # "Spending · November 2026": the kind and the fiscal period it is about

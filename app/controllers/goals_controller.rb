@@ -281,7 +281,12 @@ class GoalsController < ApplicationController
       velocity_30d = windows[:current]
       velocity_prior_30d = windows[:prior]
       delta_amount = velocity_30d - velocity_prior_30d
-      delta_percent = velocity_prior_30d.zero? ? nil : ((delta_amount / velocity_prior_30d.abs) * 100).round(1)
+      # A percent change compares two contributions: from a prior window with none, or
+      # into or out of net withdrawals, it would read "↓ 504.7%"; the line then says
+      # only which way it went
+      delta_percent = if velocity_prior_30d.positive? && !velocity_30d.negative?
+        ((delta_amount / velocity_prior_30d) * 100).round(1)
+      end
 
       delta_direction = if delta_amount.positive? then :up
       elsif delta_amount.negative? then :down
@@ -298,6 +303,7 @@ class GoalsController < ApplicationController
         # The sign shows this window's direction; the delta line says up or down
         velocity_30d_sign: velocity_30d.negative? ? "−" : "",
         velocity_delta_percent: delta_percent,
+        velocity_zero_base: velocity_prior_30d.zero?,
         velocity_direction: delta_direction,
         needs_this_month_money: Money.new(needs_this_month(behind_goals, currency), currency),
         on_track_count: tracked.count { |goal| goal.status == :on_track },

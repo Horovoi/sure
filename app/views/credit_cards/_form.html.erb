@@ -8,6 +8,7 @@
       <div class="flex items-center gap-2">
         <%= credit_card_form.number_field :available_credit,
                                         label: t("credit_cards.form.available_credit"),
+                                        class: "form-field__input privacy-sensitive",
                                         placeholder: t("credit_cards.form.available_credit_placeholder"),
                                         min: 0 %>
       </div>
@@ -30,6 +31,7 @@
                                       label: t("credit_cards.form.expiration_date") %>
         <%= credit_card_form.number_field :annual_fee,
                                         label: t("credit_cards.form.annual_fee"),
+                                        class: "form-field__input privacy-sensitive",
                                         placeholder: t("credit_cards.form.annual_fee_placeholder"),
                                         min: 0 %>
       </div>

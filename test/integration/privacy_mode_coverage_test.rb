@@ -17,6 +17,10 @@ class PrivacyModeCoverageTest < ActionDispatch::IntegrationTest
   # A currency symbol next to a digit: "$1,234.56", "-$12", "1 234,56 €", "₴500".
   MONEY = /\p{Sc}\s?[-−]?\d|\d\s?\p{Sc}/
   SHOWN_ATTRIBUTES = %w[title alt placeholder].freeze
+  # A form field that holds money: its typed or saved value shows in the field, and it
+  # has no currency symbol for MONEY to find
+  MONEY_INPUT_NAME = /amount|balance|spending|income|credit|fee|payment|price|allocation/
+  TEXT_INPUT_TYPES = [ nil, "", "text", "number" ].freeze
   SKIPPED_TAGS = %w[script style noscript].freeze
 
   setup do
@@ -31,6 +35,10 @@ class PrivacyModeCoverageTest < ActionDispatch::IntegrationTest
       create_transaction(account: @account, name: "Groceries last month #{i}", amount: 30 + i, category: food, date: Date.current.prev_month - i.days)
     end
     create_transaction(account: @account, name: "Salary", amount: -2500, category: income, date: Date.current)
+    # Months of history, so Reports has a normal to compare with (the vs-normal changes)
+    (2..4).each do |months|
+      create_transaction(account: @account, name: "Groceries #{months} months ago", amount: 25 * months, category: food, date: Date.current - months.months)
+    end
 
     # A split transaction, for the grouped list rows, the split box in the drawer and the editor
     @split = create_transaction(account: @account, name: "Supermarket", amount: 100, category: food, date: Date.current)
@@ -89,6 +97,8 @@ class PrivacyModeCoverageTest < ActionDispatch::IntegrationTest
         "reports print" => print_reports_path,
         "budget" => budget_path(@budget),
         "budget category" => budget_budget_category_path(@budget, budget_category),
+        "budget categories" => budget_budget_categories_path(@budget),
+        "credit card edit" => edit_credit_card_path(accounts(:credit_card)),
         "goals" => goals_path,
         "subscriptions" => subscriptions_path,
         "subscription calendar" => calendar_subscriptions_path,
@@ -126,7 +136,7 @@ class PrivacyModeCoverageTest < ActionDispatch::IntegrationTest
 
       document = Nokogiri::HTML5(response.body)
       @blurred[page] += blurred_amounts(document)
-      leaks = text_leaks(document) + attribute_leaks(document)
+      leaks = text_leaks(document) + attribute_leaks(document) + input_leaks(document)
       leaks = leaks.map { |leak| [ label, leak ] }
 
       return leaks if depth > 0
@@ -157,6 +167,16 @@ class PrivacyModeCoverageTest < ActionDispatch::IntegrationTest
         next if sensitive?(element) || element.ancestors.any? { |a| sensitive?(a) }
 
         "#{describe(element)} #{attribute}=#{element[attribute].squish.truncate(60).inspect}"
+      end
+    end
+
+    def input_leaks(document)
+      document.css("input").filter_map do |input|
+        next unless TEXT_INPUT_TYPES.include?(input["type"])
+        next unless input["name"].to_s.match?(MONEY_INPUT_NAME)
+        next if sensitive?(input) || input.ancestors.any? { |a| sensitive?(a) }
+
+        "#{describe(input)} name=#{input["name"].inspect} holds money but is not blurred"
       end
     end
 

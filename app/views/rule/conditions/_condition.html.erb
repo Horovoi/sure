@@ -31,7 +31,7 @@
         <%= form.select :value, condition.options, {} %>
       <% else %>
         <% if condition.filter.type == "number" %>
-          <%= form.number_field :value, placeholder: "10", step: 0.01 %>
+          <%= form.number_field :value, placeholder: "10", step: 0.01, class: "form-field__input privacy-sensitive" %>
         <% else %>
           <%= form.text_field :value, placeholder: t(".value_placeholder") %>
         <% end %>

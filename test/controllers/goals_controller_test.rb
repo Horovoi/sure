@@ -295,6 +295,22 @@ class GoalsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/1\s*reached/i, response.body)
   end
 
+  test "index KPI gives a percent change only between two contributions" do
+    Goal.stubs(:inflow_windows_for).returns({ current: 150.to_d, prior: 100.to_d })
+    get goals_url
+    assert_match I18n.t("goals.index.kpi.velocity_delta_up", percent: 50.0), response.body
+
+    # From contributions to net withdrawals: no "↓ 504.7%"
+    Goal.stubs(:inflow_windows_for).returns({ current: -404.7.to_d, prior: 100.to_d })
+    get goals_url
+    assert_match I18n.t("goals.index.kpi.velocity_delta_down_no_percent"), response.body
+    assert_no_match(/504\.7%/, response.body)
+
+    Goal.stubs(:inflow_windows_for).returns({ current: 80.to_d, prior: 0.to_d })
+    get goals_url
+    assert_match I18n.t("goals.index.kpi.velocity_delta_zero_base"), response.body
+  end
+
   test "index KPI 'on track' denominator excludes no-target-date goals" do
     family = @user.family
     family.goals.destroy_all
@@ -584,6 +600,14 @@ class GoalsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_includes response.body, "Euro Savings · EUR"
     assert_select "p", text: I18n.t("goals.consume.goal_currency_hint", currency: "USD")
+  end
+
+  test "the progress percent follows one privacy rule on the goal page and the goal cards" do
+    get goal_url(@goal)
+    assert_select "[data-testid=goal-ring-percent]:not(.privacy-sensitive)", text: /\d+%/
+
+    get goals_url
+    assert_select ".privacy-sensitive", text: /\A\s*\d+%\s*\z/, count: 0
   end
 
   test "the consumption dialog blurs its figures under privacy mode" do
