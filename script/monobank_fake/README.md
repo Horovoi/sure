@@ -97,7 +97,7 @@ The same operations are Ruby methods on the app: `settle_hold!`, `cancel_hold!`,
 - `jar_goal_rounds` (read by the scenario, not by the fake): rounds after the holds. Each
   round has `bank` (`{jar, title?, goal?}`: what changes at the fake), `owner`
   (`{jar, target?, name?}`: the owner edits that jar's goal in Sure, `target` in major
-  units), and `expected` (the round's `jar_goals`). The scenario syncs after each round.
+  units), and `expected` (the round's `jar_goals`). The scenario syncs and checks each round.
 - `expected` (read by the checks, not by the fake):
 
 | Key | Checked |

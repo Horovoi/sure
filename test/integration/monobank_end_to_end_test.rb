@@ -57,7 +57,10 @@ class MonobankEndToEndTest < ActiveSupport::TestCase
       assert_includes import.errors.details[:account].map { |detail| detail[:error] }, :provider_linked
 
       assert_checks scenario.settle_and_cancel_holds!
-      assert_checks scenario.jar_goals_follow_the_bank!
+      rounds = scenario.jar_goals_follow_the_bank!
+      assert_equal 2, rounds.size, "both jar goal rounds of the sample ran"
+      # Every round: round 1 holds the owner's target that must survive
+      rounds.each { |round| assert_checks round }
       assert_equal %i[backfill holds jar_goals_1 jar_goals_2], scenario.phases.keys
       assert_checks scenario.hourly_sync_is_quiet!
 

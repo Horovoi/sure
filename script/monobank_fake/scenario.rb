@@ -86,7 +86,7 @@ module MonobankFake
     # Step 6: jar goals follow the bank. Each round of the fixture's jar_goal_rounds:
     # `bank` changes jars at the fake ({jar, title?, goal?}), `owner` edits the jar's goal
     # in Sure ({jar, target?, name?}), then a sync; `expected` is the round's jar_goals.
-    # Returns the Checks of the last round, nil when the fixture has no rounds.
+    # Returns the Checks of every round, in order (empty when the fixture has none).
     def jar_goals_follow_the_bank!
       Array(fixture["jar_goal_rounds"]).each_with_index.map do |round, index|
         # The changed jars arrive with the next client-info, which must be allowed
@@ -104,7 +104,7 @@ module MonobankFake
         result = checks
         result.run(**(@after_holds || {}), balances: live_balances, jar_goals: @jar_goals)
         record_phase(:"jar_goals_#{index + 1}", result)
-      end.last
+      end
     end
 
     # Step 7: the hourly sync (SyncHourlyJob) after `gap` with nothing new at the bank: no
