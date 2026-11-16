@@ -12,7 +12,7 @@ en:
     exporting: Exporting...
     index:
       title: Exports
-      new: New Export
+      new: New export
     new:
       title: Export your data
       subtitle: Download all your financial data
@@ -40,4 +40,4 @@ en:
         actions:
           delete: Delete
           download: Download
-      empty: No exports yet.
+      empty: No exports yet

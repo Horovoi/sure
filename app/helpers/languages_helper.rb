@@ -383,12 +383,14 @@ module LanguagesHelper
   # stored: the zone saved now. Zones get renamed (Europe/Kiev became Europe/Kyiv), and a
   # saved name that is no longer offered is added as it is: otherwise the select would show
   # its first option and the next save would silently change the family's time zone.
-  def timezone_options(stored = nil)
+  # value: what the option sends, the IANA identifier (the family's zone) or the Rails
+  # zone name (the scheduled jobs' zone). Every zone select shows the same labels.
+  def timezone_options(stored = nil, value: :identifier)
     options = ActiveSupport::TimeZone.all
       .sort_by { |tz| [ tz.utc_offset, tz.name ] }
       .map do |tz|
         name = tz.name.split(" - ").first.gsub(" (US & Canada)", "")
-        [ "(#{tz.formatted_offset}) #{name}", tz.tzinfo.identifier ]
+        [ "(#{tz.formatted_offset}) #{name}", value == :name ? tz.name : tz.tzinfo.identifier ]
       end
 
     options << [ stored, stored ] if stored.present? && options.none? { |_, identifier| identifier == stored }

@@ -18,6 +18,7 @@ en:
       apr_placeholder: '15.99'
       available_credit: Available credit
       available_credit_placeholder: '10000'
+      day_not_set: Not set
       due_day: Payment due day
       expiration_date: Expiration date
       minimum_payment: Minimum payment
@@ -33,7 +34,7 @@ en:
         above_minimum: This statement is %{balance}, more than the %{minimum} minimum
           payment. If you pay only the minimum, the remaining balance stays on the
           card at this APR.
-        annual_percentage_rate: Annual Percentage Rate
+        annual_percentage_rate: Annual percentage rate
         balance_carried_label: Balance carried
         balances_unavailable: The balance history of this card is not calculated
           yet. The statement figures show after the next sync.
@@ -53,8 +54,8 @@ en:
         payments_credits: Payments/Credits
         per_month: "%{amount}/month"
         remaining_due: Remaining due %{amount}
-        since_last_statement: Since Last Statement
-        statement_balance: Statement Balance
+        since_last_statement: Since last statement
+        statement_balance: Statement balance
         status_paid: Paid
         status_partial: Partially paid
         unknown: Unknown

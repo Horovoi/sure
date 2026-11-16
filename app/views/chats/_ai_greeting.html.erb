@@ -5,7 +5,7 @@
     <p><%= t("chats.greeting.intro", name: Current.user&.first_name.presence || t("chats.greeting.default_name")) %></p>
 
     <p>
-      <%= t("chats.greeting.commands_html", key: tag.span("/", class: "bg-container border border-secondary px-1.5 py-0.5 rounded font-mono text-xs")) %>
+      <%= t("chats.greeting.commands_html", key: tag.kbd("/", class: "bg-container border border-secondary px-1.5 py-0.5 rounded-sm font-mono text-xs")) %>
     </p>
 
     <div class="space-y-3">
@@ -17,13 +17,15 @@
         { icon: "alert-triangle", text: t("chats.greeting.questions.patterns") }
       ] %>
 
-      <div class="space-y-2.5">
+      <%# DS outline buttons (md, rounded-lg) that ask the question %>
+      <div class="flex flex-col items-start gap-2">
         <% questions.each do |question| %>
-          <button data-action="chat#submitSampleQuestion"
-                  data-chat-question-param="<%= question[:text] %>"
-                  class="w-fit flex items-center gap-2 border border-tertiary rounded-full py-1.5 px-2.5 hover:bg-surface-hover">
-            <%= icon(question[:icon]) %> <%= question[:text] %>
-          </button>
+          <%= render DS::Button.new(
+                variant: :outline,
+                text: question[:text],
+                icon: question[:icon],
+                data: { action: "chat#submitSampleQuestion", chat_question_param: question[:text] }
+              ) %>
         <% end %>
       </div>
     </div>

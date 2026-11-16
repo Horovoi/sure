@@ -1,17 +1,17 @@
 ---
 en:
   chats:
-    demo_banner_title: "Demo Mode Active"
-    demo_banner_message: "You are using an open-weights Qwen3 LLM with credits provided by Cloudflare Workers AI.  Result may vary since the codebase was mostly tested on `gpt-4.1` but your tokens don't go anywhere else to be trained with! 🤖"
+    demo_banner_title: "Demo mode active"
+    demo_banner_message: "You are using an open-weights Qwen3 LLM with credits provided by Cloudflare Workers AI. Result may vary since the codebase was mostly tested on `gpt-4.1` but your tokens don't go anywhere else to be trained with! 🤖"
     error:
-      message: "Failed to generate response.  Please try again."
+      message: "Failed to generate response. Please try again."
       retry: "Retry"
     retry:
       in_progress: "A response is still being generated."
     ai_consent:
-      enable_title: Enable AI Chats
+      enable_title: Enable AI chats
       enable_body: The assistant answers questions about your money from your own accounts and transactions. Turn it on to use it.
-      enable_button: Enable AI Chats
+      enable_button: Enable AI chats
       enable_note: You can turn it off at any time in Settings > AI integrations. Your questions and the data the assistant reads go to Anthropic (Claude) or OpenAI, whichever engine answers.
       setup_title: Connect an AI engine
       setup_body: The assistant needs an AI engine to answer. Connect one of these.
@@ -22,6 +22,15 @@ en:
       setup_button: Set up AI
       openai_button: Add an OpenAI key
       setup_note: Your questions and the data the assistant reads go to the engine you connect, Anthropic or OpenAI.
+    composer:
+      coming_soon: Coming soon
+      disclaimer: AI responses are informational only and are not financial advice.
+      label: Message
+      placeholder: Ask anything…
+      send: Send
+    index:
+      new_chat: New chat
+      title: Chats
     greeting:
       intro: Hey %{name}! I'm an AI assistant for your finances. I can read your accounts, transactions and budgets to answer your questions.
       default_name: there

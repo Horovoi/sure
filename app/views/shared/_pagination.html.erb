@@ -1,58 +1,64 @@
 <%# locals: (pagy:, frame: :_top) %>
+<%# Every item is sm (28px, rounded-md): the arrows, the page numbers in their inset
+    track (p-1) and the per-page select. Inactive pages carry a transparent border, so
+    they are the same size as the current one. %>
+<% arrow_classes = "inline-flex items-center justify-center w-7 h-7 rounded-md" %>
+<% page_classes = "inline-flex items-center justify-center h-7 min-w-7 px-2 rounded-md border text-sm font-medium tabular-nums" %>
 
-<nav class="flex w-full items-center justify-between">
-  <div class="flex items-center gap-1 mr-3">
-    <div>
-      <% if pagy.previous %>
-        <%= link_to pagy.page_url(:previous),
-              data: { turbo_frame: frame },
-              class: "inline-flex items-center p-2 text-sm font-medium text-secondary hover:border-secondary hover:text-secondary" do %>
-          <%= icon("chevron-left") %>
-        <% end %>
-      <% else %>
-        <span class="inline-flex items-center p-2 text-sm font-medium text-subdued cursor-default" aria-disabled="true">
-          <%= icon("chevron-left", color: "current") %>
-        </span>
+<nav class="flex w-full items-center justify-between gap-2" aria-label="<%= t("shared.pagination.label") %>">
+  <div class="flex items-center gap-1 min-w-0">
+    <% if pagy.previous %>
+      <%= link_to pagy.page_url(:previous),
+            data: { turbo_frame: frame },
+            aria: { label: t("shared.pagination.previous") },
+            class: class_names(arrow_classes, "text-secondary hover:text-primary hover:bg-container-inset-hover focus-ring") do %>
+        <%= icon("chevron-left", color: "current") %>
       <% end %>
-    </div>
-    <div class="rounded-xl p-1 bg-container-inset">
+    <% else %>
+      <span class="<%= arrow_classes %> text-subdued cursor-default" aria-disabled="true">
+        <%= icon("chevron-left", color: "current") %>
+      </span>
+    <% end %>
+
+    <div class="flex items-center rounded-lg p-1 bg-container-inset">
       <%# series is the list of page numbers to show, e.g. [1, :gap, 8, "9", 10]; pagy keeps it protected %>
       <% pagy.send(:series).each do |series_item| %>
         <% if series_item.is_a?(Integer) %>
           <%= link_to pagy.page_url(series_item),
                 data: { turbo_frame: frame },
-                class: "rounded-md px-2 py-1 inline-flex items-center text-sm font-medium text-secondary hover:border-secondary hover:text-secondary" do %>
+                class: class_names(page_classes, "border-transparent text-secondary hover:text-primary hover:bg-container-inset-hover focus-ring") do %>
             <%= series_item %>
           <% end %>
         <% elsif series_item.is_a?(String) %>
           <%= link_to pagy.page_url(series_item),
                 data: { turbo_frame: frame },
-                class: "rounded-md px-2 py-1 bg-container border border-secondary shadow-xs inline-flex items-center text-sm font-medium text-primary" do %>
+                aria: { current: "page" },
+                class: class_names(page_classes, "bg-container border-secondary shadow-xs text-primary focus-ring") do %>
             <%= series_item %>
           <% end %>
         <% elsif series_item == :gap %>
-          <span class="inline-flex items-center px-2 py-1 text-sm font-medium text-secondary">...</span>
+          <span class="<%= page_classes %> border-transparent text-secondary" aria-hidden="true">…</span>
         <% end %>
       <% end %>
     </div>
-    <div>
-      <% if pagy.next %>
-        <%= link_to pagy.page_url(:next),
-              data: { turbo_frame: frame },
-              class: "inline-flex items-center p-2 text-sm font-medium text-secondary hover:border-secondary hover:text-secondary" do %>
-          <%= icon("chevron-right") %>
-        <% end %>
-      <% else %>
-        <span class="inline-flex items-center p-2 text-sm font-medium text-subdued cursor-default" aria-disabled="true">
-          <%= icon("chevron-right", color: "current") %>
-        </span>
+
+    <% if pagy.next %>
+      <%= link_to pagy.page_url(:next),
+            data: { turbo_frame: frame },
+            aria: { label: t("shared.pagination.next") },
+            class: class_names(arrow_classes, "text-secondary hover:text-primary hover:bg-container-inset-hover focus-ring") do %>
+        <%= icon("chevron-right", color: "current") %>
       <% end %>
-    </div>
+    <% else %>
+      <span class="<%= arrow_classes %> text-subdued cursor-default" aria-disabled="true">
+        <%= icon("chevron-right", color: "current") %>
+      </span>
+    <% end %>
   </div>
-  <div class="flex items-center gap-4">
-    <%= select_tag :per_page,
-                   options_for_select(["10", "20", "30", "50", "100"], pagy.limit),
-                   data: { controller: "selectable-link" },
-                   class: "py-1.5 pr-8 text-sm text-primary font-medium bg-container-inset border border-secondary rounded-lg focus:border-secondary focus:ring-secondary focus-visible:ring-secondary" %>
-  </div>
+
+  <%= select_tag :per_page,
+                 options_for_select(["10", "20", "30", "50", "100"], pagy.limit),
+                 data: { controller: "selectable-link" },
+                 aria: { label: t("shared.pagination.per_page") },
+                 class: "shrink-0 h-7 py-0 pl-2 pr-8 text-sm text-primary font-medium bg-container-inset border border-secondary rounded-md focus:border-secondary focus:ring-0 focus-ring" %>
 </nav>

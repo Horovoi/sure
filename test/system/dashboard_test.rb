@@ -261,6 +261,9 @@ class DashboardTest < ApplicationSystemTestCase
       click_button I18n.t("pages.dashboard.spending_trend.expand"), enable_aria_label: true
     end
 
+    # The dialog itself takes the focus, not its close button (Safari rings that one)
+    assert_equal "spending_trend_fullscreen_dialog", page.evaluate_script("document.activeElement.id")
+
     total = nil
     within "#spending_trend_fullscreen_dialog" do
       assert_selector "#spending-trend-fullscreen-section [data-controller='spending-chart'] svg path[data-series='current']"

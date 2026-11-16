@@ -13,4 +13,11 @@ class LanguagesHelperTest < ActionView::TestCase
     assert_equal timezone_options, timezone_options("Europe/Kyiv")
     assert_equal timezone_options, timezone_options(nil)
   end
+
+  test "the scheduled jobs select sends Rails zone names under the same labels" do
+    by_name = timezone_options(value: :name)
+
+    assert_equal timezone_options.map(&:first), by_name.map(&:first)
+    assert_includes by_name.map(&:last), "Kyiv"
+  end
 end

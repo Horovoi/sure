@@ -56,7 +56,7 @@
   </div>
 <% elsif @current_api_key %>
   <header class="flex items-center justify-between">
-    <h1 class="text-primary text-xl font-medium">Your API Key</h1>
+    <h1 class="text-primary text-xl font-medium"><%= t(".current_api_key.title") %></h1>
     <%= render DS::Link.new(
       text: "Create New Key",
       href: new_settings_api_key_path(regenerate: true),

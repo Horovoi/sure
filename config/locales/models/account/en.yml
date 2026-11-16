@@ -11,11 +11,11 @@ en:
         subtype: Subtype
     models:
       account: Account
-      account/credit: Credit Card
-      account/depository: Bank Account
+      account/credit: Credit card
+      account/depository: Bank account
       account/investment: Investment
       account/loan: Loan
-      account/other_asset: Other Asset
-      account/other_liability: Other Liability
-      account/property: Real Estate
+      account/other_asset: Other asset
+      account/other_liability: Other liability
+      account/property: Real estate
       account/vehicle: Vehicle

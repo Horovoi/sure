@@ -215,7 +215,7 @@ class ImportsTest < ApplicationSystemTestCase
 
     visit import_path(import)
 
-    assert_text "Ready for Review"
+    assert_text "Ready for review"
     select account.name, from: "pdf_import[account_id]"
     click_on "Save account"
 

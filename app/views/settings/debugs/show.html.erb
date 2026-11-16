@@ -51,7 +51,7 @@
             ) %>
       </div>
 
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto" tabindex="-1">
         <%= render "settings/debugs/log_table", entries: @debug_log_entries %>
       </div>
 
@@ -63,7 +63,7 @@
           ) do |dialog| %>
         <% dialog.with_header(title: t(".title"), subtitle: t(".subtitle")) %>
         <% dialog.with_body do %>
-          <div class="max-h-[75dvh] overflow-auto overscroll-contain">
+          <div class="max-h-[75dvh] overflow-auto overscroll-contain" tabindex="-1">
             <%= render "settings/debugs/log_table", entries: @debug_log_entries %>
           </div>
         <% end %>

@@ -10,14 +10,14 @@ class Settings::ApiKeysTest < ApplicationSystemTestCase
   test "should show no API key state when user has no active keys" do
     visit settings_api_key_path
 
-    assert_text "API Key"
-    assert_link "Create API Key", href: new_settings_api_key_path
+    assert_text "API key"
+    assert_link "Create API key", href: new_settings_api_key_path
     assert_text "Access your account data programmatically"
   end
 
   test "should navigate to create new API key form" do
     visit settings_api_key_path
-    click_link "Create API Key"
+    click_link "Create API key"
 
     assert_current_path new_settings_api_key_path
     assert_text "Create New API Key"
@@ -132,7 +132,7 @@ class Settings::ApiKeysTest < ApplicationSystemTestCase
     # Wait for redirect after revoke
     assert_no_selector "#confirm-dialog"
 
-    assert_text "API Key"
+    assert_text "API key"
     assert_text "Access your account data programmatically"
 
     # Key should be revoked in the database
@@ -157,7 +157,7 @@ class Settings::ApiKeysTest < ApplicationSystemTestCase
     visit settings_api_key_path
 
     within("nav") do
-      assert_text "API Key"
+      assert_text "API key"
     end
   end
 

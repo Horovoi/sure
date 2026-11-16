@@ -36,7 +36,7 @@ class DsSubmitButtonsTest < ApplicationSystemTestCase
     visit settings_profile_url
 
     within "form[action='#{user_path(@user)}']", match: :first do
-      fill_in "First Name", with: "Robert"
+      fill_in "First name", with: "Robert"
       click_button I18n.t("settings.profiles.show.save")
     end
 

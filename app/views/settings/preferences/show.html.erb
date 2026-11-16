@@ -61,14 +61,14 @@
       <div class="rounded-xl border border-secondary p-4 bg-container-inset">
         <div class="grid gap-4 md:grid-cols-2">
           <div>
-            <p class="text-xs font-medium uppercase tracking-wide text-secondary"><%= t(".base_currency_label") %></p>
+            <p class="text-xs font-medium text-secondary"><%= t(".base_currency_label") %></p>
             <div class="mt-2">
               <p class="text-sm font-medium text-primary"><%= primary_currency_code %></p>
               <p class="text-sm text-secondary"><%= currency_label(primary_currency_code) %></p>
             </div>
           </div>
           <div class="md:border-l md:border-secondary md:pl-4">
-            <p class="text-xs font-medium uppercase tracking-wide text-secondary"><%= t(".additional_currencies_label") %></p>
+            <p class="text-xs font-medium text-secondary"><%= t(".additional_currencies_label") %></p>
             <% if !family.custom_enabled_currencies? %>
               <p class="mt-2 text-sm text-secondary"><%= t(".all_currencies_enabled") %></p>
             <% elsif additional_preview_currencies.any? %>
@@ -191,8 +191,8 @@
 
 <%# w2-transfers transfer-match-policy: the family-wide auto-match switch %>
 <%= settings_section title: t(".transfers_title"), subtitle: t(".transfers_subtitle") do %>
-  <div class="space-y-3">
-    <%= styled_form_with model: @user, data: { controller: "auto-submit-form" } do |form| %>
+  <div class="flex flex-col items-start gap-3">
+    <%= styled_form_with model: @user, class: "w-full", data: { controller: "auto-submit-form" } do |form| %>
       <%= form.hidden_field :redirect_to, value: "preferences" %>
       <%= form.fields_for :family do |family_form| %>
         <div class="flex items-center justify-between gap-4">
@@ -217,34 +217,33 @@
           text: @pending_auto_match_count.positive? ? t(".review_matches_count", count: @pending_auto_match_count) : t(".review_matches"),
           href: auto_matches_path,
           variant: :outline,
-          size: :sm,
-          icon: "link-2"
+          icon: "link-2",
+          class: "self-start"
         ) %>
   </div>
 <% end %>
 
 <%= settings_section title: t(".theme_title"), subtitle: t(".theme_subtitle") do %>
-  <div data-controller="theme" data-theme-user-preference-value="<%= @user.theme %>">
-    <%= form_with model: @user, class: "flex flex-col md:flex-row justify-between items-center gap-4", id: "theme_form",
+  <%# Three previews cropped to one frame, each with the same border, label and
+      keyboard ring (the radio is sr-only, so its option shows the ring) %>
+  <div class="@container" data-controller="theme" data-theme-user-preference-value="<%= @user.theme %>">
+    <%= form_with model: @user, class: "grid grid-cols-1 @lg:grid-cols-3 gap-2", id: "theme_form",
         data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
       <%= form.hidden_field :redirect_to, value: "preferences" %>
-
-      <% theme_option_class = "text-center transition-all duration-200 p-3 rounded-lg hover:bg-surface-hover cursor-pointer [&:has(input:checked)]:bg-surface-hover [&:has(input:checked)]:border [&:has(input:checked)]:border-primary [&:has(input:checked)]:shadow-xs" %>
 
       <% [
         { value: "light", image: "light-mode-preview.png" },
         { value: "dark", image: "dark-mode-preview.png" },
         { value: "system", image: "system-mode-preview.png" }
       ].each do |theme| %>
-        <%= form.label :"theme_#{theme[:value]}", class: "group" do %>
-          <div class="<%= theme_option_class %>">
-            <%= image_tag(theme[:image], alt: "#{theme[:value].titleize} Theme Preview", class: "max-h-44 mb-2") %>
-            <div class="<%= theme[:value] == "system" ? "flex items-center gap-2 justify-center" : "text-sm font-medium text-primary" %>">
-              <%= form.radio_button :theme, theme[:value], checked: @user.theme == theme[:value], class: "sr-only",
-                data: { auto_submit_form_target: "auto", autosubmit_trigger_event: "change", action: "theme#updateTheme" } %>
-              <%= t(".theme_#{theme[:value]}") %>
-            </div>
-          </div>
+        <%= form.label :"theme_#{theme[:value]}",
+              class: "group/theme flex flex-col items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors hover:bg-container-hover has-[input:checked]:bg-container-inset outline-2 outline-transparent has-[input:focus-visible]:outline-focus-ring" do %>
+          <%= image_tag(theme[:image], alt: "", class: "block w-full max-w-62 h-auto rounded-lg border border-secondary group-has-[input:checked]/theme:border-primary") %>
+          <span class="text-sm font-medium text-primary">
+            <%= form.radio_button :theme, theme[:value], checked: @user.theme == theme[:value], class: "sr-only",
+              data: { auto_submit_form_target: "auto", autosubmit_trigger_event: "change", action: "theme#updateTheme" } %>
+            <%= t(".theme_#{theme[:value]}") %>
+          </span>
         <% end %>
       <% end %>
     <% end %>

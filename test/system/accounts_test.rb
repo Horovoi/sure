@@ -104,7 +104,7 @@ class AccountsTest < ApplicationSystemTestCase
     fill_in "account[opening_balance_date]", with: start_date
     select "Savings", from: "account[subtype]"
 
-    click_button "Create Account"
+    click_button "Create account"
 
     assert_text "[system test] Savings"
 
@@ -159,7 +159,7 @@ class AccountsTest < ApplicationSystemTestCase
 
       yield if block_given?
 
-      click_button "Create Account"
+      click_button "Create account"
 
       # The new account's page, or `within` holds on to the old page's sidebar
       assert_selector "h2", text: account_name
@@ -194,7 +194,7 @@ class AccountsTest < ApplicationSystemTestCase
       fill_in "Institution name", with: updated_institution_name
       fill_in "Institution domain", with: updated_institution_domain
       fill_in "Notes", with: updated_notes
-      click_button "Update Account"
+      click_button "Update account"
       assert_selector "h2", text: "Updated account name"
 
       created_account.reload

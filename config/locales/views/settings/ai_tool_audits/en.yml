@@ -12,7 +12,7 @@ en:
         all_tools: All tools
         writes_only: Writes only
         filter: Filter
-        empty: No tool calls yet.
+        empty: No tool calls yet
         duration: "%{ms} ms"
         deleted_user: Deleted user
         message: "Message %{id}"

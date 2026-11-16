@@ -13,6 +13,22 @@ class MoneyFieldOperatorsTest < ApplicationSystemTestCase
     @account = accounts(:depository)
   end
 
+  # The input listeners were bound in connect(), after Stimulus had already connected
+  # the amount target with the unbound methods, so every keystroke threw
+  test "typing in a money field raises no page error" do
+    visit new_transaction_url
+    page.execute_script(<<~JS)
+      window.__pageErrors = [];
+      window.addEventListener("error", (event) => window.__pageErrors.push(String(event.message)));
+    JS
+
+    find_field("entry[amount]").click
+    find_field("entry[amount]").send_keys("12,5+3")
+
+    assert_field "entry[amount]", with: "12,5+3"
+    assert_equal [], page.evaluate_script("window.__pageErrors")
+  end
+
   test "the operator row shows for the transaction drawer's amount, not its name" do
     entry = transactions(:one).entry
 

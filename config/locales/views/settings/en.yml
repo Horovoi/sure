@@ -7,7 +7,7 @@ en:
   settings:
     bank_sync:
       show:
-        page_title: Bank Sync
+        page_title: Bank sync
         providers: Providers
         none_title: No providers configured
         none_body: Configure providers to link your bank accounts.
@@ -23,17 +23,17 @@ en:
           title: OpenAI API key
           connected: Connected
           not_connected: Not connected.
-          add_link: Add a key in Self-Hosting
-        disable_ai: Disable AI Assistant
-        prompt_instructions: Prompt Instructions
+          add_link: Add a key in Self-hosting
+        disable_ai: Disable AI assistant
+        prompt_instructions: Prompt instructions
         main_system_prompt:
-          title: Main System Prompt
+          title: Main system prompt
           subtitle: Core instructions that define how the AI assistant behaves in all chat conversations
         transaction_categorizer:
-          title: Transaction Categorizer
+          title: Transaction categorizer
           subtitle: AI automatically categorizes your transactions based on your defined categories
         merchant_detector:
-          title: Merchant Detector
+          title: Merchant detector
           subtitle: AI identifies and enriches transaction data with merchant information
       claude_card:
         title: Claude in chat
@@ -65,26 +65,26 @@ en:
         invalid_model: That model is not available.
     llm_usages:
       show:
-        page_title: LLM Usage
+        page_title: LLM usage
         breadcrumb_home: Home
-        breadcrumb: LLM Usage
-        title: LLM Usage & Costs
+        breadcrumb: LLM usage
+        title: LLM usage & costs
         subtitle: Track your AI usage and estimated costs
-        start_date: Start Date
-        end_date: End Date
+        start_date: Start date
+        end_date: End date
         filter: Filter
-        total_requests: Total Requests
-        total_tokens: Total Tokens
+        total_requests: Total requests
+        total_tokens: Total tokens
         token_split: "%{prompt} prompt / %{completion} completion"
-        total_cost: Total Cost
+        total_cost: Total cost
         subscription_total:
           one: "Plus 1 Claude subscription request (API-equivalent %{cost}, not billed per token)"
           other: "Plus %{count} Claude subscription requests (API-equivalent %{cost}, not billed per token)"
-        avg_cost: Avg Cost/Request
+        avg_cost: Avg cost/request
         avg_cost_basis: "Based on %{with_cost} of %{total} billed requests with cost data"
-        cost_by_operation: Cost by Operation
-        cost_by_model: Cost by Model
-        recent_usage: Recent Usage
+        cost_by_operation: Cost by operation
+        cost_by_model: Cost by model
+        recent_usage: Recent usage
         columns:
           date: Date
           operation: Operation
@@ -92,7 +92,7 @@ en:
           tokens: Tokens
           cost: Cost
         failed: Failed
-        http_status: "HTTP Status: %{status}"
+        http_status: "HTTP status: %{status}"
         subscription_cost: "subscription (API-equivalent %{cost})"
         not_available: N/A
         empty: No usage data found for the selected period
@@ -132,8 +132,8 @@ en:
         date_format: Date format
         general_subtitle: Configure your preferences
         general_title: General
-        default_period: Default Period
-        default_account_order: Default Account Order
+        default_period: Default period
+        default_account_order: Default account order
         language: Language
         page_title: Preferences
         theme_dark: Dark
@@ -152,6 +152,15 @@ en:
         review_matches_count:
           one: Review 1 pending match
           other: Review %{count} pending matches
+    guides:
+      show:
+        admonitions:
+          caution: Caution
+          important: Important
+          note: Note
+          tip: Tip
+          warning: Warning
+        title: Guides
     profiles:
       destroy:
         cannot_remove_self: You cannot remove yourself from the account.
@@ -171,11 +180,11 @@ en:
           title: Reset account and load sample data?
         confirm_remove_invitation:
           body: Are you sure you want to remove the invitation for %{email}?
-          title: Remove Invitation
+          title: Remove invitation
         confirm_remove_member:
           body: Are you sure you want to remove %{name} from your account?
-          title: Remove Member
-        danger_zone_title: Danger Zone
+          title: Remove member
+        danger_zone_title: Danger zone
         delete_account: Delete account
         delete_account_warning: Deleting your account will permanently remove all
           your data and cannot be undone.
@@ -184,31 +193,35 @@ en:
         reset_account_with_sample_data: Reset and preload
         reset_account_with_sample_data_warning: Delete all your existing data and then load fresh sample data so you can explore with a pre-filled environment.
         email: Email
-        first_name: First Name
+        first_name: First name
         household_form_input_placeholder: Enter household name
         household_form_label: Household name
-        household_subtitle: Invite family members, partners and other inviduals.  Invitees
-          can login to your household and access your shared accounts.
+        household_subtitle: Invite family members, partners and other individuals. Invitees
+          can log in to your household and access your shared accounts.
         household_title: Household
         invitation_link: Invitation link
         invite_member: Add member
-        last_name: Last Name
-        page_title: Profile Info
+        last_name: Last name
+        page_title: Profile info
         pending: Pending
         profile_subtitle: Customize how you appear on %{product_name}
         profile_title: Personal
-        remove_invitation: Remove Invitation
-        remove_member: Remove Member
+        roles:
+          admin: Admin
+          member: Member
+          super_admin: Super admin
+        remove_invitation: Remove invitation
+        remove_member: Remove member
         save: Save
     securities:
       show:
         page_title: Security
-        mfa_title: Two-Factor Authentication
+        mfa_title: Two-factor authentication
         mfa_description: Add an extra layer of security to your account by requiring a code from your authenticator app when signing in
         enable_mfa: Enable 2FA
         disable_mfa: Disable 2FA
         disable_mfa_confirm: Are you sure you want to disable two-factor authentication?
-        sso_title: Connected Accounts
+        sso_title: Connected accounts
         sso_subtitle: Manage your single sign-on account connections
         sso_disconnect: Disconnect
         sso_last_used: Last used
@@ -216,19 +229,20 @@ en:
         sso_no_email: No email
         sso_no_identities: No SSO accounts connected
         sso_connect_hint: Log out and sign in with an SSO provider to connect an account.
-        sso_confirm_title: Disconnect Account?
+        sso_confirm_title: Disconnect account?
         sso_confirm_body: Are you sure you want to disconnect your %{provider} account? You can reconnect it later by signing in with that provider again.
         sso_confirm_button: Disconnect
         sso_warning_message: This is your only login method. You should set a password in your security settings before disconnecting, otherwise you may be locked out of your account.
     settings_nav:
+      escape_key: Esc
       accounts_label: Accounts
       auto_matches_label: Transfer matches
       advanced_section_title: Advanced
       ai_prompts_label: AI integrations
-      api_key_label: API Key
+      api_key_label: API key
       budgeting_label: Budgeting
-      llm_usage_label: LLM Usage
-      sso_providers_label: SSO Providers
+      llm_usage_label: LLM usage
+      sso_providers_label: SSO providers
       users_label: Users
       payment_label: Payment
       categories_label: Categories
@@ -240,14 +254,14 @@ en:
       guides_label: Guides
       other_section_title: More
       preferences_label: Preferences
-      profile_label: Profile Info
+      profile_label: Profile info
       rules_label: Rules
       security_label: Security
-      self_hosting_label: Self-Hosting
+      self_hosting_label: Self-hosting
       tags_label: Tags
       transactions_section_title: Transactions
-      api_keys_label: API Key
-      bank_sync_label: Bank Sync
+      api_keys_label: API key
+      bank_sync_label: Bank sync
     settings_nav_link_large:
       next: Next
       previous: Back
@@ -264,9 +278,9 @@ en:
         step1_html: Go to <a href="https://portal.cdp.coinbase.com/projects/api-keys" target="_blank" class="text-primary underline">Coinbase API Settings</a>
         step2: Create a new API key with read-only permissions (view accounts, view transactions)
         step3: Copy your API key and API secret and paste them below
-        api_key_label: API Key
+        api_key_label: API key
         api_key_placeholder: Enter your Coinbase API key
-        api_secret_label: API Secret
+        api_secret_label: API secret
         api_secret_placeholder: Enter your Coinbase API secret
         connect_button: Connect Coinbase
         syncing: Syncing...

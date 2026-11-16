@@ -9,6 +9,11 @@ en:
       body_html: "<p>You will not be able to undo this decision</p>"
       cancel: Cancel
       title: Are you sure?
+    pagination:
+      label: Pages
+      next: Next page
+      per_page: Rows per page
+      previous: Previous page
     exchange_rate_tabs:
       converted_display: "Comes to %{amount} %{currency}"
       converted_label: Amount in %{to}

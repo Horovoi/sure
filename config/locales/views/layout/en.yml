@@ -26,11 +26,12 @@ en:
     shared:
       confirm_dialog:
         body: This action cannot be undone.
+        cancel: Cancel
         confirm: Confirm
         title: Are you sure?
       footer:
-        privacy_policy: Privacy Policy
-        terms_of_service: Terms of Service
+        privacy_policy: Privacy policy
+        terms_of_service: Terms of service
       privacy_toggle:
         label: Hide amounts
         title: Hide amounts (Shift+H)

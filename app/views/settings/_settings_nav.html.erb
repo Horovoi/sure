@@ -52,15 +52,17 @@ nav_sections = [
       href: previous_path,
       variant: "ghost",
     ) %>
-    <%= link_to previous_path, class: "hidden md:block uppercase bg-surface-inset-hover rounded-sm px-1 py-0.5 text-xs text-secondary shadow-sm ml-1 pointer-events-none", data: { controller: "hotkey", hotkey: "Escape" } do %>
-      <kbd>esc</kbd>
+    <%# The Escape shortcut (the hotkey clicks this link). Only a hint: no Tab stop and
+        hidden from screen readers, as the Back link beside it goes to the same place %>
+    <%= link_to previous_path, class: "hidden md:block ml-1 pointer-events-none", tabindex: -1, aria: { hidden: true }, data: { controller: "hotkey", hotkey: "Escape" } do %>
+      <kbd class="bg-surface-inset-hover rounded-sm px-1 py-0.5 text-xs font-sans text-secondary shadow-sm"><%= t(".escape_key") %></kbd>
     <% end %>
   </div>
   <nav class="space-y-4 hidden md:block">
     <% nav_sections.each do |section| %>
       <section class="space-y-2">
         <div class="flex items-center gap-2 px-3">
-          <h3 class="uppercase text-secondary font-medium text-xs"><%= section[:header] %></h3>
+          <h3 class="shrink-0 text-secondary font-medium text-xs"><%= section[:header] %></h3>
           <%= render "shared/ruler", classes: "w-full" %>
         </div>
         <ul class="space-y-1">
@@ -74,7 +76,7 @@ nav_sections = [
       </section>
     <% end %>
     <section>
-      <%= button_to session_path(Current.session), method: :delete, class: "flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-surface-hover w-full" do %>
+      <%= button_to session_path(Current.session), method: :delete, class: "flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-surface-hover w-full focus-ring" do %>
         <%= icon("log-out", color: "current") %>
         <span><%= t(".logout") %></span>
       <% end %>
@@ -98,10 +100,12 @@ nav_sections = [
           </li>
         <% end %>
       <% end %>
-      <%= button_to session_path(Current.session), method: :delete, class: "flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-surface-hover w-full" do %>
-        <%= icon("log-out", color: "current") %>
-        <span><%= t(".logout") %></span>
-      <% end %>
+      <li>
+        <%= button_to session_path(Current.session), method: :delete, class: "flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive whitespace-nowrap hover:bg-surface-hover w-full focus-ring" do %>
+          <%= icon("log-out", color: "current") %>
+          <span><%= t(".logout") %></span>
+        <% end %>
+      </li>
     </ul>
   </nav>
 </div>

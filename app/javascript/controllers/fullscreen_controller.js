@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import openDialog from "utils/open_dialog";
 
 // Connects to data-controller="fullscreen"
 export default class extends Controller {
@@ -10,10 +11,7 @@ export default class extends Controller {
     if (e) e.preventDefault();
     const id = this.hasTargetIdValue ? this.targetIdValue : null;
     if (!id) return;
-    const dialog = document.getElementById(id);
-    if (dialog && typeof dialog.showModal === "function") {
-      dialog.showModal();
-    }
+    openDialog(document.getElementById(id), this.application);
   };
 
   toggleSubcategories = (e) => {
