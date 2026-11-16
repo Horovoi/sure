@@ -524,7 +524,9 @@ class ReportsController < ApplicationController
           fiscal_end = family.budget_period_end_for(current_start)
           month_end = [ fiscal_end, @end_date ].min
 
-          period = Period.custom(start_date: current_start, end_date: month_end)
+          # A range that starts inside a fiscal month counts that month from its own
+          # start, so the bars add up to the header's totals
+          period = Period.custom(start_date: [ current_start, @start_date ].max, end_date: month_end)
 
           income = income_statement.income_totals(period: period).total
           expenses = income_statement.expense_totals(period: period).total
@@ -550,10 +552,10 @@ class ReportsController < ApplicationController
           month_start = current_month
           month_end = current_month.end_of_month
 
-          # Ensure we don't go beyond the end date
+          # Ensure we don't go outside the range on either side
           month_end = @end_date if month_end > @end_date
 
-          period = Period.custom(start_date: month_start, end_date: month_end)
+          period = Period.custom(start_date: [ month_start, @start_date ].max, end_date: month_end)
 
           income = income_statement.income_totals(period: period).total
           expenses = income_statement.expense_totals(period: period).total

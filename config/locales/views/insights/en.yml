@@ -105,8 +105,8 @@ en:
         above: In the first %{days} days of this fiscal month you spent %{spent} on %{category}, about %{deviation_pct}% more than the %{normal} that is normal by this day.
         below: In the first %{days} days of this fiscal month you spent %{spent} on %{category}, about %{deviation_pct}% less than the %{normal} that is normal by this day.
       cash_flow_warning:
-        low: With your upcoming subscriptions and typical spending, your cash of %{current_balance} could drop to %{projected_low} around %{projected_low_date}.
-        negative: With your upcoming subscriptions and typical spending, your cash of %{current_balance} could fall to %{projected_low} around %{projected_low_date}.
+        low: With your typical income, upcoming subscriptions and typical spending, your cash of %{current_balance} could drop to %{projected_low} around %{projected_low_date}.
+        negative: With your typical income, upcoming subscriptions and typical spending, your cash of %{current_balance} could fall to %{projected_low} around %{projected_low_date}.
       net_worth_milestone: Your net worth passed %{milestone} this fiscal month and is now %{net_worth}.
       savings_rate_change:
         up: You saved %{current_rate}% of your income in %{month}, up %{change_pp} percentage points from %{previous_rate}% the month before.

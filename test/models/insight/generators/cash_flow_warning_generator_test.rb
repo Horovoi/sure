@@ -59,6 +59,33 @@ class Insight::Generators::CashFlowWarningGeneratorTest < ActiveSupport::TestCas
     end
   end
 
+  # The owner's month: cash of about 18k, spending about 90k and income about 127k
+  test "typical income keeps a household that spends more than its cash each month from a false alarm" do
+    travel_to Date.new(2026, 3, 20) do
+      cash_account(balance: 17_871)
+      stub_median(90_000)
+      IncomeStatement.any_instance.stubs(:median_income).returns(126_557)
+
+      assert_empty generate
+    end
+  end
+
+  test "a salary due in the window counts on its date" do
+    travel_to Date.new(2026, 3, 20) do
+      cash_account(balance: 1_000)
+      stub_median(4_000)
+      IncomeStatement.any_instance.stubs(:median_income).returns(4_000)
+      @family.recurring_transactions.create!(
+        name: "Salary", amount: -4_000, currency: "USD", expected_day_of_month: 21,
+        last_occurrence_date: Date.new(2026, 2, 21), next_expected_date: Date.new(2026, 3, 21),
+        status: "active", manual: true
+      )
+
+      # The salary arrives the next day, before the month's spending wears the cash down
+      assert_empty generate
+    end
+  end
+
   private
     def generate
       Insight::Generators::CashFlowWarningGenerator.new(@family).generate

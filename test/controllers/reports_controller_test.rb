@@ -126,6 +126,26 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a custom range that starts inside a month counts only its own days in the monthly breakdown" do
+    account = accounts(:depository)
+    start_date = Date.new(2026, 10, 16)
+    create_transaction(account: account, date: Date.new(2026, 10, 10), amount: 500, name: "Before the range")
+    create_transaction(account: account, date: start_date, amount: 30, name: "First day")
+    create_transaction(account: account, date: Date.new(2026, 11, 2), amount: 70, name: "Next month")
+
+    [ false, true ].each do |fiscal|
+      @family.update!(use_fiscal_months: fiscal, fiscal_month_start_day: fiscal ? 17 : 1)
+      get reports_path(period_type: :custom, start_date: start_date.iso8601, end_date: "2026-11-16", fiscal_mode: fiscal.to_s)
+      assert_response :ok
+
+      trends = JSON.parse(css_select("[data-reports-trends-bar-trends-value]").first["data-reports-trends-bar-trends-value"])
+      # The first bar is the month (fiscal: Sep 17 - Oct 16) the range starts in: only its
+      # first day counts, not the 500 before the range
+      assert_equal (fiscal ? "Sep 2026" : "Oct 2026"), trends.first["month"]
+      assert_in_delta 30, trends.first["expenses"], 0.001, "fiscal=#{fiscal}: #{trends.inspect}"
+    end
+  end
+
   test "index handles invalid date parameters gracefully" do
     get reports_path(
       period_type: :custom,
