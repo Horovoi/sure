@@ -606,16 +606,58 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
       reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10", period_offset: -1)
   end
 
-  test "the next arrow is off on the current period and there is no Current link" do
+  # The next arrow used to be a disabled <button> that looked active and
+  # then refused the click; Current used to vanish and shift the row.
+  test "on the current period the next arrow is greyed out and Current keeps an invisible slot" do
     get reports_path(period_type: :monthly)
     assert_response :ok
 
-    assert_select "button[disabled][aria-label=?]", I18n.t("reports.index.period_nav.next")
+    assert_select "span[role='link'][aria-disabled='true'].text-subdued[aria-label=?]", I18n.t("reports.index.period_nav.next")
+    assert_select "button[aria-label=?]", I18n.t("reports.index.period_nav.next"), count: 0
     assert_select "a[data-hotkey='ArrowRight']", count: 0
     assert_select "a[data-hotkey='ArrowLeft'][href=?]", reports_path(period_type: :monthly, fiscal_mode: "false", period_offset: -1)
-    assert_select "[data-testid='report-period-nav'] a", text: I18n.t("reports.index.period_nav.current"), count: 0
+    assert_select "[data-testid='report-period-current'].invisible[aria-hidden='true'][tabindex='-1']", text: I18n.t("reports.index.period_nav.current")
     # The Current/Last toggle is gone
     assert_select "a[href*='period_mode']", count: 0
+  end
+
+  test "every period type and mode greys out the next arrow on its current period" do
+    @family.update!(use_fiscal_months: true, fiscal_month_start_day: 10)
+
+    %i[monthly quarterly last_6_months ytd].product(%w[true false]).each do |period_type, fiscal_mode|
+      get reports_path(period_type: period_type, fiscal_mode: fiscal_mode)
+      assert_select "span[aria-disabled='true'][data-period-arrow='next']", 1, "#{period_type} fiscal=#{fiscal_mode}"
+      assert_select "a[data-period-arrow='previous']", 1, "#{period_type} fiscal=#{fiscal_mode}"
+
+      get reports_path(period_type: period_type, fiscal_mode: fiscal_mode, period_offset: -1)
+      assert_select "a[data-period-arrow='next']", 1, "#{period_type} fiscal=#{fiscal_mode} offset -1"
+      assert_select "[data-testid='report-period-current']:not(.invisible)", 1
+    end
+
+    get reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10")
+    assert_select "span[aria-disabled='true'][data-period-arrow='next']", 1
+  end
+
+  # Every label the period type can show sits invisibly in the label's grid
+  # cell, so the cell is as wide as the widest one and the row never moves.
+  test "the period label reserves the width of its widest label" do
+    travel_to Date.new(2026, 3, 20) do
+      @family.update!(use_fiscal_months: false)
+
+      get reports_path(period_type: :monthly)
+      assert_select "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true'].invisible", 12
+      assert_select "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true']", text: "September 2026"
+
+      get reports_path(period_type: :quarterly)
+      assert_select "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true']", 4
+
+      get reports_path(period_type: :ytd, period_offset: -1)
+      assert_select "[data-testid='report-period-label']", text: "2025"
+      assert_select "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true']", text: "2025 to date"
+
+      get reports_path(period_type: :custom, start_date: "2026-03-01", end_date: "2026-03-10")
+      assert_select "[data-testid='report-period-nav'] .inline-grid [aria-hidden='true']", text: "Sep 28, 2026 – Sep 28, 2026"
+    end
   end
 
   test "a past period links forward and back to the current period" do

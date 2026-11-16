@@ -345,15 +345,20 @@ class ReportsController < ApplicationController
     end
 
     # The previous and next arrows, the period label, and the link back to
-    # the current period. The next arrow is off on the current period.
+    # the current period. The next arrow is off on the current period, and
+    # so is the Current link (the view keeps its slot so nothing moves).
+    # label_samples are every label this period type can show; the view
+    # stacks them invisibly under the label so its width never changes.
     def build_period_nav
       at_current = period_offset.zero?
 
       {
-        label: period_label,
+        label: period_label(@start_date, @end_date, current: at_current),
+        label_samples: period_label_samples,
         previous_params: period_nav_params(period_offset - 1),
         next_params: at_current ? nil : period_nav_params(period_offset + 1),
-        current_params: at_current ? nil : period_nav_params(0)
+        current_params: period_nav_params(0),
+        at_current: at_current
       }
     end
 
@@ -384,23 +389,34 @@ class ReportsController < ApplicationController
       end
     end
 
-    def period_label
-      year = @start_date.year
+    def period_label(start_date, end_date, current: false)
+      year = start_date.year
 
       case @period_type
       when :monthly
-        I18n.l(@start_date, format: "%B %Y")
+        I18n.l(start_date, format: "%B %Y")
       when :quarterly
-        t("reports.index.period_nav.label.quarterly", quarter: (@start_date.month - 1) / 3 + 1, year: year)
+        t("reports.index.period_nav.label.quarterly", quarter: (start_date.month - 1) / 3 + 1, year: year)
       when :last_6_months
-        t("reports.index.period_nav.label.half_year", half: @start_date.month <= 6 ? 1 : 2, year: year)
+        t("reports.index.period_nav.label.half_year", half: start_date.month <= 6 ? 1 : 2, year: year)
       when :ytd
-        period_offset.zero? ? t("reports.index.period_nav.label.year_to_date", year: year) : year.to_s
+        current ? t("reports.index.period_nav.label.year_to_date", year: year) : year.to_s
       else
         t("reports.index.period_nav.label.custom",
-          start: I18n.l(@start_date, format: "%b %-d, %Y"),
-          end: I18n.l(@end_date, format: "%b %-d, %Y"))
+          start: I18n.l(start_date, format: "%b %-d, %Y"),
+          end: I18n.l(end_date, format: "%b %-d, %Y"))
       end
+    end
+
+    # One label per month (the 28th: a two-digit day) covers every month name
+    # and quarter or half of the year; Year adds its "to date" form.
+    def period_label_samples
+      year = @start_date.year
+      days = (1..12).map { |month| Date.new(year, month, 28) }
+
+      samples = days.map { |day| period_label(day, day) }
+      samples << period_label(@start_date, @end_date, current: true) if @period_type == :ytd
+      samples.uniq
     end
 
     def beginning_of_half_year(date)

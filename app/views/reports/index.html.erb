@@ -54,52 +54,45 @@
 
       <%# Filter Bar: Period arrows + Toggles + Date + Print %>
       <div class="flex flex-wrap items-center gap-3">
-        <%# Period arrows: step back and forth through periods of the selected type %>
+        <%# Period arrows: step back and forth through periods of the selected type.
+            Nothing in this group changes size between periods: the arrows keep
+            their box when off, the label is as wide as its widest sample, and
+            Current keeps its slot (invisible) on the current period. %>
         <% nav = @period_nav %>
         <div class="flex items-center gap-1" data-testid="report-period-nav">
-          <%= render DS::Tooltip.new(text: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.previous"), key: "←")) do |tooltip| %>
-            <% tooltip.with_trigger do %>
-              <%= render DS::Link.new(
-                variant: "icon",
-                icon: "chevron-left",
-                href: reports_path(nav[:previous_params]),
-                aria: { label: t("reports.index.period_nav.previous"), keyshortcuts: "ArrowLeft" },
-                data: { controller: "hotkey", hotkey: "ArrowLeft" }
-              ) %>
+          <%= render DS::PeriodArrow.new(
+            direction: :previous,
+            label: t("reports.index.period_nav.previous"),
+            href: reports_path(nav[:previous_params]),
+            hotkey: "ArrowLeft",
+            shortcut_hint: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.previous"), key: "←")
+          ) %>
+
+          <span class="inline-grid text-sm font-medium text-primary px-1 text-center whitespace-nowrap tabular-nums">
+            <span class="[grid-area:1/1]" data-testid="report-period-label"><%= nav[:label] %></span>
+            <% nav[:label_samples].each do |sample| %>
+              <span class="[grid-area:1/1] invisible" aria-hidden="true"><%= sample %></span>
             <% end %>
-          <% end %>
+          </span>
 
-          <span class="text-sm font-medium text-primary px-1 text-center whitespace-nowrap" data-testid="report-period-label"><%= nav[:label] %></span>
+          <%= render DS::PeriodArrow.new(
+            direction: :next,
+            label: t("reports.index.period_nav.next"),
+            href: nav[:next_params] && reports_path(nav[:next_params]),
+            hotkey: "ArrowRight",
+            shortcut_hint: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.next"), key: "→")
+          ) %>
 
-          <% if nav[:next_params] %>
-            <%= render DS::Tooltip.new(text: t("reports.index.period_nav.shortcut_hint", action: t("reports.index.period_nav.next"), key: "→")) do |tooltip| %>
-              <% tooltip.with_trigger do %>
-                <%= render DS::Link.new(
-                  variant: "icon",
-                  icon: "chevron-right",
-                  href: reports_path(nav[:next_params]),
-                  aria: { label: t("reports.index.period_nav.next"), keyshortcuts: "ArrowRight" },
-                  data: { controller: "hotkey", hotkey: "ArrowRight" }
-                ) %>
-              <% end %>
-            <% end %>
-          <% else %>
-            <%= render DS::Button.new(
-              variant: "icon",
-              icon: "chevron-right",
-              disabled: true,
-              aria: { label: t("reports.index.period_nav.next") }
-            ) %>
-          <% end %>
-
-          <% if nav[:current_params] %>
-            <%= render DS::Link.new(
-              text: t("reports.index.period_nav.current"),
-              variant: "ghost",
-              size: :sm,
-              href: reports_path(nav[:current_params])
-            ) %>
-          <% end %>
+          <%= render DS::Link.new(
+            text: t("reports.index.period_nav.current"),
+            variant: "ghost",
+            size: :sm,
+            href: reports_path(nav[:current_params]),
+            class: nav[:at_current] ? "invisible" : nil,
+            aria: nav[:at_current] ? { hidden: true } : {},
+            tabindex: nav[:at_current] ? -1 : nil,
+            data: { testid: "report-period-current" }
+          ) %>
         </div>
 
         <% if @period_type != :custom %>

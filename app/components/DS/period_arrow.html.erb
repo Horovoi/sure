@@ -1,0 +1,15 @@
+<% if enabled? %>
+  <% if shortcut_hint %>
+    <%= render DS::Tooltip.new(text: shortcut_hint) do |tooltip| %>
+      <% tooltip.with_trigger do %>
+        <%= render link %>
+      <% end %>
+    <% end %>
+  <% else %>
+    <%= render link %>
+  <% end %>
+<% else %>
+  <span role="link" aria-disabled="true" aria-label="<%= label %>" class="<%= disabled_classes %>" data-period-arrow="<%= direction %>">
+    <%= helpers.icon(icon_name, color: "current") %>
+  </span>
+<% end %>
