@@ -39,25 +39,14 @@ class Goals::FundingAccountsBreakdownComponent < ApplicationComponent
     ((backing.to_d / total) * 100).round
   end
 
-  # Pull from the goal's per-goal account color map so the colors here
-  # (distribution bar, row avatars) match the AccountStackComponent on the
-  # index card. Stable + collision-free within the goal up to PALETTE size.
+  # Goal#account_color: the bar segments and row avatars match the card's
+  # account stack and the form
   def color_for(account)
-    goal.account_color_map[account.id] || Goals::AvatarComponent.color_for(account.name)
+    goal.account_color(account)
   end
 
-  # Label shown beneath the account name. Prefers the depository subtype
-  # ("Savings", "HSA"…) over the bare accountable_type ("Depository") so the
-  # subline carries useful signal. Falls back to the accountable type's i18n
-  # entry (`accounts.types.*`), and finally to a `titleize` so the row is
-  # never blank if a string is missing.
   def accountable_label(account)
-    if account.subtype.present?
-      I18n.t("goals.form.subtypes.#{account.subtype}", default: account.subtype.titleize)
-    else
-      type = account.accountable_type.to_s
-      I18n.t("accounts.types.#{type.underscore}", default: type.titleize)
-    end
+    helpers.goal_account_kind_label(account)
   end
 
   private

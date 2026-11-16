@@ -1,69 +1,61 @@
-<%# locals: (family:, year:) %>
+<%# locals: (family:, year:, selected: nil) %>
+<%# The month picker in the budget header. `selected` is the param of the budget
+    on screen, so its month is marked; today's month carries a dot. The panel
+    is a DS::Popover, and the items sit 4px inside it, as in every overlay. %>
+
+<%
+  first_budget_date = lambda do |y, month|
+    Date.new(y, month, [ family.fiscal_start_day, Date.new(y, month, -1).day ].min)
+  end
+  previous_year_valid = Budget.budget_date_valid?(first_budget_date.call(year - 1, 12), family: family)
+  next_year_valid = Budget.budget_date_valid?(first_budget_date.call(year + 1, 1), family: family)
+  today_param = Budget.date_to_param(Date.current, family: family)
+%>
 
 <%= turbo_frame_tag "budget_picker" do %>
-  <div class="p-3 space-y-4">
-    <div class="flex items-center gap-2 justify-between">
-      <% begin
-           last_dom = Date.new(year - 1, 12, -1).day
-           day = [ family.fiscal_start_day, last_dom ].min
-           last_month_of_previous_year = Date.new(year - 1, 12, day)
-         rescue
-           last_month_of_previous_year = Date.new(year - 1, 12, 1)
-         end %>
-
-      <% if Budget.budget_date_valid?(last_month_of_previous_year, family: family) %>
-        <%= link_to picker_budgets_path(year: year - 1), data: { turbo_frame: "budget_picker" }, class: "p-2 flex items-center justify-center hover:bg-alpha-black-25 rounded-md" do %>
-          <%= icon "chevron-left" %>
-        <% end %>
-      <% else %>
-        <span class="p-2 flex items-center justify-center text-subdued rounded-md">
-          <%= icon "chevron-left", color: "current" %>
-        </span>
-      <% end %>
-
-      <span class="w-40 text-center px-3 py-2 border border-tertiary rounded-md" data-budget-picker-target="year">
-        <%= year %>
-      </span>
-
-      <% begin
-           first_dom = Date.new(year + 1, 1, -1).day
-           day = [ family.fiscal_start_day, first_dom ].min
-           first_month_of_next_year = Date.new(year + 1, 1, day)
-         rescue
-           first_month_of_next_year = Date.new(year + 1, 1, 1)
-         end %>
-
-      <% if Budget.budget_date_valid?(first_month_of_next_year, family: family) %>
-        <%= link_to picker_budgets_path(year: year + 1), data: { turbo_frame: "budget_picker" }, class: "p-2 flex items-center justify-center hover:bg-alpha-black-25 rounded-md" do %>
-          <%= icon "chevron-right" %>
-        <% end %>
-      <% else %>
-        <span class="p-2 flex items-center justify-center text-subdued rounded-md">
-          <%= icon "chevron-right", color: "current" %>
-        </span>
-      <% end %>
-    </div>
-
-    <div class="grid grid-cols-3 gap-2 text-sm text-center font-medium">
-      <% Date::ABBR_MONTHNAMES.compact.each do |month_name| %>
-        <% month_index = Date::ABBR_MONTHNAMES.index(month_name) %>
-        <% last_dom = Date.new(year, month_index, -1).day %>
-        <% start_day = [ family.fiscal_start_day, last_dom ].min %>
-        <% date = Date.new(year, month_index, start_day) %>
-        <% param_key = Budget.date_to_param(date, family: family) %>
-
-        <% if Budget.budget_date_valid?(date, family: family) %>
-          <%= render DS::Link.new(
-            variant: "ghost",
-            text: month_name,
-            href: budget_path(param_key),
-            full_width: true,
-            frame: :_top
+  <div class="w-64 max-w-full px-1 space-y-1" data-testid="budget-picker">
+    <div class="flex items-center justify-between gap-2">
+      <%= render DS::PeriodArrow.new(
+            direction: :previous,
+            label: t("budgets.picker.previous_year"),
+            href: (picker_budgets_path(year: year - 1, selected: selected) if previous_year_valid),
+            data: { turbo_frame: "budget_picker" }
           ) %>
-        <% else %>
-          <span class="px-3 py-2 text-subdued rounded-md"><%= month_name %></span>
-        <% end %>
-      <% end %>
+
+      <span class="text-sm font-medium text-primary tabular-nums" data-budget-picker-target="year"><%= year %></span>
+
+      <%= render DS::PeriodArrow.new(
+            direction: :next,
+            label: t("budgets.picker.next_year"),
+            href: (picker_budgets_path(year: year + 1, selected: selected) if next_year_valid),
+            data: { turbo_frame: "budget_picker" }
+          ) %>
     </div>
+
+    <ul class="grid grid-cols-3 text-sm text-center font-medium">
+      <% Date::ABBR_MONTHNAMES.compact.each.with_index(1) do |month_name, month_index| %>
+        <% date = first_budget_date.call(year, month_index) %>
+        <% param_key = Budget.date_to_param(date, family: family) %>
+        <% is_selected = param_key == selected %>
+        <% is_today = param_key == today_param %>
+        <li>
+          <% if Budget.budget_date_valid?(date, family: family) %>
+            <%= link_to budget_path(param_key),
+                        class: class_names("relative flex h-9 items-center justify-center rounded-md px-2 text-primary focus-ring",
+                                           is_selected ? "bg-container-inset" : "hover:bg-container-hover"),
+                        aria: { current: ("date" if is_selected) },
+                        data: { turbo_frame: "_top" } do %>
+              <%= month_name %>
+              <% if is_today %>
+                <span class="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-current" aria-hidden="true"></span>
+                <span class="sr-only"><%= t("budgets.picker.this_month") %></span>
+              <% end %>
+            <% end %>
+          <% else %>
+            <span class="flex h-9 items-center justify-center rounded-md px-2 text-subdued"><%= month_name %></span>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
   </div>
 <% end %>

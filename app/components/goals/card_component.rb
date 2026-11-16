@@ -11,13 +11,13 @@ class Goals::CardComponent < ApplicationComponent
     goal.progress_percent
   end
 
-  # Maps goal status to a DS::ProgressRing tone (the ring geometry/colors now
-  # live in that primitive — see #1899).
+  # Goal#progress_tone: the same colour rule as the ring on the goal page
   def ring_tone
-    case goal.status
-    when :reached, :on_track, :funded then :success
-    else goal.needs_attention? ? :warning : :neutral
-    end
+    goal.progress_tone
+  end
+
+  def ring_track
+    Goals::ProgressRingComponent::TRACK
   end
 
   def linked_accounts

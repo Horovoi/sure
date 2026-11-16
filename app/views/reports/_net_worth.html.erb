@@ -1,41 +1,48 @@
-<div class="space-y-6">
-  <%# Main Net Worth Stats %>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <%# Current Net Worth %>
-    <div class="p-4 bg-surface-inset rounded-lg">
-      <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.current_net_worth") %></p>
-      <p class="text-2xl font-semibold privacy-sensitive <%= net_worth_metrics[:current_net_worth] >= 0 ? "text-success" : "text-destructive" %>">
-        <%= net_worth_metrics[:current_net_worth].format %>
-      </p>
-    </div>
+<div class="@container space-y-6">
+  <%# Main net worth figures. Columns follow the section's width, not the
+      window, and amounts never wrap. %>
+  <div>
+    <div class="grid grid-cols-1 @2xl:grid-cols-3 gap-4">
+      <%= render "reports/kpi_tile",
+            label: t("reports.net_worth.current_net_worth"),
+            value: net_worth_metrics[:current_net_worth].format,
+            value_class: net_worth_metrics[:current_net_worth] >= 0 ? "text-success" : "text-destructive",
+            surface: :inset,
+            size: :md %>
 
-    <%# Period Change %>
-    <div class="p-4 bg-surface-inset rounded-lg">
-      <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.period_change") %></p>
-      <% if net_worth_metrics[:trend] %>
-        <% trend = net_worth_metrics[:trend] %>
-        <p class="text-2xl font-semibold mb-1 privacy-sensitive" style="color: <%= trend.color %>">
-          <%= trend.value.format(signify_positive: true) %>
-        </p>
+      <% if (trend = net_worth_metrics[:trend]) %>
         <%# A previous value of zero makes the percentage infinite, with nothing useful to print %>
-        <% if trend.percent.finite? %>
-          <p class="text-xs" style="color: <%= trend.color %>">
-            <%= trend.value >= 0 ? "+" : "" %><%= trend.percent_formatted %>
-          </p>
-        <% end %>
+        <%= render "reports/kpi_tile",
+              label: t("reports.net_worth.period_change"),
+              value: trend.value.format(signify_positive: true),
+              value_class: nil,
+              value_style: "color: #{trend.color}",
+              sub: (tag.span("#{"+" if trend.value >= 0}#{trend.percent_formatted}", class: "tabular-nums", style: "color: #{trend.color}") if trend.percent.finite?),
+              surface: :inset,
+              size: :md %>
       <% else %>
-        <p class="text-2xl font-semibold mb-1 text-subdued">--</p>
+        <%= render "reports/kpi_tile",
+              label: t("reports.net_worth.period_change"),
+              value: "--",
+              value_class: "text-subdued",
+              sensitive: false,
+              surface: :inset,
+              size: :md %>
       <% end %>
-    </div>
 
-    <%# Assets vs Liabilities %>
-    <div class="p-4 bg-surface-inset rounded-lg">
-      <p class="text-sm text-secondary mb-2"><%= t("reports.net_worth.assets_vs_liabilities") %></p>
-      <%# Large amounts wrap rather than overflow the card when the side panel is open %>
-      <div class="flex items-baseline gap-2 flex-wrap">
-        <span class="text-lg font-semibold text-success break-words privacy-sensitive"><%= net_worth_metrics[:total_assets].format %></span>
-        <span class="text-xs text-subdued shrink-0">-</span>
-        <span class="text-lg font-semibold text-destructive break-words privacy-sensitive"><%= net_worth_metrics[:total_liabilities].format %></span>
+      <%# Two labelled lines, so neither amount wraps or reads as a range %>
+      <div class="min-w-0 bg-surface-inset rounded-lg p-4" data-testid="net-worth-assets-liabilities">
+        <p class="text-sm text-secondary"><%= t("reports.net_worth.assets_vs_liabilities") %></p>
+        <dl class="mt-1 space-y-0.5">
+          <div class="flex items-baseline justify-between gap-3">
+            <dt class="text-xs text-secondary"><%= t("reports.net_worth.total_assets") %></dt>
+            <dd class="text-base font-medium tabular-nums whitespace-nowrap text-success privacy-sensitive"><%= net_worth_metrics[:total_assets].format %></dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-3">
+            <dt class="text-xs text-secondary"><%= t("reports.net_worth.total_liabilities") %></dt>
+            <dd class="text-base font-medium tabular-nums whitespace-nowrap text-destructive privacy-sensitive"><%= net_worth_metrics[:total_liabilities].format %></dd>
+          </div>
+        </dl>
       </div>
     </div>
   </div>
@@ -76,12 +83,12 @@
          data-reports-waterfall-chart-net-worth-label-value="<%= t("reports.net_worth.net_worth_total") %>">
     </div>
   <% else %>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="bg-container-inset rounded-xl p-4">
+    <div class="grid grid-cols-1 @md:grid-cols-2 gap-4">
+      <div class="bg-surface-inset rounded-lg p-4">
         <p class="text-sm text-secondary text-center"><%= t("reports.net_worth.no_assets") %></p>
       </div>
-      <div class="bg-container-inset rounded-xl p-4">
-        <p class="text-sm text-subdued text-center"><%= t("reports.net_worth.no_liabilities") %></p>
+      <div class="bg-surface-inset rounded-lg p-4">
+        <p class="text-sm text-secondary text-center"><%= t("reports.net_worth.no_liabilities") %></p>
       </div>
     </div>
   <% end %>

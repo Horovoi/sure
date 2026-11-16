@@ -272,7 +272,8 @@ class ReportsTest < ApplicationSystemTestCase
     wait_for_hotkeys
     record_hotkey_clicks
 
-    find("section[data-section-key]", match: :first).send_keys(:enter)
+    focus_first_section_handle
+    page.send_keys(:enter)
     page.send_keys(:arrow_left)
     assert_empty clicked_hotkeys
     page.send_keys(:escape)
@@ -289,6 +290,44 @@ class ReportsTest < ApplicationSystemTestCase
     assert_no_selector "dialog[open]"
     page.send_keys(:arrow_left)
     assert_equal %w[ArrowLeft], clicked_hotkeys
+  end
+
+  test "report sections are not tab stops and move with the keyboard from their drag handle" do
+    visit reports_path(period_type: :monthly)
+    wait_for_hotkeys
+
+    keys = all("section[data-section-key]").map { |section| section["data-section-key"] }
+    assert_operator keys.size, :>=, 2
+    assert_no_selector "section[data-section-key][tabindex]"
+
+    focus_first_section_handle
+    page.send_keys(:enter)
+    assert_selector "section[data-section-key='#{keys.first}'][aria-grabbed='true']"
+    page.send_keys(:arrow_down)
+
+    assert_equal [ keys.second, keys.first ], all("section[data-section-key]").first(2).map { |section| section["data-section-key"] }
+    # Focus stays on the handle that moved, so the next arrow keeps moving it
+    assert_equal "handle", evaluate_script("document.activeElement.dataset.reportsSortableTarget")
+    page.send_keys(:escape)
+    assert_no_selector "section[aria-grabbed='true']"
+  end
+
+  # A click in a section used to focus the section itself, and Space then
+  # picked it up for reordering instead of scrolling the page
+  test "space after a click in a section scrolls the page" do
+    visit reports_path(period_type: :monthly)
+    wait_for_hotkeys
+
+    find("section[data-section-key] h2", match: :first).click
+    page.send_keys(:space)
+
+    assert_no_selector "section[aria-grabbed='true']"
+    # Space scrolls smoothly, so the offset grows over a few frames
+    scrolled = 20.times.any? do
+      sleep 0.05
+      evaluate_script("document.getElementById('main-content').scrollTop").positive?
+    end
+    assert scrolled, "Space scrolled the page (focus: #{evaluate_script("document.activeElement.tagName + '#' + document.activeElement.id")})"
   end
 
   test "a held arrow key steps one period" do
@@ -333,6 +372,11 @@ class ReportsTest < ApplicationSystemTestCase
   end
 
   private
+    # The handle shows on hover or focus, so focus it the way Tab would
+    def focus_first_section_handle
+      page.execute_script("document.querySelector('section[data-section-key] [data-reports-sortable-target=handle]').focus()")
+    end
+
     # A desktop Chrome window does not get narrower than about 500px; the
     # emulated screen does
     def with_window_size(width, height)

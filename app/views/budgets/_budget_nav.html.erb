@@ -5,33 +5,26 @@
   { name: t(".categories"), path: budget_budget_categories_path(budget), is_complete: budget.confirmable?, step_number: 2 },
 ] %>
 
-<ul class="flex items-center gap-2">
+<%# The current step is the filled one; a finished step is ticked in the success tint %>
+<ol class="flex items-center gap-2">
   <% steps.each_with_index do |step, idx| %>
     <li class="flex items-center gap-2 group">
       <% is_current = request.path == step[:path] %>
+      <% done = step[:is_complete] && !is_current %>
 
-      <% text_class = if is_current
-                  "text-primary"
-                else
-                  step[:is_complete] ? "text-green-600" : "text-secondary"
-                end %>
-      <% step_class = if is_current
-                  "bg-primary text-primary"
-                else
-                  step[:is_complete] ? "bg-green-600/10 border-alpha-black-25" : "bg-container-inset"
-                end %>
+      <%= link_to step[:path],
+                  class: class_names("flex items-center gap-2 rounded-md text-sm font-medium focus-ring",
+                                     is_current ? "text-primary" : (done ? "text-success" : "text-secondary hover:text-primary")),
+                  aria: { current: ("step" if is_current) } do %>
+        <span class="<%= class_names("w-7 h-7 rounded-full shrink-0 inline-flex items-center justify-center tabular-nums",
+                                     is_current ? "bg-inverse text-inverse" : (done ? "bg-success/10 text-success" : "bg-container-inset text-secondary")) %>">
+          <%= done ? icon("check", size: "sm", color: "current") : idx + 1 %>
+        </span>
 
-      <%= link_to step[:path], class: "flex items-center gap-3" do %>
-        <div class="flex items-center gap-2 text-sm font-medium <%= text_class %>">
-          <span class="<%= step_class %> w-7 h-7 rounded-full shrink-0 inline-flex items-center justify-center border border-transparent">
-            <%= step[:is_complete] && !is_current ? icon("check", size: "sm") : idx + 1 %>
-          </span>
-
-          <span><%= step[:name] %></span>
-        </div>
+        <span><%= step[:name] %></span>
       <% end %>
 
-      <hr class="border border-secondary w-12 group-last:hidden">
+      <span class="w-12 border-t border-secondary group-last:hidden" aria-hidden="true"></span>
     </li>
   <% end %>
-</ul>
+</ol>

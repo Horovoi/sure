@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import evaluateAmountExpression, { precisionFromStep } from "utils/evaluate_amount_expression";
+import { formatMoney } from "utils/format_money";
 
 // Single-form controller for the goal create / edit modal.
 //
@@ -26,7 +27,12 @@ export default class extends Controller {
 
   static values = {
     currency: { type: String, default: "USD" },
+    // Money#format_options of the goal's currency (unit, delimiter, separator,
+    // format), so the hint reads "6,312 ₴" like every amount the server prints
+    moneyFormat: Object,
     suggestedWithDate: { type: String, default: "Save {monthly}/mo across {accounts} to hit it on time." },
+    accountsOne: { type: String, default: "1 account" },
+    accountsOther: { type: String, default: "{count} accounts" },
     suggestedNoDate: { type: String, default: "Set a target date to project a finish line." },
     // Only the create form must pick an account. On edit the checkboxes are
     // populated from visible accounts only, so a goal backed by a now-hidden
@@ -171,7 +177,8 @@ export default class extends Controller {
         return;
       }
       const perMonth = Math.ceil(amount / months);
-      const accountLabel = `${checkedCount} ${checkedCount === 1 ? "account" : "accounts"}`;
+      const accountLabel = (checkedCount === 1 ? this.accountsOneValue : this.accountsOtherValue)
+        .replace("{count}", checkedCount);
       text = this.suggestedWithDateValue
         .replace("{monthly}", this.#money(perMonth))
         .replace("{accounts}", accountLabel);
@@ -218,6 +225,9 @@ export default class extends Controller {
   }
 
   #money(value) {
+    if (this.hasMoneyFormatValue && Object.keys(this.moneyFormatValue).length > 0) {
+      return formatMoney(value, 0, this.moneyFormatValue);
+    }
     try {
       return new Intl.NumberFormat(undefined, {
         style: "currency",

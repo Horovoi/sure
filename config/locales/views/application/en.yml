@@ -1,5 +1,7 @@
 ---
 en:
+  application:
+    date_range: "%{start} – %{end}"
   number:
     currency:
       format:

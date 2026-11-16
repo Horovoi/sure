@@ -1,30 +1,34 @@
 <%# locals: (budget:) %>
 
+<%# Two bars against the plan. Money in is the success tone; money spent is a
+    muted fill (only the part over the budget is red), so the bar never reads
+    as a solid black block. The rest of each track is the progress track. %>
+<% track_style = "background-color: var(--color-progress-track, light-dark(var(--color-gray-200), var(--color-gray-700)))" %>
 <div>
   <div class="p-3 md:p-4 border-b border-secondary">
-    <h3 class="text-xs md:text-sm text-secondary mb-2">Expected income</h3>
+    <h3 class="text-xs md:text-sm text-secondary mb-2"><%= t(".expected_income") %></h3>
 
-    <span class="inline-block mb-2 text-lg md:text-xl font-medium text-primary privacy-sensitive">
+    <span class="inline-block mb-2 text-lg md:text-xl font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive">
       <%= format_money(budget.expected_income_money) %>
     </span>
 
     <div>
       <div class="flex h-1.5 mb-3 gap-1">
         <% if budget.remaining_expected_income.negative? %>
-          <div class="rounded-md h-1.5 bg-green-500" style="width: <%= 100 - budget.surplus_percent %>%"></div>
-          <div class="rounded-md h-1.5 bg-green-500" style="width: <%= budget.surplus_percent %>%"></div>
+          <div class="rounded-full h-1.5 bg-success" style="width: <%= 100 - budget.surplus_percent %>%"></div>
+          <div class="rounded-full h-1.5 bg-success" style="width: <%= budget.surplus_percent %>%"></div>
         <% else %>
-          <div class="rounded-md h-1.5 bg-green-500" style="width: <%= budget.actual_income_percent %>%"></div>
-          <div class="rounded-md h-1.5 bg-surface-inset" style="width: <%= 100 - budget.actual_income_percent %>%"></div>
+          <div class="rounded-full h-1.5 bg-success" style="width: <%= budget.actual_income_percent %>%"></div>
+          <div class="rounded-full h-1.5" style="width: <%= 100 - budget.actual_income_percent %>%; <%= track_style %>"></div>
         <% end %>
       </div>
-      <div class="flex justify-between text-xs md:text-sm">
-        <p class="text-secondary"><span class="privacy-sensitive"><%= format_money(budget.actual_income_money) %></span> earned</p>
+      <div class="flex flex-wrap justify-between gap-x-3 text-xs md:text-sm tabular-nums">
+        <p class="text-secondary"><%= privacy_money_text(t(".earned", amount: format_money(budget.actual_income_money))) %></p>
         <p class="font-medium">
           <% if budget.remaining_expected_income.negative? %>
-            <span class="text-green-500"><span class="privacy-sensitive"><%= format_money(budget.remaining_expected_income_money.abs) %></span> over</span>
+            <span class="text-success"><%= privacy_money_text(t(".over", amount: format_money(budget.remaining_expected_income_money.abs))) %></span>
           <% else %>
-            <span class="text-primary"><span class="privacy-sensitive"><%= format_money(budget.remaining_expected_income_money) %></span> left</span>
+            <span class="text-primary"><%= privacy_money_text(t(".left", amount: format_money(budget.remaining_expected_income_money))) %></span>
           <% end %>
         </p>
       </div>
@@ -32,29 +36,29 @@
   </div>
 
   <div class="p-3 md:p-4">
-    <h3 class="text-xs md:text-sm text-secondary mb-2">Budgeted</h3>
+    <h3 class="text-xs md:text-sm text-secondary mb-2"><%= t(".budgeted") %></h3>
 
-    <span class="inline-block mb-2 text-lg md:text-xl font-medium text-primary privacy-sensitive">
+    <span class="inline-block mb-2 text-lg md:text-xl font-medium text-primary tabular-nums whitespace-nowrap privacy-sensitive">
       <%= format_money(budget.budgeted_spending_money) %>
     </span>
 
     <div>
-      <div class="flex h-1.5 mb-3 gap-1">
+      <div class="flex h-1.5 mb-3 gap-1" data-testid="budgeted-spending-bar">
         <% if budget.available_to_spend.negative? %>
-          <div class="rounded-md h-1.5 bg-inverse" style="width: <%= 100 - budget.overage_percent %>%"></div>
-          <div class="rounded-md h-1.5 bg-destructive" style="width: <%= budget.overage_percent %>%"></div>
+          <div class="rounded-full h-1.5 bg-subdued" style="width: <%= 100 - budget.overage_percent %>%"></div>
+          <div class="rounded-full h-1.5 bg-destructive" style="width: <%= budget.overage_percent %>%"></div>
         <% else %>
-          <div class="rounded-md h-1.5 bg-inverse" style="width: <%= budget.percent_of_budget_spent %>%"></div>
-          <div class="rounded-md h-1.5 bg-surface-inset" style="width: <%= 100 - budget.percent_of_budget_spent %>%"></div>
+          <div class="rounded-full h-1.5 bg-subdued" style="width: <%= budget.percent_of_budget_spent %>%"></div>
+          <div class="rounded-full h-1.5" style="width: <%= 100 - budget.percent_of_budget_spent %>%; <%= track_style %>"></div>
         <% end %>
       </div>
-      <div class="flex justify-between text-xs md:text-sm">
-        <p class="text-secondary"><span class="privacy-sensitive"><%= format_money(budget.actual_spending_money) %></span> spent</p>
+      <div class="flex flex-wrap justify-between gap-x-3 text-xs md:text-sm tabular-nums">
+        <p class="text-secondary"><%= privacy_money_text(t(".spent", amount: format_money(budget.actual_spending_money))) %></p>
         <p class="font-medium">
           <% if budget.available_to_spend.negative? %>
-            <span class="text-destructive"><span class="privacy-sensitive"><%= format_money(budget.available_to_spend_money.abs) %></span> over</span>
+            <span class="text-destructive"><%= privacy_money_text(t(".over", amount: format_money(budget.available_to_spend_money.abs))) %></span>
           <% else %>
-            <span class="text-primary"><span class="privacy-sensitive"><%= format_money(budget.available_to_spend_money) %></span> left</span>
+            <span class="text-primary"><%= privacy_money_text(t(".left", amount: format_money(budget.available_to_spend_money))) %></span>
           <% end %>
         </p>
       </div>

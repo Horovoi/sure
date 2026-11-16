@@ -1208,37 +1208,14 @@ class GoalTest < ActiveSupport::TestCase
     assert_not goal.any_consumption?
   end
 
-  # The ring's saved segment goes through d3.color, which cannot parse a CSS
-  # variable; a goal with no colour must still hand it a real colour (#4030).
-  test "a goal without a colour gives its ring a real colour" do
-    goal = ring_goal(color: "#6471eb")
-    goal.update_columns(color: nil)
-
-    saved = Goal.find(goal.id).to_donut_segments_json.find { |segment| segment[:id] == "saved" }
-
-    assert_equal Goal::COLORS.first, saved[:color]
-    assert_match(/\A#\h{6}\z/, saved[:color])
-  end
-
-  test "a goal with a colour keeps it in its ring, and the remaining track is unchanged" do
+  test "the ring takes one colour rule from the goal's status" do
     goal = ring_goal(color: "#6471eb")
 
-    segments = Goal.find(goal.id).to_donut_segments_json.index_by { |segment| segment[:id] }
-
-    assert_equal "#6471eb", segments["saved"][:color]
-    assert_equal "var(--budget-unused-fill)", segments["unused"][:color]
-  end
-
-  # One fallback for both: a colourless goal's ring and avatar show the same
-  # colour, so changing either fallback alone fails here.
-  test "a colourless goal's ring and avatar fall back to the same colour" do
-    goal = ring_goal(color: "#6471eb")
-    goal.update_columns(color: nil)
-    goal = Goal.find(goal.id)
-
-    saved = goal.to_donut_segments_json.find { |segment| segment[:id] == "saved" }
-
-    assert_equal Goals::AvatarComponent.new(goal: goal).color, saved[:color]
+    { on_track: :success, funded: :success, reached: :success, behind: :warning,
+      depleted: :warning, no_target_date: :neutral }.each do |status, tone|
+      goal.stubs(:status).returns(status)
+      assert_equal tone, goal.progress_tone, status
+    end
   end
 
   # :funded and paused both used to rank 3, so a paused goal whose name sorted

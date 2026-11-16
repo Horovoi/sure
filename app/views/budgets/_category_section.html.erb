@@ -19,14 +19,14 @@
 <%= tag.div class: "bg-container-inset rounded-xl p-1",
             hidden: hidden,
             data: { budget_filter_target: target, testid: testid } do %>
-  <div class="flex items-center gap-1.5 px-3 md:px-4 py-2 text-xs font-medium text-secondary uppercase">
+  <div class="flex items-center gap-1.5 px-3 md:px-4 py-2 text-xs font-medium text-secondary">
     <p><%= title %></p>
     <span class="text-subdued">&middot;</span>
-    <p><%= count %></p>
+    <p class="tabular-nums"><%= count %></p>
     <p class="ml-auto"><%= t("budgets.show.categories.amount") %></p>
   </div>
 
-  <div class="bg-container py-1 shadow-border-xs rounded-md">
+  <div class="bg-container p-1 shadow-border-xs rounded-lg">
     <% if count.zero? %>
       <p class="px-4 py-6 text-sm text-secondary text-center" data-testid="budget-section-empty"><%= empty_message %></p>
     <% else %>
@@ -50,7 +50,7 @@
       <%# The uncategorized row always comes last. %>
       <% if show_uncategorized %>
         <%= render "shared/ruler" unless groups.empty? %>
-        <div class="py-2">
+        <div class="py-1">
           <%= render "budget_categories/budget_category",
                 budget_category: uncategorized,
                 show_budget_meta: (over_budget_mode ? uncategorized.over_budget_with_budget? : true) %>

@@ -124,9 +124,11 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
   test "index calculates summary metrics correctly" do
     get reports_path(period_type: :monthly)
     assert_response :ok
-    assert_select "h3", text: I18n.t("reports.summary.total_income")
-    assert_select "h3", text: I18n.t("reports.summary.total_expenses")
-    assert_select "h3", text: I18n.t("reports.summary.net_savings")
+    assert_select "[data-testid=report-summary]" do
+      assert_select "p", text: I18n.t("reports.summary.total_income")
+      assert_select "p", text: I18n.t("reports.summary.total_expenses")
+      assert_select "p", text: I18n.t("reports.summary.net_savings")
+    end
   end
 
   test "index builds trends data" do
@@ -603,7 +605,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-testid=spending-legend]", text: /Normal for a period this long: .+/
       # An arrow gives the direction beside the figure
       assert_select "[data-testid=spending-summary] svg", count: 1
-      assert_select "[data-testid=spending-legend] [role=tooltip]", text: /Based on #{I18n.l(period_start - 200.days, format: "%b %-d, %Y")} – #{I18n.l(period_start - 1.day, format: "%b %-d, %Y")}\. Changes within 15% of normal or under .+ stay grey\./
+      assert_select "[data-testid=spending-legend] [role=tooltip]", text: /Based on #{I18n.l(period_start - 200.days, format: (period_start - 200.days).year == (period_start - 1.day).year ? "%b %-d" : "%b %-d, %Y")} – #{I18n.l(period_start - 1.day, format: "%b %-d, %Y")}\. Changes within 15% of normal or under .+ stay grey\./
     end
     assert_select "section[data-section-key='transactions_breakdown'] [data-testid='breakdown-expense']" do
       assert_select "[data-testid=spending-summary]", count: 0

@@ -1,0 +1,29 @@
+<%# locals: (label:, value:, sub: nil, glyph: nil, surface: :card, size: :lg, value_class: "text-primary", value_style: nil, sub_class: "text-secondary", sensitive: true, testid: nil) %>
+<%# One headline figure: a label, the value, and an optional line under it.
+    Reports (summary, net worth, trends), Goals and Plan share it, so every
+    figure tile has one size, weight and spacing.
+
+    surface: :card  stands on the page (a container card)
+             :inset sits inside a section (an inset tile)
+    size:    :lg    the page's headline figures (text-2xl)
+             :md    figures in a three-column row inside a section (text-xl)
+    value and sub take a string or HTML; amounts never wrap. %>
+<%= tag.div class: class_names("min-w-0",
+                               surface == :inset ? "bg-surface-inset rounded-lg p-4" : "bg-container rounded-xl shadow-border-xs p-4"),
+            data: { testid: testid } do %>
+  <p class="flex items-center gap-2 text-sm text-secondary">
+    <% if glyph %>
+      <%= icon(glyph, size: "sm", color: "current") %>
+    <% end %>
+    <span class="min-w-0 truncate"><%= label %></span>
+  </p>
+  <p class="<%= class_names("mt-1 font-medium tabular-nums whitespace-nowrap",
+                            size == :md ? "text-xl" : "text-2xl",
+                            value_class,
+                            "privacy-sensitive" => sensitive) %>"<% if value_style %> style="<%= value_style %>"<% end %>>
+    <%= value %>
+  </p>
+  <% if sub.present? %>
+    <div class="<%= class_names("mt-1 text-xs", sub_class) %>"><%= sub %></div>
+  <% end %>
+<% end %>

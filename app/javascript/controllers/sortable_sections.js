@@ -13,14 +13,16 @@ import { Controller } from "@hotwired/stimulus";
 //   mouse         an HTML5 drag of a section is in progress
 //   touch-pending a finger is on a drag handle, waiting for the hold delay
 //   touch         the hold fired; the finger is dragging a section
-//   keyboard      a section was grabbed with Enter/Space; arrows move it
+//   keyboard      a section was grabbed with Enter/Space on its drag handle
+//                 (or on the section, where the section is focusable); arrows move it
 const MODES = ["idle", "mouse", "touch-pending", "touch", "keyboard"];
 
 // A finger that moves further than this before the hold fires is scrolling
 const TOUCH_SLOP_PX = 10;
 
 const DRAG_CLASSES = ["opacity-50", "scale-[1.02]"];
-const GRAB_CLASSES = ["ring-2", "ring-primary", "ring-offset-2"];
+// The focus-ring token, so a grabbed section reads like the focused control it is
+const GRAB_CLASSES = ["outline-2", "outline-focus-ring"];
 const PLACEHOLDER_CLASSES = ["border-t-4", "border-b-4", "border-primary"];
 
 export default class SortableSectionsController extends Controller {
@@ -208,6 +210,9 @@ export default class SortableSectionsController extends Controller {
     this.setMode("keyboard", section);
     section.setAttribute("aria-grabbed", "true");
     section.classList.add(...GRAB_CLASSES);
+    // A handle that says it is a toggle (aria-pressed) shows the grab
+    const handle = this.#handleIn(section);
+    if (handle?.hasAttribute("aria-pressed")) handle.setAttribute("aria-pressed", "true");
   }
 
   releaseKeyboardGrab() {
@@ -220,17 +225,27 @@ export default class SortableSectionsController extends Controller {
   moveUp(section) {
     const previousSibling = section.previousElementSibling;
     if (previousSibling?.hasAttribute("data-section-key")) {
-      this.element.insertBefore(section, previousSibling);
-      section.focus();
+      this.#keepingFocus(section, () => this.element.insertBefore(section, previousSibling));
     }
   }
 
   moveDown(section) {
     const nextSibling = section.nextElementSibling;
     if (nextSibling?.hasAttribute("data-section-key")) {
-      this.element.insertBefore(nextSibling, section);
-      section.focus();
+      this.#keepingFocus(section, () => this.element.insertBefore(nextSibling, section));
     }
+  }
+
+  // Moving a node drops focus from it: give it back to the control that had it
+  // (the drag handle), or to the section itself
+  #keepingFocus(section, move) {
+    const focused = section.contains(document.activeElement) ? document.activeElement : section;
+    move();
+    focused.focus();
+  }
+
+  #handleIn(section) {
+    return this.handleTargets.find((handle) => section.contains(handle));
   }
 
   // ===== State =====
@@ -256,6 +271,9 @@ export default class SortableSectionsController extends Controller {
         ...PLACEHOLDER_CLASSES,
       );
       section.setAttribute("aria-grabbed", "false");
+    });
+    this.handleTargets.forEach((handle) => {
+      if (handle.hasAttribute("aria-pressed")) handle.setAttribute("aria-pressed", "false");
     });
 
     this.setMode("idle");

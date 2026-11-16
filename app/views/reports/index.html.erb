@@ -26,8 +26,10 @@
           ) %>
         </div>
 
+        <%# The page title style Plan, Goals and the budget wizard share. A custom
+            range is a long label, so it steps down a size on a narrow column. %>
         <h1 class="<%= class_names("min-w-0 truncate font-medium text-primary tabular-nums",
-                                  custom ? "text-lg @lg:text-2xl" : "text-2xl @lg:text-3xl") %>">
+                                  custom ? "text-lg @lg:text-2xl" : "text-2xl") %>">
           <span class="sr-only"><%= t("reports.index.heading_prefix") %></span>
           <span data-testid="report-period-label"><%= nav[:label] %></span>
         </h1>
@@ -44,14 +46,14 @@
                                data: { auto_submit_form_target: "auto" },
                                autocomplete: "off",
                                aria: { label: t("reports.index.date_range.from") },
-                               class: "w-full min-w-0 px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
+                               class: "w-full min-w-0 h-9 px-3 py-0 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
               <span aria-hidden="true">–</span>
               <%= f.date_field :end_date,
                                value: @end_date.strftime("%Y-%m-%d"),
                                data: { auto_submit_form_target: "auto" },
                                autocomplete: "off",
                                aria: { label: t("reports.index.date_range.to") },
-                               class: "w-full min-w-0 px-2 py-1 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
+                               class: "w-full min-w-0 h-9 px-3 py-0 border border-secondary rounded-lg text-sm bg-container text-primary focus-ring" %>
             <% end %>
           <% else %>
             <span class="min-w-0 truncate" data-testid="report-period-range"><%= nav[:range] %></span>
@@ -69,7 +71,7 @@
       <div class="flex items-center gap-2 min-w-0">
         <%= render DS::SegmentedControl.new(
           aria_label: t("reports.index.periods.label"),
-          class: "min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] bg-surface-inset @2xl:flex-none",
+          class: "min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] @2xl:flex-none",
           data: { testid: "report-period-types" }
         ) do |control| %>
           <% { monthly: "month", quarterly: "quarter", last_6_months: "six_months", ytd: "year" }.each do |period_type, key| %>
@@ -141,53 +143,53 @@
     </section>
 
     <%# Collapsible & Reorderable Sections %>
-    <div data-controller="reports-sortable" data-action="dragover->reports-sortable#dragOver drop->reports-sortable#drop" role="list" aria-label="Reports sections">
+    <%# The sections are not Tab stops: keyboard reordering lives on each drag
+        handle, so Space on the page still scrolls it. %>
+    <div data-controller="reports-sortable" data-action="dragover->reports-sortable#dragOver drop->reports-sortable#drop" role="list" aria-label="<%= t("reports.index.sections_label") %>">
       <% @reports_sections.each do |section| %>
         <% next unless section[:visible] %>
         <section
-          class="bg-container rounded-xl shadow-border-xs transition-all mb-6 group focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+          class="bg-container rounded-xl shadow-border-xs transition-all mb-6 group"
           data-reports-sortable-target="section"
           data-section-key="<%= section[:key] %>"
           data-controller="reports-section"
           data-reports-section-section-key-value="<%= section[:key] %>"
           data-reports-section-collapsed-value="<%= Current.user.reports_section_collapsed?(section[:key]) %>"
           draggable="true"
-          tabindex="0"
           role="listitem"
           aria-grabbed="false"
-          aria-label="<%= t(section[:title]) %> section. Press Enter or Space to grab for reordering, then use arrow keys to move."
+          aria-label="<%= t(section[:title]) %>"
           data-action="
             dragstart->reports-sortable#dragStart
             dragend->reports-sortable#dragEnd
             keydown->reports-sortable#handleKeyDown">
-          <div class="px-4 py-2 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                class="text-secondary hover:text-primary transition-colors p-0.5"
-                data-action="click->reports-section#toggle keydown->reports-section#handleToggleKeydown"
-                data-reports-section-target="button"
-                aria-label="<%= t("reports.index.toggle_section") %>"
-                aria-expanded="<%= !Current.user.reports_section_collapsed?(section[:key]) %>">
-                <%= icon("chevron-down", size: "sm", class: "transition-transform", data: { reports_section_target: "chevron" }) %>
-              </button>
-              <h2 class="text-base font-medium">
+          <div class="px-4 py-2 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <%= render DS::Button.new(
+                    variant: "icon",
+                    size: :sm,
+                    icon: "chevron-down",
+                    class: "transition-transform",
+                    aria: { label: t("reports.index.toggle_section"),
+                            expanded: !Current.user.reports_section_collapsed?(section[:key]) },
+                    data: { action: "click->reports-section#toggle keydown->reports-section#handleToggleKeydown",
+                            reports_section_target: "button chevron" }
+                  ) %>
+              <h2 class="text-base font-medium text-primary truncate">
                 <%= t(section[:title]) %>
               </h2>
             </div>
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                class="cursor-grab active:cursor-grabbing text-secondary hover:text-primary transition-colors p-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
-                data-reports-sortable-target="handle"
-                data-action="
-                  touchstart->reports-sortable#touchStart
-                  touchmove->reports-sortable#touchMove
-                  touchend->reports-sortable#touchEnd
-                  touchcancel->reports-sortable#touchCancel"
-                aria-label="<%= t("reports.index.drag_to_reorder") %>">
-                <%= icon("grip-vertical", size: "sm") %>
-              </button>
+            <div class="flex items-center gap-1 shrink-0">
+              <%# Shown on the section's hover or focus; touch screens always show it %>
+              <%= render DS::Button.new(
+                    variant: "icon",
+                    size: :sm,
+                    icon: "grip-vertical",
+                    class: "cursor-grab active:cursor-grabbing transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100 pointer-fine:focus-visible:opacity-100 aria-pressed:opacity-100",
+                    aria: { label: t("reports.index.drag_to_reorder", section: t(section[:title])), pressed: "false" },
+                    data: { reports_sortable_target: "handle",
+                            action: "touchstart->reports-sortable#touchStart touchmove->reports-sortable#touchMove touchend->reports-sortable#touchEnd touchcancel->reports-sortable#touchCancel" }
+                  ) %>
               <%# A section's own actions (the breakdown's export menu) sit in its header,
                   last, so they end on the same edge as the section's content %>
               <% if section[:actions_partial] %>

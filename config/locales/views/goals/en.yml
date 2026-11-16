@@ -10,6 +10,7 @@ en:
     color_picker:
       trigger_label: Choose color and icon
       color_heading: Color
+      presets: Back to preset colors
       icon_heading: Icon
       poor_contrast: Poor contrast, choose darker color or
       poor_contrast_validity: Poor contrast, choose a darker color or auto-adjust.
@@ -302,6 +303,9 @@ en:
       save: Save changes
       suggested_with_date: "Save {monthly}/mo across {accounts} to hit it on time."
       suggested_no_date: Set a target date to project a finish line.
+      # Filled in by goal_form_controller as the accounts are ticked
+      suggested_accounts_one: 1 account
+      suggested_accounts_other: "{count} accounts"
       errors:
         name_required: Give your goal a name.
         amount_required: Set a target above zero.
