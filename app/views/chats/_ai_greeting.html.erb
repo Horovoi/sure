@@ -2,35 +2,26 @@
   <%= render "chats/ai_avatar" %>
 
   <div class="max-w-[85%] text-sm space-y-4 text-primary">
-    <p>Hey <%= Current.user&.first_name || "there" %>! I'm an AI/large-language-model that can help with your finances. I have access to the web and your account data.</p>
+    <p><%= t("chats.greeting.intro", name: Current.user&.first_name.presence || t("chats.greeting.default_name")) %></p>
 
     <p>
-      You can use <span class="bg-container border border-secondary px-1.5 py-0.5 rounded font-mono text-xs">/</span> to access commands
+      <%= t("chats.greeting.commands_html", key: tag.span("/", class: "bg-container border border-secondary px-1.5 py-0.5 rounded font-mono text-xs")) %>
     </p>
 
     <div class="space-y-3">
-      <p>Here's a few questions you can ask:</p>
+      <p><%= t("chats.greeting.examples") %></p>
 
       <% questions = [
-        {
-          icon: "chart-area",
-          text: "Evaluate investment portfolio"
-        },
-        {
-          icon: "wallet-minimal",
-          text: "Show spending insights"
-        },
-        {
-          icon: "alert-triangle",
-          text: "Find unusual patterns"
-        }
+        { icon: "chart-area", text: t("chats.greeting.questions.portfolio") },
+        { icon: "wallet-minimal", text: t("chats.greeting.questions.spending") },
+        { icon: "alert-triangle", text: t("chats.greeting.questions.patterns") }
       ] %>
 
       <div class="space-y-2.5">
         <% questions.each do |question| %>
           <button data-action="chat#submitSampleQuestion"
                   data-chat-question-param="<%= question[:text] %>"
-                  class="w-fit flex items-center gap-2 border border-tertiary rounded-full py-1.5 px-2.5 hover:bg-gray-100">
+                  class="w-fit flex items-center gap-2 border border-tertiary rounded-full py-1.5 px-2.5 hover:bg-surface-hover">
             <%= icon(question[:icon]) %> <%= question[:text] %>
           </button>
         <% end %>

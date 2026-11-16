@@ -12,6 +12,11 @@ en:
         claude_label: Claude
         claude_loading: Checking the Claude bridge...
         openai_label: OpenAI
+        openai_key:
+          title: OpenAI API key
+          connected: Connected
+          not_connected: Not connected.
+          add_link: Add a key in Self-Hosting
         disable_ai: Disable AI Assistant
         prompt_instructions: Prompt Instructions
         main_system_prompt:

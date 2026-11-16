@@ -14,6 +14,56 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "with no AI engine the AI box says how to connect one" do
+    @user.update!(ai_enabled: false)
+
+    without_ai_engine do
+      get chats_url
+    end
+
+    assert_response :success
+    assert_select "[data-testid=ai-setup]" do
+      assert_select "h3", text: I18n.t("chats.ai_consent.setup_title")
+      assert_select "p", text: I18n.t("chats.ai_consent.claude_body")
+      assert_select "p", text: I18n.t("chats.ai_consent.openai_body")
+      assert_select "a[href=?]", settings_ai_prompts_path, text: I18n.t("chats.ai_consent.setup_button")
+      assert_select "a[href=?]", settings_hosting_path, text: I18n.t("chats.ai_consent.openai_button")
+    end
+    assert_select "form[action=?]", user_path(@user), count: 0
+    assert_no_match "OPENAI_ACCESS_TOKEN", response.body
+    assert_no_match(/anonymi[sz]ed/i, response.body)
+  end
+
+  test "with an AI engine but AI off the AI box offers to turn AI on" do
+    @user.update!(ai_enabled: false)
+
+    without_ai_engine do
+      with_env_overrides CLAUDE_BRIDGE_URL: "http://host.docker.internal:3339", CLAUDE_BRIDGE_TOKEN: "t" * 40 do
+        get chats_url
+      end
+    end
+
+    assert_response :success
+    assert_select "[data-testid=ai-consent]" do
+      assert_select "h3", text: I18n.t("chats.ai_consent.enable_title")
+      assert_select "form[action=?]", user_path(@user) do
+        assert_select "input[name=?][value=?]", "user[ai_enabled]", "true"
+        assert_select "button", text: I18n.t("chats.ai_consent.enable_button")
+      end
+    end
+    assert_select "[data-testid=ai-setup]", count: 0
+  end
+
+  test "with AI on there is no AI box" do
+    with_env_overrides OPENAI_ACCESS_TOKEN: "test-token" do
+      @user.update!(ai_enabled: true)
+      get chats_url
+    end
+
+    assert_response :success
+    assert_select "[data-testid=ai-consent]", count: 0
+  end
+
   test "creates chat" do
     assert_difference("Chat.count") do
       post chats_url, params: { chat: { content: "Hello", ai_model: "gpt-4.1" } }
@@ -180,4 +230,19 @@ class ChatsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "textarea[name='chat[content]']", text: ""
   end
+
+  private
+    # A self-hosted instance with no OpenAI key and no Claude bridge
+    def without_ai_engine
+      previous = Setting.openai_access_token
+      Setting.openai_access_token = nil
+
+      with_self_hosting do
+        with_env_overrides OPENAI_ACCESS_TOKEN: nil, CLAUDE_BRIDGE_URL: nil, CLAUDE_BRIDGE_TOKEN: nil do
+          yield
+        end
+      end
+    ensure
+      Setting.openai_access_token = previous
+    end
 end

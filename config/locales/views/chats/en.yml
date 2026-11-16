@@ -8,3 +8,26 @@ en:
       retry: "Retry"
     retry:
       in_progress: "A response is still being generated."
+    ai_consent:
+      enable_title: Enable AI Chats
+      enable_body: The assistant answers questions about your money from your own accounts and transactions. Turn it on to use it.
+      enable_button: Enable AI Chats
+      enable_note: You can turn it off at any time in Settings > AI Prompts. Your questions and the data the assistant reads go to Anthropic (Claude) or OpenAI, whichever engine answers.
+      setup_title: Connect an AI engine
+      setup_body: The assistant needs an AI engine to answer. Connect one of these.
+      claude_title: Claude
+      claude_body: Uses your own Claude subscription through the Claude bridge on this Mac.
+      openai_title: OpenAI
+      openai_body: Uses an OpenAI API key.
+      setup_button: Set up AI
+      openai_button: Add an OpenAI key
+      setup_note: Your questions and the data the assistant reads go to the engine you connect, Anthropic or OpenAI.
+    greeting:
+      intro: Hey %{name}! I'm an AI assistant for your finances. I can read your accounts, transactions and budgets to answer your questions.
+      default_name: there
+      commands_html: You can use %{key} to access commands
+      examples: "Here are a few questions you can ask:"
+      questions:
+        portfolio: Evaluate investment portfolio
+        spending: Show spending insights
+        patterns: Find unusual patterns

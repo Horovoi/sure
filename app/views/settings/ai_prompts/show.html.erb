@@ -35,6 +35,30 @@
 
     <div class="bg-container rounded-lg shadow-border-xs">
       <div class="space-y-4 p-4">
+        <div class="flex items-center gap-3" data-testid="openai-status">
+          <div class="w-9 h-9 rounded-full bg-surface-inset flex justify-center items-center">
+            <%= icon "key-round" %>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-primary"><%= t(".openai_key.title") %></p>
+            <% if Assistant.openai_configured? %>
+              <p class="inline-flex items-center gap-1 text-xs font-medium text-success">
+                <%= icon "circle-check", size: "sm", color: "success" %>
+                <%= t(".openai_key.connected") %>
+              </p>
+            <% elsif self_hosted? %>
+              <p class="text-xs text-secondary">
+                <%= t(".openai_key.not_connected") %>
+                <%= link_to t(".openai_key.add_link"), settings_hosting_path, class: "text-link underline underline-offset-2 hover:no-underline" %>
+              </p>
+            <% else %>
+              <p class="text-xs text-secondary"><%= t(".openai_key.not_connected") %></p>
+            <% end %>
+          </div>
+        </div>
+
+        <div class="border-t border-primary"></div>
+
         <!-- Main System Prompt Section -->
         <div class="space-y-3">
           <div class="flex items-center gap-3">

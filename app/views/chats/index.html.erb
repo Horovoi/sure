@@ -1,38 +1,50 @@
+<% ai_off = !Current.user.ai_enabled? %>
+
 <div data-controller="chat hotkey" class="h-full">
   <%= turbo_frame_tag chat_frame do %>
     <div class="flex flex-col h-full md:p-4">
-      <% if show_demo_warning? %>
-        <%= render "shared/demo_warning",
-          title: t("chats.demo_banner_title"),
-          message: t("chats.demo_banner_message") %>
+      <%# On a phone this page is the assistant. With AI off it shows the AI box instead of the chats;
+          on a wide screen the sidebar draws the same box over the chats. %>
+      <% if ai_off %>
+        <div class="lg:hidden grow flex flex-col justify-center py-8">
+          <%= render "chats/ai_consent" %>
+        </div>
       <% end %>
 
-      <% if @chats.any? %>
-        <div class="grow flex flex-col">
-          <div class="flex items-center justify-between my-6">
-            <h1 class="text-xl font-medium">Chats</h1>
-            <%= render DS::Link.new(
-              id: "new-chat",
-              icon: "plus",
-              variant: "icon",
-              href: new_chat_path,
-              frame: chat_frame,
-              text: "New chat"
-            ) %>
+      <div class="<%= class_names("grow flex flex-col", "hidden lg:flex": ai_off) %>">
+        <% if show_demo_warning? %>
+          <%= render "shared/demo_warning",
+            title: t("chats.demo_banner_title"),
+            message: t("chats.demo_banner_message") %>
+        <% end %>
+
+        <% if @chats.any? %>
+          <div class="grow flex flex-col">
+            <div class="flex items-center justify-between my-6">
+              <h1 class="text-xl font-medium">Chats</h1>
+              <%= render DS::Link.new(
+                id: "new-chat",
+                icon: "plus",
+                variant: "icon",
+                href: new_chat_path,
+                frame: chat_frame,
+                text: "New chat"
+              ) %>
+            </div>
+            <div class="space-y-2 px-0.5">
+              <%= render @chats %>
+            </div>
           </div>
-          <div class="space-y-2 px-0.5">
-            <%= render @chats %>
+        <% else %>
+          <div class="grow flex flex-col">
+            <h1 class="sr-only">Chats</h1>
+            <div class="mt-auto py-8">
+              <%= render "chats/ai_greeting" %>
+            </div>
+            <%= render "messages/chat_form" %>
           </div>
-        </div>
-      <% else %>
-        <div class="grow flex flex-col">
-          <h1 class="sr-only">Chats</h1>
-          <div class="mt-auto py-8">
-            <%= render "chats/ai_greeting" %>
-          </div>
-          <%= render "messages/chat_form" %>
-        </div>
-      <% end %>
+        <% end %>
+      </div>
     </div>
   <% end %>
 </div>

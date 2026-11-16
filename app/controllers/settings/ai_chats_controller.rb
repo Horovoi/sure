@@ -37,15 +37,11 @@ class Settings::AiChatsController < ApplicationController
     # The Claude models (from the bridge, or the aliases when it is down) and the OpenAI model when OpenAI is set up
     def model_options
       options = Assistant::Claude.model_options
-      if openai_configured?
+      if Assistant.openai_configured?
         openai = Chat.openai_model
         options += [ [ t("settings.ai_chats.openai_option", model: openai), openai ] ]
       end
       options
-    end
-
-    def openai_configured?
-      ENV["OPENAI_ACCESS_TOKEN"].present? || Setting.openai_access_token.present?
     end
 
     def time_zone
