@@ -30,6 +30,7 @@ class GenerateSubscriptionTransactionsJob < ApplicationJob
 
     def generate_for_family(family)
       result = { subscriptions_processed: 0, transactions_created: 0 }
+      booked = []
 
       due_subscriptions(family).find_each do |subscription|
         next unless subscription.can_auto_generate?
@@ -38,6 +39,7 @@ class GenerateSubscriptionTransactionsJob < ApplicationJob
           entries = subscription.generate_overdue_transactions!
           result[:subscriptions_processed] += 1
           result[:transactions_created] += entries.size
+          booked.concat(entries)
 
           if entries.any?
             Rails.logger.info(
@@ -52,7 +54,19 @@ class GenerateSubscriptionTransactionsJob < ApplicationJob
         end
       end
 
+      sync_accounts(booked)
       result
+    end
+
+    # The balances follow the booked charges now, as after "Record" or a transaction
+    # entered by hand: without a sync the account kept its old balance until something
+    # else synced it. One sync per account, from its earliest booked date.
+    def sync_accounts(entries)
+      entries.group_by(&:account).each do |account, account_entries|
+        account.sync_later(window_start_date: account_entries.map(&:date).min)
+      rescue StandardError => e
+        Rails.logger.error("Failed to sync account #{account.id} after generating subscription transactions: #{e.message}")
+      end
     end
 
     def due_subscriptions(family)

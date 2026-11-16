@@ -158,6 +158,27 @@ class RecurringTransaction::LifecycleTest < ActiveSupport::TestCase
     assert subscription.reload.next_expected_date > Date.current
   end
 
+  test "generation job syncs each account it booked charges on, once" do
+    create_recurring(subscription_state: "subscription", default_account: @account,
+                     next_expected_date: 2.days.ago.to_date, expected_day_of_month: 2.days.ago.day)
+    create_recurring(subscription_state: "subscription", default_account: @account, name: "Gym", merchant: nil,
+                     next_expected_date: 1.day.ago.to_date, expected_day_of_month: 1.day.ago.day)
+    @account.syncs.destroy_all
+
+    assert_difference -> { @account.syncs.count }, 1 do
+      GenerateSubscriptionTransactionsJob.perform_now
+    end
+    assert_equal 2.days.ago.to_date, Sync.where(syncable: @account).sole.window_start_date, "the sync starts at the earliest booked charge"
+  end
+
+  test "generation job starts no sync when it books nothing" do
+    create_recurring(subscription_state: "subscription", default_account: @account, next_expected_date: 5.days.from_now.to_date)
+
+    assert_no_difference -> { Sync.count } do
+      GenerateSubscriptionTransactionsJob.perform_now
+    end
+  end
+
   test "generation job skips subscriptions whose account cannot auto-generate" do
     @account.disable!
     create_recurring(subscription_state: "subscription", default_account: @account, next_expected_date: Date.current)
