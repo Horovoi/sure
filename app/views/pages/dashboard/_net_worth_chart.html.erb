@@ -70,7 +70,7 @@
     data-time-series-chart-data-value="<%= series.to_json %>"
     data-time-series-chart-endpoint-markers-value="true"
     data-time-series-chart-show-y-guides-value="true"
-    data-time-series-chart-money-format-value="<%= Money.new(0, Current.family.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
+    data-time-series-chart-money-format-value="<%= Money.new(0, balance_sheet.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
     data-time-series-chart-selectable-value="true"
     data-time-series-chart-select-period-param-value="net_worth_period"
     data-time-series-chart-select-start-param-value="net_worth_start_date"

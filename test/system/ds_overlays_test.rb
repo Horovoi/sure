@@ -28,9 +28,21 @@ class DsOverlaysTest < ApplicationSystemTestCase
   test "open() and a direct showModal() both focus the dialog itself, not its close button" do
     visit root_path
 
+    # A DS dialog with a close button and no autofocus field; the confirm
+    # dialog starts on its Cancel button (autofocus) on purpose
+    page.execute_script(<<~JS)
+      const dialog = document.createElement("dialog")
+      dialog.id = "probe-dialog"
+      dialog.setAttribute("aria-label", "Probe")
+      dialog.dataset.controller = "DS--dialog"
+      dialog.innerHTML = '<button type="button" aria-label="Close">x</button><p>Probe</p>'
+      document.body.append(dialog)
+    JS
+    assert_selector "#probe-dialog[data-controller]", visible: :all
+
     focused = page.evaluate_script(<<~JS)
       (() => {
-        const dialog = document.getElementById("confirm-dialog")
+        const dialog = document.getElementById("probe-dialog")
         window.Stimulus.getControllerForElementAndIdentifier(dialog, "DS--dialog").open()
         return document.activeElement === dialog
       })()
@@ -38,12 +50,12 @@ class DsOverlaysTest < ApplicationSystemTestCase
     assert focused, "open() leaves focus on the dialog"
 
     page.execute_script(<<~JS)
-      document.getElementById("confirm-dialog").close()
-      document.getElementById("confirm-dialog").showModal()
+      document.getElementById("probe-dialog").close()
+      document.getElementById("probe-dialog").showModal()
     JS
 
     # The observer runs right after showModal() returns
-    assert page.evaluate_script(%(document.activeElement === document.getElementById("confirm-dialog"))),
+    assert page.evaluate_script(%(document.activeElement === document.getElementById("probe-dialog"))),
       "a direct showModal() also leaves focus on the dialog"
   end
 end
