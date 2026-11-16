@@ -316,11 +316,14 @@
     --color-tooltip-bg: var(--color-gray-700);
     --color-tooltip-border: var(--color-gray-600);
 
-    --shadow-xs: 0px 1px 2px 0px --alpha(var(--color-white) / 8%);
-    --shadow-sm: 0px 1px 6px 0px --alpha(var(--color-white) / 8%);
-    --shadow-md: 0px 4px 8px -2px --alpha(var(--color-white) / 8%);
-    --shadow-lg: 0px 12px 16px -4px --alpha(var(--color-white) / 8%);
-    --shadow-xl: 0px 20px 24px -4px --alpha(var(--color-white) / 8%);
+    /* Shadows fall darker than the surface in dark mode too: a white shadow
+       read as a glow under menus, popovers and cards. The 1px alpha-white ring
+       in shadow-border-* keeps their edges. */
+    --shadow-xs: 0px 1px 2px 0px --alpha(var(--color-black) / 30%);
+    --shadow-sm: 0px 1px 6px 0px --alpha(var(--color-black) / 35%);
+    --shadow-md: 0px 4px 8px -2px --alpha(var(--color-black) / 40%);
+    --shadow-lg: 0px 12px 16px -4px --alpha(var(--color-black) / 50%);
+    --shadow-xl: 0px 20px 24px -4px --alpha(var(--color-black) / 55%);
   }
 
   /* Bind the CSS color-scheme to Sure's data-theme attribute so the CSS
