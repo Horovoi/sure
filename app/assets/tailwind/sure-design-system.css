@@ -479,8 +479,11 @@
     @apply block text-xs text-secondary peer-disabled:text-subdued;
   }
 
+  /* align-top: an inline control in a wrapper (the money field's currency
+     select) otherwise sits on the wrapper's baseline, and Safari adds the
+     space below it to the field's height */
   .form-field__input {
-    @apply text-primary border-none bg-container text-sm opacity-100 w-full p-0;
+    @apply text-primary border-none bg-container text-sm opacity-100 w-full p-0 align-top;
     @apply focus:opacity-100 focus:outline-hidden focus:ring-0;
     @apply placeholder-shown:opacity-50;
     @apply disabled:text-subdued;

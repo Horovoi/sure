@@ -67,7 +67,7 @@
   /* The input reads like every other field's (.form-field__input): the gem's own
      size and padding made the transaction description larger than the rest */
   .hw-combobox__input {
-    @apply text-sm leading-5 p-0 border-0 ring-0 outline-hidden focus:ring-0 placeholder:text-subdued;
+    @apply text-sm leading-5 p-0 border-0 ring-0 outline-hidden focus:ring-0 placeholder:text-subdued align-top;
   }
 
   /* Label, a 4px gap and a 20px line, like .form-field__body */
