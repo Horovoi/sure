@@ -78,6 +78,31 @@ class LayoutExtrasTest < ApplicationSystemTestCase
     end
   end
 
+  # A folded panel is zero wide; its content must not show past its edge
+  test "a folded assistant panel shows nothing" do
+    # The AI card is centred in the panel, so in a zero-wide panel it spilled out
+    # half to the left, over the page
+    @user.update!(show_ai_sidebar: false, ai_enabled: false)
+    visit transactions_path
+
+    assert_equal 0, evaluate_script("Math.round(document.getElementById('app_right_panel').getBoundingClientRect().width)")
+    # A folded panel is inert, so hit testing cannot see it: measure instead. Its AI
+    # card reaches outside the zero-wide box, and only clipping keeps it unseen.
+    spill, clip = evaluate_script(<<~JS)
+      (() => {
+        const panel = document.getElementById("app_right_panel")
+        const box = panel.getBoundingClientRect()
+        const spill = [...panel.querySelectorAll("*")].some((el) => {
+          const r = el.getBoundingClientRect()
+          return r.width > 0 && (r.left < box.left - 1 || r.right > box.right + 1)
+        })
+        return [spill, getComputedStyle(panel).overflowX]
+      })()
+    JS
+    assert spill, "expected the folded panel's content to reach past its edge (the case being guarded)"
+    assert_equal "hidden", clip, "the folded assistant panel still paints its content"
+  end
+
   test "the first Tab reaches a skip link that moves focus to the page" do
     visit root_path
     find("body").send_keys(:tab)

@@ -31,6 +31,20 @@ class DialogTabsTest < ApplicationSystemTestCase
     assert_equal 0, evaluate_script("window.__closed")
   end
 
+  # The tabs morph the form: the amount input the money field guards can be swapped
+  # under it, and its checks must follow the new input
+  test "after a tab switch the amount field still refuses a second decimal separator" do
+    visit transactions_path
+    click_on I18n.t("transactions.index.new_transaction", default: "New transaction"), match: :first
+    within("dialog[open]") { click_on "Income" }
+    assert_selector "dialog[open] input[name='entry[nature]'][value=inflow]", visible: :all
+
+    field = find("dialog[open] input[name='entry[amount]']")
+    field.send_keys("10.5")
+    field.send_keys(".")
+    assert_equal "10.5", field.value
+  end
+
   test "the dialog opens with focus on itself, not on the close button" do
     visit transactions_path
     click_on I18n.t("transactions.index.new_transaction", default: "New transaction"), match: :first

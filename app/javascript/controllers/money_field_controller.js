@@ -47,7 +47,6 @@ export default class extends Controller {
     // that would create a second separator keeps that state unreachable by
     // typing in the first place.
     this.guardSeparator = this.guardSeparator.bind(this);
-    this.amountTarget.addEventListener("beforeinput", this.guardSeparator);
 
     // The field being a text input means the browser applies no numeric
     // constraint at all (unlike the old type="number" field, which refused
@@ -63,14 +62,34 @@ export default class extends Controller {
     // Enter in the field, which unlike a submit-button click doesn't blur
     // it first.
     this.updateValidity = this.updateValidity.bind(this);
-    this.amountTarget.addEventListener("input", this.updateValidity);
+    // The listeners go on through amountTargetConnected below
+    if (this.hasAmountTarget) this.#listenTo(this.amountTarget);
+  }
+
+  // A morph (the new-transaction dialog's tabs) can swap the amount input under a
+  // controller that stays connected: the listeners follow the target, not connect()
+  amountTargetConnected(input) {
+    if (this.guardSeparator) this.#listenTo(input);
+  }
+
+  amountTargetDisconnected(input) {
+    input.removeEventListener("beforeinput", this.guardSeparator);
+    input.removeEventListener("input", this.updateValidity);
+  }
+
+  #listenTo(input) {
+    input.removeEventListener("beforeinput", this.guardSeparator);
+    input.removeEventListener("input", this.updateValidity);
+    input.addEventListener("beforeinput", this.guardSeparator);
+    input.addEventListener("input", this.updateValidity);
     this.updateValidity();
   }
 
   disconnect() {
     this.form?.removeEventListener("formdata", this.canonicalizeForSubmit);
-    this.amountTarget.removeEventListener("beforeinput", this.guardSeparator);
-    this.amountTarget.removeEventListener("input", this.updateValidity);
+    // The amount input may already be gone (removed by a morph): only an input
+    // still here needs its listeners taken off
+    if (this.hasAmountTarget) this.amountTargetDisconnected(this.amountTarget);
   }
 
   // A blank field is left to the existing `required` attribute (if any) to
