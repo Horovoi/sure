@@ -45,6 +45,7 @@ export default class extends Controller {
     savedTemplate: { type: String, default: "Saved: {amount}" },
     targetRelationTemplate: { type: String, default: "{percent}% of {target} target" },
     targetLabelTemplate: { type: String, default: "Target · {amount}" },
+    shortfallTemplate: { type: String, default: "{amount} short" },
   };
 
   connect() {
@@ -380,10 +381,10 @@ export default class extends Controller {
       if (innerWidth >= 320 && !(willHit && collidesWithTargetLabel)) {
         // Server-rendered labels: projection_end_label is the full-format
         // currency for the on-track endpoint, projection_shortfall_label
-        // is the "$X short" string when we fall short.
+        // is the shortfall amount, put into the translated "{amount} short".
         const labelText = willHit
           ? data.projection_end_label
-          : (data.projection_shortfall_label ? `${data.projection_shortfall_label} short` : "");
+          : (data.projection_shortfall_label ? this.shortfallTemplateValue.replace("{amount}", data.projection_shortfall_label) : "");
         if (labelText) {
           // A shortfall ends just under the target line: above the dot, its
           // label would run into the target label, so it goes under the dot
