@@ -1,6 +1,12 @@
-<%# locals: (param_key:, param_value:, clear_url: nil) %>
+<%# locals: (param_key:, param_value:, clear_url: nil, count: nil) %>
+<%# count: the filters bar's one badge for a long list of values ("52 categories") %>
 <li class="flex items-center gap-1 h-7 text-sm border border-secondary rounded-md pl-2 pr-0.5">
-  <% if param_key == "start_date" || param_key == "end_date" %>
+  <% if count %>
+    <div class="flex items-center gap-2">
+      <%= icon "list-filter", size: "sm" %>
+      <p><%= t(".collapsed.#{param_key}", count: count, default: t(".collapsed.generic", count: count)) %></p>
+    </div>
+  <% elsif param_key == "start_date" || param_key == "end_date" %>
     <div class="flex items-center gap-2">
       <%= icon "calendar" %>
       <p>
@@ -77,8 +83,8 @@
   <%= button_to badge_clear_url,
         method: :delete,
         form: { data: { turbo_frame: "_top" } },
-        aria: { label: t(".remove") },
-        title: t(".remove"),
+        aria: { label: count ? t(".remove_all") : t(".remove") },
+        title: count ? t(".remove_all") : t(".remove"),
         class: "inline-flex items-center justify-center size-6 rounded-sm text-secondary hover:text-primary hover:bg-container-inset-hover cursor-pointer" do %>
     <%= icon "x", size: "sm", color: "current" %>
   <% end %>

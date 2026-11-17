@@ -83,7 +83,9 @@ class TransactionsController < ApplicationController
     param_key = params[:param_key]
     param_value = params[:param_value]
 
-    if q_params[param_key].is_a?(Array)
+    # A blank value clears the whole key: the filters bar collapses a long list into
+    # one badge ("52 categories") whose remove button clears them all
+    if q_params[param_key].is_a?(Array) && param_value.present?
       q_params[param_key].delete(param_value)
       q_params.delete(param_key) if q_params[param_key].empty?
     else

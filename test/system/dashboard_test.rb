@@ -400,8 +400,12 @@ class DashboardTest < ApplicationSystemTestCase
     %w[cashflow outflows net_worth].each do |widget|
       assert_selector "select##{widget}_period option[selected][value=last_90_days]", visible: :all
     end
-    # The changed select keeps focus, and the page keeps its place
-    assert_equal "net_worth_period", page.evaluate_script("document.activeElement.id")
+    # The changed select keeps focus (given back once its frame has loaded, a moment after
+    # the new options show), and the page keeps its place
+    page.document.synchronize do
+      focused = page.evaluate_script("document.activeElement.id")
+      raise Capybara::ExpectationNotMet, "focus is on #{focused.inspect}" unless focused == "net_worth_period"
+    end
     assert_in_delta scroll_before, page.evaluate_script("document.querySelector('main').scrollTop"), 40
 
     # A reload shows the same period

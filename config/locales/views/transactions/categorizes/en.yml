@@ -46,6 +46,9 @@ en:
         rule_description_merchant: Future %{type} transactions from %{merchant} get this category.
         rule_description_prefix: Future %{type} transactions whose name contains
         rule_description_suffix: get this category.
+        select_all: All transactions
+        select_all_aria: Check or uncheck every transaction
+        selected_count: "%{count} of %{total}"
         skip: Skip
         skipped_rest:
           one: You skipped the last group. 1 transaction is still uncategorized.

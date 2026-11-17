@@ -328,6 +328,14 @@ en:
           placeholder: '0'
         badge:
           remove: Remove filter
+          remove_all: Remove these filters
+          collapsed:
+            categories: "%{count} categories"
+            merchants: "%{count} merchants"
+            tags: "%{count} tags"
+            accounts: "%{count} accounts"
+            account_ids: "%{count} accounts"
+            generic: "%{count} selected"
           expense: Expense
           income: Income
           on_or_after: on or after %{date}
@@ -355,6 +363,9 @@ en:
           to: To
         category_filter:
           placeholder: Filter categories
+          select_all: All categories
+          select_all_shown: All shown
+          selected_count: "%{count} of %{total}"
         merchant_filter:
           placeholder: Filter merchants
         tag_filter:

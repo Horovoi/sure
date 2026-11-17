@@ -1,9 +1,12 @@
 import { Controller } from "@hotwired/stimulus";
 
-// The "All" row of a checklist filter (pages/dashboard/filter_popover): one checkbox that
-// checks or clears every row, shown checked, clear or mixed as the rows are, with a
-// "n of total" count beside it. While a search hides rows it acts on the rows shown, and
-// says so. With no row checked the submit is off: an empty list would mean no filter.
+// The "All" checkbox of a checklist: it checks or clears every row, and shows checked,
+// clear or mixed as the rows are. Used by the dashboard Spending filter, the transactions
+// category filter and the categorize list.
+//
+// Optional parts: a label that says "All shown" while a search (list-filter) hides rows,
+// and the box then acts on the rows shown only; an "n of total" count; a submit that is
+// off, with a hint, while no row is checked (where an empty list would mean no filter).
 //
 // Each row change is announced (input and change events), so a cascade on the rows (the
 // category-filter parents and subcategories) runs as for a click.
@@ -13,12 +16,22 @@ export default class extends Controller {
     label: String,
     searchingLabel: String,
     countTemplate: String,
+    // The row checkboxes
+    rows: { type: String, default: ".filterable-item input[type=checkbox]" },
     // Rows left out of the count: a parent stands for its subcategories, as on the button
     uncounted: { type: String, default: "" },
   };
 
   connect() {
     this.refresh();
+    // Rows can come and go without a change event (the categorize list drops a row once
+    // it has a category), so the box and count follow the list itself too
+    this.observer = new MutationObserver(() => this.refresh());
+    this.observer.observe(this.element, { childList: true, subtree: true });
+  }
+
+  disconnect() {
+    this.observer?.disconnect();
   }
 
   toggle() {
@@ -41,24 +54,34 @@ export default class extends Controller {
     this.allTarget.indeterminate = shownChecked > 0 && shownChecked < shown.length;
     this.allTarget.disabled = shown.length === 0;
 
-    const searching = shown.length < this.#rows().length;
-    this.labelTarget.textContent = searching ? this.searchingLabelValue : this.labelValue;
+    if (this.hasLabelTarget) {
+      const searching = shown.length < this.#rows().length;
+      this.#setText(this.labelTarget, searching ? this.searchingLabelValue : this.labelValue);
+    }
 
-    const counted = this.#rows().filter((box) => !this.#uncounted(box));
-    const checked = counted.filter((box) => box.checked).length;
-    this.countTarget.textContent = this.countTemplateValue
-      .replace("%{count}", checked)
-      .replace("%{total}", counted.length);
+    if (this.hasCountTarget) {
+      const counted = this.#rows().filter((box) => !this.#uncounted(box));
+      const checked = counted.filter((box) => box.checked).length;
+      this.#setText(this.countTarget, this.countTemplateValue.replace("%{count}", checked).replace("%{total}", counted.length));
+    }
 
-    const none = this.#rows().every((box) => !box.checked);
-    this.submitTarget.disabled = none;
-    this.hintTarget.hidden = !none;
+    if (this.hasSubmitTarget) {
+      const none = this.#rows().every((box) => !box.checked);
+      this.submitTarget.disabled = none;
+      if (this.hasHintTarget) this.hintTarget.hidden = !none;
+    }
   }
 
   #rows({ visibleOnly = false } = {}) {
-    const boxes = Array.from(this.element.querySelectorAll(".filterable-item input[type=checkbox]"));
+    const boxes = Array.from(this.element.querySelectorAll(this.rowsValue));
     if (!visibleOnly) return boxes;
-    return boxes.filter((box) => box.closest(".filterable-item").style.display !== "none");
+    // A row list-filter hides has display none on its .filterable-item
+    return boxes.filter((box) => box.closest(".filterable-item")?.style.display !== "none");
+  }
+
+  // Writes only a change: a write is a mutation the observer would answer, forever
+  #setText(element, text) {
+    if (element.textContent !== text) element.textContent = text;
   }
 
   #uncounted(box) {

@@ -37,6 +37,25 @@ class TransactionCategorizeTest < ApplicationSystemTestCase
     assert_equal "Corner shop", @family.rules.order(:created_at).last.conditions.find_by!(condition_type: "transaction_name").value
   end
 
+  test "the All box in the list header clears and checks every row" do
+    visit transactions_categorize_url(position: 0)
+    assert_selector "#categorize_group_title h2", text: "Corner shop"
+
+    rows = -> { all("input[name='categorize[entry_ids][]']") }
+    all_box = find("#categorize_select_all")
+    assert all_box.checked?
+
+    all_box.click
+    assert rows.call.none?(&:checked?)
+
+    rows.call.first.click
+    assert page.evaluate_script("document.getElementById('categorize_select_all').indeterminate")
+
+    all_box.click
+    assert rows.call.all?(&:checked?)
+    assert all_box.checked?
+  end
+
   test "pick a category for a single row" do
     visit transactions_categorize_url(position: 1)
 

@@ -254,6 +254,12 @@ end
     assert_response :success
   end
 
+  test "clear_filter with a blank value removes every value of that filter" do
+    delete clear_filter_transactions_url(param_key: "categories", param_value: "", q: { categories: %w[Food Rent Travel], search: "coffee" })
+
+    assert_redirected_to transactions_path("q" => { "search" => "coffee" })
+  end
+
   test "clear_filters bypasses stored params restoration" do
     family = @user.family
     Session.order(:created_at).last.update!(

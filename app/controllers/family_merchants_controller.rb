@@ -57,7 +57,8 @@ class FamilyMerchantsController < ApplicationController
     q = merchant_search_params
     param_key = params[:param_key].to_s
 
-    if q[param_key].is_a?(Array)
+    # A blank value clears the whole key (the filters bar's collapsed badge)
+    if q[param_key].is_a?(Array) && params[:param_value].present?
       q[param_key] = q[param_key] - [ params[:param_value].to_s ]
       q.delete(param_key) if q[param_key].empty?
     else

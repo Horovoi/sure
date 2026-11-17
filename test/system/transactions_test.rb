@@ -79,6 +79,36 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "the category filter's All row checks every category, and a long pick is one badge" do
+    family = @transaction.account.family
+    6.times { |i| family.categories.create!(name: "Filter extra #{i}", color: "#336699") }
+
+    visit transactions_url
+    find("#transaction-filters-button").click
+    within "#transaction-filters-menu" do
+      click_button "Category"
+      find("label", text: I18n.t("transactions.searches.filters.category_filter.select_all")).click
+      boxes = all("#list .filterable-item input[type='checkbox']")
+      assert boxes.any?
+      assert boxes.all?(&:checked?)
+
+      # Everything but one: the All box turns mixed
+      find(".filterable-item[data-filter-name='Filter extra 0'] input[type='checkbox']").click
+      assert page.evaluate_script("document.querySelector(\"[data-checklist-select-all-target='all']\").indeterminate")
+      @checked_count = find("[data-checklist-select-all-target='count']").text[/\A\d+/]
+      click_button "Apply"
+    end
+
+    # The badge counts the categories as the All row does
+    within "#transaction-search-filters" do
+      assert_selector "li", count: 1
+      assert_selector "li", exact_text: I18n.t("transactions.searches.filters.badge.collapsed.categories", count: @checked_count)
+      click_button I18n.t("transactions.searches.filters.badge.remove_all")
+    end
+
+    assert_no_selector "#transaction-search-filters li"
+  end
+
   test "can filter uncategorized transactions" do
     find("#transaction-filters-button").click
 

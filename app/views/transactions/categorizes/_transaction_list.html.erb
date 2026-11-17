@@ -2,13 +2,25 @@
 <%# A container query sets the columns, as the list sits in a side-by-side layout: wide,
     one line per row under a header; narrow, each row stacks (categorizes/_entry_row)
     and the header, which has nothing to line up with, is hidden %>
-<div id="categorize_transaction_list" class="@container bg-container-inset rounded-xl p-1 space-y-1">
-  <div class="hidden @xl:grid grid-cols-[1rem_minmax(0,1fr)_6.5rem_6.5rem_9rem] gap-3 px-4 py-2 text-xs font-medium text-secondary">
-    <div></div>
-    <p><%= t("transactions.categorizes.show.col_transaction") %></p>
-    <p><%= t("transactions.categorizes.show.col_date") %></p>
-    <p class="text-right"><%= t("transactions.categorizes.show.col_amount") %></p>
-    <p><%= t("transactions.categorizes.show.col_category") %></p>
+<%# The checkbox column's header is the All box (checklist-select-all): it checks or
+    clears every row. Narrow, where the column names are hidden, it is labelled and counts
+    the checked rows. %>
+<div id="categorize_transaction_list" class="@container bg-container-inset rounded-xl p-1 space-y-1"
+     data-controller="checklist-select-all"
+     data-action="change->checklist-select-all#refresh"
+     data-checklist-select-all-rows-value="input[name='categorize[entry_ids][]']"
+     data-checklist-select-all-count-template-value="<%= t("transactions.categorizes.show.selected_count", count: "%{count}", total: "%{total}") %>">
+  <div class="grid grid-cols-[1rem_minmax(0,1fr)_auto] @xl:grid-cols-[1rem_minmax(0,1fr)_6.5rem_6.5rem_9rem] items-center gap-3 px-4 py-2 text-xs font-medium text-secondary">
+    <input type="checkbox" id="categorize_select_all" class="checkbox checkbox--light"
+           aria-label="<%= t("transactions.categorizes.show.select_all_aria") %>"
+           data-checklist-select-all-target="all"
+           data-action="checklist-select-all#toggle">
+    <label for="categorize_select_all" class="@xl:hidden text-sm text-primary cursor-pointer"><%= t("transactions.categorizes.show.select_all") %></label>
+    <span class="@xl:hidden text-right tabular-nums" data-checklist-select-all-target="count"></span>
+    <p class="hidden @xl:block"><%= t("transactions.categorizes.show.col_transaction") %></p>
+    <p class="hidden @xl:block"><%= t("transactions.categorizes.show.col_date") %></p>
+    <p class="hidden @xl:block text-right"><%= t("transactions.categorizes.show.col_amount") %></p>
+    <p class="hidden @xl:block"><%= t("transactions.categorizes.show.col_category") %></p>
   </div>
 
   <div class="shadow-border-xs rounded-lg overflow-hidden">

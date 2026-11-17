@@ -1,13 +1,32 @@
 <%# locals: (form:) %>
-<div data-controller="list-filter category-filter" class="space-y-2">
+<%# checklist-select-all: the All row checks or clears every category (the ones a search
+    shows, while searching). Parents and subcategories keep their cascade. %>
+<div data-controller="list-filter category-filter checklist-select-all"
+     data-action="change->checklist-select-all#refresh input->checklist-select-all#refresh"
+     data-checklist-select-all-label-value="<%= t(".select_all") %>"
+     data-checklist-select-all-searching-label-value="<%= t(".select_all_shown") %>"
+     data-checklist-select-all-count-template-value="<%= t(".selected_count", count: "%{count}", total: "%{total}") %>"
+     data-checklist-select-all-uncounted-value="[data-has-subcategories]"
+     class="space-y-2">
   <%= render DS::SearchInput.new(
         placeholder: t(".placeholder"),
         data: { list_filter_target: "input", action: "input->list-filter#filter" }
       ) %>
 
+  <%# Outside the list, so a search never hides it; it has no name, so it is not sent %>
+  <div class="pb-1 border-b border-divider">
+    <label class="flex items-center gap-2 h-8 px-2 rounded-md hover:bg-container-hover cursor-pointer">
+      <input type="checkbox" class="checkbox checkbox--light" data-checklist-select-all-target="all" data-action="checklist-select-all#toggle">
+      <span class="text-sm font-medium text-primary" data-checklist-select-all-target="label"><%= t(".select_all") %></span>
+      <span class="ml-auto text-xs text-secondary tabular-nums" data-checklist-select-all-target="count"></span>
+    </label>
+  </div>
+
   <% selected_categories = Array(@q[:categories]).map(&:to_s) %>
 
-  <% render_category_option = lambda do |category, nested: false, parent_name: nil, role: :plain, group_id: nil|
+  <%# has_subcategories: the All row's count leaves the box out, as a parent stands for
+      its subcategories (the Spending filter counts the same way) %>
+  <% render_category_option = lambda do |category, nested: false, parent_name: nil, role: :plain, group_id: nil, has_subcategories: false|
        is_checked = selected_categories.include?(category.filter_value) ||
          (category.uncategorized? && selected_categories.any? { |value| Category.uncategorized_filter_value?(value) }) ||
          (parent_name.present? && selected_categories.include?(parent_name))
@@ -22,8 +41,9 @@
          checkbox_options[:data] = {
            action: "category-filter#toggleChildren",
            category_filter_group_param: group_id,
-           category_filter_target: "parent"
-         }
+           category_filter_target: "parent",
+           has_subcategories: (true if has_subcategories)
+         }.compact
        elsif role == :child && group_id.present?
          checkbox_options[:data] = {
            category_filter_target: "child",
@@ -55,7 +75,7 @@
     <%= render_category_option.call(Category.uncategorized) %>
 
     <% grouped_family_categories.each do |group| %>
-      <%= render_category_option.call(group.category, role: :parent, group_id: group.category.id) %>
+      <%= render_category_option.call(group.category, role: :parent, group_id: group.category.id, has_subcategories: group.subcategories.any?) %>
 
       <% group.subcategories.each do |subcategory| %>
         <%= render_category_option.call(subcategory, nested: true, parent_name: group.category.name, role: :child, group_id: group.category.id) %>

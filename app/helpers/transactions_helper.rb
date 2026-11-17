@@ -31,6 +31,19 @@ module TransactionsHelper
     @transaction_filter_account_names.fetch(account_id.to_s, account_id.to_s)
   end
 
+  # How many values the filters bar's collapsed badge names. Categories count as the
+  # category filter's All row counts them: a parent with subcategories stands for its
+  # subcategories (which the filter sends along), not for one more category.
+  def transaction_filter_collapsed_count(param_key, values)
+    values = Array(values)
+    return values.size unless param_key.to_s == "categories"
+
+    @transaction_filter_group_names ||= Current.family.categories
+      .where(id: Current.family.categories.where.not(parent_id: nil).select(:parent_id))
+      .pluck(:name)
+    values.count { |value| !@transaction_filter_group_names.include?(value) }
+  end
+
   # ---- Reconciliation status (w3-toolstrx reconciliation-status) ----
   # How each Entry#reconciled_status looks, for the row icon, the drawer pill, the
   # filter chip and the bulk menu alike

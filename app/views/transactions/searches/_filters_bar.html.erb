@@ -16,6 +16,11 @@
                                end %>
           <% clear_url = clear_filter_url_builder ? clear_filter_url_builder.call("amount", "#{amount_operator} #{param_value}") : clear_filter_transactions_path(param_key: "amount", param_value: "#{amount_operator} #{param_value}", **request.query_parameters) %>
           <%= render partial: "transactions/searches/filters/badge", locals: { param_key: "amount", param_value: "#{amount_operator} #{param_value}", clear_url: clear_url } %>
+        <% elsif Array(param_value).size > 5 %>
+          <%# A long list (every category but a few, picked with the All row) is one badge
+              that removes them all: a blank value clears the whole key %>
+          <% clear_url = clear_filter_url_builder ? clear_filter_url_builder.call(param_key, "") : clear_filter_transactions_path(param_key: param_key, param_value: "", **request.query_parameters) %>
+          <%= render partial: "transactions/searches/filters/badge", locals: { param_key: param_key, param_value: nil, clear_url: clear_url, count: transaction_filter_collapsed_count(param_key, param_value) } %>
         <% else %>
           <% Array(param_value).each do |value| %>
             <% clear_url = clear_filter_url_builder ? clear_filter_url_builder.call(param_key, value) : clear_filter_transactions_path(param_key: param_key, param_value: value, **request.query_parameters) %>

@@ -172,7 +172,8 @@ class AccountsController < ApplicationController
     param_key = params[:param_key]
     param_value = params[:param_value]
 
-    if q_params[param_key].is_a?(Array)
+    # A blank value clears the whole key (the filters bar's collapsed badge)
+    if q_params[param_key].is_a?(Array) && param_value.present?
       q_params[param_key].delete(param_value)
       q_params.delete(param_key) if q_params[param_key].empty?
     else
