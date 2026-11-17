@@ -16,6 +16,10 @@ CREDENTIALS = {
 replaced = 0
 CREDENTIALS.each do |model_name, attributes|
   model = model_name.safe_constantize or next
+  # The copy has production's schema, which can predate a provider's table: the
+  # deploy rehearsal defuses before it runs the new migrations
+  next unless model.table_exists?
+
   columns = attributes & model.column_names
 
   model.unscoped.find_each do |record|
