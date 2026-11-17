@@ -29,82 +29,85 @@
     <%= form.hidden_field :transaction_type, value: @group.transaction_type %>
     <%= form.hidden_field :merchant_id, value: @group.merchant&.id %>
 
-    <div class="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start w-full">
-      <div class="space-y-4 min-w-0">
-        <div class="bg-container shadow-border-xs rounded-xl p-4 space-y-3">
-          <label class="flex items-center gap-2.5 cursor-pointer">
-            <%= form.check_box :create_rule,
-                  { checked: @group.entries.size > 1,
-                    class: "checkbox checkbox--light",
-                    data: { categorize_target: "createRuleCheckbox", action: "change->categorize#toggleRuleDetails" } },
-                  "1", "0" %>
-            <span class="text-sm font-medium text-primary"><%= t(".create_rule_label") %></span>
-          </label>
+    <%# One column, so the list has the main column's full width (one line per row
+        from 36rem). The picker sits under the rows it applies to: picking submits, so
+        the rule and the checked rows come first. %>
+    <div class="@container space-y-4 w-full">
+      <div class="bg-container shadow-border-xs rounded-xl p-4 space-y-3">
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <%= form.check_box :create_rule,
+                { checked: @group.entries.size > 1,
+                  class: "checkbox checkbox--light",
+                  data: { categorize_target: "createRuleCheckbox", action: "change->categorize#toggleRuleDetails" } },
+                "1", "0" %>
+          <span class="text-sm font-medium text-primary"><%= t(".create_rule_label") %></span>
+        </label>
 
-          <div data-categorize-target="ruleDetails" class="<%= "opacity-40" unless @group.entries.size > 1 %>">
-            <%= form.hidden_field :grouping_key, value: @group.grouping_key, data: { categorize_target: "groupingKeyHidden" } %>
+        <div data-categorize-target="ruleDetails" class="<%= "opacity-40" unless @group.entries.size > 1 %>">
+          <%= form.hidden_field :grouping_key, value: @group.grouping_key, data: { categorize_target: "groupingKeyHidden" } %>
 
-            <p class="text-sm text-secondary leading-relaxed">
-              <% type_label = t(".type_#{@group.transaction_type}").downcase %>
-              <% if @group.merchant_group? %>
-                <%= t(".rule_description_merchant", type: type_label, merchant: @group.display_name) %>
-              <% else %>
-                <%= t(".rule_description_prefix", type: type_label) %>
-                <span class="inline-flex items-center gap-1 align-middle">
-                  <span class="font-medium text-primary" data-categorize-target="filterDisplay">"<%= @group.grouping_key %>"</span>
-                  <%# flex, not the default inline-flex, so the hidden the controller adds wins %>
+          <p class="text-sm text-secondary leading-relaxed">
+            <% type_label = t(".type_#{@group.transaction_type}").downcase %>
+            <% if @group.merchant_group? %>
+              <%= t(".rule_description_merchant", type: type_label, merchant: @group.display_name) %>
+            <% else %>
+              <%= t(".rule_description_prefix", type: type_label) %>
+              <span class="inline-flex items-center gap-1 align-middle -my-1">
+                <span class="font-medium text-primary" data-categorize-target="filterDisplay">"<%= @group.grouping_key %>"</span>
+                <%# flex, not the default inline-flex, so the hidden the controller adds wins %>
+                <%= render DS::Button.new(
+                      variant: "icon",
+                      size: "sm",
+                      icon: "pencil",
+                      type: "button",
+                      class: "flex",
+                      title: t(".edit_filter"),
+                      aria: { label: t(".edit_filter") },
+                      data: { action: "click->categorize#startFilterEdit", categorize_target: "filterEditTrigger" }
+                    ) %>
+                <span class="hidden items-center gap-1" data-categorize-target="filterEditArea">
+                  <input type="text"
+                         value="<%= @group.grouping_key %>"
+                         autocomplete="off"
+                         aria-label="<%= t(".edit_filter") %>"
+                         class="h-7 w-40 text-sm border border-secondary rounded-md px-2 py-0 bg-container text-primary focus-ring focus:ring-0"
+                         data-categorize-target="filterInput"
+                         data-action="keydown.enter->categorize#confirmFilterEdit keydown.esc->categorize#cancelFilterEdit">
                   <%= render DS::Button.new(
-                        variant: "icon",
+                        variant: "primary",
                         size: "sm",
-                        icon: "pencil",
+                        icon: "check",
                         type: "button",
-                        class: "flex",
-                        title: t(".edit_filter"),
-                        aria: { label: t(".edit_filter") },
-                        data: { action: "click->categorize#startFilterEdit", categorize_target: "filterEditTrigger" }
+                        class: "shrink-0",
+                        title: t(".confirm_filter"),
+                        aria: { label: t(".confirm_filter") },
+                        data: { action: "click->categorize#confirmFilterEdit" }
                       ) %>
-                  <span class="hidden items-center gap-1" data-categorize-target="filterEditArea">
-                    <input type="text"
-                           value="<%= @group.grouping_key %>"
-                           autocomplete="off"
-                           aria-label="<%= t(".edit_filter") %>"
-                           class="h-7 w-40 text-sm border border-secondary rounded-md px-2 py-0 bg-container text-primary focus-ring focus:ring-0"
-                           data-categorize-target="filterInput"
-                           data-action="keydown.enter->categorize#confirmFilterEdit keydown.esc->categorize#cancelFilterEdit">
-                    <%= render DS::Button.new(
-                          variant: "primary",
-                          size: "sm",
-                          icon: "check",
-                          type: "button",
-                          class: "shrink-0",
-                          title: t(".confirm_filter"),
-                          aria: { label: t(".confirm_filter") },
-                          data: { action: "click->categorize#confirmFilterEdit" }
-                        ) %>
-                  </span>
                 </span>
-                <%= t(".rule_description_suffix") %>
-              <% end %>
-            </p>
-          </div>
-        </div>
-
-        <div class="bg-container rounded-xl shadow-border-xs p-4 space-y-3">
-          <p class="text-xs text-secondary"><%= t(".transactions_hint") %></p>
-          <%= render "transactions/categorizes/transaction_list", entries: @group.entries, categories: @categories %>
+              </span>
+              <%= t(".rule_description_suffix") %>
+            <% end %>
+          </p>
         </div>
       </div>
 
-      <div class="bg-container shadow-border-xs rounded-xl p-4 space-y-3">
-        <p class="text-sm text-secondary"><%= t(".assign_category_hint") %></p>
-        <%= render DS::CategorySelect.new(
-              form: form,
-              categories: @categories,
-              classification: @group.transaction_type,
-              recent_categories: @recent_categories,
-              label: t(".assign_category"),
-              auto_submit: true
-            ) %>
+      <div class="bg-container rounded-xl shadow-border-xs p-4 space-y-3">
+        <p class="text-xs text-secondary"><%= t(".transactions_hint") %></p>
+        <%= render "transactions/categorizes/transaction_list", entries: @group.entries, categories: @categories %>
+
+        <div class="flex flex-col gap-3 border-t border-divider pt-4 @2xl:flex-row @2xl:items-center @2xl:justify-between">
+          <p class="text-sm text-secondary"><%= t(".assign_category_hint") %></p>
+          <div class="w-full @2xl:w-80 shrink-0">
+            <%= render DS::CategorySelect.new(
+                  form: form,
+                  categories: @categories,
+                  classification: @group.transaction_type,
+                  recent_categories: @recent_categories,
+                  label: t(".assign_category"),
+                  auto_submit: true
+                ) %>
+          </div>
+        </div>
       </div>
     </div>
   <% end %>
