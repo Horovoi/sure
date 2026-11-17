@@ -84,6 +84,10 @@ en:
           one: "%{count} category"
           other: "%{count} categories"
         search_categories: "Search categories"
+        select_all: "All categories"
+        select_all_shown: "All shown"
+        selected_count: "%{count} of %{total}"
+        select_none_hint: "Pick at least one category"
         apply: "Apply"
         no_data: "No spending in these periods"
       investment_summary:

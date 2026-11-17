@@ -17,8 +17,11 @@
 // left/top glide. It's a component class because Tailwind shadow utilities
 // can't compose a ring with a custom drop shadow. This constant adds the
 // behavioural classes shared by every chart tooltip.
+//
+// z-40, one layer under popovers and menus (z-50): a tooltip appended to <body> comes
+// after them in the page, so at the same layer it would cover an open popover.
 export const CHART_TOOLTIP_CLASSES =
-  "chart-tooltip text-primary text-sm font-sans absolute pointer-events-none z-50 privacy-sensitive";
+  "chart-tooltip text-primary text-sm font-sans absolute pointer-events-none z-40 privacy-sensitive";
 
 // Content conventions (kept here so the controllers stay aligned):
 //   - context line (date / node title): `text-xs text-secondary mb-1`

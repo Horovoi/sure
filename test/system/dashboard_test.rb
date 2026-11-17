@@ -251,6 +251,42 @@ class DashboardTest < ApplicationSystemTestCase
     end
   end
 
+  test "the spending filter's All row clears and checks every category" do
+    travel = @family.categories.create!(name: "Curve Travel", color: "#2244aa")
+    create_transaction(account: @account, currency: @family.currency, category: travel, amount: 700, date: @start_date)
+    all_label = I18n.t("pages.dashboard.spending_trend.select_all")
+
+    visit root_path
+    within "#spending-trend-section" do
+      click_button I18n.t("pages.dashboard.spending_trend.filter_categories_all")
+      boxes = -> { all(".filterable-item input[type='checkbox']") }
+      all_box = find("[data-checklist-select-all-target='all']")
+      assert all_box.checked?
+
+      # Cleared, nothing would filter, so Apply waits for a pick
+      find("label", text: all_label).click
+      assert boxes.call.none?(&:checked?)
+      assert_text I18n.t("pages.dashboard.spending_trend.select_none_hint")
+      assert_button I18n.t("pages.dashboard.spending_trend.apply"), disabled: true
+
+      # One pick turns the All row mixed and Apply back on
+      find("label[data-filter-name='Curve Travel'] input[type='checkbox']").click
+      assert page.evaluate_script("document.querySelector(\"[data-checklist-select-all-target='all']\").indeterminate")
+      assert_button I18n.t("pages.dashboard.spending_trend.apply"), disabled: false
+
+      # While a search hides rows, the row acts on the rows shown
+      fill_in I18n.t("pages.dashboard.spending_trend.search_categories"), with: @child.name
+      assert_text I18n.t("pages.dashboard.spending_trend.select_all_shown")
+      find("label", text: I18n.t("pages.dashboard.spending_trend.select_all_shown")).click
+      assert find("label[data-filter-name='#{@child.name}'] input[type='checkbox']", visible: :all).checked?
+      assert find("label[data-filter-name='Curve Travel'] input[type='checkbox']", visible: :all).checked?
+      assert_not find("label[data-filter-name='#{@parent.name}'] input[type='checkbox']", visible: :all).checked?
+
+      click_button I18n.t("pages.dashboard.spending_trend.apply")
+      assert_button I18n.t("pages.dashboard.spending_trend.filter_categories", count: 2)
+    end
+  end
+
   test "the spending fullscreen dialog keeps its period picker and category filter working" do
     travel = @family.categories.create!(name: "Curve Travel", color: "#2244aa")
     create_transaction(account: @account, currency: @family.currency, category: travel, amount: 700_000, date: @start_date)

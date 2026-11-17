@@ -1,9 +1,13 @@
-<%# locals: (button_text:, search_label:, apply_text:, frame:, hidden_fields: {}, list_controllers: "list-filter") %>
+<%# locals: (button_text:, search_label:, apply_text:, frame:, hidden_fields: {}, list_controllers: "list-filter", select_all: nil) %>
 <%# The checklist filter a dashboard widget puts beside its period picker: a GET form
     into the widget's own turbo frame, with a searchable list of options (yielded by the
     caller, one pages/dashboard/filter_popover_option each) and an Apply button.
     hidden_fields carries the widget's other params (its period) through the submit, so
-    applying the filter keeps them. %>
+    applying the filter keeps them.
+
+    select_all adds an "All" row above the list (checklist-select-all): label,
+    searching_label, count (a "%{count} of %{total}" template), empty_hint (why Apply is
+    off with nothing checked) and uncounted (a selector for rows the count leaves out). %>
 <%= render DS::Popover.new(variant: :button, no_padding: true) do |popover| %>
   <% popover.with_button(
        type: "button",
@@ -14,7 +18,18 @@
 
   <% popover.with_custom_content do %>
     <%# Full width where DS--popover spans the window (below md), so Apply spans it too %>
-    <%= form_with url: root_path, method: :get, data: { turbo_frame: frame }, class: "p-3 w-full md:w-64 flex flex-col gap-2" do %>
+    <% form_data = { turbo_frame: frame } %>
+    <% if select_all %>
+      <% form_data.merge!(
+           controller: "checklist-select-all",
+           action: "change->checklist-select-all#refresh input->checklist-select-all#refresh",
+           checklist_select_all_label_value: select_all[:label],
+           checklist_select_all_searching_label_value: select_all[:searching_label],
+           checklist_select_all_count_template_value: select_all[:count],
+           checklist_select_all_uncounted_value: select_all[:uncounted].to_s
+         ) %>
+    <% end %>
+    <%= form_with url: root_path, method: :get, data: form_data, class: "p-3 w-full md:w-64 flex flex-col gap-2" do %>
       <% hidden_fields.each do |name, value| %>
         <% if value.is_a?(Array) %>
           <% value.each do |item| %>
@@ -33,12 +48,27 @@
               data: { list_filter_target: "input", action: "input->list-filter#filter" }
             ) %>
 
+        <% if select_all %>
+          <%# Outside the scrolling list, so it stays in reach; not submitted %>
+          <div class="mt-2 pb-1 border-b border-divider">
+            <label class="flex items-center gap-2 p-1.5 rounded-md hover:bg-container-inset-hover cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox--light" data-checklist-select-all-target="all" data-action="checklist-select-all#toggle">
+              <span class="text-sm font-medium text-primary" data-checklist-select-all-target="label"><%= select_all[:label] %></span>
+              <span class="ml-auto text-xs text-secondary tabular-nums" data-checklist-select-all-target="count"></span>
+            </label>
+          </div>
+        <% end %>
+
         <div class="mt-2 max-h-64 overflow-y-auto space-y-1" data-list-filter-target="list">
           <%= yield %>
         </div>
       </div>
 
-      <%= render DS::Button.new(type: "submit", text: apply_text, variant: "primary", full_width: true) %>
+      <% if select_all %>
+        <p class="text-xs text-secondary" data-checklist-select-all-target="hint" aria-live="polite" hidden><%= select_all[:empty_hint] %></p>
+      <% end %>
+      <%= render DS::Button.new(type: "submit", text: apply_text, variant: "primary", full_width: true,
+                                data: (select_all ? { checklist_select_all_target: "submit" } : {})) %>
     <% end %>
   <% end %>
 <% end %>

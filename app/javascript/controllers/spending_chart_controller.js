@@ -210,7 +210,7 @@ export default class extends Controller {
     this.#tooltip = d3
       .select(this.element)
       .append("div")
-      .attr("class", "chart-tooltip text-sm font-sans fixed pointer-events-none z-50 top-0 left-0")
+      .attr("class", "chart-tooltip text-sm font-sans fixed pointer-events-none z-40 top-0 left-0")
       .style("opacity", 0);
 
     const currentByDay = new Map(current.map((d) => [d.day, d]));

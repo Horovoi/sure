@@ -47,7 +47,14 @@
             apply_text: t("pages.dashboard.spending_trend.apply"),
             frame: frame_id,
             hidden_fields: { spending_period: trend.period_start.iso8601 },
-            list_controllers: "list-filter category-filter"
+            list_controllers: "list-filter category-filter",
+            select_all: {
+              label: t("pages.dashboard.spending_trend.select_all"),
+              searching_label: t("pages.dashboard.spending_trend.select_all_shown"),
+              count: t("pages.dashboard.spending_trend.selected_count", count: "%{count}", total: "%{total}"),
+              empty_hint: t("pages.dashboard.spending_trend.select_none_hint"),
+              uncounted: "[data-category-filter-target~=parent]"
+            }
           } do %>
         <%# The cascade of the transactions category filter: checking a parent checks its
             subcategories, and unchecking one subcategory unchecks the parent, so a parent

@@ -583,8 +583,8 @@ export default class extends Controller {
     this.tooltip = d3
       .select(dialog || document.body)
       .append("div")
-      // The surface every chart tooltip shares
-      .attr("class", "chart-tooltip text-primary text-sm font-sans pointer-events-none absolute z-50 top-0")
+      // The surface every chart tooltip shares, under popovers and menus (utils/chart_tooltip)
+      .attr("class", "chart-tooltip text-primary text-sm font-sans pointer-events-none absolute z-40 top-0")
       .style("opacity", 0)
       .style("pointer-events", "none");
   }
