@@ -308,15 +308,15 @@ class DashboardTest < ApplicationSystemTestCase
     # the chart's brush, not the section's drag-and-drop reordering.
     drag_across find("#netWorthChart .drag-select-brush .overlay", visible: :all)
 
-    assert_current_path(/net_worth_period=custom/)
+    assert_current_path(/period=custom/)
 
-    # The range loads into the widget's frame: the dashboard stays where it was
+    # The range loads into the widgets' frames: the dashboard stays where it was
     # instead of reloading at the top
     assert_selector "#netWorthChart .drag-select-brush .overlay", visible: :all
     assert_in_delta scroll_before, page.evaluate_script("document.querySelector('main').scrollTop"), 40
     query = Rack::Utils.parse_query(URI.parse(current_url).query)
-    start_date = Date.parse(query.fetch("net_worth_start_date"))
-    end_date = Date.parse(query.fetch("net_worth_end_date"))
+    start_date = Date.parse(query.fetch("start_date"))
+    end_date = Date.parse(query.fetch("end_date"))
     assert_operator start_date, :<, end_date
 
     # The chart redraws for the range, with its brush again, and the custom
@@ -325,6 +325,10 @@ class DashboardTest < ApplicationSystemTestCase
     assert_selector "#netWorthChart .drag-select-brush .overlay", visible: :all
     assert_field "net_worth_start_date", with: start_date.iso8601
     assert_field "net_worth_end_date", with: end_date.iso8601
+
+    # The other period widgets take the same range
+    assert_field "cashflow_start_date", with: start_date.iso8601
+    assert_field "cashflow_end_date", with: end_date.iso8601
 
     # Dashboard sections kept their order. Sections that have no data for the
     # range may hide, so only the common ones are compared.
@@ -345,7 +349,28 @@ class DashboardTest < ApplicationSystemTestCase
     overlay = find("#netWorthChart .drag-select-brush .overlay", visible: :all)
     overlay.click
 
-    assert_no_current_path(/net_worth_period=custom/)
+    assert_no_current_path(/period=custom/)
+  end
+
+  test "a period picked in one widget goes to every period widget" do
+    last_90 = Period.from_key("last_90_days")
+
+    page.execute_script("document.getElementById('netWorthChart').scrollIntoView({ block: 'center' })")
+    scroll_before = page.evaluate_script("document.querySelector('main').scrollTop")
+
+    select last_90.label_short, from: "net_worth_period"
+
+    assert_current_path(/period=last_90_days/)
+    %w[cashflow outflows net_worth].each do |widget|
+      assert_selector "select##{widget}_period option[selected][value=last_90_days]", visible: :all
+    end
+    # The changed select keeps focus, and the page keeps its place
+    assert_equal "net_worth_period", page.evaluate_script("document.activeElement.id")
+    assert_in_delta scroll_before, page.evaluate_script("document.querySelector('main').scrollTop"), 40
+
+    # A reload shows the same period
+    visit current_url
+    assert_selector "select#outflows_period option[selected][value=last_90_days]", visible: :all
   end
 
   # --- w3-reports exclude-from-reports ---
@@ -385,7 +410,7 @@ class DashboardTest < ApplicationSystemTestCase
     end
 
     def visit_dashboard
-      visit root_path(cashflow_period: "custom", cashflow_start_date: @start_date.iso8601, cashflow_end_date: Date.current.iso8601)
+      visit root_path(period: "custom", start_date: @start_date.iso8601, end_date: Date.current.iso8601)
       assert_selector "#cashflowSankeyChart svg .sankey-link"
     end
 end

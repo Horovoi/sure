@@ -20,13 +20,18 @@ class Family::SyncCompleteEventTest < ActiveSupport::TestCase
     assert_includes toast.to_html, %(aria-label="#{I18n.t("shared.sync_toast.close")}")
   end
 
-  test "still replaces the dashboard balance sheet and net worth chart" do
-    targets = capture_turbo_stream_broadcasts(@family) do
+  test "still replaces the dashboard balance sheet and refreshes the net worth chart" do
+    streams = capture_turbo_stream_broadcasts(@family) do
       Family::SyncCompleteEvent.new(@family).broadcast
-    end.map { |stream| stream["target"] }
+    end
 
-    assert_includes targets, "balance-sheet"
-    assert_includes targets, "net-worth-chart"
+    assert_includes streams.map { |stream| stream["target"] }, "balance-sheet"
+
+    # The chart reloads with the period the viewer picked, not one the job chose
+    net_worth = streams.find { |stream| stream["target"] == "net-worth-chart" }
+    assert net_worth, "expected a net-worth-chart broadcast"
+    assert_equal "append", net_worth["action"]
+    assert_includes net_worth.to_html, %(data-controller="frame-refresh")
   end
 
   test "a manual account sync still schedules recurring transaction identification" do

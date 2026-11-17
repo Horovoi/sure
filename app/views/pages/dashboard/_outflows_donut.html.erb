@@ -2,36 +2,16 @@
 <%= turbo_frame_tag "outflows_donut_section" do %>
 <div id="outflows-donut-section">
   <div class="flex justify-end items-center gap-4 px-4 mb-4">
-    <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "outflows_donut_section" } do |form| %>
-      <div class="flex flex-wrap items-center gap-2">
-        <% outflows_options = Period.as_options + [[t("pages.dashboard.outflows_donut.custom"), "custom"]] %>
-        <% selected_key = period.key || "custom" %>
-        <%= form.select :outflows_period,
-                  outflows_options,
-                  { selected: selected_key },
-                  data: { "auto-submit-form-target": "auto" },
-                  aria: { label: t("pages.dashboard.outflows_donut.period_label") },
-                  class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
-
-        <% if period.key.nil? %>
-          <div class="flex items-center gap-2">
-            <%= form.date_field :outflows_start_date,
-                  value: period.start_date,
-                  data: { "auto-submit-form-target": "auto" },
-                  aria: { label: t("pages.dashboard.outflows_donut.start_date") },
-                  class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
-            <span class="text-secondary text-sm"><%= t("pages.dashboard.outflows_donut.to") %></span>
-            <%= form.date_field :outflows_end_date,
-                  value: period.end_date,
-                  data: { "auto-submit-form-target": "auto" },
-                  aria: { label: t("pages.dashboard.outflows_donut.end_date") },
-                  class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
-          </div>
-        <% end %>
-      </div>
-    <% end %>
+    <%= render "pages/dashboard/period_form", period: period, id: "outflows" %>
   </div>
 
+  <%# The widget stays on the dashboard when the shared period has no outflows, so its
+      period picker and the other widgets' period changes can lead back out %>
+  <% if outflows_data[:categories].empty? %>
+    <div class="h-[300px] px-4 flex items-center justify-center">
+      <p class="text-secondary text-sm"><%= t("pages.dashboard.outflows_donut.no_data") %></p>
+    </div>
+  <% else %>
   <div class="px-4 @container">
     <div class="flex flex-col @2xl:flex-row gap-8 items-center">
       <!-- Donut Chart -->
@@ -138,5 +118,6 @@
       </div>
     </div>
   </div>
+  <% end %>
 </div>
 <% end %>

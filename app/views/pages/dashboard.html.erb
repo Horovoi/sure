@@ -100,7 +100,11 @@
   <% end %>
 <% end %>
 
-<div class="w-full space-y-6 pb-6 lg:pb-12" data-controller="dashboard-sortable" data-action="dragover->dashboard-sortable#dragOver drop->dashboard-sortable#drop" role="list" aria-label="<%= t("pages.dashboard.sections_aria_label") %>">
+<div class="w-full space-y-6 pb-6 lg:pb-12"
+     data-controller="dashboard-sortable dashboard-period"
+     data-dashboard-period-frames-value="<%= PagesController::DASHBOARD_PERIOD_FRAMES.to_json %>"
+     data-action="dragover->dashboard-sortable#dragOver drop->dashboard-sortable#drop time-series-chart:select-range->dashboard-period#selectRange"
+     role="list" aria-label="<%= t("pages.dashboard.sections_aria_label") %>">
   <% if @has_accounts %>
     <% @dashboard_sections.each do |section| %>
       <section

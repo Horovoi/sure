@@ -19,11 +19,12 @@ class Family::SyncCompleteEvent
       Rails.logger.error("Family::SyncCompleteEvent balance_sheet broadcast failed: #{e.message}\n#{e.backtrace&.join("\n")}")
     end
 
+    # The job cannot know the dashboard period a viewer has picked: the net worth widget
+    # gets a trigger that reloads its frame from the viewer's own URL
     begin
-      family.broadcast_replace(
+      family.broadcast_append(
         target: "net-worth-chart",
-        partial: "pages/dashboard/net_worth_chart",
-        locals: { balance_sheet: family.balance_sheet, period: Period.last_30_days }
+        partial: "pages/dashboard/frame_refresh"
       )
     rescue => e
       Rails.logger.error("Family::SyncCompleteEvent net_worth_chart broadcast failed: #{e.message}\n#{e.backtrace&.join("\n")}")

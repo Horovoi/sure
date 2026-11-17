@@ -38,10 +38,10 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
     assert_select "#cashflowSankeyChartFullscreen"
   end
 
-  test "the Sankey carries the custom cash flow period for its label links" do
+  test "the Sankey carries the custom dashboard period for its label links" do
     create_transaction(account: @family.accounts.first, amount: 100, category: categories(:food_and_drink), date: 3.days.ago.to_date)
 
-    get root_path(cashflow_period: "custom", cashflow_start_date: 10.days.ago.to_date.iso8601, cashflow_end_date: Date.current.iso8601)
+    get root_path(period: "custom", start_date: 10.days.ago.to_date.iso8601, end_date: Date.current.iso8601)
 
     assert_response :ok
     chart = css_select("#cashflowSankeyChart").sole
@@ -151,19 +151,39 @@ class PagesControllerTest < ActionDispatch::IntegrationTest
   test "a widget's own frame request builds only that widget" do
     IncomeStatement::Sankey.expects(:new).never
 
-    get root_path(outflows_period: "last_30_days"), headers: { "Turbo-Frame" => "outflows_donut_section" }
+    get root_path(period: "last_30_days"), headers: { "Turbo-Frame" => "outflows_donut_section" }
 
     assert_response :ok
+  end
+
+  test "every period widget shows the one dashboard period" do
+    get root_path(period: "custom", start_date: 20.days.ago.to_date.iso8601, end_date: 5.days.ago.to_date.iso8601)
+
+    assert_response :ok
+    %w[cashflow outflows net_worth].each do |widget|
+      assert_select "select##{widget}_period option[selected][value=custom]"
+      assert_select "input##{widget}_start_date[name=start_date][value=?]", 20.days.ago.to_date.iso8601
+      assert_select "input##{widget}_end_date[name=end_date][value=?]", 5.days.ago.to_date.iso8601
+    end
+  end
+
+  # Another widget's period change reloads this frame, so it must come back even when
+  # the period has no outflows
+  test "the outflows frame answers with an empty state for a period with no outflows" do
+    get root_path(period: "custom", start_date: "2001-01-01", end_date: "2001-01-31"), headers: { "Turbo-Frame" => "outflows_donut_section" }
+
+    assert_response :ok
+    assert_select "turbo-frame#outflows_donut_section", text: /#{Regexp.escape(I18n.t("pages.dashboard.outflows_donut.no_data"))}/
   end
 
   test "customize mode hides a widget and redirects back with the view params" do
     patch dashboard_preferences_path, params: {
       customize: 1,
-      cashflow_period: "last_90_days",
+      period: "last_90_days",
       preferences: { hidden_sections: { net_worth_chart: "true" } }
     }
 
-    assert_redirected_to root_path(cashflow_period: "last_90_days", customize: 1, hidden_section: "net_worth_chart")
+    assert_redirected_to root_path(period: "last_90_days", customize: 1, hidden_section: "net_worth_chart")
     assert @user.reload.dashboard_section_hidden?("net_worth_chart")
 
     follow_redirect!

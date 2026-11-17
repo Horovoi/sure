@@ -1,0 +1,37 @@
+<%# locals: (period:, id:, extra: nil) %>
+<%# The period of a period widget (cash flow, outflows, investments, net worth). They all
+    show one period: dashboard-period takes the submit, puts the period in the page URL
+    and reloads each of their frames. Custom adds the two dates. id prefixes the field
+    ids, so the four forms on the page keep distinct ones. extra is more controls in the
+    same row (the cash flow subcategory toggle). %>
+<%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", action: "submit->dashboard-period#change" } do |form| %>
+  <div class="flex flex-wrap items-center gap-2">
+    <%= form.select :period,
+          Period.as_options + [ [ t("pages.dashboard.period_form.custom"), "custom" ] ],
+          { selected: period.key || "custom" },
+          id: "#{id}_period",
+          data: { "auto-submit-form-target": "auto" },
+          aria: { label: t("pages.dashboard.period_form.label") },
+          class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
+
+    <% if period.key.nil? %>
+      <div class="flex items-center gap-2">
+        <%= form.date_field :start_date,
+              value: period.start_date,
+              id: "#{id}_start_date",
+              data: { "auto-submit-form-target": "auto" },
+              aria: { label: t("pages.dashboard.period_form.start_date") },
+              class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
+        <span class="text-secondary text-sm"><%= t("pages.dashboard.period_form.to") %></span>
+        <%= form.date_field :end_date,
+              value: period.end_date,
+              id: "#{id}_end_date",
+              data: { "auto-submit-form-target": "auto" },
+              aria: { label: t("pages.dashboard.period_form.end_date") },
+              class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
+      </div>
+    <% end %>
+
+    <%= extra %>
+  </div>
+<% end %>

@@ -17,34 +17,7 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <%= form_with url: root_path, method: :get, data: { controller: "auto-submit-form", turbo_frame: "net_worth_section" } do |form| %>
-        <div class="flex flex-wrap items-center gap-2">
-          <% net_worth_options = Period.as_options + [[t(".custom_period"), "custom"]] %>
-          <% selected_key = period.key || "custom" %>
-          <%= form.select :net_worth_period,
-                        net_worth_options,
-                        { selected: selected_key },
-                        data: { "auto-submit-form-target": "auto" },
-                        aria: { label: t(".period_label") },
-                        class: "h-9 py-0 pl-3 pr-8 bg-container border border-secondary font-medium rounded-lg text-sm cursor-pointer text-primary focus-ring focus:ring-0 focus:border-secondary" %>
-
-          <% if period.key.nil? %>
-            <div class="flex items-center gap-2">
-              <%= form.date_field :net_worth_start_date,
-                    value: period.start_date,
-                    data: { "auto-submit-form-target": "auto" },
-                    aria: { label: t(".start_date") },
-                    class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
-              <span class="text-secondary text-sm"><%= t(".date_range_separator") %></span>
-              <%= form.date_field :net_worth_end_date,
-                    value: period.end_date,
-                    data: { "auto-submit-form-target": "auto" },
-                    aria: { label: t(".end_date") },
-                    class: "h-9 py-0 px-2 bg-container border border-secondary rounded-lg text-sm text-primary focus-ring focus:ring-0 focus:border-secondary" %>
-            </div>
-          <% end %>
-        </div>
-      <% end %>
+      <%= render "pages/dashboard/period_form", period: period, id: "net_worth" %>
 
       <% if series.trend.present? %>
         <%= render DS::Button.new(
@@ -72,10 +45,6 @@
     data-time-series-chart-show-y-guides-value="true"
     data-time-series-chart-money-format-value="<%= Money.new(0, balance_sheet.currency).format_options.slice(:unit, :precision, :delimiter, :separator, :format).to_json %>"
     data-time-series-chart-selectable-value="true"
-    data-time-series-chart-select-period-param-value="net_worth_period"
-    data-time-series-chart-select-start-param-value="net_worth_start_date"
-    data-time-series-chart-select-end-param-value="net_worth_end_date"
-    data-time-series-chart-select-frame-value="net_worth_section"
     draggable="false"
     data-period-label="<%= period.key.present? ? period.label : t("pages.dashboard.net_worth_chart_dialog.date_range", start: l(period.start_date, format: "%b %-d, %Y"), end: l(period.end_date, format: "%b %-d, %Y")) %>"
     data-period-start="<%= period.start_date %>"

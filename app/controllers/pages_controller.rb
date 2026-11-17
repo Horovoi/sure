@@ -3,18 +3,18 @@ class PagesController < ApplicationController
 
   skip_authentication only: :redis_configuration_error
 
-  # The widgets whose period a param picks: <prefix>_period, <prefix>_start_date and
-  # <prefix>_end_date
-  DASHBOARD_WIDGET_PERIOD_PREFIXES = %w[cashflow net_worth outflows investment].freeze
-
   # The dashboard widgets, in their default order when the saved order leaves one out
   DASHBOARD_SECTION_KEYS = %w[
     cashflow_sankey outflows_donut spending_trend investment_summary net_worth_chart balance_sheet subscriptions_summary
     insights_feed
   ].freeze
 
-  # A widget's period form reloads only the widget's own turbo frame, so such a request
-  # builds that one widget
+  # The period widgets share one period (period, start_date, end_date), as upstream's do.
+  # A change in any of them reloads each of their frames (dashboard_period_controller.js),
+  # and a frame request builds only that frame's widget.
+  DASHBOARD_PERIOD_FRAMES = %w[cashflow_sankey_section outflows_donut_section investment_summary_section net_worth_section].freeze
+
+  # A frame request builds only the widget that frame holds
   DASHBOARD_FRAME_SECTIONS = {
     "cashflow_sankey_section" => "cashflow_sankey",
     "outflows_donut_section" => "outflows_donut",
@@ -26,10 +26,7 @@ class PagesController < ApplicationController
 
   # Query params that shape what the dashboard shows without being saved. Customize mode
   # carries them through its links and buttons, so the widgets keep their periods.
-  DASHBOARD_VIEW_PARAMS = (
-    %i[period start_date end_date cashflow_show_subcategories spending_period] +
-    DASHBOARD_WIDGET_PERIOD_PREFIXES.flat_map { |prefix| %I[#{prefix}_period #{prefix}_start_date #{prefix}_end_date] }
-  ).freeze
+  DASHBOARD_VIEW_PARAMS = %i[period start_date end_date cashflow_show_subcategories spending_period].freeze
 
   # The view params that hold a list (the spending curve's category filter)
   DASHBOARD_VIEW_ARRAY_PARAMS = %i[spending_category_ids].freeze
@@ -39,11 +36,6 @@ class PagesController < ApplicationController
     @investment_statement = Current.family.investment_statement
     @accounts = Current.family.accounts.visible.with_attached_logo
     @has_accounts = Current.family.accounts.any?
-
-    @cashflow_period = parse_widget_period("cashflow")
-    @net_worth_period = parse_widget_period("net_worth")
-    @outflows_period = parse_widget_period("outflows")
-    @investment_period = parse_widget_period("investment")
 
     # Toggle: show/hide subcategories in Sankey (default: false)
     @cashflow_show_subcategories = if params.key?(:cashflow_show_subcategories)
@@ -113,26 +105,6 @@ class PagesController < ApplicationController
         .to_h.symbolize_keys
     end
 
-    # The period one widget shows: its own <prefix>_period param, else the page period.
-    # "custom" reads <prefix>_start_date and <prefix>_end_date, falls back to the last 30
-    # days and swaps a reversed range.
-    def parse_widget_period(prefix)
-      key = params[:"#{prefix}_period"]
-      return @period if key.blank?
-
-      if key == "custom"
-        last_30 = Period.last_30_days
-        start_date = safe_parse_date(params[:"#{prefix}_start_date"]) || last_30.start_date
-        end_date = safe_parse_date(params[:"#{prefix}_end_date"]) || last_30.end_date
-        start_date, end_date = end_date, start_date if start_date > end_date
-        Period.custom(start_date: start_date, end_date: end_date)
-      else
-        Period.from_key(key)
-      end
-    rescue Period::InvalidKeyError
-      @period
-    end
-
     # Each widget builds its own data, so a hidden widget's builder is never called and
     # its queries never run
     def dashboard_section_builders
@@ -140,29 +112,31 @@ class PagesController < ApplicationController
         "cashflow_sankey" => -> {
           # One payload with subcategories; the chart drops the subcategory column itself
           # when the toggle is off, so the toggle needs no request
-          sankey_data = IncomeStatement::Sankey.new(Current.family.income_statement, period: @cashflow_period).as_json
+          sankey_data = IncomeStatement::Sankey.new(Current.family.income_statement, period: @period).as_json
           {
             key: "cashflow_sankey",
             title: "pages.dashboard.cashflow_sankey.title",
             partial: "pages/dashboard/cashflow_sankey",
-            locals: { sankey_data: sankey_data, period: @cashflow_period, show_subcategories: @cashflow_show_subcategories },
+            locals: { sankey_data: sankey_data, period: @period, show_subcategories: @cashflow_show_subcategories },
             # Outside the section, so it stays open while the section's frame reloads
             dialog: {
               partial: "pages/dashboard/cashflow_sankey_dialog",
-              locals: { sankey_data: sankey_data, period: @cashflow_period, show_subcategories: @cashflow_show_subcategories }
+              locals: { sankey_data: sankey_data, period: @period, show_subcategories: @cashflow_show_subcategories }
             },
             visible: @has_accounts,
             collapsible: true
           }
         },
         "outflows_donut" => -> {
-          outflows_data = build_outflows_donut_data(Current.family.income_statement.expense_totals(period: @outflows_period))
+          outflows_data = build_outflows_donut_data(Current.family.income_statement.expense_totals(period: @period))
           {
             key: "outflows_donut",
             title: "pages.dashboard.outflows_donut.title",
             partial: "pages/dashboard/outflows_donut",
-            locals: { outflows_data: outflows_data, period: @outflows_period },
-            visible: @has_accounts && outflows_data[:categories].present?,
+            locals: { outflows_data: outflows_data, period: @period },
+            # Shown with an empty state when the period has no outflows: another
+            # widget's period change reloads its frame, which must then be there
+            visible: @has_accounts,
             collapsible: true
           }
         },
@@ -187,7 +161,7 @@ class PagesController < ApplicationController
             key: "investment_summary",
             title: "pages.dashboard.investment_summary.title",
             partial: "pages/dashboard/investment_summary",
-            locals: { investment_statement: @investment_statement, period: @investment_period },
+            locals: { investment_statement: @investment_statement, period: @period },
             visible: investment_summary_available?,
             collapsible: true
           }
@@ -197,10 +171,10 @@ class PagesController < ApplicationController
             key: "net_worth_chart",
             title: "pages.dashboard.net_worth_chart.title",
             partial: "pages/dashboard/net_worth_chart",
-            locals: { balance_sheet: @balance_sheet, period: @net_worth_period },
+            locals: { balance_sheet: @balance_sheet, period: @period },
             dialog: {
               partial: "pages/dashboard/net_worth_chart_dialog",
-              locals: { balance_sheet: @balance_sheet, period: @net_worth_period }
+              locals: { balance_sheet: @balance_sheet, period: @period }
             },
             visible: @has_accounts,
             collapsible: true
@@ -372,13 +346,6 @@ class PagesController < ApplicationController
       else
         t("pages.dashboard.spending_trend.date_range_short", start_date: I18n.l(range.begin, format: :short), end_date: I18n.l(range.end, format: :short), year: range.end.year)
       end
-    end
-
-    def safe_parse_date(value)
-      return nil if value.blank?
-      Date.parse(value)
-    rescue ArgumentError
-      nil
     end
 
     def calculate_subscriptions_monthly_total

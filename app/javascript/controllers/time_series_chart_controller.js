@@ -26,16 +26,11 @@ export default class extends Controller {
     showYGuides: { type: Boolean, default: false },
     endpointMarkers: { type: Boolean, default: false },
     fullscreen: { type: Boolean, default: false },
-    // Drag across the chart to pick a date range. On release the page visits
-    // the same URL with the range in the widget's own query params.
+    // Drag across the chart to pick a date range. On release the chart sends
+    // time-series-chart:select-range; unless a page handles it (the dashboard
+    // gives the range to every period widget), it visits the same URL with
+    // period=custom, start_date and end_date.
     selectable: { type: Boolean, default: false },
-    selectPeriodParam: { type: String, default: "period" },
-    selectStartParam: { type: String, default: "start_date" },
-    selectEndParam: { type: String, default: "end_date" },
-    // The Turbo Frame that holds the widget (the dashboard's net_worth_section):
-    // the range then loads into that frame, as the widget's period select does,
-    // so the dashboard keeps its scroll position instead of reloading at the top.
-    selectFrame: { type: String, default: "" },
     // Money#format_options of the series currency (unit, delimiter, separator,
     // format): the guide amounts then read as the server writes them, "33.4K ₴"
     moneyFormat: { type: Object, default: {} },
@@ -652,22 +647,20 @@ export default class extends Controller {
     this._d3DragSelectGroup?.call(this._d3DragSelectBrush.move, null);
   }
 
-  // Visits the current URL with the range in this chart's own params: the
-  // dashboard net worth widget uses net_worth_period/net_worth_start_date/
-  // net_worth_end_date, the account chart period/start_date/end_date.
+  // Offers the range to the page first (the dashboard reloads its period
+  // widgets with it), else visits the current URL with it
   _navigateToDateRange(startDate, endDate) {
     const formatDate = d3.timeFormat("%Y-%m-%d");
+    const range = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
+
+    const event = this.dispatch("select-range", { detail: range, cancelable: true });
+    if (event.defaultPrevented) return;
+
     const url = new URL(window.location.href);
-
-    url.searchParams.set(this.selectPeriodParamValue, "custom");
-    url.searchParams.set(this.selectStartParamValue, formatDate(startDate));
-    url.searchParams.set(this.selectEndParamValue, formatDate(endDate));
-
-    if (this.selectFrameValue && document.getElementById(this.selectFrameValue)) {
-      Turbo.visit(url.toString(), { frame: this.selectFrameValue, action: "advance" });
-    } else {
-      Turbo.visit(url.toString());
-    }
+    url.searchParams.set("period", "custom");
+    url.searchParams.set("start_date", range.startDate);
+    url.searchParams.set("end_date", range.endDate);
+    Turbo.visit(url.toString());
   }
 
   _nearestDataPointForPixel(xPos) {
