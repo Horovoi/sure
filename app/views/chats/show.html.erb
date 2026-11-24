@@ -15,30 +15,36 @@
         <% end %>
       </div>
 
-      <div id="messages" class="grow overflow-y-auto p-4 space-y-6 lg:pb-4" data-chat-target="messages">
-        <% if @chat.conversation_messages.any? %>
-          <% @chat.conversation_messages.ordered.each do |message| %>
-            <%= render message %>
-          <% end %>
-        <% else %>
-          <div class="mt-auto">
+      <%# The scroller is the chat controller's target; Message broadcasts append to #messages.
+          The column inside keeps lines readable when the panel is wide or the chat has the whole page. %>
+      <div class="grow overflow-y-auto p-4 lg:pb-4" data-chat-target="messages">
+        <div id="messages" class="mx-auto w-full max-w-xl space-y-6">
+          <% if @chat.conversation_messages.any? %>
+            <% @chat.conversation_messages.ordered.each do |message| %>
+              <%= render message %>
+            <% end %>
+          <% else %>
             <%= render "chats/ai_greeting", context: "chat" %>
-          </div>
-        <% end %>
+          <% end %>
 
-        <%# A prompt with no assistant turn after it (left by an older version when its job was lost) %>
-        <% if @chat.unanswered_prompt? %>
-          <%= render "chats/error", chat: @chat %>
-        <% end %>
+          <%# A prompt with no assistant turn after it (left by an older version when its job was lost) %>
+          <% if @chat.unanswered_prompt? %>
+            <%= render "chats/error", chat: @chat %>
+          <% end %>
+        </div>
       </div>
 
-      <%# DESKTOP - Chat form %>
-      <div class="px-4 pt-4 lg:pt-0 lg:mt-auto sticky lg:static left-0 bottom-0 w-full bg-surface">
-        <% if flash[:alert].present? %>
-          <p class="text-xs text-red-500 pb-2"><%= flash[:alert] %></p>
-        <% end %>
+      <%# Chat form. On a phone the page scrolls and the form sticks to its bottom: main's bottom
+          padding is a little taller than the tab bar, so the form sits 0.75rem lower (behind the
+          bar) and pads that back, or the answer would show through the gap. %>
+      <div class="px-4 pt-4 pb-6 lg:pb-3 lg:pt-0 lg:mt-auto sticky lg:static left-0 -bottom-3 w-full bg-surface">
+        <div class="mx-auto w-full max-w-xl">
+          <% if flash[:alert].present? %>
+            <p class="text-xs text-red-500 pb-2"><%= flash[:alert] %></p>
+          <% end %>
 
-        <%= render "messages/chat_form", chat: @chat %>
+          <%= render "messages/chat_form", chat: @chat %>
+        </div>
       </div>
     </div>
   <% end %>

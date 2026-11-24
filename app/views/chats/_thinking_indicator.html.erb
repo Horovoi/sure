@@ -1,6 +1,6 @@
 <%# locals: (chat:, message: "Thinking ...") -%>
 
-<div id="thinking-indicator" class="flex items-start gap-3">
-  <%= render "chats/ai_avatar" %>
+<div id="thinking-indicator" class="flex items-center gap-2">
+  <%= render "chats/ai_avatar", size: "sm" %>
   <p class="text-sm text-secondary animate-pulse"><%= message %></p>
 </div>

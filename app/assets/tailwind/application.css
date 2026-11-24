@@ -212,11 +212,153 @@
   }
 }
 
+/* Chat answers: a narrow panel (about 360px of text by default), so headings grow by weight,
+   not size, and tables size to their content with numbers right-aligned. */
 .prose--ai-chat {
-  @apply break-words;
+  @apply break-words text-sm text-primary;
+  line-height: 1.6;
 
   p, li {
     @apply text-sm text-primary;
+    line-height: 1.6;
+  }
+
+  p {
+    margin-block: 0.75em;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-primary;
+    line-height: 1.35;
+    margin-block: 1.4em 0.4em;
+  }
+
+  h1, h2 {
+    @apply text-base;
+  }
+
+  h3 {
+    font-size: 0.9375rem;
+  }
+
+  h4, h5, h6 {
+    @apply text-sm;
+  }
+
+  /* A heading right after another block keeps its own space; one that opens the answer has none */
+  > :first-child {
+    margin-top: 0;
+  }
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+
+  strong {
+    @apply font-semibold text-primary;
+  }
+
+  /* An amount never breaks between the number and its currency sign */
+  .privacy-sensitive {
+    @apply whitespace-nowrap;
+  }
+
+  a {
+    @apply underline underline-offset-2;
+  }
+
+  ul, ol {
+    margin-block: 0.5em;
+    padding-inline-start: 1.125em;
+  }
+
+  li {
+    margin-block: 0.25em;
+    padding-inline-start: 0.25em;
+  }
+
+  li::marker {
+    @apply text-secondary;
+  }
+
+  li > ul, li > ol {
+    margin-block: 0.25em;
+  }
+
+  li > p {
+    margin-block: 0.25em;
+  }
+
+  /* As wide as the content, scrolls sideways when wider than the panel. A step smaller than
+     the text, so five columns of dates, names and amounts still fit the default panel. */
+  table {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    margin-block: 0.75em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th, td {
+    @apply text-left align-baseline;
+    padding: 0.4375rem 0.75rem 0.4375rem 0;
+  }
+
+  th:last-child, td:last-child {
+    padding-right: 0;
+  }
+
+  thead th {
+    @apply text-xs font-medium text-secondary border-b border-secondary;
+    padding-top: 0;
+  }
+
+  tbody td {
+    @apply text-primary border-b border-tertiary;
+  }
+
+  tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* markdown() marks columns whose cells are all numbers; Redcarpet writes the style for |---:| */
+  .numeric, [style*="text-align: right"] {
+    @apply text-right;
+  }
+
+  code {
+    @apply bg-surface-inset text-primary font-mono font-normal rounded px-1 py-0.5;
+    font-size: 0.875em;
+  }
+
+  code::before, code::after {
+    content: none;
+  }
+
+  pre {
+    @apply bg-surface-inset text-primary text-xs rounded-lg p-3 overflow-x-auto;
+    margin-block: 0.75em;
+  }
+
+  pre code {
+    @apply bg-transparent p-0;
+    font-size: inherit;
+  }
+
+  blockquote {
+    @apply border-l-2 border-secondary pl-3 text-secondary font-normal not-italic;
+  }
+
+  blockquote p::before, blockquote p::after {
+    content: none;
+  }
+
+  hr {
+    @apply border-tertiary;
+    margin-block: 1.25em;
   }
 
   scrollbar-width: thin;

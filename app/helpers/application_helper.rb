@@ -155,8 +155,12 @@ module ApplicationHelper
   def markdown(text)
     return "" if text.blank?
 
+    # The text is a model's answer or a user's message: raw HTML in it is shown as text, and
+    # only http(s), ftp and mailto links become links
     renderer = Redcarpet::Render::HTML.new(
       hard_wrap: true,
+      escape_html: true,
+      safe_links_only: true,
       link_attributes: { target: "_blank", rel: "noopener noreferrer" }
     )
 
@@ -173,10 +177,37 @@ module ApplicationHelper
       footnotes: true
     )
 
-    markdown.render(text).html_safe
+    html = markdown.render(text)
+    html = mark_numeric_columns(html) if html.include?("<table")
+    html.html_safe
   end
 
+  # A number, optionally signed, with a currency sign or percent: "−22,294.21 ₴", "+14%", "$1,200"
+  NUMERIC_CELL = /\A[+\-\u2212\u2013]?[\s\u00A0\u202F]*\p{Sc}?[\s\u00A0\u202F]*\d[\d.,\s\u00A0\u202F]*(?:%|\p{Sc})?\z/
+
   private
+    # Right-aligns each table column after the first whose body cells are all numbers, so
+    # digits line up. The first column holds the row labels (often dates) and stays left.
+    def mark_numeric_columns(html)
+      fragment = Nokogiri::HTML5.fragment(html)
+      fragment.css("table").each do |table|
+        rows = table.css("tbody tr").map { |tr| tr.css("td") }
+        next if rows.empty?
+
+        width = rows.map(&:size).max
+        (1...width).each do |col|
+          cells = rows.filter_map { |row| row[col] }
+          values = cells.map { |cell| cell.text.strip }.reject(&:empty?)
+          next if values.empty? || !values.all? { |v| v.match?(NUMERIC_CELL) }
+
+          (cells + table.css("thead tr").filter_map { |tr| tr.css("th")[col] }).each do |cell|
+            cell.add_class("numeric")
+          end
+        end
+      end
+      fragment.to_html
+    end
+
     def calculate_total(item, money_method, negate)
       # Filter out transfer-type transactions from entries
       # Only Entry objects have entryable transactions, Account objects don't

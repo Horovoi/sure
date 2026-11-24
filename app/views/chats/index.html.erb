@@ -42,10 +42,12 @@
           <% else %>
             <div class="grow flex flex-col">
               <h1 class="sr-only"><%= t(".title") %></h1>
-              <div class="mt-auto py-8">
-                <%= render "chats/ai_greeting" %>
+              <div class="mt-auto mx-auto w-full max-w-xl">
+                <div class="py-8">
+                  <%= render "chats/ai_greeting" %>
+                </div>
+                <%= render "messages/chat_form" %>
               </div>
-              <%= render "messages/chat_form" %>
             </div>
           <% end %>
         </div>

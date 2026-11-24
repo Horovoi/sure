@@ -17,8 +17,9 @@
     <% end %>
 
     <% if assistant_message.content.present? %>
-      <div class="flex items-start gap-3 mb-6">
-        <%= render "chats/ai_avatar" %>
+      <%# The avatar sits above the answer, so the text uses the full width of the panel %>
+      <div class="space-y-2 mb-6">
+        <%= render "chats/ai_avatar", size: "sm" %>
 
         <div class="prose prose--ai-chat"><%= privacy_money_html(markdown(assistant_message.content)) %></div>
       </div>

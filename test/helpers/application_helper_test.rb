@@ -61,4 +61,31 @@ class ApplicationHelperTest < ActionView::TestCase
 
     assert_equal "01.11.2026 – 30.11.2026", format_date_range(Date.new(2026, 11, 1), Date.new(2026, 11, 30), family_format: true)
   end
+
+  test "#markdown shows raw HTML as text and links only safe schemes" do
+    html = markdown(%(<img src=x onerror="alert(1)"> [bad](javascript:alert(1)) [good](https://example.com) **bold**))
+    fragment = Nokogiri::HTML5.fragment(html)
+
+    assert_empty fragment.css("img")
+    assert_includes fragment.text, "<img src=x"
+    assert_equal [ "https://example.com" ], fragment.css("a").map { |a| a["href"] }
+    assert_equal "bold", fragment.at_css("strong").text
+  end
+
+  test "#markdown right-aligns table columns of numbers, but never the label column" do
+    html = markdown(<<~MD)
+      | Month | Net | Note |
+      |---|---|---|
+      | 17.05 | **−22,294.21 ₴** | rent |
+      | 17.06 | +14% | |
+      | 17.07 | $1,200 | bonus |
+    MD
+    fragment = Nokogiri::HTML5.fragment(html)
+    numeric = ->(cells) { cells.map { |c| c.classes.include?("numeric") } }
+
+    assert_equal [ false, true, false ], numeric.(fragment.css("thead th"))
+    fragment.css("tbody tr").each do |row|
+      assert_equal [ false, true, false ], numeric.(row.css("td"))
+    end
+  end
 end

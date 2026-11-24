@@ -8,10 +8,12 @@
         message: t("chats.demo_banner_message") %>
     <% end %>
 
-    <div class="mt-auto py-8">
-      <%= render "chats/ai_greeting" %>
-    </div>
+    <div class="mt-auto mx-auto w-full max-w-xl px-4 md:px-0">
+      <div class="py-8">
+        <%= render "chats/ai_greeting" %>
+      </div>
 
-    <%= render "messages/chat_form", chat: @chat, message_hint: (insight_dig_in_prompt(@insight) if @insight) %>
+      <%= render "messages/chat_form", chat: @chat, message_hint: (insight_dig_in_prompt(@insight) if @insight) %>
+    </div>
   </div>
 <% end %>
