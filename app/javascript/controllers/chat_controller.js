@@ -1,11 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
 
-// Turns whose page was re-fetched once after the stream subscription connected (see #refreshIfTurnMissed)
-const refreshedTurns = new Set();
-
-// Stream sources that have connected before: a later "connected" on one of them is a reconnect
-const connectedSources = new WeakSet();
-
 // How close to the bottom (px) the user must be for new content to keep the view scrolled down
 const STICK_TO_BOTTOM_THRESHOLD = 80;
 
@@ -134,48 +128,45 @@ export default class extends Controller {
   }
 
   // The response job starts as soon as the turn is saved, before this page subscribes to the chat stream.
-  // A turn that ends fast (for example, no LLM provider configured) can finish before the subscription, and
-  // its broadcasts are lost. Once the subscription connects, re-fetch the chat once per turn to catch up
-  // (once, because the re-fetched frame subscribes again). A reconnect (sleep, network drop) can have missed
-  // broadcasts at any point of the turn, so it always catches up.
+  // A turn that ends fast (for example, the AI engine refuses it) can finish before the subscription, and
+  // its broadcasts are lost; a reconnect (sleep, network drop) can miss them at any point of the turn.
+  // Each time the subscription connects while a turn runs, fetch the chat and, if the turn has ended,
+  // put the stored messages in place. The subscription stays as it is, so nothing can slip past it
+  // after the fetch (re-fetching the whole frame would subscribe again and open a new gap).
   #refreshIfTurnMissed(mutations) {
-    const source = mutations.find(
+    const connected = mutations.some(
       (m) =>
         m.type === "attributes" &&
         m.target.tagName === "TURBO-CABLE-STREAM-SOURCE" &&
         m.target.hasAttribute("connected"),
-    )?.target;
-    if (!source) return;
+    );
+    if (connected && this.#inFlightTurn()) this.#catchUp();
+  }
 
-    const reconnected = connectedSources.has(source);
-    connectedSources.add(source);
-
-    const turn = this.#inFlightTurn();
-    if (!turn || (!reconnected && refreshedTurns.has(turn.id))) return;
-    refreshedTurns.add(turn.id);
-
+  async #catchUp() {
     const frame = this.messagesTarget.closest("turbo-frame");
-    if (!frame) return;
+    const list = this.messagesTarget.querySelector("#messages");
+    if (!frame || !list) return;
 
-    // The composer is inside the frame: carry over a question typed while waiting
-    const draft = this.hasInputTarget ? this.inputTarget.value : "";
-    if (draft) {
-      frame.addEventListener(
-        "turbo:frame-load",
-        () => {
-          if (!this.hasInputTarget || this.inputTarget.value) return;
-          this.inputTarget.value = draft;
-          this.autoResize();
-        },
-        { once: true },
-      );
+    let fresh;
+    try {
+      const response = await fetch(frame.src || window.location.href, {
+        headers: { Accept: "text/html", "Turbo-Frame": frame.id },
+        credentials: "same-origin",
+      });
+      if (!response.ok) return;
+      const page = new DOMParser().parseFromString(await response.text(), "text/html");
+      fresh = page.getElementById("messages");
+    } catch {
+      return;
     }
 
-    if (frame.src) {
-      frame.reload();
-    } else {
-      frame.src = window.location.href;
-    }
+    // A turn still running there will reach this page through the stream, which is connected now.
+    // The page may also have moved to another chat while the request ran.
+    if (!fresh || fresh.querySelector('[data-turn-in-flight="true"]')) return;
+    if (!list.isConnected || !this.#inFlightTurn()) return;
+
+    list.replaceChildren(...fresh.childNodes);
   }
 
   // Follow new content only while the user is at the bottom; a new chat always starts at the bottom
