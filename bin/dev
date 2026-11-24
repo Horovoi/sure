@@ -14,6 +14,10 @@ fi
 # Default to port 3000 if not specified
 export PORT="${PORT:-3000}"
 
+# Foreman gives every process its own PORT (the worker gets 3200), but the Claude chat
+# turns that the worker runs must point the bridge at the web server's /mcp
+export CLAUDE_BRIDGE_MCP_URL="${CLAUDE_BRIDGE_MCP_URL:-http://localhost:$PORT/mcp}"
+
 # Let the debug gem allow remote connections,
 # but avoid loading until `debugger` is called
 export RUBY_DEBUG_OPEN="true"

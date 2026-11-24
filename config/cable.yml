@@ -1,5 +1,9 @@
+# Development runs jobs in Sidekiq, a separate process, as production does: its broadcasts
+# (chat answers, sync toasts) reach the browser only through Redis, not the in-process adapter
 development:
-  adapter: async
+  adapter: redis
+  url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6379/1" } %>
+  channel_prefix: sure_development
 
 test:
   adapter: test

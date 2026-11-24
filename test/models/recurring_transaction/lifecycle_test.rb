@@ -18,8 +18,9 @@ class RecurringTransaction::LifecycleTest < ActiveSupport::TestCase
     recurring = recurring_rows.sole
     assert_equal 15.99, recurring.amount.to_f
 
-    # A new charge at a slightly different price moves the average.
-    create_charge(date: Date.current, amount: 16.49)
+    # Another charge at a slightly different price moves the average. It falls on the pattern's
+    # days (the 6th), not today: a charge 5+ days off them does not join the pattern.
+    create_charge(date: 1.month.ago.beginning_of_month + 6.days, amount: 16.49)
     identify
 
     assert_equal 1, recurring_rows.count
@@ -34,7 +35,7 @@ class RecurringTransaction::LifecycleTest < ActiveSupport::TestCase
     assert suggestion.suggested?
     suggestion.dismiss_suggestion!
 
-    create_charge(date: Date.current, amount: 16.49)
+    create_charge(date: 1.month.ago.beginning_of_month + 6.days, amount: 16.49)
     identify
 
     assert_equal [ "dismissed" ], recurring_rows.pluck(:subscription_state)

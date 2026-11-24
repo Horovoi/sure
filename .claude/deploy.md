@@ -272,7 +272,11 @@ bin/claude-bridge run                     # foreground, for bin/dev or bin/stagi
   `node --test 'claude_bridge/*.test.ts'`, then `bin/claude-bridge install`.
 - **Logs** hold ids, error codes and timings, never prompts, answers or tokens.
 - **Staging** containers cannot reach the bridge (their network is closed). To try Claude
-  against the copy, run `bin/staging dev` and `bin/claude-bridge run` (or the agent).
+  against the copy, run `bin/staging dev` and `bin/claude-bridge run` (or the agent), with
+  `CLAUDE_BRIDGE_URL=http://127.0.0.1:3339` and the `token` from
+  `~/.config/sure-claude-bridge/config.json` as `CLAUDE_BRIDGE_TOKEN` in the environment.
+  `bin/dev` points the worker's turns at the web server's `/mcp` (`CLAUDE_BRIDGE_MCP_URL`),
+  and development broadcasts through Redis, so the worker's answers reach the page.
 - Turns are saved as Claude Code sessions under `~/.claude/projects/` for the folder
   `~/Library/Application Support/sure-claude-bridge/work`; each turn forks the last one.
 - **Sure's side** (`Assistant::Claude`). A turn whose model is a Claude model (`opus`, `sonnet`,

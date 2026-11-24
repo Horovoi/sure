@@ -1,5 +1,22 @@
 require "test_helper"
 
+# Capybara 3.40 (the latest) resets Chrome between tests with Storage.clearDataForOrigin for
+# origin "*", which Chrome 158 rejects ("* is not a valid URL"), failing every system test in
+# teardown. Clear the cookies of every origin and the app's own storage instead.
+module ChromeResetForAnyOrigin
+  private
+    def execute_cdp(cmd, params = {})
+      return super unless cmd == "Storage.clearDataForOrigin" && params[:origin] == "*"
+
+      super("Network.clearBrowserCookies")
+      app = Capybara.current_session.server&.base_url
+      super(cmd, params.merge(origin: app)) if app && params[:storageTypes] != "cookies"
+    end
+end
+require "capybara/selenium/driver"
+require "capybara/selenium/driver_specializations/chrome_driver"
+Capybara::Selenium::Driver::ChromeDriver.prepend(ChromeResetForAnyOrigin)
+
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   setup do
     # The dashboard after a login, or a save that syncs, can take longer than 5s on a busy
